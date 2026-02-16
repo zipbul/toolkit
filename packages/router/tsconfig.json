@@ -1,0 +1,10 @@
+{
+  "extends": "../../tsconfig.json",
+  "compilerOptions": {
+    "rootDir": ".",
+    "paths": {
+      "@bunner-pantry/router": ["./index.ts"]
+    }
+  },
+  "include": ["./**/*.ts"]
+}
