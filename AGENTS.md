@@ -66,9 +66,7 @@ This is not a suggestion — it is a hard gate.
 
 ### Required MCP Tools
 
-- `context7`: package/version/option/spec/compatibility verification
 - `sequential-thinking`: all analysis/judgment/planning tasks
-- `firebat`: project codebase analysis
 
 Usage of reasoning, assumptions, simulation, memory, or experience to substitute MCP is forbidden.
 
@@ -76,17 +74,6 @@ Usage of reasoning, assumptions, simulation, memory, or experience to substitute
 
 - Any analysis, judgment, or planning task (use as the FIRST tool call)
 - Exception: simple single-file reads or trivial lookups
-
-### firebat — Tool Selection Matrix:
-
-| Situation | Tool(s) |
-|-----------|--------|
-| After code change | `scan` (mandatory) |
-| Find symbol | `index_symbols` → `search_symbol_from_index` |
-| Refactoring | `find_references` → `rename_symbol` |
-| Code pattern search | `find_pattern` (ast-grep syntax) |
-| Type/signature check | `get_hover` |
-| External library API | `index_external_libraries` → `search_external_library_symbols` |
 
 ### MCP verification before value/judgment answers
 
