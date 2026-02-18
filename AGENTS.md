@@ -13,12 +13,6 @@ alwaysApply: true
 
 No file create/modify/delete without explicit approval token `ㅇㅇ`.
 
-## Project
-
-firebat — code quality scanner & MCP server.
-
-**Stack:** Bun, TypeScript, oxc (parser), tsgo (typecheck), ast-grep (pattern search), oxlint, SQLite (cache)
-
 ## Language Policy
 
 **Always respond in Korean. No exceptions.**
@@ -48,11 +42,19 @@ Before acting, identify which triggers apply. Read **every** matching rule file.
 | --- | --- |
 | File change needed (create / modify / delete) | `.ai/rules/write-gate.md` |
 | External info required (API, package, version, runtime behavior) | `.ai/rules/search-policy.md` |
-| Any code or test change | `.ai/rules/test-standards.md` |
+| Any code or test change, quality review, or enhancement proposal | `.ai/rules/test-standards.md`, `.ai/rules/workflow.md` |
 | Starting a task, planning, or scoping | `.ai/rules/workflow.md` |
 | Choosing runtime, library, or native API | `.ai/rules/bun-first.md` |
 
 Multiple triggers may fire at once — read all applicable files.
+
+## Rule File Loading
+
+Rule files MUST be read in full — from first line to last line — via actual tool calls.
+
+- **Partial read prohibited**: skipping lines, reading only a range, or stopping mid-file is a violation.
+- **Memory/summary prohibited**: a rule file is "loaded" only when its full content has been read in the current response via a tool call. Recollection from previous turns does not count.
+- **Split reads allowed**: if a file is too long for one read, split into multiple reads that together cover every line. All parts must be read before the file can be listed under "Rules loaded".
 
 ## Format Gate Principle
 
