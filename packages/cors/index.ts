@@ -1,2 +1,3 @@
-export * from './interfaces';
-export * from './cors.middleware';
+export * from './src/cors-handler';
+export * from './src/interfaces';
+export * from './src/types';

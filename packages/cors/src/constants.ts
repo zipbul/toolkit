@@ -1,4 +1,4 @@
-import { HttpMethod } from '../../enums';
+import { HttpMethod, HttpStatus } from '@zipbul/shared';
 
 export const CORS_DEFAULT_METHODS: HttpMethod[] = [
   HttpMethod.Get,
@@ -8,4 +8,5 @@ export const CORS_DEFAULT_METHODS: HttpMethod[] = [
   HttpMethod.Post,
   HttpMethod.Delete,
 ];
-export const CORS_DEFAULT_OPTIONS_SUCCESS_STATUS = 204;
+
+export const CORS_DEFAULT_OPTIONS_SUCCESS_STATUS = HttpStatus.NoContent;

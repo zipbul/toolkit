@@ -3,7 +3,7 @@
   "compilerOptions": {
     "rootDir": ".",
     "paths": {
-      "@bunner-pantry/query-parser": ["./index.ts"]
+      "@zipbul/query-parser": ["./index.ts"]
     }
   },
   "include": ["./**/*.ts"]

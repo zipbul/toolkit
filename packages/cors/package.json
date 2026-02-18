@@ -1,6 +1,12 @@
 {
-  "name": "@bunner-pantry/cors",
+  "name": "@zipbul/cors",
   "version": "0.0.1",
   "module": "index.ts",
-  "type": "module"
+  "type": "module",
+  "scripts": {
+    "coverage": "bun test --coverage"
+  },
+  "dependencies": {
+    "@zipbul/shared": "workspace:*"
+  }
 }
