@@ -35,6 +35,25 @@ Violation: Side-effect verification uses hand-rolled counter/flag instead of spy
 Enforcement: block
 ```
 
+### Monkey-Patch Prohibition
+
+Direct property assignment (`=`) on global/singleton objects to replace behavior is **prohibited**.
+Always use `spyOn(obj, 'method').mockImplementation(...)` instead.
+
+Examples of prohibited patterns:
+- `(process as any).kill = fakeKill`
+- `(globalThis as any).fetch = fakeFetch`
+- `console.log = () => {}`
+
+Restore via `try/finally` is NOT a substitute for `afterEach` + `mockRestore()`.
+
+```
+Rule: TST-MONKEY-PATCH
+Violation: Global/singleton object property replaced via direct assignment (=) instead of spyOn().
+           try/finally restore pattern used instead of afterEach + mockRestore().
+Enforcement: block
+```
+
 ### Mock Strategy Priority
 
 When a SUT dependency needs to be replaced with a test double, apply in order:
@@ -324,11 +343,18 @@ Required cases by type:
 | union / enum | at least 1 per variant |
 | boolean | true, false |
 
+**Class hierarchy consistency:**
+When SUT is a class hierarchy (`extends`), if the base class test covers N equivalence classes
+for a constructor parameter, each subclass MUST cover the same N classes — OR explicitly declare
+why fewer is sufficient (e.g., "constructor is pass-through with no override").
+
 ```
 Rule: TST-INPUT-PARTITION
 Applies to: Unit, Integration
 Violation: An equivalence class of a SUT parameter is untested,
-           or a required case from the type table above is missing
+           or a required case from the type table above is missing,
+           or a subclass covers fewer equivalence classes than its base class
+           without explicit justification
 Enforcement: block
 ```
 
@@ -337,9 +363,14 @@ Enforcement: block
 No two `it` blocks may verify the same branch + same equivalence class.
 Different equivalence classes passing through the same branch are NOT duplicates.
 
+Tests with identical setup and identical assertion logic that claim to test different scenarios
+are duplicates — **the `it` title alone does not differentiate them.**
+Each `it` MUST exercise a distinct code path or distinct input equivalence class.
+
 ```
 Rule: TST-NO-DUPLICATE
-Violation: Duplicate it blocks for the same branch and equivalence class
+Violation: Duplicate it blocks for the same branch and equivalence class,
+           or tests with identical setup + assertion where only the it title differs
 Enforcement: block
 ```
 
