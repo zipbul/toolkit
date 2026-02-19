@@ -6,9 +6,21 @@ import type { CorsOptions, CorsPreflightResult, CorsRejectResult } from './inter
 import type { CorsAllowed, CorsResult } from './types';
 import type { OriginOptions, OriginResult } from './types';
 
-export class CorsHandler {
+/**
+ * Framework-agnostic CORS handler.
+ * Evaluates CORS policy and returns a discriminated union result
+ * instead of generating responses directly.
+ */
+export class Cors {
   constructor(private readonly options: CorsOptions = {}) {}
 
+  /**
+   * Evaluates CORS policy for the given request.
+   *
+   * @returns `Continue` — attach headers and proceed,
+   *          `RespondPreflight` — return preflight response,
+   *          `Reject` — deny with reason.
+   */
   public async handle(request: Request): Promise<CorsResult> {
     const origin = request.headers.get(HttpHeader.Origin);
 
@@ -100,12 +112,18 @@ export class CorsHandler {
     return { action: CorsAction.RespondPreflight, headers, statusCode };
   }
 
+  /**
+   * Merges CORS headers from a successful result into an existing response.
+   * `Vary` values are merged without duplicates.
+   *
+   * @returns A new `Response` with CORS headers applied.
+   */
   public static applyHeaders(result: CorsAllowed, response: Response): Response {
     const mergedHeaders = new Headers(response.headers);
 
     for (const [name, value] of result.headers.entries()) {
       if (name.toLowerCase() === HttpHeader.Vary.toLowerCase()) {
-        const mergedVary = CorsHandler.mergeVaryValues(mergedHeaders.get(HttpHeader.Vary), value);
+        const mergedVary = Cors.mergeVaryValues(mergedHeaders.get(HttpHeader.Vary), value);
 
         mergedHeaders.set(HttpHeader.Vary, mergedVary);
         continue;
@@ -121,6 +139,9 @@ export class CorsHandler {
     });
   }
 
+  /**
+   * Creates a bodiless preflight response from a {@link CorsPreflightResult}.
+   */
   public static createPreflightResponse(result: CorsPreflightResult): Response {
     return new Response(null, {
       status: result.statusCode,

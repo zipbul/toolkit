@@ -14,7 +14,7 @@
     "packages/cors": {
       "name": "@zipbul/cors",
       "version": "0.0.1",
-      "dependencies": {
+      "devDependencies": {
         "@zipbul/shared": "workspace:*",
       },
     },

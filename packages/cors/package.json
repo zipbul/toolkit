@@ -1,12 +1,35 @@
 {
   "name": "@zipbul/cors",
   "version": "0.0.1",
-  "module": "index.ts",
+  "description": "Framework-agnostic CORS library for standard Web APIs (Request/Response)",
+  "license": "MIT",
+  "author": "Junhyung Park (https://github.com/parkrevil)",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/zipbul/toolkit",
+    "directory": "packages/cors"
+  },
+  "bugs": "https://github.com/zipbul/toolkit/issues",
+  "homepage": "https://github.com/zipbul/toolkit/tree/main/packages/cors#readme",
+  "keywords": ["cors", "http", "fetch", "web-api", "bun", "middleware", "typescript", "zipbul"],
+  "engines": {
+    "bun": ">=1.0.0"
+  },
   "type": "module",
+  "module": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "files": ["dist"],
   "scripts": {
+    "build": "bun build index.ts --outdir dist --target bun --format esm --production --sourcemap=linked && tsc -p tsconfig.build.json",
     "coverage": "bun test --coverage"
   },
-  "dependencies": {
+  "devDependencies": {
     "@zipbul/shared": "workspace:*"
   }
 }

@@ -5,7 +5,7 @@ import { HttpHeader, HttpMethod, HttpStatus } from '@zipbul/shared';
 import { CorsAction, CorsRejectionReason } from './enums';
 import type { CorsContinueResult, CorsPreflightResult, CorsRejectResult } from './interfaces';
 import type { CorsAllowed, CorsResult } from './types';
-import { CorsHandler } from './cors-handler';
+import { Cors } from './cors';
 
 function assertReject(result: CorsResult): asserts result is CorsRejectResult {
   expect(result.action).toBe(CorsAction.Reject);
@@ -23,9 +23,9 @@ function assertPreflight(result: CorsResult): asserts result is CorsPreflightRes
   expect(result.action).toBe(CorsAction.RespondPreflight);
 }
 
-describe('CorsHandler', () => {
+describe('Cors', () => {
   it('should return disallowed result when origin header is missing', async () => {
-    const handler = new CorsHandler();
+    const handler = new Cors();
     const request = new Request('http://example.test', { method: HttpMethod.Get });
 
     const result = await handler.handle(request);
@@ -35,7 +35,7 @@ describe('CorsHandler', () => {
   });
 
   it('should return disallowed result when origin header is empty string', async () => {
-    const handler = new CorsHandler();
+    const handler = new Cors();
     const request = new Request('http://example.test', {
       method: HttpMethod.Get,
       headers: {
@@ -50,7 +50,7 @@ describe('CorsHandler', () => {
   });
 
   it('should allow wildcard origin when origin header is provided with default options', async () => {
-    const handler = new CorsHandler();
+    const handler = new Cors();
     const request = new Request('http://example.test', {
       method: HttpMethod.Get,
       headers: {
@@ -65,7 +65,7 @@ describe('CorsHandler', () => {
   });
 
   it('should return disallowed result when origin option is false', async () => {
-    const handler = new CorsHandler({ origin: false });
+    const handler = new Cors({ origin: false });
     const request = new Request('http://example.test', {
       method: HttpMethod.Get,
       headers: {
@@ -80,7 +80,7 @@ describe('CorsHandler', () => {
   });
 
   it('should allow request when origin option is exact matching string', async () => {
-    const handler = new CorsHandler({ origin: 'https://example.com' });
+    const handler = new Cors({ origin: 'https://example.com' });
     const request = new Request('http://example.test', {
       method: HttpMethod.Get,
       headers: {
@@ -95,7 +95,7 @@ describe('CorsHandler', () => {
   });
 
   it('should return disallowed result when origin option is non-matching string', async () => {
-    const handler = new CorsHandler({ origin: 'https://allowed.example.com' });
+    const handler = new Cors({ origin: 'https://allowed.example.com' });
     const request = new Request('http://example.test', {
       method: HttpMethod.Get,
       headers: {
@@ -110,7 +110,7 @@ describe('CorsHandler', () => {
   });
 
   it('should reflect origin when origin option is true', async () => {
-    const handler = new CorsHandler({ origin: true });
+    const handler = new Cors({ origin: true });
     const request = new Request('http://example.test', {
       method: HttpMethod.Get,
       headers: {
@@ -125,7 +125,7 @@ describe('CorsHandler', () => {
   });
 
   it('should return disallowed result when origin option is regular expression and does not match', async () => {
-    const handler = new CorsHandler({ origin: /^https:\/\/allowed\./ });
+    const handler = new Cors({ origin: /^https:\/\/allowed\./ });
     const request = new Request('http://example.test', {
       method: HttpMethod.Get,
       headers: {
@@ -140,7 +140,7 @@ describe('CorsHandler', () => {
   });
 
   it('should allow request when origin option is regular expression and matches', async () => {
-    const handler = new CorsHandler({ origin: /^https:\/\/example\./ });
+    const handler = new Cors({ origin: /^https:\/\/example\./ });
     const request = new Request('http://example.test', {
       method: HttpMethod.Get,
       headers: {
@@ -155,7 +155,7 @@ describe('CorsHandler', () => {
   });
 
   it('should allow request when origin option array contains exact string', async () => {
-    const handler = new CorsHandler({ origin: ['https://example.com'] });
+    const handler = new Cors({ origin: ['https://example.com'] });
     const request = new Request('http://example.test', {
       method: HttpMethod.Get,
       headers: {
@@ -169,7 +169,7 @@ describe('CorsHandler', () => {
   });
 
   it('should allow request when origin option array contains matching regular expression', async () => {
-    const handler = new CorsHandler({ origin: [/^https:\/\/example\./] });
+    const handler = new Cors({ origin: [/^https:\/\/example\./] });
     const request = new Request('http://example.test', {
       method: HttpMethod.Get,
       headers: {
@@ -183,7 +183,7 @@ describe('CorsHandler', () => {
   });
 
   it('should return disallowed result when origin option array does not match request origin', async () => {
-    const handler = new CorsHandler({ origin: ['https://allowed.example.com', /^https:\/\/api\./] });
+    const handler = new Cors({ origin: ['https://allowed.example.com', /^https:\/\/api\./] });
     const request = new Request('http://example.test', {
       method: HttpMethod.Get,
       headers: {
@@ -198,7 +198,7 @@ describe('CorsHandler', () => {
   });
 
   it('should allow request when origin function returns true', async () => {
-    const handler = new CorsHandler({
+    const handler = new Cors({
       origin: async () => true,
     });
     const request = new Request('http://example.test', {
@@ -215,7 +215,7 @@ describe('CorsHandler', () => {
   });
 
   it('should allow request when origin function returns explicit origin string', async () => {
-    const handler = new CorsHandler({
+    const handler = new Cors({
       origin: async () => 'https://proxy.example.com',
     });
     const request = new Request('http://example.test', {
@@ -232,7 +232,7 @@ describe('CorsHandler', () => {
   });
 
   it('should allow request when origin function is synchronous and returns true', async () => {
-    const handler = new CorsHandler({
+    const handler = new Cors({
       origin: () => true,
     });
     const request = new Request('http://example.test', {
@@ -251,7 +251,7 @@ describe('CorsHandler', () => {
     let capturedOrigin = '';
     let capturedRequest: Request | null = null;
 
-    const handler = new CorsHandler({
+    const handler = new Cors({
       origin: (origin, request) => {
         capturedOrigin = origin;
         capturedRequest = request;
@@ -274,7 +274,7 @@ describe('CorsHandler', () => {
   });
 
   it('should reject when origin function throws an error', async () => {
-    const handler = new CorsHandler({
+    const handler = new Cors({
       origin: () => {
         throw new Error('origin function failed');
       },
@@ -290,7 +290,7 @@ describe('CorsHandler', () => {
   });
 
   it('should reject when origin function returns rejected promise', async () => {
-    const handler = new CorsHandler({
+    const handler = new Cors({
       origin: async () => Promise.reject(new Error('origin function rejected')),
     });
     const request = new Request('http://example.test', {
@@ -304,7 +304,7 @@ describe('CorsHandler', () => {
   });
 
   it('should return disallowed result when origin function returns false', async () => {
-    const handler = new CorsHandler({
+    const handler = new Cors({
       origin: async () => false,
     });
     const request = new Request('http://example.test', {
@@ -321,7 +321,7 @@ describe('CorsHandler', () => {
   });
 
   it('should return disallowed result when origin function returns empty string', async () => {
-    const handler = new CorsHandler({
+    const handler = new Cors({
       origin: async () => '',
     });
     const request = new Request('http://example.test', {
@@ -338,7 +338,7 @@ describe('CorsHandler', () => {
   });
 
   it('should reflect request origin when credentials is true and origin option is wildcard', async () => {
-    const handler = new CorsHandler({ origin: '*', credentials: true });
+    const handler = new Cors({ origin: '*', credentials: true });
     const request = new Request('http://example.test', {
       method: HttpMethod.Get,
       headers: {
@@ -354,7 +354,7 @@ describe('CorsHandler', () => {
   });
 
   it('should set expose headers when exposed headers are provided', async () => {
-    const handler = new CorsHandler({ exposedHeaders: ['x-request-id', 'x-rate-limit'] });
+    const handler = new Cors({ exposedHeaders: ['x-request-id', 'x-rate-limit'] });
     const request = new Request('http://example.test', {
       method: HttpMethod.Get,
       headers: {
@@ -369,7 +369,7 @@ describe('CorsHandler', () => {
   });
 
   it('should not set expose headers when exposed headers is empty array', async () => {
-    const handler = new CorsHandler({ exposedHeaders: [] });
+    const handler = new Cors({ exposedHeaders: [] });
     const request = new Request('http://example.test', {
       method: HttpMethod.Get,
       headers: {
@@ -384,7 +384,7 @@ describe('CorsHandler', () => {
   });
 
   it('should set wildcard expose headers when credentials is not enabled', async () => {
-    const handler = new CorsHandler({ exposedHeaders: ['*'] });
+    const handler = new Cors({ exposedHeaders: ['*'] });
     const request = new Request('http://example.test', {
       method: HttpMethod.Get,
       headers: {
@@ -399,7 +399,7 @@ describe('CorsHandler', () => {
   });
 
   it('should not set expose headers when exposed headers contains wildcard and credentials is true', async () => {
-    const handler = new CorsHandler({ exposedHeaders: ['*'], credentials: true });
+    const handler = new Cors({ exposedHeaders: ['*'], credentials: true });
     const request = new Request('http://example.test', {
       method: HttpMethod.Get,
       headers: {
@@ -414,7 +414,7 @@ describe('CorsHandler', () => {
   });
 
   it('should not mark preflight when options request does not include access-control-request-method', async () => {
-    const handler = new CorsHandler();
+    const handler = new Cors();
     const request = new Request('http://example.test', {
       method: HttpMethod.Options,
       headers: {
@@ -428,7 +428,7 @@ describe('CorsHandler', () => {
   });
 
   it('should not mark preflight when access-control-request-method is empty string', async () => {
-    const handler = new CorsHandler();
+    const handler = new Cors();
     const request = new Request('http://example.test', {
       method: HttpMethod.Options,
       headers: {
@@ -443,7 +443,7 @@ describe('CorsHandler', () => {
   });
 
   it('should mark preflight response when options method has access-control-request-method', async () => {
-    const handler = new CorsHandler();
+    const handler = new Cors();
     const request = new Request('http://example.test', {
       method: HttpMethod.Options,
       headers: {
@@ -460,7 +460,7 @@ describe('CorsHandler', () => {
   });
 
   it('should return disallowed result when preflight requested method is not allowed by configured methods', async () => {
-    const handler = new CorsHandler({ methods: [HttpMethod.Get] });
+    const handler = new Cors({ methods: [HttpMethod.Get] });
     const request = new Request('http://example.test', {
       method: HttpMethod.Options,
       headers: {
@@ -476,7 +476,7 @@ describe('CorsHandler', () => {
   });
 
   it('should return disallowed result when allowed methods is empty', async () => {
-    const handler = new CorsHandler({ methods: [] });
+    const handler = new Cors({ methods: [] });
     const request = new Request('http://example.test', {
       method: HttpMethod.Options,
       headers: {
@@ -492,7 +492,7 @@ describe('CorsHandler', () => {
   });
 
   it('should allow request method matching with different casing', async () => {
-    const handler = new CorsHandler({ methods: [HttpMethod.Post] });
+    const handler = new Cors({ methods: [HttpMethod.Post] });
     const request = new Request('http://example.test', {
       method: HttpMethod.Options,
       headers: {
@@ -507,7 +507,7 @@ describe('CorsHandler', () => {
   });
 
   it('should allow requested method when methods wildcard is configured without credentials', async () => {
-    const handler = new CorsHandler({ methods: ['*'] });
+    const handler = new Cors({ methods: ['*'] });
     const request = new Request('http://example.test', {
       method: HttpMethod.Options,
       headers: {
@@ -523,7 +523,7 @@ describe('CorsHandler', () => {
   });
 
   it('should avoid wildcard methods when credentials is true by echoing requested method', async () => {
-    const handler = new CorsHandler({ methods: ['*'], credentials: true });
+    const handler = new Cors({ methods: ['*'], credentials: true });
     const request = new Request('http://example.test', {
       method: HttpMethod.Options,
       headers: {
@@ -539,7 +539,7 @@ describe('CorsHandler', () => {
   });
 
   it('should set allow headers from request headers when allowedHeaders option is undefined', async () => {
-    const handler = new CorsHandler();
+    const handler = new Cors();
     const request = new Request('http://example.test', {
       method: HttpMethod.Options,
       headers: {
@@ -557,7 +557,7 @@ describe('CorsHandler', () => {
   });
 
   it('should return disallowed result when requested headers are not allowed by configured headers', async () => {
-    const handler = new CorsHandler({ allowedHeaders: ['content-type'] });
+    const handler = new Cors({ allowedHeaders: ['content-type'] });
     const request = new Request('http://example.test', {
       method: HttpMethod.Options,
       headers: {
@@ -574,7 +574,7 @@ describe('CorsHandler', () => {
   });
 
   it('should allow requested headers when configured headers include case-insensitive matches', async () => {
-    const handler = new CorsHandler({ allowedHeaders: ['Content-Type', 'X-API-KEY'] });
+    const handler = new Cors({ allowedHeaders: ['Content-Type', 'X-API-KEY'] });
     const request = new Request('http://example.test', {
       method: HttpMethod.Options,
       headers: {
@@ -591,7 +591,7 @@ describe('CorsHandler', () => {
   });
 
   it('should return disallowed result when configured allowed headers are empty and request includes headers', async () => {
-    const handler = new CorsHandler({ allowedHeaders: [] });
+    const handler = new Cors({ allowedHeaders: [] });
     const request = new Request('http://example.test', {
       method: HttpMethod.Options,
       headers: {
@@ -608,7 +608,7 @@ describe('CorsHandler', () => {
   });
 
   it('should set wildcard allow headers when allowed headers wildcard is configured without credentials', async () => {
-    const handler = new CorsHandler({ allowedHeaders: ['*'] });
+    const handler = new Cors({ allowedHeaders: ['*'] });
     const request = new Request('http://example.test', {
       method: HttpMethod.Options,
       headers: {
@@ -625,7 +625,7 @@ describe('CorsHandler', () => {
   });
 
   it('should not set allow headers when wildcard allowed headers are configured with credentials and request headers are missing', async () => {
-    const handler = new CorsHandler({ allowedHeaders: ['*'], credentials: true });
+    const handler = new Cors({ allowedHeaders: ['*'], credentials: true });
     const request = new Request('http://example.test', {
       method: HttpMethod.Options,
       headers: {
@@ -641,7 +641,7 @@ describe('CorsHandler', () => {
   });
 
   it('should return disallowed result when wildcard allowed headers is used with authorization request header', async () => {
-    const handler = new CorsHandler({ allowedHeaders: ['*'] });
+    const handler = new Cors({ allowedHeaders: ['*'] });
     const request = new Request('http://example.test', {
       method: HttpMethod.Options,
       headers: {
@@ -658,7 +658,7 @@ describe('CorsHandler', () => {
   });
 
   it('should return disallowed result when wildcard allowed headers is used with uppercase authorization request header', async () => {
-    const handler = new CorsHandler({ allowedHeaders: ['*'] });
+    const handler = new Cors({ allowedHeaders: ['*'] });
     const request = new Request('http://example.test', {
       method: HttpMethod.Options,
       headers: {
@@ -675,7 +675,7 @@ describe('CorsHandler', () => {
   });
 
   it('should allow authorization request header when authorization is explicitly listed with wildcard', async () => {
-    const handler = new CorsHandler({ allowedHeaders: ['*', 'authorization'] });
+    const handler = new Cors({ allowedHeaders: ['*', 'authorization'] });
     const request = new Request('http://example.test', {
       method: HttpMethod.Options,
       headers: {
@@ -691,7 +691,7 @@ describe('CorsHandler', () => {
   });
 
   it('should allow authorization request header when explicit authorization is listed with mixed casing', async () => {
-    const handler = new CorsHandler({ allowedHeaders: ['*', 'Authorization'] });
+    const handler = new Cors({ allowedHeaders: ['*', 'Authorization'] });
     const request = new Request('http://example.test', {
       method: HttpMethod.Options,
       headers: {
@@ -707,7 +707,7 @@ describe('CorsHandler', () => {
   });
 
   it('should avoid wildcard allow headers when credentials is true by echoing request headers', async () => {
-    const handler = new CorsHandler({ allowedHeaders: ['*'], credentials: true });
+    const handler = new Cors({ allowedHeaders: ['*'], credentials: true });
     const request = new Request('http://example.test', {
       method: HttpMethod.Options,
       headers: {
@@ -725,7 +725,7 @@ describe('CorsHandler', () => {
   });
 
   it('should set max age when maxAge option is provided', async () => {
-    const handler = new CorsHandler({ maxAge: 600 });
+    const handler = new Cors({ maxAge: 600 });
     const request = new Request('http://example.test', {
       method: HttpMethod.Options,
       headers: {
@@ -741,7 +741,7 @@ describe('CorsHandler', () => {
   });
 
   it('should set max age to zero when maxAge option is zero', async () => {
-    const handler = new CorsHandler({ maxAge: 0 });
+    const handler = new Cors({ maxAge: 0 });
     const request = new Request('http://example.test', {
       method: HttpMethod.Options,
       headers: {
@@ -757,7 +757,7 @@ describe('CorsHandler', () => {
   });
 
   it('should not include vary origin when allow origin is wildcard', async () => {
-    const handler = new CorsHandler();
+    const handler = new Cors();
     const request = new Request('http://example.test', {
       method: HttpMethod.Get,
       headers: {
@@ -772,7 +772,7 @@ describe('CorsHandler', () => {
   });
 
   it('should allow origin string value null when origin option explicitly permits it', async () => {
-    const handler = new CorsHandler({ origin: 'null' });
+    const handler = new Cors({ origin: 'null' });
     const request = new Request('http://example.test', {
       method: HttpMethod.Get,
       headers: {
@@ -787,7 +787,7 @@ describe('CorsHandler', () => {
   });
 
   it('should include three vary fields for configured preflight response', async () => {
-    const handler = new CorsHandler({
+    const handler = new Cors({
       origin: ['https://example.com'],
       methods: [HttpMethod.Post],
       allowedHeaders: ['content-type', 'x-api-key'],
@@ -811,7 +811,7 @@ describe('CorsHandler', () => {
   });
 
   it('should include vary access-control-request-method for preflight responses', async () => {
-    const handler = new CorsHandler({ methods: [HttpMethod.Post] });
+    const handler = new Cors({ methods: [HttpMethod.Post] });
     const request = new Request('http://example.test', {
       method: HttpMethod.Options,
       headers: {
@@ -827,7 +827,7 @@ describe('CorsHandler', () => {
   });
 
   it('should include vary access-control-request-headers when configured allowed headers are returned', async () => {
-    const handler = new CorsHandler({ allowedHeaders: ['content-type', 'x-api-key'] });
+    const handler = new Cors({ allowedHeaders: ['content-type', 'x-api-key'] });
     const request = new Request('http://example.test', {
       method: HttpMethod.Options,
       headers: {
@@ -844,7 +844,7 @@ describe('CorsHandler', () => {
   });
 
   it('should continue preflight when preflightContinue is true', async () => {
-    const handler = new CorsHandler({ preflightContinue: true });
+    const handler = new Cors({ preflightContinue: true });
     const request = new Request('http://example.test', {
       method: HttpMethod.Options,
       headers: {
@@ -859,7 +859,7 @@ describe('CorsHandler', () => {
   });
 
   it('should keep configured headers when allowed headers are configured and request headers are missing', async () => {
-    const handler = new CorsHandler({
+    const handler = new Cors({
       allowedHeaders: ['content-type', 'x-api-key'],
       methods: [HttpMethod.Post],
     });
@@ -878,7 +878,7 @@ describe('CorsHandler', () => {
   });
 
   it('should set custom options success status in handle result', async () => {
-    const handler = new CorsHandler({ optionsSuccessStatus: HttpStatus.Ok });
+    const handler = new Cors({ optionsSuccessStatus: HttpStatus.Ok });
     const request = new Request('http://example.test', {
       method: HttpMethod.Options,
       headers: {
@@ -894,7 +894,7 @@ describe('CorsHandler', () => {
   });
 
   it('should apply cors headers to existing response when applyHeaders is used', async () => {
-    const handler = new CorsHandler();
+    const handler = new Cors();
     const request = new Request('http://example.test', {
       method: HttpMethod.Get,
       headers: {
@@ -910,7 +910,7 @@ describe('CorsHandler', () => {
     });
 
     assertAllowed(result);
-    const output = CorsHandler.applyHeaders(result, source);
+    const output = Cors.applyHeaders(result, source);
 
     expect(output.headers.get('content-type')).toBe('text/plain');
     expect(output.headers.get(HttpHeader.AccessControlAllowOrigin)).toBe('*');
@@ -927,7 +927,7 @@ describe('CorsHandler', () => {
       },
     });
 
-    const output = CorsHandler.applyHeaders(
+    const output = Cors.applyHeaders(
       {
         action: CorsAction.Continue,
         headers: resultHeaders,
@@ -951,7 +951,7 @@ describe('CorsHandler', () => {
       },
     });
 
-    const output = CorsHandler.applyHeaders(
+    const output = Cors.applyHeaders(
       {
         action: CorsAction.Continue,
         headers: resultHeaders,
@@ -965,7 +965,7 @@ describe('CorsHandler', () => {
   it('should preserve status and status text when applyHeaders is used', () => {
     const createdStatus = 201;
 
-    const output = CorsHandler.applyHeaders(
+    const output = Cors.applyHeaders(
       {
         action: CorsAction.Continue,
         headers: new Headers({ [HttpHeader.AccessControlAllowOrigin]: '*' }),
@@ -991,7 +991,7 @@ describe('CorsHandler', () => {
       },
     });
 
-    const output = CorsHandler.applyHeaders(
+    const output = Cors.applyHeaders(
       {
         action: CorsAction.Continue,
         headers: new Headers(),
@@ -1005,7 +1005,7 @@ describe('CorsHandler', () => {
   });
 
   it('should create preflight response with configured status when helper is called', async () => {
-    const handler = new CorsHandler({ optionsSuccessStatus: HttpStatus.Ok });
+    const handler = new Cors({ optionsSuccessStatus: HttpStatus.Ok });
     const request = new Request('http://example.test', {
       method: HttpMethod.Options,
       headers: {
@@ -1016,13 +1016,13 @@ describe('CorsHandler', () => {
     const result = await handler.handle(request);
 
     assertPreflight(result);
-    const response = CorsHandler.createPreflightResponse(result);
+    const response = Cors.createPreflightResponse(result);
 
     expect(response.status).toBe(HttpStatus.Ok);
   });
 
   it('should create preflight response with NoContent status when statusCode is NoContent', () => {
-    const response = CorsHandler.createPreflightResponse({
+    const response = Cors.createPreflightResponse({
       action: CorsAction.RespondPreflight,
       headers: new Headers(),
       statusCode: HttpStatus.NoContent,
@@ -1032,7 +1032,7 @@ describe('CorsHandler', () => {
   });
 
   it('should create preflight response with null body', () => {
-    const response = CorsHandler.createPreflightResponse({
+    const response = Cors.createPreflightResponse({
       action: CorsAction.RespondPreflight,
       headers: new Headers(),
       statusCode: HttpStatus.NoContent,

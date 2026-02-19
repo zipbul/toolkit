@@ -2,7 +2,7 @@ import { describe, expect, it } from 'bun:test';
 
 import { HttpHeader, HttpMethod, HttpStatus } from '@zipbul/shared';
 
-import { CorsAction, CorsHandler } from '../index';
+import { CorsAction, Cors } from '../index';
 import type { CorsContinueResult, CorsPreflightResult, CorsRejectResult } from '../index';
 import type { CorsAllowed, CorsResult } from '../index';
 
@@ -24,7 +24,7 @@ function assertPreflight(result: CorsResult): asserts result is CorsPreflightRes
 
 describe('cors-handler integration', () => {
   it('should create preflight response data and merge it into final response when modules are combined', async () => {
-    const cors = new CorsHandler({
+    const cors = new Cors({
       origin: ['https://app.example.com'],
       methods: [HttpMethod.Get, HttpMethod.Post],
       allowedHeaders: ['content-type', 'authorization'],
@@ -53,7 +53,7 @@ describe('cors-handler integration', () => {
   });
 
   it('should reject preflight request when requested method is not in allowed methods', async () => {
-    const cors = new CorsHandler({
+    const cors = new Cors({
       origin: ['https://app.example.com'],
       methods: [HttpMethod.Get],
     });
@@ -71,7 +71,7 @@ describe('cors-handler integration', () => {
   });
 
   it('should echo requested method and headers when wildcard options are used with credentials', async () => {
-    const cors = new CorsHandler({
+    const cors = new Cors({
       origin: ['https://app.example.com'],
       methods: ['*'],
       allowedHeaders: ['*'],
@@ -94,7 +94,7 @@ describe('cors-handler integration', () => {
   });
 
   it('should preserve existing vary values when applying cors headers to response', async () => {
-    const cors = new CorsHandler({
+    const cors = new Cors({
       origin: ['https://app.example.com'],
       credentials: true,
     });
@@ -114,7 +114,7 @@ describe('cors-handler integration', () => {
     });
 
     assertAllowed(result);
-    const merged = CorsHandler.applyHeaders(result, response);
+    const merged = Cors.applyHeaders(result, response);
     const vary = merged.headers.get(HttpHeader.Vary);
 
     expect(vary).toContain('Accept-Encoding');
@@ -122,7 +122,7 @@ describe('cors-handler integration', () => {
   });
 
   it('should reject wildcard allowed headers when request includes authorization header', async () => {
-    const cors = new CorsHandler({
+    const cors = new Cors({
       origin: ['https://app.example.com'],
       methods: [HttpMethod.Post],
       allowedHeaders: ['*'],
@@ -142,7 +142,7 @@ describe('cors-handler integration', () => {
   });
 
   it('should reject wildcard allowed headers when request includes uppercase Authorization header', async () => {
-    const cors = new CorsHandler({
+    const cors = new Cors({
       origin: ['https://app.example.com'],
       methods: [HttpMethod.Post],
       allowedHeaders: ['*'],
@@ -162,7 +162,7 @@ describe('cors-handler integration', () => {
   });
 
   it('should allow authorization header when wildcard and explicit authorization are both configured', async () => {
-    const cors = new CorsHandler({
+    const cors = new Cors({
       origin: ['https://app.example.com'],
       methods: [HttpMethod.Post],
       allowedHeaders: ['*', 'Authorization'],
@@ -182,7 +182,7 @@ describe('cors-handler integration', () => {
   });
 
   it('should include request method and request headers in vary for configured preflight response', async () => {
-    const cors = new CorsHandler({
+    const cors = new Cors({
       origin: ['https://app.example.com'],
       methods: [HttpMethod.Post],
       allowedHeaders: ['content-type', 'x-api-key'],
@@ -205,7 +205,7 @@ describe('cors-handler integration', () => {
   });
 
   it('should treat options request without access-control-request-method as non-preflight', async () => {
-    const cors = new CorsHandler({
+    const cors = new Cors({
       origin: ['https://app.example.com'],
     });
     const request = new Request('http://example.test', {
@@ -222,7 +222,7 @@ describe('cors-handler integration', () => {
   });
 
   it('should return preflight result without immediate response when preflightContinue is enabled', async () => {
-    const cors = new CorsHandler({
+    const cors = new Cors({
       origin: ['https://app.example.com'],
       methods: [HttpMethod.Post],
       preflightContinue: true,
@@ -241,7 +241,7 @@ describe('cors-handler integration', () => {
   });
 
   it('should keep preflight rejection contract when requested method is disallowed', async () => {
-    const cors = new CorsHandler({
+    const cors = new Cors({
       origin: ['https://app.example.com'],
       methods: [HttpMethod.Get],
     });
@@ -259,7 +259,7 @@ describe('cors-handler integration', () => {
   });
 
   it('should return wildcard origin and omit vary origin when credentials are disabled', async () => {
-    const cors = new CorsHandler();
+    const cors = new Cors();
     const request = new Request('http://example.test', {
       method: HttpMethod.Get,
       headers: {
@@ -275,7 +275,7 @@ describe('cors-handler integration', () => {
   });
 
   it('should reflect request origin and append vary origin when credentials are enabled with wildcard origin', async () => {
-    const cors = new CorsHandler({
+    const cors = new Cors({
       credentials: true,
     });
     const request = new Request('http://example.test', {
@@ -294,7 +294,7 @@ describe('cors-handler integration', () => {
   });
 
   it('should allow requested headers when allowedHeaders is undefined by echoing access-control-request-headers', async () => {
-    const cors = new CorsHandler({
+    const cors = new Cors({
       origin: ['https://app.example.com'],
       methods: [HttpMethod.Put],
     });
@@ -315,7 +315,7 @@ describe('cors-handler integration', () => {
   });
 
   it('should build preflight response and merge cors headers into existing response in sequence', async () => {
-    const cors = new CorsHandler({
+    const cors = new Cors({
       origin: ['https://app.example.com'],
       methods: [HttpMethod.Post],
       allowedHeaders: ['content-type'],
@@ -331,8 +331,8 @@ describe('cors-handler integration', () => {
 
     const result = await cors.handle(request);
     assertPreflight(result);
-    const preflightResponse = CorsHandler.createPreflightResponse(result);
-    const merged = CorsHandler.applyHeaders(result, preflightResponse);
+    const preflightResponse = Cors.createPreflightResponse(result);
+    const merged = Cors.applyHeaders(result, preflightResponse);
 
     expect(preflightResponse.status).toBe(HttpStatus.NoContent);
     expect(merged.headers.get(HttpHeader.AccessControlAllowOrigin)).toBe('https://app.example.com');
@@ -341,7 +341,7 @@ describe('cors-handler integration', () => {
   });
 
   it('should keep request disallowed when origin callback denies the origin', async () => {
-    const cors = new CorsHandler({
+    const cors = new Cors({
       origin: async () => false,
     });
     const request = new Request('http://example.test', {

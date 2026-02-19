@@ -1,6 +1,7 @@
 {
   "name": "bunner-pantry",
   "private": true,
+  "license": "MIT",
   "type": "module",
   "workspaces": ["packages/*"],
   "devDependencies": {

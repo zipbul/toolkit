@@ -1,11 +1,4 @@
 {
-  "extends": "../../tsconfig.json",
-  "compilerOptions": {
-    "rootDir": ".",
-    "paths": {
-      "@zipbul/cors": ["./index.ts"]
-    }
-  },
-  "include": ["./**/*.ts"]
+  "extends": "../../tsconfig.json"
 }
 
