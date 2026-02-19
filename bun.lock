@@ -22,6 +22,10 @@
       "name": "@zipbul/query-parser",
       "version": "0.0.1",
     },
+    "packages/result": {
+      "name": "@zipbul/result",
+      "version": "0.0.1",
+    },
     "packages/router": {
       "name": "@zipbul/router",
       "version": "0.0.1",
@@ -39,6 +43,8 @@
     "@zipbul/cors": ["@zipbul/cors@workspace:packages/cors"],
 
     "@zipbul/query-parser": ["@zipbul/query-parser@workspace:packages/query-parser"],
+
+    "@zipbul/result": ["@zipbul/result@workspace:packages/result"],
 
     "@zipbul/router": ["@zipbul/router@workspace:packages/router"],
 
