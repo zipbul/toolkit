@@ -5,8 +5,7 @@ coverageReporter = ["text", "lcov"]
 coverageThreshold = 0.95
 coveragePathIgnorePatterns = [
   "node_modules/**",
-  "dist/**",
-  "../shared/**"
+  "dist/**"
 ]
 
 [test.reporter]

@@ -62,5 +62,19 @@ describe('constants', () => {
       // Assert
       expect(getMarkerKey()).toBe(DEFAULT_MARKER_KEY);
     });
+
+    it('should throw TypeError when key is a whitespace-only string', () => {
+      // Arrange / Act / Assert
+      expect(() => setMarkerKey('   ')).toThrow(TypeError);
+    });
+
+    it('should not modify current marker key when validation fails', () => {
+      // Arrange
+      setMarkerKey('__custom__');
+      // Act
+      try { setMarkerKey(''); } catch {}
+      // Assert
+      expect(getMarkerKey()).toBe('__custom__');
+    });
   });
 });

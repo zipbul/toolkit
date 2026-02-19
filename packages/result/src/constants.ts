@@ -19,13 +19,13 @@ export function getMarkerKey(): string {
 /**
  * 마커 키를 변경한다.
  * error()와 isError()가 이 키를 참조하여 에러를 판별한다.
- * 빈 문자열은 허용하지 않는다.
+ * 빈 문자열 및 공백만으로 이루어진 문자열은 허용하지 않는다.
  *
- * @param key - 새 마커 키. 비어있지 않은 문자열이어야 한다.
- * @throws {TypeError} key가 빈 문자열인 경우
+ * @param key - 새 마커 키. 비어있지 않은(공백 제외) 문자열이어야 한다.
+ * @throws {TypeError} key가 빈/공백 문자열인 경우
  */
 export function setMarkerKey(key: string): void {
-  if (key.length === 0) {
+  if (key.trim().length === 0) {
     throw new TypeError('Marker key must be a non-empty string');
   }
   currentMarkerKey = key;
