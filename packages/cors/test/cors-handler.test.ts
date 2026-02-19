@@ -2,7 +2,25 @@ import { describe, expect, it } from 'bun:test';
 
 import { HttpHeader, HttpMethod, HttpStatus } from '@zipbul/shared';
 
-import { CorsHandler } from '../index';
+import { CorsAction, CorsHandler } from '../index';
+import type { CorsContinueResult, CorsPreflightResult, CorsRejectResult } from '../index';
+import type { CorsAllowed, CorsResult } from '../index';
+
+function assertReject(result: CorsResult): asserts result is CorsRejectResult {
+  expect(result.action).toBe(CorsAction.Reject);
+}
+
+function assertAllowed(result: CorsResult): asserts result is CorsAllowed {
+  expect(result.action).not.toBe(CorsAction.Reject);
+}
+
+function assertContinue(result: CorsResult): asserts result is CorsContinueResult {
+  expect(result.action).toBe(CorsAction.Continue);
+}
+
+function assertPreflight(result: CorsResult): asserts result is CorsPreflightResult {
+  expect(result.action).toBe(CorsAction.RespondPreflight);
+}
 
 describe('cors-handler integration', () => {
   it('should create preflight response data and merge it into final response when modules are combined', async () => {
@@ -25,8 +43,7 @@ describe('cors-handler integration', () => {
 
     const result = await cors.handle(request);
 
-    expect(result.isPreflight).toBe(true);
-    expect(result.shouldRespond).toBe(true);
+    assertPreflight(result);
     expect(result.statusCode).toBe(HttpStatus.Ok);
     expect(result.headers.get(HttpHeader.AccessControlAllowOrigin)).toBe('https://app.example.com');
     expect(result.headers.get(HttpHeader.AccessControlAllowMethods)).toBe('GET,POST');
@@ -50,8 +67,7 @@ describe('cors-handler integration', () => {
 
     const result = await cors.handle(request);
 
-    expect(result.isAllowed).toBe(false);
-    expect(result.headers.get(HttpHeader.AccessControlAllowOrigin)).toBeNull();
+    assertReject(result);
   });
 
   it('should echo requested method and headers when wildcard options are used with credentials', async () => {
@@ -72,7 +88,7 @@ describe('cors-handler integration', () => {
 
     const result = await cors.handle(request);
 
-    expect(result.isAllowed).toBe(true);
+    assertAllowed(result);
     expect(result.headers.get(HttpHeader.AccessControlAllowMethods)).toBe(HttpMethod.Patch);
     expect(result.headers.get(HttpHeader.AccessControlAllowHeaders)).toBe('x-api-key,content-type');
   });
@@ -97,6 +113,7 @@ describe('cors-handler integration', () => {
       },
     });
 
+    assertAllowed(result);
     const merged = CorsHandler.applyHeaders(result, response);
     const vary = merged.headers.get(HttpHeader.Vary);
 
@@ -121,7 +138,7 @@ describe('cors-handler integration', () => {
 
     const result = await cors.handle(request);
 
-    expect(result.isAllowed).toBe(false);
+    assertReject(result);
   });
 
   it('should reject wildcard allowed headers when request includes uppercase Authorization header', async () => {
@@ -141,7 +158,7 @@ describe('cors-handler integration', () => {
 
     const result = await cors.handle(request);
 
-    expect(result.isAllowed).toBe(false);
+    assertReject(result);
   });
 
   it('should allow authorization header when wildcard and explicit authorization are both configured', async () => {
@@ -161,7 +178,7 @@ describe('cors-handler integration', () => {
 
     const result = await cors.handle(request);
 
-    expect(result.isAllowed).toBe(true);
+    assertAllowed(result);
   });
 
   it('should include request method and request headers in vary for configured preflight response', async () => {
@@ -180,6 +197,7 @@ describe('cors-handler integration', () => {
     });
 
     const result = await cors.handle(request);
+    assertAllowed(result);
     const vary = result.headers.get(HttpHeader.Vary);
 
     expect(vary).toContain(HttpHeader.AccessControlRequestMethod);
@@ -199,10 +217,7 @@ describe('cors-handler integration', () => {
 
     const result = await cors.handle(request);
 
-    expect(result.isAllowed).toBe(true);
-    expect(result.isPreflight).toBe(false);
-    expect(result.shouldRespond).toBe(false);
-    expect(result.statusCode).toBeNull();
+    assertContinue(result);
     expect(result.headers.get(HttpHeader.AccessControlAllowMethods)).toBeNull();
   });
 
@@ -222,10 +237,7 @@ describe('cors-handler integration', () => {
 
     const result = await cors.handle(request);
 
-    expect(result.isAllowed).toBe(true);
-    expect(result.isPreflight).toBe(true);
-    expect(result.shouldRespond).toBe(false);
-    expect(result.statusCode).toBeNull();
+    assertContinue(result);
   });
 
   it('should keep preflight rejection contract when requested method is disallowed', async () => {
@@ -243,11 +255,7 @@ describe('cors-handler integration', () => {
 
     const result = await cors.handle(request);
 
-    expect(result.isAllowed).toBe(false);
-    expect(result.isPreflight).toBe(true);
-    expect(result.shouldRespond).toBe(false);
-    expect(result.statusCode).toBeNull();
-    expect(result.headers.get(HttpHeader.AccessControlAllowOrigin)).toBeNull();
+    assertReject(result);
   });
 
   it('should return wildcard origin and omit vary origin when credentials are disabled', async () => {
@@ -261,7 +269,7 @@ describe('cors-handler integration', () => {
 
     const result = await cors.handle(request);
 
-    expect(result.isAllowed).toBe(true);
+    assertAllowed(result);
     expect(result.headers.get(HttpHeader.AccessControlAllowOrigin)).toBe('*');
     expect(result.headers.get(HttpHeader.Vary)).toBeNull();
   });
@@ -279,7 +287,7 @@ describe('cors-handler integration', () => {
 
     const result = await cors.handle(request);
 
-    expect(result.isAllowed).toBe(true);
+    assertAllowed(result);
     expect(result.headers.get(HttpHeader.AccessControlAllowOrigin)).toBe('https://app.example.com');
     expect(result.headers.get(HttpHeader.AccessControlAllowCredentials)).toBe('true');
     expect(result.headers.get(HttpHeader.Vary)).toContain(HttpHeader.Origin);
@@ -301,7 +309,7 @@ describe('cors-handler integration', () => {
 
     const result = await cors.handle(request);
 
-    expect(result.isAllowed).toBe(true);
+    assertAllowed(result);
     expect(result.headers.get(HttpHeader.AccessControlAllowHeaders)).toBe('x-client-id,content-type');
     expect(result.headers.get(HttpHeader.Vary)).toContain(HttpHeader.AccessControlRequestHeaders);
   });
@@ -322,6 +330,7 @@ describe('cors-handler integration', () => {
     });
 
     const result = await cors.handle(request);
+    assertPreflight(result);
     const preflightResponse = CorsHandler.createPreflightResponse(result);
     const merged = CorsHandler.applyHeaders(result, preflightResponse);
 
@@ -344,7 +353,6 @@ describe('cors-handler integration', () => {
 
     const result = await cors.handle(request);
 
-    expect(result.isAllowed).toBe(false);
-    expect(result.headers.get(HttpHeader.AccessControlAllowOrigin)).toBeNull();
+    assertReject(result);
   });
 });

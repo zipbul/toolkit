@@ -1,6 +1,23 @@
 import type { HttpMethod } from '@zipbul/shared';
 
+import type { CorsAction, CorsRejectionReason } from './enums';
 import type { OriginOptions } from './types';
+
+export interface CorsContinueResult {
+  action: CorsAction.Continue;
+  headers: Headers;
+}
+
+export interface CorsPreflightResult {
+  action: CorsAction.RespondPreflight;
+  headers: Headers;
+  statusCode: number;
+}
+
+export interface CorsRejectResult {
+  action: CorsAction.Reject;
+  reason: CorsRejectionReason;
+}
 
 export interface CorsOptions {
   origin?: OriginOptions;
@@ -11,12 +28,4 @@ export interface CorsOptions {
   maxAge?: number;
   preflightContinue?: boolean;
   optionsSuccessStatus?: number;
-}
-
-export interface CorsResult {
-  headers: Headers;
-  isPreflight: boolean;
-  isAllowed: boolean;
-  shouldRespond: boolean;
-  statusCode: number | null;
 }

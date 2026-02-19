@@ -1,7 +1,9 @@
-import { HttpHeader, HttpStatus } from '@zipbul/shared';
+import { HttpHeader } from '@zipbul/shared';
 
 import { CORS_DEFAULT_METHODS, CORS_DEFAULT_OPTIONS_SUCCESS_STATUS } from './constants';
-import type { CorsOptions, CorsResult } from './interfaces';
+import { CorsAction, CorsRejectionReason } from './enums';
+import type { CorsOptions, CorsPreflightResult, CorsRejectResult } from './interfaces';
+import type { CorsAllowed, CorsResult } from './types';
 import type { OriginOptions, OriginResult } from './types';
 
 export class CorsHandler {
@@ -11,13 +13,13 @@ export class CorsHandler {
     const origin = request.headers.get(HttpHeader.Origin);
 
     if (origin === null || origin.length === 0) {
-      return this.createDisallowedResult();
+      return this.reject(CorsRejectionReason.NoOrigin);
     }
 
     const allowedOrigin = await this.matchOrigin(origin, request);
 
     if (allowedOrigin === undefined) {
-      return this.createDisallowedResult();
+      return this.reject(CorsRejectionReason.OriginNotAllowed);
     }
 
     const headers = new Headers();
@@ -41,31 +43,19 @@ export class CorsHandler {
         }
       }
 
-      return {
-        headers,
-        isPreflight: false,
-        isAllowed: true,
-        shouldRespond: false,
-        statusCode: null,
-      };
+      return { action: CorsAction.Continue, headers };
     }
 
     const requestMethod = request.headers.get(HttpHeader.AccessControlRequestMethod);
 
     if (requestMethod === null || requestMethod.length === 0) {
-      return {
-        headers,
-        isPreflight: false,
-        isAllowed: true,
-        shouldRespond: false,
-        statusCode: null,
-      };
+      return { action: CorsAction.Continue, headers };
     }
 
     const allowedMethods = this.options.methods ?? CORS_DEFAULT_METHODS;
 
     if (!this.isMethodAllowed(requestMethod, allowedMethods)) {
-      return this.createDisallowedResult(true);
+      return this.reject(CorsRejectionReason.MethodNotAllowed);
     }
 
     const allowMethodsValue = this.serializeAllowedMethods(allowedMethods, requestMethod);
@@ -79,7 +69,7 @@ export class CorsHandler {
 
     if (this.options.allowedHeaders !== undefined) {
       if (!this.areRequestHeadersAllowed(requestHeaders, this.options.allowedHeaders)) {
-        return this.createDisallowedResult(true);
+        return this.reject(CorsRejectionReason.HeaderNotAllowed);
       }
 
       const allowHeadersValue = this.serializeAllowedHeaders(this.options.allowedHeaders, requestHeadersRaw);
@@ -102,27 +92,15 @@ export class CorsHandler {
     const preflightContinue = this.options.preflightContinue ?? false;
 
     if (preflightContinue) {
-      return {
-        headers,
-        isPreflight: true,
-        isAllowed: true,
-        shouldRespond: false,
-        statusCode: null,
-      };
+      return { action: CorsAction.Continue, headers };
     }
 
     const statusCode = this.options.optionsSuccessStatus ?? CORS_DEFAULT_OPTIONS_SUCCESS_STATUS;
 
-    return {
-      headers,
-      isPreflight: true,
-      isAllowed: true,
-      shouldRespond: true,
-      statusCode,
-    };
+    return { action: CorsAction.RespondPreflight, headers, statusCode };
   }
 
-  public static applyHeaders(result: CorsResult, response: Response): Response {
+  public static applyHeaders(result: CorsAllowed, response: Response): Response {
     const mergedHeaders = new Headers(response.headers);
 
     for (const [name, value] of result.headers.entries()) {
@@ -143,23 +121,15 @@ export class CorsHandler {
     });
   }
 
-  public static createPreflightResponse(result: CorsResult): Response {
-    const status = result.statusCode ?? HttpStatus.NoContent;
-
+  public static createPreflightResponse(result: CorsPreflightResult): Response {
     return new Response(null, {
-      status,
+      status: result.statusCode,
       headers: result.headers,
     });
   }
 
-  private createDisallowedResult(isPreflight = false): CorsResult {
-    return {
-      headers: new Headers(),
-      isPreflight,
-      isAllowed: false,
-      shouldRespond: false,
-      statusCode: null,
-    };
+  private reject(reason: CorsRejectionReason): CorsRejectResult {
+    return { action: CorsAction.Reject, reason };
   }
 
   private async matchOrigin(origin: string, request: Request): Promise<string | undefined> {

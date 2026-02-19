@@ -2,7 +2,26 @@ import { describe, expect, it } from 'bun:test';
 
 import { HttpHeader, HttpMethod, HttpStatus } from '@zipbul/shared';
 
+import { CorsAction, CorsRejectionReason } from './enums';
+import type { CorsContinueResult, CorsPreflightResult, CorsRejectResult } from './interfaces';
+import type { CorsAllowed, CorsResult } from './types';
 import { CorsHandler } from './cors-handler';
+
+function assertReject(result: CorsResult): asserts result is CorsRejectResult {
+  expect(result.action).toBe(CorsAction.Reject);
+}
+
+function assertAllowed(result: CorsResult): asserts result is CorsAllowed {
+  expect(result.action).not.toBe(CorsAction.Reject);
+}
+
+function assertContinue(result: CorsResult): asserts result is CorsContinueResult {
+  expect(result.action).toBe(CorsAction.Continue);
+}
+
+function assertPreflight(result: CorsResult): asserts result is CorsPreflightResult {
+  expect(result.action).toBe(CorsAction.RespondPreflight);
+}
 
 describe('CorsHandler', () => {
   it('should return disallowed result when origin header is missing', async () => {
@@ -11,8 +30,8 @@ describe('CorsHandler', () => {
 
     const result = await handler.handle(request);
 
-    expect(result.isAllowed).toBe(false);
-    expect(result.headers.get(HttpHeader.AccessControlAllowOrigin)).toBeNull();
+    assertReject(result);
+    expect(result.reason).toBe(CorsRejectionReason.NoOrigin);
   });
 
   it('should return disallowed result when origin header is empty string', async () => {
@@ -26,8 +45,8 @@ describe('CorsHandler', () => {
 
     const result = await handler.handle(request);
 
-    expect(result.isAllowed).toBe(false);
-    expect(result.headers.get(HttpHeader.AccessControlAllowOrigin)).toBeNull();
+    assertReject(result);
+    expect(result.reason).toBe(CorsRejectionReason.NoOrigin);
   });
 
   it('should allow wildcard origin when origin header is provided with default options', async () => {
@@ -41,7 +60,7 @@ describe('CorsHandler', () => {
 
     const result = await handler.handle(request);
 
-    expect(result.isAllowed).toBe(true);
+    assertAllowed(result);
     expect(result.headers.get(HttpHeader.AccessControlAllowOrigin)).toBe('*');
   });
 
@@ -56,7 +75,8 @@ describe('CorsHandler', () => {
 
     const result = await handler.handle(request);
 
-    expect(result.isAllowed).toBe(false);
+    assertReject(result);
+    expect(result.reason).toBe(CorsRejectionReason.OriginNotAllowed);
   });
 
   it('should allow request when origin option is exact matching string', async () => {
@@ -70,7 +90,7 @@ describe('CorsHandler', () => {
 
     const result = await handler.handle(request);
 
-    expect(result.isAllowed).toBe(true);
+    assertAllowed(result);
     expect(result.headers.get(HttpHeader.AccessControlAllowOrigin)).toBe('https://example.com');
   });
 
@@ -85,7 +105,8 @@ describe('CorsHandler', () => {
 
     const result = await handler.handle(request);
 
-    expect(result.isAllowed).toBe(false);
+    assertReject(result);
+    expect(result.reason).toBe(CorsRejectionReason.OriginNotAllowed);
   });
 
   it('should reflect origin when origin option is true', async () => {
@@ -99,7 +120,7 @@ describe('CorsHandler', () => {
 
     const result = await handler.handle(request);
 
-    expect(result.isAllowed).toBe(true);
+    assertAllowed(result);
     expect(result.headers.get(HttpHeader.AccessControlAllowOrigin)).toBe('https://example.com');
   });
 
@@ -114,7 +135,8 @@ describe('CorsHandler', () => {
 
     const result = await handler.handle(request);
 
-    expect(result.isAllowed).toBe(false);
+    assertReject(result);
+    expect(result.reason).toBe(CorsRejectionReason.OriginNotAllowed);
   });
 
   it('should allow request when origin option is regular expression and matches', async () => {
@@ -128,7 +150,7 @@ describe('CorsHandler', () => {
 
     const result = await handler.handle(request);
 
-    expect(result.isAllowed).toBe(true);
+    assertAllowed(result);
     expect(result.headers.get(HttpHeader.AccessControlAllowOrigin)).toBe('https://example.com');
   });
 
@@ -143,7 +165,7 @@ describe('CorsHandler', () => {
 
     const result = await handler.handle(request);
 
-    expect(result.isAllowed).toBe(true);
+    assertAllowed(result);
   });
 
   it('should allow request when origin option array contains matching regular expression', async () => {
@@ -157,7 +179,7 @@ describe('CorsHandler', () => {
 
     const result = await handler.handle(request);
 
-    expect(result.isAllowed).toBe(true);
+    assertAllowed(result);
   });
 
   it('should return disallowed result when origin option array does not match request origin', async () => {
@@ -171,7 +193,8 @@ describe('CorsHandler', () => {
 
     const result = await handler.handle(request);
 
-    expect(result.isAllowed).toBe(false);
+    assertReject(result);
+    expect(result.reason).toBe(CorsRejectionReason.OriginNotAllowed);
   });
 
   it('should allow request when origin function returns true', async () => {
@@ -187,7 +210,7 @@ describe('CorsHandler', () => {
 
     const result = await handler.handle(request);
 
-    expect(result.isAllowed).toBe(true);
+    assertAllowed(result);
     expect(result.headers.get(HttpHeader.AccessControlAllowOrigin)).toBe('https://example.com');
   });
 
@@ -204,7 +227,7 @@ describe('CorsHandler', () => {
 
     const result = await handler.handle(request);
 
-    expect(result.isAllowed).toBe(true);
+    assertAllowed(result);
     expect(result.headers.get(HttpHeader.AccessControlAllowOrigin)).toBe('https://proxy.example.com');
   });
 
@@ -221,7 +244,7 @@ describe('CorsHandler', () => {
 
     const result = await handler.handle(request);
 
-    expect(result.isAllowed).toBe(true);
+    assertAllowed(result);
   });
 
   it('should pass origin and request to origin function', async () => {
@@ -245,7 +268,7 @@ describe('CorsHandler', () => {
 
     const result = await handler.handle(request);
 
-    expect(result.isAllowed).toBe(true);
+    assertAllowed(result);
     expect(capturedOrigin).toBe('https://example.com');
     expect(capturedRequest === request).toBe(true);
   });
@@ -293,7 +316,8 @@ describe('CorsHandler', () => {
 
     const result = await handler.handle(request);
 
-    expect(result.isAllowed).toBe(false);
+    assertReject(result);
+    expect(result.reason).toBe(CorsRejectionReason.OriginNotAllowed);
   });
 
   it('should return disallowed result when origin function returns empty string', async () => {
@@ -309,7 +333,8 @@ describe('CorsHandler', () => {
 
     const result = await handler.handle(request);
 
-    expect(result.isAllowed).toBe(false);
+    assertReject(result);
+    expect(result.reason).toBe(CorsRejectionReason.OriginNotAllowed);
   });
 
   it('should reflect request origin when credentials is true and origin option is wildcard', async () => {
@@ -323,7 +348,7 @@ describe('CorsHandler', () => {
 
     const result = await handler.handle(request);
 
-    expect(result.isAllowed).toBe(true);
+    assertAllowed(result);
     expect(result.headers.get(HttpHeader.AccessControlAllowOrigin)).toBe('https://example.com');
     expect(result.headers.get(HttpHeader.AccessControlAllowCredentials)).toBe('true');
   });
@@ -339,6 +364,7 @@ describe('CorsHandler', () => {
 
     const result = await handler.handle(request);
 
+    assertAllowed(result);
     expect(result.headers.get(HttpHeader.AccessControlExposeHeaders)).toBe('x-request-id,x-rate-limit');
   });
 
@@ -353,6 +379,7 @@ describe('CorsHandler', () => {
 
     const result = await handler.handle(request);
 
+    assertAllowed(result);
     expect(result.headers.get(HttpHeader.AccessControlExposeHeaders)).toBeNull();
   });
 
@@ -367,6 +394,7 @@ describe('CorsHandler', () => {
 
     const result = await handler.handle(request);
 
+    assertAllowed(result);
     expect(result.headers.get(HttpHeader.AccessControlExposeHeaders)).toBe('*');
   });
 
@@ -381,6 +409,7 @@ describe('CorsHandler', () => {
 
     const result = await handler.handle(request);
 
+    assertAllowed(result);
     expect(result.headers.get(HttpHeader.AccessControlExposeHeaders)).toBeNull();
   });
 
@@ -395,9 +424,7 @@ describe('CorsHandler', () => {
 
     const result = await handler.handle(request);
 
-    expect(result.isAllowed).toBe(true);
-    expect(result.isPreflight).toBe(false);
-    expect(result.shouldRespond).toBe(false);
+    assertContinue(result);
   });
 
   it('should not mark preflight when access-control-request-method is empty string', async () => {
@@ -412,8 +439,7 @@ describe('CorsHandler', () => {
 
     const result = await handler.handle(request);
 
-    expect(result.isPreflight).toBe(false);
-    expect(result.isAllowed).toBe(true);
+    assertContinue(result);
   });
 
   it('should mark preflight response when options method has access-control-request-method', async () => {
@@ -428,8 +454,7 @@ describe('CorsHandler', () => {
 
     const result = await handler.handle(request);
 
-    expect(result.isPreflight).toBe(true);
-    expect(result.shouldRespond).toBe(true);
+    assertPreflight(result);
     expect(result.statusCode).toBe(HttpStatus.NoContent);
     expect(result.headers.get(HttpHeader.AccessControlAllowMethods)).toContain(HttpMethod.Post);
   });
@@ -446,8 +471,8 @@ describe('CorsHandler', () => {
 
     const result = await handler.handle(request);
 
-    expect(result.isAllowed).toBe(false);
-    expect(result.isPreflight).toBe(true);
+    assertReject(result);
+    expect(result.reason).toBe(CorsRejectionReason.MethodNotAllowed);
   });
 
   it('should return disallowed result when allowed methods is empty', async () => {
@@ -462,8 +487,8 @@ describe('CorsHandler', () => {
 
     const result = await handler.handle(request);
 
-    expect(result.isAllowed).toBe(false);
-    expect(result.isPreflight).toBe(true);
+    assertReject(result);
+    expect(result.reason).toBe(CorsRejectionReason.MethodNotAllowed);
   });
 
   it('should allow request method matching with different casing', async () => {
@@ -478,7 +503,7 @@ describe('CorsHandler', () => {
 
     const result = await handler.handle(request);
 
-    expect(result.isAllowed).toBe(true);
+    assertAllowed(result);
   });
 
   it('should allow requested method when methods wildcard is configured without credentials', async () => {
@@ -493,7 +518,7 @@ describe('CorsHandler', () => {
 
     const result = await handler.handle(request);
 
-    expect(result.isAllowed).toBe(true);
+    assertAllowed(result);
     expect(result.headers.get(HttpHeader.AccessControlAllowMethods)).toBe('*');
   });
 
@@ -509,7 +534,7 @@ describe('CorsHandler', () => {
 
     const result = await handler.handle(request);
 
-    expect(result.isAllowed).toBe(true);
+    assertAllowed(result);
     expect(result.headers.get(HttpHeader.AccessControlAllowMethods)).toBe(HttpMethod.Patch);
   });
 
@@ -526,7 +551,7 @@ describe('CorsHandler', () => {
 
     const result = await handler.handle(request);
 
-    expect(result.isAllowed).toBe(true);
+    assertAllowed(result);
     expect(result.headers.get(HttpHeader.AccessControlAllowHeaders)).toBe('x-api-key,content-type');
     expect(result.headers.get(HttpHeader.Vary)).toContain(HttpHeader.AccessControlRequestHeaders);
   });
@@ -544,7 +569,8 @@ describe('CorsHandler', () => {
 
     const result = await handler.handle(request);
 
-    expect(result.isAllowed).toBe(false);
+    assertReject(result);
+    expect(result.reason).toBe(CorsRejectionReason.HeaderNotAllowed);
   });
 
   it('should allow requested headers when configured headers include case-insensitive matches', async () => {
@@ -560,7 +586,7 @@ describe('CorsHandler', () => {
 
     const result = await handler.handle(request);
 
-    expect(result.isAllowed).toBe(true);
+    assertAllowed(result);
     expect(result.headers.get(HttpHeader.AccessControlAllowHeaders)).toBe('Content-Type,X-API-KEY');
   });
 
@@ -577,7 +603,8 @@ describe('CorsHandler', () => {
 
     const result = await handler.handle(request);
 
-    expect(result.isAllowed).toBe(false);
+    assertReject(result);
+    expect(result.reason).toBe(CorsRejectionReason.HeaderNotAllowed);
   });
 
   it('should set wildcard allow headers when allowed headers wildcard is configured without credentials', async () => {
@@ -593,7 +620,7 @@ describe('CorsHandler', () => {
 
     const result = await handler.handle(request);
 
-    expect(result.isAllowed).toBe(true);
+    assertAllowed(result);
     expect(result.headers.get(HttpHeader.AccessControlAllowHeaders)).toBe('*');
   });
 
@@ -609,7 +636,7 @@ describe('CorsHandler', () => {
 
     const result = await handler.handle(request);
 
-    expect(result.isAllowed).toBe(true);
+    assertAllowed(result);
     expect(result.headers.get(HttpHeader.AccessControlAllowHeaders)).toBeNull();
   });
 
@@ -626,7 +653,8 @@ describe('CorsHandler', () => {
 
     const result = await handler.handle(request);
 
-    expect(result.isAllowed).toBe(false);
+    assertReject(result);
+    expect(result.reason).toBe(CorsRejectionReason.HeaderNotAllowed);
   });
 
   it('should return disallowed result when wildcard allowed headers is used with uppercase authorization request header', async () => {
@@ -642,7 +670,8 @@ describe('CorsHandler', () => {
 
     const result = await handler.handle(request);
 
-    expect(result.isAllowed).toBe(false);
+    assertReject(result);
+    expect(result.reason).toBe(CorsRejectionReason.HeaderNotAllowed);
   });
 
   it('should allow authorization request header when authorization is explicitly listed with wildcard', async () => {
@@ -658,7 +687,7 @@ describe('CorsHandler', () => {
 
     const result = await handler.handle(request);
 
-    expect(result.isAllowed).toBe(true);
+    assertAllowed(result);
   });
 
   it('should allow authorization request header when explicit authorization is listed with mixed casing', async () => {
@@ -674,7 +703,7 @@ describe('CorsHandler', () => {
 
     const result = await handler.handle(request);
 
-    expect(result.isAllowed).toBe(true);
+    assertAllowed(result);
   });
 
   it('should avoid wildcard allow headers when credentials is true by echoing request headers', async () => {
@@ -690,7 +719,7 @@ describe('CorsHandler', () => {
 
     const result = await handler.handle(request);
 
-    expect(result.isAllowed).toBe(true);
+    assertAllowed(result);
     expect(result.headers.get(HttpHeader.AccessControlAllowHeaders)).toBe('x-api-key,content-type');
     expect(result.headers.get(HttpHeader.Vary)).toContain(HttpHeader.AccessControlRequestHeaders);
   });
@@ -707,6 +736,7 @@ describe('CorsHandler', () => {
 
     const result = await handler.handle(request);
 
+    assertPreflight(result);
     expect(result.headers.get(HttpHeader.AccessControlMaxAge)).toBe('600');
   });
 
@@ -722,6 +752,7 @@ describe('CorsHandler', () => {
 
     const result = await handler.handle(request);
 
+    assertPreflight(result);
     expect(result.headers.get(HttpHeader.AccessControlMaxAge)).toBe('0');
   });
 
@@ -736,6 +767,7 @@ describe('CorsHandler', () => {
 
     const result = await handler.handle(request);
 
+    assertAllowed(result);
     expect(result.headers.get(HttpHeader.Vary)).toBeNull();
   });
 
@@ -750,7 +782,7 @@ describe('CorsHandler', () => {
 
     const result = await handler.handle(request);
 
-    expect(result.isAllowed).toBe(true);
+    assertAllowed(result);
     expect(result.headers.get(HttpHeader.AccessControlAllowOrigin)).toBe('null');
   });
 
@@ -770,6 +802,7 @@ describe('CorsHandler', () => {
     });
 
     const result = await handler.handle(request);
+    assertPreflight(result);
     const vary = result.headers.get(HttpHeader.Vary);
 
     expect(vary).toContain(HttpHeader.Origin);
@@ -789,6 +822,7 @@ describe('CorsHandler', () => {
 
     const result = await handler.handle(request);
 
+    assertPreflight(result);
     expect(result.headers.get(HttpHeader.Vary)).toContain(HttpHeader.AccessControlRequestMethod);
   });
 
@@ -805,6 +839,7 @@ describe('CorsHandler', () => {
 
     const result = await handler.handle(request);
 
+    assertPreflight(result);
     expect(result.headers.get(HttpHeader.Vary)).toContain(HttpHeader.AccessControlRequestHeaders);
   });
 
@@ -820,9 +855,7 @@ describe('CorsHandler', () => {
 
     const result = await handler.handle(request);
 
-    expect(result.isPreflight).toBe(true);
-    expect(result.shouldRespond).toBe(false);
-    expect(result.statusCode).toBeNull();
+    assertContinue(result);
   });
 
   it('should keep configured headers when allowed headers are configured and request headers are missing', async () => {
@@ -840,7 +873,7 @@ describe('CorsHandler', () => {
 
     const result = await handler.handle(request);
 
-    expect(result.isAllowed).toBe(true);
+    assertAllowed(result);
     expect(result.headers.get(HttpHeader.AccessControlAllowHeaders)).toBe('content-type,x-api-key');
   });
 
@@ -856,7 +889,7 @@ describe('CorsHandler', () => {
 
     const result = await handler.handle(request);
 
-    expect(result.isPreflight).toBe(true);
+    assertPreflight(result);
     expect(result.statusCode).toBe(HttpStatus.Ok);
   });
 
@@ -876,6 +909,7 @@ describe('CorsHandler', () => {
       },
     });
 
+    assertAllowed(result);
     const output = CorsHandler.applyHeaders(result, source);
 
     expect(output.headers.get('content-type')).toBe('text/plain');
@@ -895,11 +929,8 @@ describe('CorsHandler', () => {
 
     const output = CorsHandler.applyHeaders(
       {
+        action: CorsAction.Continue,
         headers: resultHeaders,
-        isAllowed: true,
-        isPreflight: false,
-        shouldRespond: false,
-        statusCode: null,
       },
       source,
     );
@@ -922,11 +953,8 @@ describe('CorsHandler', () => {
 
     const output = CorsHandler.applyHeaders(
       {
+        action: CorsAction.Continue,
         headers: resultHeaders,
-        isAllowed: true,
-        isPreflight: false,
-        shouldRespond: false,
-        statusCode: null,
       },
       source,
     );
@@ -939,11 +967,8 @@ describe('CorsHandler', () => {
 
     const output = CorsHandler.applyHeaders(
       {
+        action: CorsAction.Continue,
         headers: new Headers({ [HttpHeader.AccessControlAllowOrigin]: '*' }),
-        isAllowed: true,
-        isPreflight: false,
-        shouldRespond: false,
-        statusCode: null,
       },
       new Response('ok', {
         status: createdStatus,
@@ -955,7 +980,7 @@ describe('CorsHandler', () => {
     expect(output.statusText).toBe('Created');
   });
 
-  it('should keep original response unchanged when applyHeaders is used with disallowed result', () => {
+  it('should keep original response unchanged when applyHeaders is used with Continue result and empty headers', () => {
     const acceptedStatus = 202;
 
     const source = new Response('ok', {
@@ -968,11 +993,8 @@ describe('CorsHandler', () => {
 
     const output = CorsHandler.applyHeaders(
       {
+        action: CorsAction.Continue,
         headers: new Headers(),
-        isAllowed: false,
-        isPreflight: false,
-        shouldRespond: false,
-        statusCode: null,
       },
       source,
     );
@@ -993,18 +1015,17 @@ describe('CorsHandler', () => {
     });
     const result = await handler.handle(request);
 
+    assertPreflight(result);
     const response = CorsHandler.createPreflightResponse(result);
 
     expect(response.status).toBe(HttpStatus.Ok);
   });
 
-  it('should create preflight response with default status when result status code is null', () => {
+  it('should create preflight response with NoContent status when statusCode is NoContent', () => {
     const response = CorsHandler.createPreflightResponse({
+      action: CorsAction.RespondPreflight,
       headers: new Headers(),
-      isAllowed: true,
-      isPreflight: true,
-      shouldRespond: true,
-      statusCode: null,
+      statusCode: HttpStatus.NoContent,
     });
 
     expect(response.status).toBe(HttpStatus.NoContent);
@@ -1012,10 +1033,8 @@ describe('CorsHandler', () => {
 
   it('should create preflight response with null body', () => {
     const response = CorsHandler.createPreflightResponse({
+      action: CorsAction.RespondPreflight,
       headers: new Headers(),
-      isAllowed: true,
-      isPreflight: true,
-      shouldRespond: true,
       statusCode: HttpStatus.NoContent,
     });
 
