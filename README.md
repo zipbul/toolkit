@@ -1,15 +1,16 @@
-# bunner-pantry
+# @zipbul/toolkit
 
-To install dependencies:
+Monorepo for zipbul utility packages.
 
-```bash
-bun install
-```
+## Packages
 
-To run:
+| Package | Description | Docs |
+|:--------|:------------|:-----|
+| `@zipbul/cors` | Framework-agnostic CORS library for standard Web APIs | [README](packages/cors/README.md) |
+| `@zipbul/router` | — | — |
+| `@zipbul/query-parser` | — | — |
+| `@zipbul/result` | — | — |
 
-```bash
-bun run index.ts
-```
+## License
 
-This project was created using `bun init` in bun v1.3.8. [Bun](https://bun.com) is a fast all-in-one JavaScript runtime.
+MIT
