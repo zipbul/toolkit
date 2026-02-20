@@ -29,6 +29,9 @@
     "build": "bun build index.ts --outdir dist --target bun --format esm --production --sourcemap=linked && tsc -p tsconfig.build.json",
     "coverage": "bun test --coverage"
   },
+  "dependencies": {
+    "@zipbul/result": "workspace:*"
+  },
   "devDependencies": {
     "@zipbul/shared": "workspace:*"
   }

@@ -1,10 +1,12 @@
 import { HttpHeader } from '@zipbul/shared';
+import { err, isErr } from '@zipbul/result';
+import type { Err, Result } from '@zipbul/result';
 
-import { CORS_DEFAULT_METHODS, CORS_DEFAULT_OPTIONS_SUCCESS_STATUS } from './constants';
-import { CorsAction, CorsRejectionReason } from './enums';
-import type { CorsOptions, CorsPreflightResult, CorsRejectResult } from './interfaces';
-import type { CorsAllowed, CorsResult } from './types';
-import type { OriginOptions, OriginResult } from './types';
+import { CorsAction, CorsErrorReason, CorsRejectionReason } from './enums';
+import type { CorsError, CorsOptions, CorsPreflightResult, CorsRejectResult } from './interfaces';
+import { resolveCorsOptions, validateCorsOptions } from './options';
+import type { CorsAllowed, CorsResult, ResolvedCorsOptions } from './types';
+import type { OriginResult } from './types';
 
 /**
  * Framework-agnostic CORS handler.
@@ -12,16 +14,33 @@ import type { OriginOptions, OriginResult } from './types';
  * instead of generating responses directly.
  */
 export class Cors {
-  constructor(private readonly options: CorsOptions = {}) {}
+  private constructor(private readonly options: ResolvedCorsOptions) {}
+
+  /**
+   * Creates a Cors instance after resolving and validating options.
+   *
+   * @returns Cors instance on success, Err<CorsError> on validation failure.
+   */
+  public static create(options?: CorsOptions): Result<Cors, CorsError> {
+    const resolved = resolveCorsOptions(options);
+    const validationResult = validateCorsOptions(resolved);
+
+    if (isErr(validationResult)) {
+      return validationResult;
+    }
+
+    return new Cors(resolved);
+  }
 
   /**
    * Evaluates CORS policy for the given request.
    *
    * @returns `Continue` — attach headers and proceed,
    *          `RespondPreflight` — return preflight response,
-   *          `Reject` — deny with reason.
+   *          `Reject` — deny with reason,
+   *          `Err<CorsError>` — origin function threw.
    */
-  public async handle(request: Request): Promise<CorsResult> {
+  public async handle(request: Request): Promise<Result<CorsResult, CorsError>> {
     const origin = request.headers.get(HttpHeader.Origin);
 
     if (origin === null || origin.length === 0) {
@@ -29,6 +48,10 @@ export class Cors {
     }
 
     const allowedOrigin = await this.matchOrigin(origin, request);
+
+    if (isErr(allowedOrigin)) {
+      return allowedOrigin;
+    }
 
     if (allowedOrigin === undefined) {
       return this.reject(CorsRejectionReason.OriginNotAllowed);
@@ -42,12 +65,12 @@ export class Cors {
       headers.append(HttpHeader.Vary, HttpHeader.Origin);
     }
 
-    if (this.options.credentials === true) {
+    if (this.options.credentials) {
       headers.set(HttpHeader.AccessControlAllowCredentials, 'true');
     }
 
     if (request.method !== 'OPTIONS') {
-      if (this.options.exposedHeaders !== undefined && this.options.exposedHeaders.length > 0) {
+      if (this.options.exposedHeaders !== null && this.options.exposedHeaders.length > 0) {
         const exposeHeadersValue = this.serializeExposeHeaders(this.options.exposedHeaders);
 
         if (exposeHeadersValue !== undefined) {
@@ -64,13 +87,11 @@ export class Cors {
       return { action: CorsAction.Continue, headers };
     }
 
-    const allowedMethods = this.options.methods ?? CORS_DEFAULT_METHODS;
-
-    if (!this.isMethodAllowed(requestMethod, allowedMethods)) {
+    if (!this.isMethodAllowed(requestMethod, this.options.methods)) {
       return this.reject(CorsRejectionReason.MethodNotAllowed);
     }
 
-    const allowMethodsValue = this.serializeAllowedMethods(allowedMethods, requestMethod);
+    const allowMethodsValue = this.serializeAllowedMethods(this.options.methods, requestMethod);
 
     headers.set(HttpHeader.AccessControlAllowMethods, allowMethodsValue);
 
@@ -79,7 +100,7 @@ export class Cors {
     const requestHeadersRaw = request.headers.get(HttpHeader.AccessControlRequestHeaders);
     const requestHeaders = this.parseCommaSeparatedValues(requestHeadersRaw);
 
-    if (this.options.allowedHeaders !== undefined) {
+    if (this.options.allowedHeaders !== null) {
       if (!this.areRequestHeadersAllowed(requestHeaders, this.options.allowedHeaders)) {
         return this.reject(CorsRejectionReason.HeaderNotAllowed);
       }
@@ -97,19 +118,15 @@ export class Cors {
       }
     }
 
-    if (this.options.maxAge !== undefined) {
+    if (this.options.maxAge !== null) {
       headers.set(HttpHeader.AccessControlMaxAge, this.options.maxAge.toString());
     }
 
-    const preflightContinue = this.options.preflightContinue ?? false;
-
-    if (preflightContinue) {
+    if (this.options.preflightContinue) {
       return { action: CorsAction.Continue, headers };
     }
 
-    const statusCode = this.options.optionsSuccessStatus ?? CORS_DEFAULT_OPTIONS_SUCCESS_STATUS;
-
-    return { action: CorsAction.RespondPreflight, headers, statusCode };
+    return { action: CorsAction.RespondPreflight, headers, statusCode: this.options.optionsSuccessStatus };
   }
 
   /**
@@ -153,15 +170,15 @@ export class Cors {
     return { action: CorsAction.Reject, reason };
   }
 
-  private async matchOrigin(origin: string, request: Request): Promise<string | undefined> {
-    const originOption: OriginOptions | undefined = this.options.origin;
+  private async matchOrigin(origin: string, request: Request): Promise<string | undefined | Err<CorsError>> {
+    const originOption = this.options.origin;
 
     if (originOption === false) {
       return undefined;
     }
 
-    if (originOption === undefined || originOption === '*') {
-      return this.options.credentials === true ? origin : '*';
+    if (originOption === '*') {
+      return '*';
     }
 
     if (typeof originOption === 'string') {
@@ -188,9 +205,16 @@ export class Cors {
       return matched ? origin : undefined;
     }
 
-    const originResult = await originOption(origin, request);
+    try {
+      const originResult = await originOption(origin, request);
 
-    return this.resolveOriginResult(origin, originResult);
+      return this.resolveOriginResult(origin, originResult);
+    } catch {
+      return err<CorsError>({
+        reason: CorsErrorReason.OriginFunctionError,
+        message: 'Origin function threw an error',
+      });
+    }
   }
 
   private resolveOriginResult(origin: string, result: OriginResult): string | undefined {
@@ -233,8 +257,10 @@ export class Cors {
   }
 
   private serializeExposeHeaders(exposedHeaders: string[]): string | undefined {
-    if (this.includesWildcard(exposedHeaders) && this.options.credentials === true) {
-      return undefined;
+    if (this.options.credentials && this.includesWildcard(exposedHeaders)) {
+      const explicit = exposedHeaders.filter(header => header.trim() !== '*');
+
+      return explicit.length > 0 ? explicit.join(',') : undefined;
     }
 
     return exposedHeaders.join(',');
@@ -245,7 +271,7 @@ export class Cors {
       return true;
     }
 
-    return allowedMethods.some(method => method.toLowerCase() === requestMethod.toLowerCase());
+    return allowedMethods.includes(requestMethod);
   }
 
   private serializeAllowedMethods(allowedMethods: Array<string>, requestMethod: string): string {
@@ -253,7 +279,7 @@ export class Cors {
       return allowedMethods.join(',');
     }
 
-    if (this.options.credentials === true) {
+    if (this.options.credentials) {
       return requestMethod;
     }
 
@@ -280,7 +306,7 @@ export class Cors {
         return false;
       }
 
-      if (this.options.credentials !== true) {
+      if (!this.options.credentials) {
         return true;
       }
 
@@ -305,7 +331,7 @@ export class Cors {
       return allowedHeaders.join(',');
     }
 
-    if (this.options.credentials === true) {
+    if (this.options.credentials) {
       if (requestHeadersRaw !== null && requestHeadersRaw.length > 0) {
         return requestHeadersRaw;
       }

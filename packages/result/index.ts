@@ -1,4 +1,4 @@
-export { error } from './src/error';
-export { isError } from './src/is-error';
+export { err } from './src/err';
+export { isErr } from './src/is-err';
 export { DEFAULT_MARKER_KEY, getMarkerKey, setMarkerKey } from './src/constants';
-export type { Error, Result } from './src/types';
+export type { Err, Result } from './src/types';

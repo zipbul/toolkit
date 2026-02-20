@@ -6,7 +6,8 @@ coverageThreshold = 0.95
 coveragePathIgnorePatterns = [
   "node_modules/**",
   "dist/**",
-  "../shared/**"
+  "../shared/**",
+  "../result/**"
 ]
 
 [test.reporter]

@@ -1,4 +1,12 @@
+import type { HttpMethod } from '@zipbul/shared';
+
 import type { CorsContinueResult, CorsPreflightResult, CorsRejectResult } from './interfaces';
+
+/**
+ * String literal union extracted from {@link HttpMethod} enum values.
+ * Accepts only the exact uppercase method strings defined in the enum.
+ */
+export type CorsHttpMethod = `${HttpMethod}`;
 
 /**
  * Return value of an origin function.
@@ -27,3 +35,18 @@ export type CorsResult = CorsContinueResult | CorsPreflightResult | CorsRejectRe
  * Excludes `Reject`.
  */
 export type CorsAllowed = CorsContinueResult | CorsPreflightResult;
+
+/**
+ * Fully resolved CORS options with all defaults applied.
+ * `null` indicates "use default behavior" (e.g., echo mode for headers).
+ */
+export type ResolvedCorsOptions = {
+  origin: OriginOptions;
+  methods: (CorsHttpMethod | '*')[];
+  allowedHeaders: string[] | null;
+  exposedHeaders: string[] | null;
+  credentials: boolean;
+  maxAge: number | null;
+  preflightContinue: boolean;
+  optionsSuccessStatus: number;
+};

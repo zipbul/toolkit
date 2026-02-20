@@ -1,7 +1,5 @@
-import type { HttpMethod } from '@zipbul/shared';
-
-import type { CorsAction, CorsRejectionReason } from './enums';
-import type { OriginOptions } from './types';
+import type { CorsAction, CorsErrorReason, CorsRejectionReason } from './enums';
+import type { CorsHttpMethod, OriginOptions } from './types';
 
 /**
  * Normal request or `preflightContinue` preflight.
@@ -32,6 +30,14 @@ export interface CorsRejectResult {
 }
 
 /**
+ * Error data returned when CORS validation fails.
+ */
+export interface CorsError {
+  reason: CorsErrorReason;
+  message: string;
+}
+
+/**
  * Configuration for the {@link Cors} handler.
  * All fields are optional.
  */
@@ -49,7 +55,7 @@ export interface CorsOptions {
    *
    * @defaultValue `['GET','HEAD','PUT','PATCH','POST','DELETE']`
    */
-  methods?: HttpMethod[] | string[];
+  methods?: (CorsHttpMethod | '*')[];
 
   /**
    * Request headers allowed in preflight.
