@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it } from 'bun:test';
+import { afterEach, describe, expect, it, spyOn } from 'bun:test';
 
 import { DEFAULT_MARKER_KEY, getMarkerKey, setMarkerKey } from './constants';
 import { err } from './err';
@@ -71,6 +71,37 @@ describe('err', () => {
       obj.self = obj;
       // Act / Assert
       expect(() => err(obj)).not.toThrow();
+    });
+  });
+
+  describe('stack extraction fallback', () => {
+    let errorSpy: ReturnType<typeof spyOn>;
+
+    afterEach(() => {
+      errorSpy?.mockRestore();
+    });
+
+    it('should return Err with empty stack when Error constructor throws', () => {
+      // Arrange
+      errorSpy = spyOn(globalThis as never, 'Error').mockImplementation(() => {
+        throw 'mocked';
+      });
+      // Act
+      const result = err();
+      // Assert
+      expect(result.stack).toBe('');
+      expect((result as Record<string, unknown>)[getMarkerKey()]).toBe(true);
+    });
+
+    it('should return Err with empty stack when Error().stack is undefined', () => {
+      // Arrange
+      errorSpy = spyOn(globalThis as never, 'Error').mockImplementation(
+        () => ({ stack: undefined }) as unknown as Error,
+      );
+      // Act
+      const result = err();
+      // Assert
+      expect(result.stack).toBe('');
     });
   });
 

@@ -2,6 +2,9 @@
 
 [English](./README.md) | **한국어**
 
+[![npm](https://img.shields.io/npm/v/@zipbul/cors)](https://www.npmjs.com/package/@zipbul/cors)
+![coverage](https://img.shields.io/endpoint?url=https://gist.githubusercontent.com/parkrevil/3965fb9d1fe2d6fc5c321cb38d88c823/raw/cors-coverage.json)
+
 프레임워크에 종속되지 않는 CORS 처리 라이브러리.
 응답을 직접 생성하지 않고, **판별 유니온(discriminated union)** 결과를 반환하여 호출자가 응답 방식을 완전히 제어할 수 있도록 설계되었습니다.
 
