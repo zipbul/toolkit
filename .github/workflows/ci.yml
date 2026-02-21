@@ -1,0 +1,40 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  build-and-test:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - run: bun install --frozen-lockfile
+
+      - name: Build shared
+        run: bun run build
+        working-directory: packages/shared
+
+      - name: Build result
+        run: bun run build
+        working-directory: packages/result
+
+      - name: Build cors
+        run: bun run build
+        working-directory: packages/cors
+
+      - name: Test result
+        run: bun test
+        working-directory: packages/result
+
+      - name: Test cors
+        run: bun test
+        working-directory: packages/cors
