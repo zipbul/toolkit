@@ -2,6 +2,9 @@
 
 [English](./README.md) | **한국어**
 
+[![npm](https://img.shields.io/npm/v/@zipbul/result)](https://www.npmjs.com/package/@zipbul/result)
+![coverage](https://img.shields.io/endpoint?url=https://gist.githubusercontent.com/parkrevil/3965fb9d1fe2d6fc5c321cb38d88c823/raw/result-coverage.json)
+
 예외(exception) 없이 에러를 처리하는 경량 Result 타입입니다.
 클래스로 감싸지 않고 평범한 유니온 값(`T | Err<E>`)을 반환합니다 — 런타임 오버헤드 제로, 완전한 타입 안전성.
 

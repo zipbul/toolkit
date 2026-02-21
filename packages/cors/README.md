@@ -2,6 +2,9 @@
 
 **English** | [한국어](./README.ko.md)
 
+[![npm](https://img.shields.io/npm/v/@zipbul/cors)](https://www.npmjs.com/package/@zipbul/cors)
+![coverage](https://img.shields.io/endpoint?url=https://gist.githubusercontent.com/parkrevil/3965fb9d1fe2d6fc5c321cb38d88c823/raw/cors-coverage.json)
+
 A framework-agnostic CORS handling library.
 Instead of generating responses directly, it returns a **discriminated union** result, giving the caller full control over the response.
 

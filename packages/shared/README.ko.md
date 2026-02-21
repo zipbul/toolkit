@@ -2,6 +2,8 @@
 
 [English](./README.md) | **한국어**
 
+[![npm](https://img.shields.io/npm/v/@zipbul/shared)](https://www.npmjs.com/package/@zipbul/shared)
+
 `@zipbul` 툴킷의 공유 라이브러리입니다.
 여러 `@zipbul` 패키지에서 공통으로 사용하는 열거형(enum), 상수, 타입, 유틸리티 등을 제공합니다.
 
