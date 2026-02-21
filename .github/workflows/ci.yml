@@ -85,35 +85,14 @@ jobs:
           elif (( $(echo "$PCT >= 60" | bc -l) )); then echo "color=yellow" >> "$GITHUB_OUTPUT"
           else echo "color=red" >> "$GITHUB_OUTPUT"; fi
 
-      - name: Update shared coverage badge
+      - name: Update coverage badges
         if: github.ref == 'refs/heads/main' && github.event_name == 'push'
-        uses: schneegans/dynamic-badges-action@v1.7.0
-        with:
-          auth: ${{ secrets.GIST_TOKEN }}
-          gistID: 3965fb9d1fe2d6fc5c321cb38d88c823
-          filename: shared-coverage.json
-          label: coverage
-          message: ${{ steps.shared-cov.outputs.percentage }}%
-          color: ${{ steps.shared-cov.outputs.color }}
-
-      - name: Update result coverage badge
-        if: github.ref == 'refs/heads/main' && github.event_name == 'push'
-        uses: schneegans/dynamic-badges-action@v1.7.0
-        with:
-          auth: ${{ secrets.GIST_TOKEN }}
-          gistID: 3965fb9d1fe2d6fc5c321cb38d88c823
-          filename: result-coverage.json
-          label: coverage
-          message: ${{ steps.result-cov.outputs.percentage }}%
-          color: ${{ steps.result-cov.outputs.color }}
-
-      - name: Update cors coverage badge
-        if: github.ref == 'refs/heads/main' && github.event_name == 'push'
-        uses: schneegans/dynamic-badges-action@v1.7.0
-        with:
-          auth: ${{ secrets.GIST_TOKEN }}
-          gistID: 3965fb9d1fe2d6fc5c321cb38d88c823
-          filename: cors-coverage.json
-          label: coverage
-          message: ${{ steps.cors-cov.outputs.percentage }}%
-          color: ${{ steps.cors-cov.outputs.color }}
+        env:
+          GH_TOKEN: ${{ secrets.GIST_TOKEN }}
+        run: |
+          badge() { printf '{"schemaVersion":1,"label":"coverage","message":"%s%%","color":"%s"}' "$1" "$2"; }
+          gh api --method PATCH /gists/3965fb9d1fe2d6fc5c321cb38d88c823 \
+            -f "files[shared-coverage.json][content]=$(badge '${{ steps.shared-cov.outputs.percentage }}' '${{ steps.shared-cov.outputs.color }}')" \
+            -f "files[result-coverage.json][content]=$(badge '${{ steps.result-cov.outputs.percentage }}' '${{ steps.result-cov.outputs.color }}')" \
+            -f "files[cors-coverage.json][content]=$(badge '${{ steps.cors-cov.outputs.percentage }}' '${{ steps.cors-cov.outputs.color }}')" \
+            > /dev/null

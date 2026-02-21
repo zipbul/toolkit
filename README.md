@@ -1,16 +1,24 @@
 # @zipbul/toolkit
 
-Monorepo for zipbul utility packages.
+[![CI](https://github.com/zipbul/toolkit/actions/workflows/ci.yml/badge.svg)](https://github.com/zipbul/toolkit/actions/workflows/ci.yml)
 
-## Packages
+Bun-native TypeScript utility packages.
+Each package solves one problem, returns a plain value, and stays out of your way.
 
-| Package | Description | Docs |
-|:--------|:------------|:-----|
-| `@zipbul/cors` | Framework-agnostic CORS library for standard Web APIs | [README](packages/cors/README.md) |
-| `@zipbul/router` | — | — |
-| `@zipbul/query-parser` | — | — |
-| `@zipbul/result` | — | — |
+<br>
 
-## License
+## 📦 Packages
 
-MIT
+| Package | Description | Version | Coverage |
+|:--------|:------------|:--------|:---------|
+| [@zipbul/shared](packages/shared) | Shared library for the toolkit | [![npm](https://img.shields.io/npm/v/@zipbul/shared?label=)](https://www.npmjs.com/package/@zipbul/shared) | ![coverage](https://img.shields.io/endpoint?url=https://gist.githubusercontent.com/parkrevil/3965fb9d1fe2d6fc5c321cb38d88c823/raw/shared-coverage.json) |
+| [@zipbul/result](packages/result) | Error handling without exceptions | [![npm](https://img.shields.io/npm/v/@zipbul/result?label=)](https://www.npmjs.com/package/@zipbul/result) | ![coverage](https://img.shields.io/endpoint?url=https://gist.githubusercontent.com/parkrevil/3965fb9d1fe2d6fc5c321cb38d88c823/raw/result-coverage.json) |
+| [@zipbul/cors](packages/cors) | Framework-agnostic CORS handling | [![npm](https://img.shields.io/npm/v/@zipbul/cors?label=)](https://www.npmjs.com/package/@zipbul/cors) | ![coverage](https://img.shields.io/endpoint?url=https://gist.githubusercontent.com/parkrevil/3965fb9d1fe2d6fc5c321cb38d88c823/raw/cors-coverage.json) |
+| @zipbul/router | URL router | 🚧 | — |
+| @zipbul/query-parser | Query string parser | 🚧 | — |
+
+<br>
+
+##  License
+
+[MIT](LICENSE)
