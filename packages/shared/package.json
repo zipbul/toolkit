@@ -1,6 +1,6 @@
 {
   "name": "@zipbul/shared",
-  "version": "0.0.1",
+  "version": "0.0.2",
   "description": "Shared library for the @zipbul toolkit",
   "license": "MIT",
   "author": "Junhyung Park (https://github.com/parkrevil)",
@@ -11,7 +11,13 @@
   },
   "bugs": "https://github.com/zipbul/toolkit/issues",
   "homepage": "https://github.com/zipbul/toolkit/tree/main/packages/shared#readme",
-  "keywords": ["enum", "constants", "shared", "typescript", "zipbul"],
+  "keywords": [
+    "enum",
+    "constants",
+    "shared",
+    "typescript",
+    "zipbul"
+  ],
   "engines": {
     "bun": ">=1.0.0"
   },
@@ -24,7 +30,9 @@
       "import": "./dist/index.js"
     }
   },
-  "files": ["dist"],
+  "files": [
+    "dist"
+  ],
   "scripts": {
     "build": "bun build index.ts --outdir dist --target bun --format esm --sourcemap=linked && tsc -p tsconfig.build.json"
   }
