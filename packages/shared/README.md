@@ -3,6 +3,7 @@
 **English** | [한국어](./README.ko.md)
 
 [![npm](https://img.shields.io/npm/v/@zipbul/shared)](https://www.npmjs.com/package/@zipbul/shared)
+![coverage](https://img.shields.io/endpoint?url=https://gist.githubusercontent.com/parkrevil/3965fb9d1fe2d6fc5c321cb38d88c823/raw/shared-coverage.json)
 
 Shared library for the `@zipbul` toolkit.
 Provides common definitions — enums, constants, types, and utilities — used across multiple `@zipbul` packages.
