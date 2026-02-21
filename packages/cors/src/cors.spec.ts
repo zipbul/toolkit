@@ -12,7 +12,7 @@ import type {
   CorsPreflightResult,
   CorsRejectResult,
 } from './interfaces';
-import type { CorsAllowed, CorsResult } from './types';
+import type { CorsResult } from './types';
 import { Cors } from './cors';
 
 // ── helpers ──
@@ -191,6 +191,45 @@ describe('Cors', () => {
       const result = await cors.handle(req);
       // Assert
       assertReject(result as CorsResult);
+    });
+
+    it('should return Allow consistently when RegExp has /g flag and called twice', async () => {
+      // Arrange
+      const cors = Cors.create({ origin: /^https:\/\/a\.com$/g }) as Cors;
+      const req1 = makeRequest('GET', 'https://a.com');
+      const req2 = makeRequest('GET', 'https://a.com');
+      // Act
+      const result1 = await cors.handle(req1);
+      const result2 = await cors.handle(req2);
+      // Assert
+      assertContinue(result1 as CorsResult);
+      assertContinue(result2 as CorsResult);
+    });
+
+    it('should return Allow consistently when array contains /g flag RegExp and called twice', async () => {
+      // Arrange
+      const cors = Cors.create({ origin: [/^https:\/\/a\.com$/g, 'https://b.com'] }) as Cors;
+      const req1 = makeRequest('GET', 'https://a.com');
+      const req2 = makeRequest('GET', 'https://a.com');
+      // Act
+      const result1 = await cors.handle(req1);
+      const result2 = await cors.handle(req2);
+      // Assert
+      assertContinue(result1 as CorsResult);
+      assertContinue(result2 as CorsResult);
+    });
+
+    it('should return Allow consistently when RegExp has no flag and called twice', async () => {
+      // Arrange
+      const cors = Cors.create({ origin: /^https:\/\/a\.com$/ }) as Cors;
+      const req1 = makeRequest('GET', 'https://a.com');
+      const req2 = makeRequest('GET', 'https://a.com');
+      // Act
+      const result1 = await cors.handle(req1);
+      const result2 = await cors.handle(req2);
+      // Assert
+      assertContinue(result1 as CorsResult);
+      assertContinue(result2 as CorsResult);
     });
 
     it('should allow when origin matches any entry in array (string+RegExp)', async () => {
@@ -494,51 +533,6 @@ describe('Cors', () => {
       // Assert
       assertPreflight(result as CorsResult);
       expect((result as CorsPreflightResult).headers.get(HttpHeader.AccessControlAllowMethods)).toBe('*');
-    });
-  });
-
-  // ── Static methods ──
-
-  describe('applyHeaders', () => {
-    it('should merge CORS headers into response with Vary dedup', () => {
-      // Arrange
-      const corsHeaders = new Headers();
-      corsHeaders.set(HttpHeader.AccessControlAllowOrigin, 'https://a.com');
-      corsHeaders.set(HttpHeader.Vary, 'Origin');
-      const corsResult: CorsContinueResult = {
-        action: CorsAction.Continue,
-        headers: corsHeaders,
-      };
-      const original = new Response('body', {
-        status: 200,
-        headers: { [HttpHeader.Vary]: 'Accept-Encoding' },
-      });
-      // Act
-      const merged = Cors.applyHeaders(corsResult, original);
-      // Assert
-      expect(merged.headers.get(HttpHeader.AccessControlAllowOrigin)).toBe('https://a.com');
-      const vary = merged.headers.get(HttpHeader.Vary)!;
-      expect(vary).toContain('Accept-Encoding');
-      expect(vary).toContain('Origin');
-    });
-  });
-
-  describe('createPreflightResponse', () => {
-    it('should create bodiless response with status and headers', () => {
-      // Arrange
-      const headers = new Headers();
-      headers.set(HttpHeader.AccessControlAllowOrigin, '*');
-      const result: CorsPreflightResult = {
-        action: CorsAction.RespondPreflight,
-        headers,
-        statusCode: 204,
-      };
-      // Act
-      const response = Cors.createPreflightResponse(result);
-      // Assert
-      expect(response.status).toBe(204);
-      expect(response.body).toBeNull();
-      expect(response.headers.get(HttpHeader.AccessControlAllowOrigin)).toBe('*');
     });
   });
 

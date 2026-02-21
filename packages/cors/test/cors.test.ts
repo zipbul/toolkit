@@ -13,7 +13,7 @@ import type {
 } from '../index';
 
 describe('Cors integration', () => {
-  it('should handle full GET flow: create → handle → applyHeaders', async () => {
+  it('should handle full GET flow: create → handle → inspect headers', async () => {
     // Arrange
     const cors = Cors.create() as Cors;
     const req = new Request('http://localhost', {
@@ -26,14 +26,10 @@ describe('Cors integration', () => {
     expect(isErr(result)).toBe(false);
     const corsResult = result as CorsContinueResult;
     expect(corsResult.action).toBe(CorsAction.Continue);
-    // apply
-    const original = new Response('ok', { status: 200 });
-    const response = Cors.applyHeaders(corsResult, original);
-    expect(response.headers.get(HttpHeader.AccessControlAllowOrigin)).toBe('*');
-    expect(response.status).toBe(200);
+    expect(corsResult.headers.get(HttpHeader.AccessControlAllowOrigin)).toBe('*');
   });
 
-  it('should handle full preflight flow: create → handle → createPreflightResponse', async () => {
+  it('should handle full preflight flow: create → handle → inspect result', async () => {
     // Arrange
     const cors = Cors.create({
       origin: 'https://a.com',
@@ -54,11 +50,9 @@ describe('Cors integration', () => {
     expect(isErr(result)).toBe(false);
     const corsResult = result as CorsPreflightResult;
     expect(corsResult.action).toBe(CorsAction.RespondPreflight);
-    // response
-    const response = Cors.createPreflightResponse(corsResult);
-    expect(response.status).toBe(204);
-    expect(response.headers.get(HttpHeader.AccessControlAllowCredentials)).toBe('true');
-    expect(response.headers.get(HttpHeader.AccessControlAllowMethods)).toBeDefined();
+    expect(corsResult.statusCode).toBe(204);
+    expect(corsResult.headers.get(HttpHeader.AccessControlAllowCredentials)).toBe('true');
+    expect(corsResult.headers.has(HttpHeader.AccessControlAllowMethods)).toBe(true);
   });
 
   it('should return Err when create receives credentials with wildcard origin', () => {
@@ -121,12 +115,10 @@ describe('Cors integration', () => {
     expect(isErr(result)).toBe(false);
     const corsResult = result as CorsContinueResult;
     expect(corsResult.action).toBe(CorsAction.Continue);
-    // apply
-    const response = Cors.applyHeaders(corsResult, new Response(null, { status: 200 }));
-    expect(response.headers.has(HttpHeader.AccessControlAllowMethods)).toBe(true);
+    expect(corsResult.headers.has(HttpHeader.AccessControlAllowMethods)).toBe(true);
   });
 
-  it('should include ACEH in response when exposedHeaders is configured', async () => {
+  it('should include ACEH in result headers when exposedHeaders is configured', async () => {
     // Arrange
     const cors = Cors.create({ origin: true, exposedHeaders: ['X-Request-Id'] }) as Cors;
     const req = new Request('http://localhost', {
@@ -139,9 +131,7 @@ describe('Cors integration', () => {
     expect(isErr(result)).toBe(false);
     const corsResult = result as CorsContinueResult;
     expect(corsResult.action).toBe(CorsAction.Continue);
-    // apply
-    const response = Cors.applyHeaders(corsResult, new Response('ok'));
-    expect(response.headers.get(HttpHeader.AccessControlExposeHeaders)).toBe('X-Request-Id');
+    expect(corsResult.headers.get(HttpHeader.AccessControlExposeHeaders)).toBe('X-Request-Id');
   });
 
   it('should return Err when create receives maxAge as non-integer', () => {

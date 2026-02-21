@@ -36,28 +36,47 @@ CorsResult
 
 ```typescript
 import { Cors, CorsAction } from '@zipbul/cors';
+import { isErr } from '@zipbul/result';
 
-const cors = new Cors({
+const corsResult = Cors.create({
   origin: 'https://my-app.example.com',
   credentials: true,
 });
 
+if (isErr(corsResult)) {
+  throw new Error(`CORS 설정 오류: ${corsResult.data.message}`);
+}
+
+const cors = corsResult;
+
 async function handleRequest(request: Request): Promise<Response> {
   const result = await cors.handle(request);
+
+  if (isErr(result)) {
+    return new Response('Internal Error', { status: 500 });
+  }
 
   if (result.action === CorsAction.Reject) {
     return new Response('Forbidden', { status: 403 });
   }
 
   if (result.action === CorsAction.RespondPreflight) {
-    return Cors.createPreflightResponse(result);
+    return new Response(null, {
+      status: result.statusCode,
+      headers: result.headers,
+    });
   }
 
+  // CorsAction.Continue — CORS 헤더를 응답에 병합
   const response = new Response(JSON.stringify({ ok: true }), {
     headers: { 'Content-Type': 'application/json' },
   });
 
-  return Cors.applyHeaders(result, response);
+  for (const [key, value] of result.headers) {
+    response.headers.set(key, value);
+  }
+
+  return response;
 }
 ```
 
@@ -68,7 +87,7 @@ async function handleRequest(request: Request): Promise<Response> {
 ```typescript
 interface CorsOptions {
   origin?: OriginOptions;              // 기본값: '*'
-  methods?: HttpMethod[] | string[];   // 기본값: GET, HEAD, PUT, PATCH, POST, DELETE
+  methods?: CorsMethod[];              // 기본값: GET, HEAD, PUT, PATCH, POST, DELETE
   allowedHeaders?: string[];           // 기본값: 요청의 ACRH 반영
   exposedHeaders?: string[];           // 기본값: 없음
   credentials?: boolean;               // 기본값: false
@@ -90,14 +109,17 @@ interface CorsOptions {
 | `['https://a.com', /^https:\/\/b\./]` | 배열 (문자열·정규식 혼합) |
 | `(origin, request) => boolean \| string` | 함수 (동기·비동기) |
 
-> `credentials: true`일 때 `origin: '*'`는 자동으로 요청 출처를 반영합니다.
+> `credentials: true`일 때 `origin: '*'`는 **검증 오류**를 발생시킵니다. 요청 출처를 반영하려면 `origin: true`를 사용하세요.
+>
+> RegExp origin은 생성 시점에 [safe-regex2](https://github.com/fastify/safe-regex2)를 사용하여 **ReDoS 안전성**을 검사합니다. star height ≥ 2인 패턴(예: `/(a+)+$/`)은 `CorsErrorReason.UnsafeRegExp`으로 거부됩니다.
 
 ### `methods`
 
-프리플라이트에서 허용할 HTTP 메서드 목록. `HttpMethod[]` 또는 `string[]`을 받습니다.
+프리플라이트에서 허용할 HTTP 메서드 목록. `CorsMethod[]`를 받으며, 표준 메서드는 자동 완성되고 RFC 9110 §5.6.2 토큰(예: `'PROPFIND'`)도 허용합니다.
 
 ```typescript
-new Cors({ methods: ['GET', 'POST', 'DELETE'] });
+Cors.create({ methods: ['GET', 'POST', 'DELETE'] });
+Cors.create({ methods: ['GET', 'PROPFIND'] }); // 커스텀 토큰
 ```
 
 와일드카드 `'*'`를 넣으면 모든 메서드를 허용합니다. `credentials: true`이면 와일드카드 대신 요청 메서드를 그대로 반영합니다.
@@ -107,13 +129,13 @@ new Cors({ methods: ['GET', 'POST', 'DELETE'] });
 프리플라이트에서 허용할 요청 헤더 목록. 미설정 시 클라이언트의 `Access-Control-Request-Headers` 값을 그대로 반영합니다.
 
 ```typescript
-new Cors({ allowedHeaders: ['Content-Type', 'Authorization', 'X-API-Key'] });
+Cors.create({ allowedHeaders: ['Content-Type', 'Authorization', 'X-API-Key'] });
 ```
 
 > **⚠️ Authorization 주의** — Fetch Standard에 따라, 와일드카드 `'*'`만으로는 `Authorization` 헤더가 허용되지 않습니다. 반드시 명시적으로 추가해야 합니다.
 >
 > ```typescript
-> new Cors({ allowedHeaders: ['*', 'Authorization'] });
+> Cors.create({ allowedHeaders: ['*', 'Authorization'] });
 > ```
 
 ### `exposedHeaders`
@@ -121,7 +143,7 @@ new Cors({ allowedHeaders: ['Content-Type', 'Authorization', 'X-API-Key'] });
 브라우저 JavaScript에서 접근 가능하게 노출할 응답 헤더 목록.
 
 ```typescript
-new Cors({ exposedHeaders: ['X-Request-Id', 'X-Rate-Limit-Remaining'] });
+Cors.create({ exposedHeaders: ['X-Request-Id', 'X-Rate-Limit-Remaining'] });
 ```
 
 > `credentials: true` 환경에서 와일드카드 `'*'`를 사용하면 `Access-Control-Expose-Headers` 헤더 자체가 설정되지 않습니다.
@@ -131,7 +153,7 @@ new Cors({ exposedHeaders: ['X-Request-Id', 'X-Rate-Limit-Remaining'] });
 `Access-Control-Allow-Credentials: true` 헤더 포함 여부.
 
 ```typescript
-new Cors({ origin: 'https://app.example.com', credentials: true });
+Cors.create({ origin: 'https://app.example.com', credentials: true });
 ```
 
 ### `maxAge`
@@ -139,7 +161,7 @@ new Cors({ origin: 'https://app.example.com', credentials: true });
 프리플라이트 결과를 브라우저가 캐시할 시간(초).
 
 ```typescript
-new Cors({ maxAge: 86400 }); // 24시간
+Cors.create({ maxAge: 86400 }); // 24시간
 ```
 
 ### `preflightContinue`
@@ -162,7 +184,7 @@ new Cors({ maxAge: 86400 }); // 24시간
 { action: CorsAction.Continue; headers: Headers }
 ```
 
-일반 요청(비-OPTIONS) 또는 `preflightContinue: true`인 프리플라이트에서 반환됩니다. `Cors.applyHeaders(result, response)`로 응답에 헤더를 병합합니다.
+일반 요청(비-OPTIONS) 또는 `preflightContinue: true`인 프리플라이트에서 반환됩니다. `headers`를 응답에 직접 병합하세요.
 
 #### `CorsPreflightResult`
 
@@ -170,7 +192,7 @@ new Cors({ maxAge: 86400 }); // 24시간
 { action: CorsAction.RespondPreflight; headers: Headers; statusCode: number }
 ```
 
-`OPTIONS` + `Access-Control-Request-Method`가 포함된 프리플라이트에서 반환됩니다. `Cors.createPreflightResponse(result)`로 즉시 응답을 생성합니다.
+`OPTIONS` + `Access-Control-Request-Method`가 포함된 프리플라이트에서 반환됩니다. `headers`와 `statusCode`를 사용하여 응답을 직접 구성합니다.
 
 #### `CorsRejectResult`
 
@@ -187,25 +209,19 @@ CORS 검증 실패 시 반환됩니다. `reason`으로 상세한 에러 응답�
 | `MethodNotAllowed` | 요청 메서드가 허용 목록에 없음 |
 | `HeaderNotAllowed` | 요청 헤더가 허용 목록에 없음 |
 
-<br>
+`Cors.create()`는 옵션 검증 실패 시 `Err<CorsError>`를 반환합니다:
 
-## 🔧 정적 메서드
-
-### `Cors.applyHeaders(result, response)`
-
-`CorsAllowed` 결과의 CORS 헤더를 기존 `Response`에 병합합니다. `Vary` 헤더는 기존 값을 보존하면서 중복 없이 병합됩니다.
-
-```typescript
-const corsResponse = Cors.applyHeaders(result, response);
-```
-
-### `Cors.createPreflightResponse(result)`
-
-`CorsPreflightResult`로부터 본문 없는 프리플라이트 전용 `Response`를 생성합니다.
-
-```typescript
-const preflightResponse = Cors.createPreflightResponse(result);
-```
+| `CorsErrorReason` | 의미 |
+|:------------------|:--------|
+| `CredentialsWithWildcardOrigin` | `credentials:true` + `origin:'*'` 조합 불가 (Fetch Standard §3.3.5) |
+| `InvalidMaxAge` | `maxAge`가 음수가 아닌 정수가 아님 (RFC 9111 §1.2.1) |
+| `InvalidStatusCode` | `optionsSuccessStatus`가 2xx 정수가 아님 |
+| `InvalidOrigin` | `origin`이 빈/공백 문자열, 빈 배열, 또는 배열 내 빈/공백 요소 (RFC 6454) |
+| `InvalidMethods` | `methods`가 빈 배열이거나 빈/공백 요소 포함 (RFC 9110 §5.6.2) |
+| `InvalidAllowedHeaders` | `allowedHeaders`에 빈/공백 요소 포함 (RFC 9110 §5.6.2) |
+| `InvalidExposedHeaders` | `exposedHeaders`에 빈/공백 요소 포함 (RFC 9110 §5.6.2) |
+| `OriginFunctionError` | 런타임에 origin 함수가 예외를 오발 |
+| `UnsafeRegExp` | origin RegExp이 지수적 역추적 위험(ReDoS)을 가짐 |
 
 <br>
 
@@ -215,10 +231,10 @@ const preflightResponse = Cors.createPreflightResponse(result);
 
 ```typescript
 // 단일 출처
-new Cors({ origin: 'https://app.example.com' });
+Cors.create({ origin: 'https://app.example.com' });
 
 // 여러 출처 (문자열 + 정규식 혼합)
-new Cors({
+Cors.create({
   origin: [
     'https://app.example.com',
     'https://admin.example.com',
@@ -227,7 +243,7 @@ new Cors({
 });
 
 // 정규식으로 서브도메인 전체 허용
-new Cors({ origin: /^https:\/\/(.+\.)?example\.com$/ });
+Cors.create({ origin: /^https:\/\/(.+\.)?example\.com$/ });
 ```
 
 ### 비동기 origin 함수
@@ -235,7 +251,7 @@ new Cors({ origin: /^https:\/\/(.+\.)?example\.com$/ });
 데이터베이스나 외부 서비스를 통해 동적으로 출처를 검증할 수 있습니다.
 
 ```typescript
-new Cors({
+Cors.create({
   origin: async (origin, request) => {
     const tenant = request.headers.get('X-Tenant-Id');
     const allowed = await db.isOriginAllowed(tenant, origin);
@@ -248,7 +264,7 @@ new Cors({
 });
 ```
 
-> origin 함수에서 예외가 발생하면 `handle()`이 그대로 throw합니다. 라이브러리가 에러를 삼키지 않습니다.
+> origin 함수에서 예외가 발생하면 `handle()`은 `Err<CorsError>`를 `reason: CorsErrorReason.OriginFunctionError`와 함께 반환합니다. 에러는 래핑되며 다시 throw되지 않습니다.
 
 ### 와일드카드와 credentials
 
@@ -257,17 +273,20 @@ Fetch Standard에 따라 인증 요청(쿠키·`Authorization`)에는 와일드�
 
 | 옵션 | 와일드카드 시 동작 |
 |:---|:---|
-| `origin: '*'` | 요청 출처를 반영 + `Vary: Origin` 추가 |
+| `origin: '*'` | **검증 오류** — `origin: true`를 사용하여 요청 출처를 반영하세요 |
 | `methods: ['*']` | 요청 메서드를 그대로 반영 |
 | `allowedHeaders: ['*']` | 요청 헤더를 그대로 반영 |
 | `exposedHeaders: ['*']` | `Access-Control-Expose-Headers` 미설정 |
 
 ```typescript
-// ✅ origin: '*' + credentials: true → 요청 origin 자동 반영
-new Cors({ credentials: true });
+// ✅ origin: true + credentials: true → 요청 origin 자동 반영
+Cors.create({ origin: true, credentials: true });
 
 // ✅ 특정 도메인 + credentials
-new Cors({ origin: 'https://app.example.com', credentials: true });
+Cors.create({ origin: 'https://app.example.com', credentials: true });
+
+// ❌ origin: '*' + credentials: true → Cors.create()가 Err<CorsError> 반환
+Cors.create({ origin: '*', credentials: true }); // CorsErrorReason.CredentialsWithWildcardOrigin
 ```
 
 ### 프리플라이트 위임
@@ -275,10 +294,14 @@ new Cors({ origin: 'https://app.example.com', credentials: true });
 다른 미들웨어가 OPTIONS 요청을 직접 처리해야 하는 경우:
 
 ```typescript
-const cors = new Cors({ preflightContinue: true });
+const cors = Cors.create({ preflightContinue: true }) as Cors;
 
 async function handle(request: Request): Promise<Response> {
   const result = await cors.handle(request);
+
+  if (isErr(result)) {
+    return new Response('Internal Error', { status: 500 });
+  }
 
   if (result.action === CorsAction.Reject) {
     return new Response('Forbidden', { status: 403 });
@@ -286,7 +309,12 @@ async function handle(request: Request): Promise<Response> {
 
   // Continue — 일반 요청과 프리플라이트 모두 여기로 진입
   const response = await nextHandler(request);
-  return Cors.applyHeaders(result, response);
+
+  for (const [key, value] of result.headers) {
+    response.headers.set(key, value);
+  }
+
+  return response;
 }
 ```
 
@@ -299,16 +327,24 @@ async function handle(request: Request): Promise<Response> {
 
 ```typescript
 import { Cors, CorsAction } from '@zipbul/cors';
+import { isErr } from '@zipbul/result';
 
-const cors = new Cors({
+const corsResult = Cors.create({
   origin: ['https://app.example.com'],
   credentials: true,
   exposedHeaders: ['X-Request-Id'],
 });
 
+if (isErr(corsResult)) throw new Error(corsResult.data.message);
+const cors = corsResult;
+
 Bun.serve({
   async fetch(request) {
     const result = await cors.handle(request);
+
+    if (isErr(result)) {
+      return new Response('Internal Error', { status: 500 });
+    }
 
     if (result.action === CorsAction.Reject) {
       return new Response(
@@ -318,11 +354,19 @@ Bun.serve({
     }
 
     if (result.action === CorsAction.RespondPreflight) {
-      return Cors.createPreflightResponse(result);
+      return new Response(null, {
+        status: result.statusCode,
+        headers: result.headers,
+      });
     }
 
     const response = await router.handle(request);
-    return Cors.applyHeaders(result, response);
+
+    for (const [key, value] of result.headers) {
+      response.headers.set(key, value);
+    }
+
+    return response;
   },
   port: 3000,
 });
@@ -336,12 +380,21 @@ Bun.serve({
 ```typescript
 import { Cors, CorsAction } from '@zipbul/cors';
 import type { CorsOptions } from '@zipbul/cors';
+import { isErr } from '@zipbul/result';
 
 function corsMiddleware(options?: CorsOptions) {
-  const cors = new Cors(options);
+  const createResult = Cors.create(options);
+  if (isErr(createResult)) throw new Error(createResult.data.message);
+  const cors = createResult;
 
   return async (ctx: Context, next: () => Promise<void>) => {
     const result = await cors.handle(ctx.request);
+
+    if (isErr(result)) {
+      ctx.status = 500;
+      ctx.body = { error: 'CORS_INTERNAL_ERROR' };
+      return;
+    }
 
     if (result.action === CorsAction.Reject) {
       ctx.status = 403;
@@ -350,12 +403,18 @@ function corsMiddleware(options?: CorsOptions) {
     }
 
     if (result.action === CorsAction.RespondPreflight) {
-      ctx.response = Cors.createPreflightResponse(result);
+      ctx.response = new Response(null, {
+        status: result.statusCode,
+        headers: result.headers,
+      });
       return;
     }
 
     await next();
-    ctx.response = Cors.applyHeaders(result, ctx.response);
+
+    for (const [key, value] of result.headers) {
+      ctx.response.headers.set(key, value);
+    }
   };
 }
 ```

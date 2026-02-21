@@ -36,28 +36,47 @@ This design fits naturally into any environment — middleware pipelines, edge r
 
 ```typescript
 import { Cors, CorsAction } from '@zipbul/cors';
+import { isErr } from '@zipbul/result';
 
-const cors = new Cors({
+const corsResult = Cors.create({
   origin: 'https://my-app.example.com',
   credentials: true,
 });
 
+if (isErr(corsResult)) {
+  throw new Error(`CORS config error: ${corsResult.data.message}`);
+}
+
+const cors = corsResult;
+
 async function handleRequest(request: Request): Promise<Response> {
   const result = await cors.handle(request);
+
+  if (isErr(result)) {
+    return new Response('Internal Error', { status: 500 });
+  }
 
   if (result.action === CorsAction.Reject) {
     return new Response('Forbidden', { status: 403 });
   }
 
   if (result.action === CorsAction.RespondPreflight) {
-    return Cors.createPreflightResponse(result);
+    return new Response(null, {
+      status: result.statusCode,
+      headers: result.headers,
+    });
   }
 
+  // CorsAction.Continue — merge CORS headers into your response
   const response = new Response(JSON.stringify({ ok: true }), {
     headers: { 'Content-Type': 'application/json' },
   });
 
-  return Cors.applyHeaders(result, response);
+  for (const [key, value] of result.headers) {
+    response.headers.set(key, value);
+  }
+
+  return response;
 }
 ```
 
@@ -68,7 +87,7 @@ async function handleRequest(request: Request): Promise<Response> {
 ```typescript
 interface CorsOptions {
   origin?: OriginOptions;              // Default: '*'
-  methods?: HttpMethod[] | string[];   // Default: GET, HEAD, PUT, PATCH, POST, DELETE
+  methods?: CorsMethod[];              // Default: GET, HEAD, PUT, PATCH, POST, DELETE
   allowedHeaders?: string[];           // Default: reflects request's ACRH
   exposedHeaders?: string[];           // Default: none
   credentials?: boolean;               // Default: false
@@ -90,14 +109,17 @@ interface CorsOptions {
 | `['https://a.com', /^https:\/\/b\./]` | Array (mix of strings and regexes) |
 | `(origin, request) => boolean \| string` | Function (sync or async) |
 
-> When `credentials: true`, `origin: '*'` automatically reflects the request origin.
+> When `credentials: true`, `origin: '*'` causes a **validation error**. Use `origin: true` to reflect the request origin.
+>
+> RegExp origins are checked for **ReDoS safety** at creation time using [safe-regex2](https://github.com/fastify/safe-regex2). Patterns with star height ≥ 2 (e.g. `/(a+)+$/`) are rejected with `CorsErrorReason.UnsafeRegExp`.
 
 ### `methods`
 
-HTTP methods to allow in preflight. Accepts `HttpMethod[]` or `string[]`.
+HTTP methods to allow in preflight. Accepts `CorsMethod[]` — standard methods are autocompleted, and any RFC 9110 §5.6.2 token (e.g. `'PROPFIND'`) is also valid.
 
 ```typescript
-new Cors({ methods: ['GET', 'POST', 'DELETE'] });
+Cors.create({ methods: ['GET', 'POST', 'DELETE'] });
+Cors.create({ methods: ['GET', 'PROPFIND'] }); // custom token
 ```
 
 A wildcard `'*'` allows all methods. With `credentials: true`, the wildcard is replaced by echoing the request method.
@@ -107,13 +129,13 @@ A wildcard `'*'` allows all methods. With `credentials: true`, the wildcard is r
 Request headers to allow in preflight. When not set, the client's `Access-Control-Request-Headers` value is echoed back.
 
 ```typescript
-new Cors({ allowedHeaders: ['Content-Type', 'Authorization', 'X-API-Key'] });
+Cors.create({ allowedHeaders: ['Content-Type', 'Authorization', 'X-API-Key'] });
 ```
 
 > **⚠️ Authorization caveat** — Per the Fetch Standard, a wildcard `'*'` alone does not cover the `Authorization` header. You must list it explicitly.
 >
 > ```typescript
-> new Cors({ allowedHeaders: ['*', 'Authorization'] });
+> Cors.create({ allowedHeaders: ['*', 'Authorization'] });
 > ```
 
 ### `exposedHeaders`
@@ -121,7 +143,7 @@ new Cors({ allowedHeaders: ['Content-Type', 'Authorization', 'X-API-Key'] });
 Response headers to expose to browser JavaScript.
 
 ```typescript
-new Cors({ exposedHeaders: ['X-Request-Id', 'X-Rate-Limit-Remaining'] });
+Cors.create({ exposedHeaders: ['X-Request-Id', 'X-Rate-Limit-Remaining'] });
 ```
 
 > With `credentials: true`, using a wildcard `'*'` causes the `Access-Control-Expose-Headers` header to not be set at all.
@@ -131,7 +153,7 @@ new Cors({ exposedHeaders: ['X-Request-Id', 'X-Rate-Limit-Remaining'] });
 Whether to include the `Access-Control-Allow-Credentials: true` header.
 
 ```typescript
-new Cors({ origin: 'https://app.example.com', credentials: true });
+Cors.create({ origin: 'https://app.example.com', credentials: true });
 ```
 
 ### `maxAge`
@@ -139,7 +161,7 @@ new Cors({ origin: 'https://app.example.com', credentials: true });
 How long (in seconds) the browser may cache the preflight result.
 
 ```typescript
-new Cors({ maxAge: 86400 }); // 24 hours
+Cors.create({ maxAge: 86400 }); // 24 hours
 ```
 
 ### `preflightContinue`
@@ -162,7 +184,7 @@ HTTP status code for the preflight response. Defaults to `204`. Set to `200` if 
 { action: CorsAction.Continue; headers: Headers }
 ```
 
-Returned for normal (non-OPTIONS) requests, or preflight when `preflightContinue: true`. Use `Cors.applyHeaders(result, response)` to merge headers into the response.
+Returned for normal (non-OPTIONS) requests, or preflight when `preflightContinue: true`. Merge `headers` into your response directly.
 
 #### `CorsPreflightResult`
 
@@ -170,7 +192,7 @@ Returned for normal (non-OPTIONS) requests, or preflight when `preflightContinue
 { action: CorsAction.RespondPreflight; headers: Headers; statusCode: number }
 ```
 
-Returned for `OPTIONS` requests that include `Access-Control-Request-Method`. Use `Cors.createPreflightResponse(result)` to generate the response.
+Returned for `OPTIONS` requests that include `Access-Control-Request-Method`. Use `headers` and `statusCode` to build a response.
 
 #### `CorsRejectResult`
 
@@ -187,25 +209,19 @@ Returned when CORS validation fails. Use `reason` to build a detailed error resp
 | `MethodNotAllowed` | Request method not in the allowed list |
 | `HeaderNotAllowed` | Request header not in the allowed list |
 
-<br>
+`Cors.create()` returns `Err<CorsError>` when options fail validation:
 
-## 🔧 Static Methods
-
-### `Cors.applyHeaders(result, response)`
-
-Merges CORS headers from a `CorsAllowed` result into an existing `Response`. The `Vary` header is merged without duplicates, preserving existing values.
-
-```typescript
-const corsResponse = Cors.applyHeaders(result, response);
-```
-
-### `Cors.createPreflightResponse(result)`
-
-Creates a bodiless preflight `Response` from a `CorsPreflightResult`.
-
-```typescript
-const preflightResponse = Cors.createPreflightResponse(result);
-```
+| `CorsErrorReason` | Meaning |
+|:------------------|:--------|
+| `CredentialsWithWildcardOrigin` | `credentials:true` with `origin:'*'` (Fetch Standard §3.3.5) |
+| `InvalidMaxAge` | `maxAge` is not a non-negative integer (RFC 9111 §1.2.1) |
+| `InvalidStatusCode` | `optionsSuccessStatus` is not a 2xx integer |
+| `InvalidOrigin` | `origin` is an empty/blank string, empty array, or array with empty/blank entries (RFC 6454) |
+| `InvalidMethods` | `methods` is empty, or contains empty/blank entries (RFC 9110 §5.6.2) |
+| `InvalidAllowedHeaders` | `allowedHeaders` contains empty/blank entries (RFC 9110 §5.6.2) |
+| `InvalidExposedHeaders` | `exposedHeaders` contains empty/blank entries (RFC 9110 §5.6.2) |
+| `OriginFunctionError` | Origin function threw at runtime |
+| `UnsafeRegExp` | origin RegExp has exponential backtracking risk (ReDoS) |
 
 <br>
 
@@ -215,10 +231,10 @@ const preflightResponse = Cors.createPreflightResponse(result);
 
 ```typescript
 // Single origin
-new Cors({ origin: 'https://app.example.com' });
+Cors.create({ origin: 'https://app.example.com' });
 
 // Multiple origins (mix of strings and regexes)
-new Cors({
+Cors.create({
   origin: [
     'https://app.example.com',
     'https://admin.example.com',
@@ -227,7 +243,7 @@ new Cors({
 });
 
 // Regex to allow all subdomains
-new Cors({ origin: /^https:\/\/(.+\.)?example\.com$/ });
+Cors.create({ origin: /^https:\/\/(.+\.)?example\.com$/ });
 ```
 
 ### Async origin function
@@ -235,7 +251,7 @@ new Cors({ origin: /^https:\/\/(.+\.)?example\.com$/ });
 Dynamically validate origins via a database or external service.
 
 ```typescript
-new Cors({
+Cors.create({
   origin: async (origin, request) => {
     const tenant = request.headers.get('X-Tenant-Id');
     const allowed = await db.isOriginAllowed(tenant, origin);
@@ -248,7 +264,7 @@ new Cors({
 });
 ```
 
-> If the origin function throws, `handle()` re-throws as-is. The library does not swallow errors.
+> If the origin function throws, `handle()` returns `Err<CorsError>` with `reason: CorsErrorReason.OriginFunctionError`. The error is wrapped, not re-thrown.
 
 ### Wildcards and credentials
 
@@ -257,17 +273,20 @@ When `credentials: true`, the library automatically handles the following:
 
 | Option | Behavior with wildcard |
 |:-------|:-----------------------|
-| `origin: '*'` | Reflects the request origin + adds `Vary: Origin` |
+| `origin: '*'` | **Validation error** — use `origin: true` to reflect the request origin |
 | `methods: ['*']` | Echoes the request method |
 | `allowedHeaders: ['*']` | Echoes the request headers |
 | `exposedHeaders: ['*']` | `Access-Control-Expose-Headers` is not set |
 
 ```typescript
-// ✅ origin: '*' + credentials: true → request origin is reflected
-new Cors({ credentials: true });
+// ✅ origin: true + credentials: true → request origin is reflected
+Cors.create({ origin: true, credentials: true });
 
 // ✅ Specific domain + credentials
-new Cors({ origin: 'https://app.example.com', credentials: true });
+Cors.create({ origin: 'https://app.example.com', credentials: true });
+
+// ❌ origin: '*' + credentials: true → Cors.create() returns Err<CorsError>
+Cors.create({ origin: '*', credentials: true }); // CorsErrorReason.CredentialsWithWildcardOrigin
 ```
 
 ### Preflight delegation
@@ -275,10 +294,14 @@ new Cors({ origin: 'https://app.example.com', credentials: true });
 When another middleware needs to handle OPTIONS requests directly:
 
 ```typescript
-const cors = new Cors({ preflightContinue: true });
+const cors = Cors.create({ preflightContinue: true }) as Cors;
 
 async function handle(request: Request): Promise<Response> {
   const result = await cors.handle(request);
+
+  if (isErr(result)) {
+    return new Response('Internal Error', { status: 500 });
+  }
 
   if (result.action === CorsAction.Reject) {
     return new Response('Forbidden', { status: 403 });
@@ -286,7 +309,12 @@ async function handle(request: Request): Promise<Response> {
 
   // Continue — both normal and preflight requests arrive here
   const response = await nextHandler(request);
-  return Cors.applyHeaders(result, response);
+
+  for (const [key, value] of result.headers) {
+    response.headers.set(key, value);
+  }
+
+  return response;
 }
 ```
 
@@ -299,16 +327,24 @@ async function handle(request: Request): Promise<Response> {
 
 ```typescript
 import { Cors, CorsAction } from '@zipbul/cors';
+import { isErr } from '@zipbul/result';
 
-const cors = new Cors({
+const corsResult = Cors.create({
   origin: ['https://app.example.com'],
   credentials: true,
   exposedHeaders: ['X-Request-Id'],
 });
 
+if (isErr(corsResult)) throw new Error(corsResult.data.message);
+const cors = corsResult;
+
 Bun.serve({
   async fetch(request) {
     const result = await cors.handle(request);
+
+    if (isErr(result)) {
+      return new Response('Internal Error', { status: 500 });
+    }
 
     if (result.action === CorsAction.Reject) {
       return new Response(
@@ -318,11 +354,19 @@ Bun.serve({
     }
 
     if (result.action === CorsAction.RespondPreflight) {
-      return Cors.createPreflightResponse(result);
+      return new Response(null, {
+        status: result.statusCode,
+        headers: result.headers,
+      });
     }
 
     const response = await router.handle(request);
-    return Cors.applyHeaders(result, response);
+
+    for (const [key, value] of result.headers) {
+      response.headers.set(key, value);
+    }
+
+    return response;
   },
   port: 3000,
 });
@@ -336,12 +380,21 @@ Bun.serve({
 ```typescript
 import { Cors, CorsAction } from '@zipbul/cors';
 import type { CorsOptions } from '@zipbul/cors';
+import { isErr } from '@zipbul/result';
 
 function corsMiddleware(options?: CorsOptions) {
-  const cors = new Cors(options);
+  const createResult = Cors.create(options);
+  if (isErr(createResult)) throw new Error(createResult.data.message);
+  const cors = createResult;
 
   return async (ctx: Context, next: () => Promise<void>) => {
     const result = await cors.handle(ctx.request);
+
+    if (isErr(result)) {
+      ctx.status = 500;
+      ctx.body = { error: 'CORS_INTERNAL_ERROR' };
+      return;
+    }
 
     if (result.action === CorsAction.Reject) {
       ctx.status = 403;
@@ -350,12 +403,18 @@ function corsMiddleware(options?: CorsOptions) {
     }
 
     if (result.action === CorsAction.RespondPreflight) {
-      ctx.response = Cors.createPreflightResponse(result);
+      ctx.response = new Response(null, {
+        status: result.statusCode,
+        headers: result.headers,
+      });
       return;
     }
 
     await next();
-    ctx.response = Cors.applyHeaders(result, ctx.response);
+
+    for (const [key, value] of result.headers) {
+      ctx.response.headers.set(key, value);
+    }
   };
 }
 ```

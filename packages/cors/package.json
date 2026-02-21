@@ -26,13 +26,14 @@
   },
   "files": ["dist"],
   "scripts": {
-    "build": "bun build index.ts --outdir dist --target bun --format esm --production --sourcemap=linked && tsc -p tsconfig.build.json",
+    "build": "bun build index.ts --outdir dist --target bun --format esm --packages external --sourcemap=linked && tsc -p tsconfig.build.json",
+    "test": "bun test",
     "coverage": "bun test --coverage"
   },
   "dependencies": {
-    "@zipbul/result": "workspace:*"
+    "@zipbul/result": "workspace:*",
+    "@zipbul/shared": "workspace:*",
+    "safe-regex2": "^5.0.0"
   },
-  "devDependencies": {
-    "@zipbul/shared": "workspace:*"
-  }
+  "devDependencies": {}
 }

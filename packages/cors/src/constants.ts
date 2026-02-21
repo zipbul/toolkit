@@ -1,6 +1,6 @@
 import { HttpMethod, HttpStatus } from '@zipbul/shared';
 
-export const CORS_DEFAULT_METHODS: HttpMethod[] = [
+export const CORS_DEFAULT_METHODS: string[] = [
   HttpMethod.Get,
   HttpMethod.Head,
   HttpMethod.Put,

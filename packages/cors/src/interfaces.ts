@@ -1,9 +1,9 @@
 import type { CorsAction, CorsErrorReason, CorsRejectionReason } from './enums';
-import type { CorsHttpMethod, OriginOptions } from './types';
+import type { CorsMethod, OriginOptions } from './types';
 
 /**
  * Normal request or `preflightContinue` preflight.
- * Attach headers via {@link Cors.applyHeaders}.
+ * Merge `headers` into your response.
  */
 export interface CorsContinueResult {
   action: CorsAction.Continue;
@@ -12,7 +12,7 @@ export interface CorsContinueResult {
 
 /**
  * Preflight response.
- * Generate via {@link Cors.createPreflightResponse}.
+ * Use `headers` and `statusCode` to build a response.
  */
 export interface CorsPreflightResult {
   action: CorsAction.RespondPreflight;
@@ -52,10 +52,15 @@ export interface CorsOptions {
 
   /**
    * HTTP methods allowed in preflight.
+   * Standard methods are autocompleted; any RFC 9110 §5.6.2 token is accepted.
+   * Values are normalized to uppercase internally.
    *
    * @defaultValue `['GET','HEAD','PUT','PATCH','POST','DELETE']`
+   * @example ['GET', 'POST', 'DELETE']
+   * @example ['*']  // allow all methods
+   * @example ['GET', 'PROPFIND']  // custom token
    */
-  methods?: (CorsHttpMethod | '*')[];
+  methods?: CorsMethod[];
 
   /**
    * Request headers allowed in preflight.

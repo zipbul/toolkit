@@ -1,11 +1,11 @@
-import { HttpHeader } from '@zipbul/shared';
+import { HttpHeader, HttpMethod } from '@zipbul/shared';
 import { err, isErr } from '@zipbul/result';
 import type { Err, Result } from '@zipbul/result';
 
 import { CorsAction, CorsErrorReason, CorsRejectionReason } from './enums';
 import type { CorsError, CorsOptions, CorsPreflightResult, CorsRejectResult } from './interfaces';
 import { resolveCorsOptions, validateCorsOptions } from './options';
-import type { CorsAllowed, CorsResult, ResolvedCorsOptions } from './types';
+import type { CorsResult, ResolvedCorsOptions } from './types';
 import type { OriginResult } from './types';
 
 /**
@@ -69,7 +69,7 @@ export class Cors {
       headers.set(HttpHeader.AccessControlAllowCredentials, 'true');
     }
 
-    if (request.method !== 'OPTIONS') {
+    if (request.method !== HttpMethod.Options) {
       if (this.options.exposedHeaders !== null && this.options.exposedHeaders.length > 0) {
         const exposeHeadersValue = this.serializeExposeHeaders(this.options.exposedHeaders);
 
@@ -129,43 +129,6 @@ export class Cors {
     return { action: CorsAction.RespondPreflight, headers, statusCode: this.options.optionsSuccessStatus };
   }
 
-  /**
-   * Merges CORS headers from a successful result into an existing response.
-   * `Vary` values are merged without duplicates.
-   *
-   * @returns A new `Response` with CORS headers applied.
-   */
-  public static applyHeaders(result: CorsAllowed, response: Response): Response {
-    const mergedHeaders = new Headers(response.headers);
-
-    for (const [name, value] of result.headers.entries()) {
-      if (name.toLowerCase() === HttpHeader.Vary.toLowerCase()) {
-        const mergedVary = Cors.mergeVaryValues(mergedHeaders.get(HttpHeader.Vary), value);
-
-        mergedHeaders.set(HttpHeader.Vary, mergedVary);
-        continue;
-      }
-
-      mergedHeaders.set(name, value);
-    }
-
-    return new Response(response.body, {
-      status: response.status,
-      statusText: response.statusText,
-      headers: mergedHeaders,
-    });
-  }
-
-  /**
-   * Creates a bodiless preflight response from a {@link CorsPreflightResult}.
-   */
-  public static createPreflightResponse(result: CorsPreflightResult): Response {
-    return new Response(null, {
-      status: result.statusCode,
-      headers: result.headers,
-    });
-  }
-
   private reject(reason: CorsRejectionReason): CorsRejectResult {
     return { action: CorsAction.Reject, reason };
   }
@@ -190,12 +153,14 @@ export class Cors {
     }
 
     if (originOption instanceof RegExp) {
+      originOption.lastIndex = 0;
       return originOption.test(origin) ? origin : undefined;
     }
 
     if (Array.isArray(originOption)) {
       const matched = originOption.some(entry => {
         if (entry instanceof RegExp) {
+          entry.lastIndex = 0;
           return entry.test(origin);
         }
 
@@ -227,33 +192,6 @@ export class Cors {
     }
 
     return undefined;
-  }
-
-  private static mergeVaryValues(existing: string | null, incoming: string): string {
-    const values = new Map<string, string>();
-
-    const append = (input: string | null): void => {
-      if (input === null || input.length === 0) {
-        return;
-      }
-
-      for (const item of input.split(',')) {
-        const trimmed = item.trim();
-
-        if (trimmed.length > 0) {
-          const normalized = trimmed.toLowerCase();
-
-          if (!values.has(normalized)) {
-            values.set(normalized, trimmed);
-          }
-        }
-      }
-    };
-
-    append(existing);
-    append(incoming);
-
-    return Array.from(values.values()).join(', ');
   }
 
   private serializeExposeHeaders(exposedHeaders: string[]): string | undefined {
@@ -343,7 +281,7 @@ export class Cors {
   }
 
   private includesWildcard(values: string[]): boolean {
-    return values.some(value => value.trim() === '*');
+    return values.some(value => value === '*');
   }
 
   private includesHeader(allowedHeaders: string[], requestHeader: string): boolean {
