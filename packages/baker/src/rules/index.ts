@@ -21,3 +21,9 @@ export type {
   IsIBANOptions, IsISSNOptions, IsFQDNOptions, IsLatLongOptions,
   IsISO8601Options, IsNumberStringOptions, IsDecimalOptions,
 } from './string';
+export {
+  arrayContains, arrayNotContains, arrayMinSize, arrayMaxSize,
+  arrayUnique, arrayNotEmpty,
+} from './array';
+export { isNotEmptyObject, isInstance } from './object';
+export type { IsNotEmptyObjectOptions } from './object';
