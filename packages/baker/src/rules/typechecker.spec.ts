@@ -7,6 +7,8 @@ import {
   isDate,
   isEnum,
   isInt,
+  isArray,
+  isObject,
 } from './typechecker';
 
 function makeCtx(refIndex: number = 0) {
@@ -342,5 +344,87 @@ describe('isInt', () => {
     expect(failMock).toHaveBeenCalledWith('isInt');
     expect(isInt.ruleName).toBe('isInt');
     expect((isInt as any).requiresType).toBeUndefined();
+  });
+});
+
+// ─── isArray ──────────────────────────────────────────────────────────────────
+
+describe('isArray', () => {
+  it('should return true for an empty array', () => {
+    expect(isArray([])).toBe(true);
+  });
+
+  it('should return true for a non-empty array', () => {
+    expect(isArray([1, 2, 3])).toBe(true);
+  });
+
+  it('should return false for a plain object', () => {
+    expect(isArray({})).toBe(false);
+  });
+
+  it('should return false for a string', () => {
+    expect(isArray('hello')).toBe(false);
+  });
+
+  it('should return false for null', () => {
+    expect(isArray(null)).toBe(false);
+  });
+
+  it('should return false for undefined', () => {
+    expect(isArray(undefined)).toBe(false);
+  });
+
+  it('should return false for a number', () => {
+    expect(isArray(42)).toBe(false);
+  });
+
+  it('should generate Array.isArray check code when calling emit()', () => {
+    const { ctx, failMock } = makeCtx();
+    const code = isArray.emit('_v', ctx);
+    expect(code).toContain('Array.isArray(_v)');
+    expect(failMock).toHaveBeenCalledWith('isArray');
+    expect(isArray.ruleName).toBe('isArray');
+    expect((isArray as any).requiresType).toBeUndefined();
+  });
+});
+
+// ─── isObject ─────────────────────────────────────────────────────────────────
+
+describe('isObject', () => {
+  it('should return true for a plain object', () => {
+    expect(isObject({})).toBe(true);
+  });
+
+  it('should return true for an object with properties', () => {
+    expect(isObject({ a: 1 })).toBe(true);
+  });
+
+  it('should return false for null', () => {
+    expect(isObject(null)).toBe(false);
+  });
+
+  it('should return false for an array', () => {
+    expect(isObject([])).toBe(false);
+  });
+
+  it('should return false for a string', () => {
+    expect(isObject('hello')).toBe(false);
+  });
+
+  it('should return false for a number', () => {
+    expect(isObject(42)).toBe(false);
+  });
+
+  it('should return false for undefined', () => {
+    expect(isObject(undefined)).toBe(false);
+  });
+
+  it('should generate isObject check code when calling emit()', () => {
+    const { ctx, failMock } = makeCtx();
+    const code = isObject.emit('_v', ctx);
+    expect(code).toContain('typeof _v');
+    expect(failMock).toHaveBeenCalledWith('isObject');
+    expect(isObject.ruleName).toBe('isObject');
+    expect((isObject as any).requiresType).toBeUndefined();
   });
 });

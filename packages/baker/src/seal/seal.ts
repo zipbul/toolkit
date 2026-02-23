@@ -45,7 +45,7 @@ export function _resetForTesting(): void {
 // ─────────────────────────────────────────────────────────────────────────────
 
 function sealOne<T>(Class: Function, options?: SealOptions): void {
-  if ((Class as any)[SEALED]) return; // 이미 봉인됨 (순환 참조 중 재귀 방지)
+  if (Object.prototype.hasOwnProperty.call(Class, SEALED)) return; // 이미 봉인됨 (순환 참조 중 재귀 방지)
 
   // 0. placeholder 등록 — 순환 참조 시 무한 재귀 방지
   const placeholder: SealedExecutors<T> = {

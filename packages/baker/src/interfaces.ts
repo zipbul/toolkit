@@ -7,11 +7,10 @@ export interface ValidationOptions {
   each?: boolean;
   /** 이 규칙이 속하는 그룹 목록 */
   groups?: string[];
-  /**
-   * 사용자 정의 에러 메시지.
-   * @phase2 — Phase 1에서는 수집만 하고 코드 생성에서 미사용.
-   */
+  /** 사용자 정의 에러 메시지 — 검증 실패 시 BakerError.message에 포함 */
   message?: string | ((args: { property: string; value: unknown; constraints: unknown[] }) => string);
+  /** 검증 실패 시 BakerError.context에 포함할 임의 값 */
+  context?: unknown;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

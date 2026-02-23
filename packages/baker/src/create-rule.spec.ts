@@ -110,4 +110,50 @@ describe('createRule', () => {
     // Assert
     expect(rule1).not.toBe(rule2);
   });
+
+  // ── Async validate ─────────────────────────────────────────────────────────
+
+  it('should set isAsync=true when validate is an async function', () => {
+    // Arrange / Act
+    const rule = createRule({ name: 'asyncRule', validate: async (_v) => true });
+    // Assert
+    expect(rule.isAsync).toBe(true);
+  });
+
+  it('should not set isAsync when validate is a sync function', () => {
+    // Arrange / Act
+    const rule = createRule({ name: 'syncRule', validate: (_v) => true });
+    // Assert
+    expect(rule.isAsync).toBeFalsy();
+  });
+
+  it('should include await in emitted code when validate is async', () => {
+    // Arrange
+    const rule = createRule({ name: 'asyncRule', validate: async (_v) => true });
+    const { ctx } = makeCtx(0);
+    // Act
+    const code = rule.emit('_val', ctx as any);
+    // Assert
+    expect(code).toContain('await');
+  });
+
+  it('should not include await in emitted code when validate is sync', () => {
+    // Arrange
+    const rule = createRule({ name: 'syncRule', validate: (_v) => true });
+    const { ctx } = makeCtx(0);
+    // Act
+    const code = rule.emit('_val', ctx as any);
+    // Assert
+    expect(code).not.toContain('await');
+  });
+
+  it('should return a Promise<boolean> when calling the async rule function', async () => {
+    // Arrange
+    const rule = createRule({ name: 'asyncRule', validate: async (_v) => true });
+    // Act
+    const result = rule('hello');
+    // Assert
+    expect(result).toBeInstanceOf(Promise);
+    expect(await result).toBe(true);
+  });
 });

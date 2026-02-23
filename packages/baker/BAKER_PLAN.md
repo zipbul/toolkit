@@ -1,6 +1,6 @@
 # @zipbul/baker 구현 계획
 
-> **Status:** Draft v5
+> **Status:** Draft v6 (async 지원 + 코드 생성 안전성 강화)
 > **Package:** `@zipbul/baker`
 > **Location:** `packages/baker/`
 
@@ -24,7 +24,7 @@
 | **AOT Equivalence** | 런타임 seal ≡ AOT 빌드 출력. 실행 성능 차이 0 |
 | **Fused Pipeline** | validate + transform = 1패스. 프로퍼티 1회 순회 |
 | **Dual Mode** | AOT (zipbul CLI) + 독립 런타임 (seal). 둘 다 데코레이터 DX |
-| **Throw on Error** | `deserialize()` 실패 시 `BakerValidationError` throw. `serialize()`는 무검증 전제 — 항상 `Record<string, unknown>` 직접 반환. 내부 `_deserialize` executor만 Result 패턴 사용 (코드 생성 효율). `@zipbul/result`는 내부 의존으로만 사용, 외부 노출 0 |
+| **Throw on Error** | `deserialize()` 실패 시 `BakerValidationError` throw. `serialize()`는 무검증 전제. 두 함수 모두 항상 `async` — `deserialize()`: `Promise<T>`, `serialize()`: `Promise<Record<string, unknown>>` 반환. 내부 executor는 sync/async 자동 분기 (async 요소 없으면 sync function 생성). 내부 `_deserialize` executor만 Result 패턴 사용 (코드 생성 효율). `@zipbul/result`는 내부 의존으로만 사용, 외부 노출 0 |
 | **Zero Dependencies** | validator.js 포함 외부 의존 0. 검증 로직 100% 직접 구현 (`@zipbul/result` 내부 사용 제외 — 모노레포 내부, 외부 미노출) |
 | **Bun Exclusive** | Bun 런타임 전용 |
 | **Strict Seal** | `seal()`은 전역 레지스트리의 모든 DTO를 봉인. Lazy 모드 없음. 미봉인 클래스 사용 시 `SealError` throw |
@@ -110,7 +110,7 @@ class-validator **0.14.1** 기준으로 데코레이터를 1:1 대응한다.
 | 데코레이터 | 제외 이유 |
 |-----------|----------|
 | `@ValidateBy` | baker는 `createRule()` API로 대체. ValidateBy의 메타데이터 기반 접근은 baker 아키텍처와 비호환 |
-| `@ValidatePromise` | 비동기 검증 미지원. baker는 동기 전용 (인라인 코드 생성 최적화) |
+| `@ValidatePromise` | `@ValidatePromise`의 Promise unwrap 패턴은 baker 아키텍처와 비호환. baker는 `createRule({ validate: async ... })` + `@Transform(async ...)` 으로 비동기 검증/변환을 직접 지원 |
 | `@Allow` | baker는 ExposeAll 기본이므로 역할 없음 |
 
 #### 커스텀 검증: `createRule()` API
@@ -121,14 +121,15 @@ class-validator **0.14.1** 기준으로 데코레이터를 1:1 대응한다.
 // src/create-rule.ts
 export function createRule(options: {
   name: string;               // 규칙 이름 (에러 코드로 사용)
-  validate: (value: unknown) => boolean;
+  validate: (value: unknown) => boolean | Promise<boolean>;
   defaultMessage?: string;
 }): EmittableRule;
 ```
 
 - `createRule()`이 반환하는 `EmittableRule`은 반드시 `.emit()` 메서드를 갖는다
+- **async 자동 감지**: `validate.constructor.name === 'AsyncFunction'`이면 `isAsync: true` 플래그 설정. `seal()` 시 해당 DTO의 executor가 `async function`으로 생성되며, emit 코드에 `await` 삽입
 - 데코레이터/헬퍼 양쪽에서 사용 가능
-- `.emit()` 구현: `_refs[i]` 슬롯에 `validate` 함수를 등록하고 `if(!_refs[${i}](${valueExpr}))` 인라인 코드 생성
+- `.emit()` 구현: `_refs[i]` 슬롯에 `validate` 함수를 등록하고 `if(!_refs[${i}](${valueExpr}))` (sync) 또는 `if(!(await _refs[${i}](${valueExpr})))` (async) 인라인 코드 생성
 
 #### `@ValidateIf` — 조건부 검증
 
@@ -290,12 +291,16 @@ interface TypeDef {
 ```
 
 ```typescript
-// Class[SEALED] 구조 — 방향별 dual executor
+// Class[SEALED] 구조 — 방향별 dual executor + async 플래그
 interface SealedExecutors<T> {
   /** 내부 executor — Result 패턴. deserialize()가 감싸서 throw로 변환 */
-  _deserialize: (input: unknown, options?: RuntimeOptions) => Result<T, BakerError[]>;
+  _deserialize: (input: unknown, options?: RuntimeOptions) => (T | Err<BakerError[]>) | Promise<T | Err<BakerError[]>>;
   /** 내부 executor — 항상 성공. serialize는 무검증 전제 (§4.3). */
-  _serialize: (instance: T, options?: RuntimeOptions) => Record<string, unknown>;
+  _serialize: (instance: T, options?: RuntimeOptions) => Record<string, unknown> | Promise<Record<string, unknown>>;
+  /** seal() 시 자동 감지 — deserialize 방향에 async 규칙/@Transform 존재 시 true */
+  _isAsync: boolean;
+  /** seal() 시 자동 감지 — serialize 방향에 async @Transform 존재 시 true */
+  _isSerializeAsync: boolean;
 }
 
 interface RuntimeOptions {
@@ -626,7 +631,7 @@ function mergeInheritance(Class: Function): RawClassMeta {
   const chain: Function[] = [];
   let current = Class;
   while (current && current !== Object) {
-    if ((current as any)[RAW]) chain.push(current);
+    if (Object.hasOwn(current as object, RAW)) chain.push(current);  // hasOwn으로 자기 소유만
     current = Object.getPrototypeOf(current);
   }
 
@@ -723,7 +728,7 @@ class ChildDto extends BaseDto2 {
                     (@IsDefined 동시 존재 시 @IsDefined 우선 — optional 가드 생성 안 함)
 ③ 추출(Extract)   : input에서 값 추출 + @Expose name 매핑 (deserializeOnly)
 ④ 타입 가드       : string 계열 rule은 builder가 typeof string 자동 삽입 (에러 코드는 첫 번째 rule 이름)
-⑤ 변환(Transform) : @Transform 실행 또는 enableImplicitConversion 자동 변환
+⑤ 변환(Transform) : @Transform 실행 또는 enableImplicitConversion 자동 변환. 복수 @Transform 적용 시 선언 순서대로 파이프라인 (최초 결과가 다음 입력). async @Transform은 seal() 시 자동 감지되어 `await` 삽입
 ⑥ 배열 전개       : each:true인 규칙이 있으면 for 루프로 각 원소에 규칙 적용
 ⑦ 검증(Validate)  : validation 데코레이터 실행
 ⑧ 할당(Assign)    : 통과한 값을 new Class() 인스턴스에 할당
@@ -734,6 +739,8 @@ class ChildDto extends BaseDto2 {
 **우선순위 규칙**: `@Transform` 존재 시 → `enableImplicitConversion` 자동 변환 건너뜀 ("명시적 > 자동")
 
 **@IsOptional 처리**: `@IsOptional`은 `EmittableRule`이 아니라 `RawPropertyMeta.flags.isOptional` 플래그로 처리한다. `deserialize-builder`가 `meta.flags.isOptional`을 확인하고 `if (v !== undefined && v !== null) { ... }` 래핑을 생성한다. `@IsDefined`(`meta.flags.isDefined`)와 `@IsOptional`이 동시 선언된 경우 `@IsDefined`가 우선하여 optional 가드를 생성하지 않는다 (class-validator 호환).
+
+**@IsDefined 처리**: `@IsDefined`는 `undefined`만 거부한다. `null`, 빈 문자열(`""`), `0` 등은 통과한다. 코드 생성 시 `if (v === undefined) fail('isDefined')` 코드를 삽입한 후, 후속 validation 로직을 이어서 생성한다. `@IsOptional`이 없으면서 `@IsDefined`만 있으면: undefined → 에러, 나머지 값 → validation 진행.
 
 **@ValidateIf 처리**: `meta.flags.validateIf`가 존재하면 해당 필드의 전체 검증 코드를 `if(_refs[condIdx](input)){...}` 로 감싼다. 조건 함수는 `_refs` 배열에 등록되며, `input` (원본 입력 객체)을 인자로 전달한다. `_out`이 아닌 `input`을 사용하는 이유: `_out`은 필드 처리 순서에 의존하는 불완전 인스턴스이므로, 조건 함수가 참조하는 필드가 아직 undefined일 수 있다. `input`은 모든 필드가 확정된 원본이므로 순서 의존성이 없다. 조건이 false면 해당 필드의 추출/변환/검증/할당을 모두 건너뛴다.
 
@@ -755,13 +762,13 @@ class ChildDto extends BaseDto2 {
 
 ```javascript
 // 예시: 타입 가드 → else if, 독립 규칙 → 독립 if + 마커
-var _age = input['age'];
-if (typeof _age !== 'number') _errors.push({path:'age',code:'isNumber'});  // 타입 가드
+var __bk$f_age = input['age'];
+if (typeof __bk$f_age !== 'number') __bk$errors.push({path:'age',code:'isNumber'});  // 타입 가드
 else {
-  var _ageMark = _errors.length;                                           // 마커
-  if (_age < 0) _errors.push({path:'age',code:'min'});                     // 독립 규칙 1
-  if (_age > 150) _errors.push({path:'age',code:'max'});                   // 독립 규칙 2
-  if (_errors.length === _ageMark) _out.age = _age;                        // 전부 통과 시만 할당
+  var __bk$mark_age = __bk$errors.length;                                             // 마커
+  if (__bk$f_age < 0) __bk$errors.push({path:'age',code:'min'});                      // 독립 규칙 1
+  if (__bk$f_age > 150) __bk$errors.push({path:'age',code:'max'});                    // 독립 규칙 2
+  if (__bk$errors.length === __bk$mark_age) __bk$out["age"] = __bk$f_age;             // 전부 통과 시만 할당
 }
 ```
 
@@ -772,9 +779,10 @@ else {
 ① 추출(Extract)   : 인스턴스에서 필드 읽기 (baker 등록 필드만)
 ② Optional 가드  : @IsOptional 필드 → `if (instance.field !== undefined)` 래핑 (undefined면 출력 생략)
 ③ 필터(Filter)    : groups 체크
-④ 변환(Transform) : @Transform 실행 (serializeOnly)
-⑤ 매핑(Map)       : @Expose name 매핑 (serializeOnly)
-⑥ 출력(Output)    : plain 객체에 할당
+④ 변환(Transform) : @Transform 실행 (serializeOnly). 복수 @Transform 적용 시 선언 순서대로 파이프라인. async @Transform은 seal() 시 자동 감지되어 `await` 삽입
+⑤ 재귀 직렬화  : @Type 지정된 중첩 DTO는 해당 DTO의 sealed serialize executor를 재귀 호출. 배열이면 `.map()`으로 각 요소 처리
+⑥ 매핑(Map)       : @Expose name 매핑 (serializeOnly)
+⑦ 출력(Output)    : plain 객체에 할당
 ```
 
 **serialize 필드 범위**: baker에 등록된 필드만 (validation/transform/expose/exclude/type 중 하나라도 데코레이터가 있는 필드).
@@ -792,24 +800,24 @@ else {
 |------|------|
 | `input[key]` 존재 | input 값 사용, validation 실행 |
 | `input[key] === undefined` + `exposeDefaultValues: false` | undefined를 값으로 사용, validation 실행 (undefined에 대해 검증) |
-| `input[key] === undefined` + `exposeDefaultValues: true` | `('key' in input) ? input['key'] : _out.key` → 클래스 기본값 사용, **기본값에 대해 validation 실행** |
+| `input[key] === undefined` + `exposeDefaultValues: true` | `('key' in input) ? input['key'] : __bk$out["key"]` → 클래스 기본값 사용, **기본값에 대해 validation 실행** |
 
-> `new _Cls()` 인스턴스는 **항상** 생성한다 (exposeDefaultValues와 무관). `exposeDefaultValues: true`일 때 input에 해당 키가 없으면 `_out.key`(기본값)를 변수에 재할당한 뒤 동일한 검증 파이프라인을 통과시킨다.
+> `new _Cls()` 인스턴스는 **항상** 생성한다 (exposeDefaultValues와 무관). `exposeDefaultValues: true`일 때 input에 해당 키가 없으면 `__bk$out["key"]`(기본값)를 변수에 재할당한 뒤 동일한 검증 파이프라인을 통과시킨다.
 
 **@IsOptional 동시 적용**: `@IsOptional` 가드(`!== undefined && !== null`)가 `exposeDefaultValues` 가드(`!== undefined`)를 포함(subsume)하므로, `@IsOptional`이 존재하면 optional 가드만 생성하고 exposeDefaultValues 가드는 생략한다.
 
 ```javascript
 // exposeDefaultValues: false 생성 코드 (기본)
-var _name = input['name'];         // undefined면 undefined
-if (typeof _name !== 'string') _errors.push({path:'name',code:'isString'});
-else if (_name.length < 3) _errors.push({path:'name',code:'minLength'});
-else _out.name = _name;
+var __bk$f_name = input['name'];         // undefined면 undefined
+if (typeof __bk$f_name !== 'string') __bk$errors.push({path:'name',code:'isString'});
+else if (__bk$f_name.length < 3) __bk$errors.push({path:'name',code:'minLength'});
+else __bk$out["name"] = __bk$f_name;
 
 // exposeDefaultValues: true 생성 코드
-var _name = ('name' in input) ? input['name'] : _out.name;  // input에 없으면 기본값
-if (typeof _name !== 'string') _errors.push({path:'name',code:'isString'});
-else if (_name.length < 3) _errors.push({path:'name',code:'minLength'});
-else _out.name = _name;
+var __bk$f_name = ('name' in input) ? input['name'] : __bk$out["name"];  // input에 없으면 기본값
+if (typeof __bk$f_name !== 'string') __bk$errors.push({path:'name',code:'isString'});
+else if (__bk$f_name.length < 3) __bk$errors.push({path:'name',code:'minLength'});
+else __bk$out["name"] = __bk$f_name;
 ```
 
 ### 4.5 groups + ExposeAll 상호작용
@@ -827,11 +835,11 @@ class-transformer 호환 규칙:
 코드 생성:
 ```javascript
 // groups 없는 필드 → 조건문 없이 항상 포함 (분기 0)
-var _name = input['name'];
+var __bk$f_name = input['name'];
 
 // groups=['admin'] 필드 → 런타임 체크
-if (!_groups || _groups.indexOf('admin') !== -1) {
-  var _secret = input['secret'];
+if (!__bk$groups || __bk$groups.indexOf('admin') !== -1) {
+  var __bk$f_secret = input['secret'];
   // ...
 }
 ```
@@ -851,9 +859,16 @@ function analyzeCircular(Class: Function, merged: RawClassMeta, options?: SealOp
     const raw = (cls as any)[RAW] as RawClassMeta;
     if (!raw) return false;
     for (const meta of Object.values(raw)) {
+      // 단순 @Type
       if (meta.type?.fn) {
         const nested = meta.type.fn();
         if (walk(nested)) return true;
+      }
+      // discriminator subTypes
+      if (meta.type?.discriminator) {
+        for (const sub of meta.type.discriminator.subTypes) {
+          if (walk(sub.value)) return true;
+        }
       }
     }
     visited.delete(cls);
@@ -894,11 +909,13 @@ interface EmitContext {
 //   collectErrors ? "_errors.push({path:'${boundPath}',code:'${code}'})" : "return _err([{path:'${boundPath}',code:'${code}'}])"
 
 interface EmittableRule {
-  (value: unknown): boolean;
+  (value: unknown): boolean | Promise<boolean>;
   emit(varName: string, ctx: EmitContext): string;
   readonly ruleName: string;
   /** builder가 typeof 가드 삽입 여부를 판단하는 메타. 해당 타입을 전제하는 rule만 설정. */
   readonly requiresType?: 'string' | 'number';
+  /** async validate 함수 사용 시 true — deserialize-builder가 await 코드를 생성 */
+  readonly isAsync?: boolean;
 }
 ```
 
@@ -974,9 +991,9 @@ const executor = new Function(
 
 ```javascript
 // deserialize executor
-'return function(input, _opts) { ' + code + '\n//# sourceURL=baker://ClassName/deserialize }'
+`return ${fnPrefix}(input, _opts) { ` + code + '\n//# sourceURL=baker://ClassName/deserialize }'
 // serialize executor
-'return function(instance, _opts) { ' + code + '\n//# sourceURL=baker://ClassName/serialize }'
+`return ${fnPrefix}(instance, _opts) { ` + code + '\n//# sourceURL=baker://ClassName/serialize }'
 ```
 
 이를 통해 에러 발생 시 스택 트레이스에서 `baker://CreateUserDto/deserialize`와 같은 가상 경로가 표시되어 어느 DTO의 어느 방향 executor에서 문제가 발생했는지 즉시 파악 가능하다.
@@ -991,19 +1008,19 @@ const executor = new Function(
 
 **stopAtFirstError: true (early return):**
 ```javascript
-if (typeof _name !== 'string') return _err([{path:'name',code:'isString'}]);
-if (_name.length < 3) return _err([{path:'name',code:'minLength'}]);
+if (typeof __bk$f_name !== 'string') return _err([{path:'name',code:'isString'}]);
+if (__bk$f_name.length < 3) return _err([{path:'name',code:'minLength'}]);
 ```
 
 **stopAtFirstError: false (전체 수집, 기본):**
 ```javascript
-var _errors = [];
-if (typeof _name !== 'string') _errors.push({path:'name',code:'isString'});
-else if (_name.length < 3) _errors.push({path:'name',code:'minLength'});
+var __bk$errors = [];
+if (typeof __bk$f_name !== 'string') __bk$errors.push({path:'name',code:'isString'});
+else if (__bk$f_name.length < 3) __bk$errors.push({path:'name',code:'minLength'});
 // 타입 실패 시 해당 필드 하위 규칙 skip, 다른 필드는 계속 진행
 // ...
-if (_errors.length) return _err(_errors);
-return _out;
+if (__bk$errors.length) return _err(__bk$errors);
+return __bk$out;
 ```
 
 ### 4.11 생성되는 코드 예시
@@ -1029,64 +1046,150 @@ class CreateUserDto {
 **seal({ exposeDefaultValues: true }) — deserialize executor 생성 코드 (stopAtFirstError: false):**
 ```javascript
 'use strict';
-var _out = new _Cls();
-var _errors = [];
+var __bk$out = new _Cls();
+var __bk$errors = [];
 // input 타입 방어 (preamble — §4.9 input guard 규칙)
 if (input == null || typeof input !== 'object' || Array.isArray(input)) return _err([{path:'',code:'invalidInput'}]);
 // name (exposeDefaultValues: input 없으면 기본값 유지)
-var _name = input['name'];
-if (_name !== undefined) {
-  if (typeof _name !== 'string') _errors.push({path:'name',code:'isString'});
-  else if (_name.length < 3) _errors.push({path:'name',code:'minLength'});
-  else _out.name = _name;
+var __bk$f_name = input['name'];
+if (__bk$f_name !== undefined) {
+  if (typeof __bk$f_name !== 'string') __bk$errors.push({path:'name',code:'isString'});
+  else if (__bk$f_name.length < 3) __bk$errors.push({path:'name',code:'minLength'});
+  else __bk$out["name"] = __bk$f_name;
 }
 // email (타입 가드: isEmail.emit()이 typeof 체크 포함, 에러 코드는 rule 이름)
-var _email = input['email'];
-if (typeof _email !== 'string') _errors.push({path:'email',code:'isEmail'});
-else if (!_re[0].test(_email)) _errors.push({path:'email',code:'isEmail'});
-else _out.email = _email;
+var __bk$f_email = input['email'];
+if (typeof __bk$f_email !== 'string') __bk$errors.push({path:'email',code:'isEmail'});
+else if (!_re[0].test(__bk$f_email)) __bk$errors.push({path:'email',code:'isEmail'});
+else __bk$out["email"] = __bk$f_email;
 // age (optional)
-var _age = input['age'];
-if (_age !== undefined && _age !== null) {
-  if (typeof _age !== 'number') _errors.push({path:'age',code:'isNumber'});
+var __bk$f_age = input['age'];
+if (__bk$f_age !== undefined && __bk$f_age !== null) {
+  if (typeof __bk$f_age !== 'number') __bk$errors.push({path:'age',code:'isNumber'});
   else {
-    var _ageMark = _errors.length;
-    if (_age < 0) _errors.push({path:'age',code:'min'});
-    if (_age > 150) _errors.push({path:'age',code:'max'});
-    if (_errors.length === _ageMark) _out.age = _age;
+    var __bk$mark_age = __bk$errors.length;
+    if (__bk$f_age < 0) __bk$errors.push({path:'age',code:'min'});
+    if (__bk$f_age > 150) __bk$errors.push({path:'age',code:'max'});
+    if (__bk$errors.length === __bk$mark_age) __bk$out["age"] = __bk$f_age;
   }
 }
 // displayName (deserializeOnly name mapping: 'user_name' → displayName, validation 없음 → 직접 할당)
-var _displayName = input['user_name'];
-_out.displayName = _displayName;
+var __bk$f_displayName = input['user_name'];
+__bk$out["displayName"] = __bk$f_displayName;
 // result
-if (_errors.length) return _err(_errors);
-return _out;
+if (__bk$errors.length) return _err(__bk$errors);
+return __bk$out;
 ```
 
 **serialize executor 생성 코드 (동일 DTO):**
 ```javascript
 'use strict';
-var _out = {};
+var __bk$out = {};
 // name (groups 없음 → 항상 포함)
-_out.name = instance.name;
+__bk$out["name"] = instance["name"];
 // email (groups 없음 → 항상 포함)
-_out.email = instance.email;
+__bk$out["email"] = instance["email"];
 // age (groups 없음 → 항상 포함)
-if (instance.age !== undefined) _out.age = instance.age;
+if (instance["age"] !== undefined) __bk$out["age"] = instance["age"];
 // displayName (serializeOnly name mapping: displayName → 'userName')
-_out['userName'] = instance.displayName;
+__bk$out['userName'] = instance["displayName"];
 // result
-return _out;
+return __bk$out;
 ```
 
 **serialize 코드 생성 규칙:**
 - `@Exclude()` 필드 → 코드 생성 skip
 - `@Exclude({ serializeOnly: true })` → serialize에서만 skip
-- `@Expose({ groups: ['admin'], serializeOnly: true })` → `if (!_groups || _groups.indexOf('admin') !== -1) { ... }` 래핑
-- `@Expose({ name: 'foo', serializeOnly: true })` → `_out['foo'] = instance.fieldName`
-- `@Transform` → `_out.name = _refs[i]({value: instance.name, key: 'name', obj: instance, type: 'serialize'})`
-- `@IsOptional` 필드 → `if (instance.field !== undefined) _out.field = instance.field` (§4.3 serialize ②)
+- `@Expose({ groups: ['admin'], serializeOnly: true })` → `if (!__bk$groups || __bk$groups.indexOf('admin') !== -1) { ... }` 래핑
+- `@Expose({ name: 'foo', serializeOnly: true })` → `__bk$out['foo'] = instance["fieldName"]`
+- `@Transform` → `__bk$out["name"] = _refs[i]({value: instance["name"], key: 'name', obj: instance, type: 'serialize'})`. 복수 @Transform 시 선언 순서 파이프라인. async @Transform은 `await` 삽입
+- `@Type` 중첩 DTO → `__bk$out["field"] = _execs[i]._serialize(instance["field"], _opts)`. 배열이면 `.map()` 사용
+- `@IsOptional` 필드 → `if (instance["field"] !== undefined) __bk$out["field"] = instance["field"]` (§4.3 serialize ②)
+
+### 4.12 Async 지원 설계
+
+desserialize/serialize 모두 `async` Public API를 제공한다. 내부적으로는 async 요소 존재 여부에 따라 sync/async executor를 분기 생성하여 성능을 최적화한다.
+
+#### 4.12.1 Async 요소 자동 감지
+
+`seal()` 시 각 DTO의 메타데이터를 분석하여 비동기 요소 존재 여부를 판단한다:
+
+```typescript
+function analyzeAsync(merged: RawClassMeta, direction: 'deserialize' | 'serialize'): boolean {
+  for (const meta of Object.values(merged)) {
+    // 1. createRule의 isAsync 플래그 검사 (deserialize에만 적용)
+    if (direction === 'deserialize' && meta.validation.some(rd => rd.rule.isAsync)) return true;
+    // 2. @Transform 함수의 AsyncFunction 여부 검사
+    const transforms = direction === 'deserialize'
+      ? meta.transform.filter(td => !td.options?.serializeOnly)
+      : meta.transform.filter(td => !td.options?.deserializeOnly);
+    if (transforms.some(td => td.fn.constructor.name === 'AsyncFunction')) return true;
+    // 3. @ValidateNested의 하위 DTO가 async인지 재귀 확인
+    if (meta.type?.fn) {
+      const nested = (meta.type.fn() as any)[SEALED];
+      if (direction === 'deserialize' && nested?._isAsync) return true;
+      if (direction === 'serialize' && nested?._isSerializeAsync) return true;
+    }
+  }
+  return false;
+}
+```
+
+#### 4.12.2 코드 생성 분기
+
+| 조건 | executor 생성 | @Transform/createRule 호출 | 중첩 DTO 호출 |
+|------|----------------|--------------------------|----------------|
+| async 요소 0개 | `function(input, _opts) { ... }` | 직접 호출 | 직접 호출 |
+| async 요소 1+개 | `async function(input, _opts) { ... }` | `await` 삽입 | `await` 삽입 |
+
+#### 4.12.3 Public API
+
+```typescript
+// 항상 async — 사용자는 async 여부 신경 안 쓰
+// sync executor면 Promise.resolve()로 자동 래핑됨 (Bun에서 await 오버헤드 ≈ 0.1μs)
+async function deserialize<T>(Class, input, options?): Promise<T>
+async function serialize<T>(instance, options?): Promise<Record<string, unknown>>
+```
+
+### 4.13 코드 생성 안전성
+
+#### 4.13.1 Bracket Notation 의무
+
+생성 코드에서 **모든 필드 접근은 bracket notation**을 사용한다:
+
+```javascript
+// ✅ 올바른 형식
+__bk$out["fieldName"] = __bk$f_field;
+instance["fieldName"]
+
+// ❌ 금지된 형식
+__bk$out.fieldName = __bk$f_field;
+instance.fieldName
+```
+
+이유: dot notation은 `__proto__`, `constructor` 같은 필드명에서 prototype pollution 위험이 있다.
+
+#### 4.13.2 금지된 프로퍼티명
+
+`seal()` 시 다음 필드명이 발견되면 `SealError`를 throw한다:
+
+```typescript
+const BANNED_NAMES = new Set(['__proto__', 'constructor', 'prototype']);
+```
+
+#### 4.13.3 내부 변수 Prefix
+
+생성 코드의 내부 변수는 `__bk$` prefix를 사용하여 DTO 필드명과의 충돌을 방지한다:
+
+| 목적 | 변수명 |
+|------|----------|
+| 출력 인스턴스 | `__bk$out` |
+| 에러 배열 | `__bk$errors` |
+| groups | `__bk$groups` |
+| 필드 변수 | `__bk$f_${fieldKey}` |
+| 마커 | `__bk$mark_${fieldKey}` |
+
+이 prefix는 사용자가 DTO 필드명으로 `out`, `errors`, `groups` 등을 사용해도 충돌하지 않음을 보장한다.
 
 ---
 
@@ -1102,19 +1205,19 @@ import type { RuntimeOptions, BakerError } from './types';
 
 /**
  * input → Class 인스턴스 변환 + 검증.
- * - 성공: T 반환
+ * - 성공: Promise<T> 반환
  * - 검증 실패: BakerValidationError throw
  * - 미봉인: SealError throw
  */
-export function deserialize<T>(
+export async function deserialize<T>(
   Class: new (...args: any[]) => T,
   input: unknown,
   options?: RuntimeOptions,
-): T {
+): Promise<T> {
   const sealed = (Class as any)[SEALED];
   if (!sealed) throw new SealError(`not sealed: ${Class.name}. Call seal() before deserialize()`);
 
-  const result = sealed._deserialize(input, options);
+  const result = await sealed._deserialize(input, options);
   if (isErr(result)) {
     throw new BakerValidationError(result.data as BakerError[]);
   }
@@ -1125,7 +1228,7 @@ export function deserialize<T>(
 ```typescript
 // 사용
 try {
-  const user = deserialize(CreateUserDto, body);
+  const user = await deserialize(CreateUserDto, body);
   // user: CreateUserDto 인스턴스
 } catch (e) {
   if (e instanceof BakerValidationError) {
@@ -1136,7 +1239,7 @@ try {
 }
 ```
 
-- 성공 시: `T` 직접 반환 (wrapper 할당 0)
+- 성공 시: `Promise<T>` 반환
 - 검증 실패 시: `BakerValidationError` throw (errors 배열 포함)
 - 미봉인 시: `SealError` throw — Lazy fallback **없음**
 
@@ -1147,15 +1250,15 @@ try {
  * Class 인스턴스 → plain 객체 변환.
  * - 미봉인: SealError throw
  */
-export function serialize<T>(
+export async function serialize<T>(
   instance: T,
   options?: RuntimeOptions,
-): Record<string, unknown> {
+): Promise<Record<string, unknown>> {
   const Class = (instance as any).constructor;
   const sealed = (Class as any)[SEALED];
   if (!sealed) throw new SealError(`not sealed: ${Class.name}. Call seal() before serialize()`);
 
-  return sealed._serialize(instance, options);
+  return await sealed._serialize(instance, options);
 }
 ```
 
@@ -1167,8 +1270,8 @@ interface RuntimeOptions {
 }
 
 // groups가 요청마다 다를 수 있으므로 런타임에 전달
-const adminResult = deserialize(UserDto, body, { groups: ['admin'] });
-const publicResult = serialize(user, { groups: ['public'] });
+const adminResult = await deserialize(UserDto, body, { groups: ['admin'] });
+const publicResult = await serialize(user, { groups: ['public'] });
 ```
 
 ---
@@ -1279,11 +1382,11 @@ reflect-metadata 없이, **validation 데코레이터를 타입 힌트로 활용
 코드 생성 예시 (`enableImplicitConversion: true`):
 ```javascript
 // @IsNumber @Min(0) age 필드
-var _age = input['age'];
-if (typeof _age === 'string') _age = Number(_age);  // implicit conversion
-if (typeof _age !== 'number' || _age !== _age) _errors.push({path:'age',code:'isNumber'});
-else if (_age < 0) _errors.push({path:'age',code:'min'});
-else _out.age = _age;
+var __bk$f_age = input['age'];
+if (typeof __bk$f_age === 'string') __bk$f_age = Number(__bk$f_age);  // implicit conversion
+if (typeof __bk$f_age !== 'number') __bk$errors.push({path:'age',code:'isNumber'});
+else if (__bk$f_age < 0) __bk$errors.push({path:'age',code:'min'});
+else __bk$out["age"] = __bk$f_age;
 ```
 
 ---
@@ -1583,16 +1686,18 @@ packages/baker/
 ```
 ┌─────────────────────────────────────────────────────┐
 │  Public API Layer (사용자 접점)                       │
-│  deserialize() → 성공: T 반환 / 실패: throw          │
-│  serialize()   → 항상 성공: Record 반환               │
+│  deserialize() → 성공: Promise<T> / 실패: throw        │
+│  serialize()   → 항상 성공: Promise<Record> 반환      │
 │  미봉인: throw SealError                              │
 └───────────────────────┬─────────────────────────────┘
-                        │ deserialize: isErr() 확인 후 throw 변환
-                        │ serialize: 직접 반환 (Result 미사용)
+                        │ deserialize: await + isErr() 확인 후 throw 변환
+                        │ serialize: await 후 직접 반환
 ┌───────────────────────┴─────────────────────────────┐
 │  Internal Executor Layer (코드 생성)                  │
-│  _deserialize() → 성공: T / 실패: _err(BakerError[]) │
-│  _serialize()   → 항상 Record<string, unknown> 반환   │
+│  _deserialize() → sync|async executor                │
+│    성공: T / 실패: _err(BakerError[])                   │
+│  _serialize()   → sync|async executor                │
+│    항상 Record<string, unknown> 반환                   │
 │  @zipbul/result: _deserialize만 사용 (사용자 미노출)  │
 └─────────────────────────────────────────────────────┘
 ```
@@ -1710,7 +1815,7 @@ return result;  // T
 | 에러 타입 | `ValidationError[]` (복잡) | `BakerValidationError` (throw, errors 배열 포함) |
 | 에러 접근 | `errors[0].constraints['isString']` 중첩 접근 | `e.errors[0].code === 'isString'` 평탄 접근 |
 | Result 의존 | N/A | 없음 (내부만 사용, 사용자 미노출) |
-| 동기/비동기 | `validate()` = async | `deserialize()` = sync |
+| 동기/비동기 | `validate()` = async | `deserialize()` = async (`Promise<T>`). 내부적으로 sync DTO는 sync executor 생성 → await 오버헤드 최소화. `serialize()` = async (`Promise<Record>`) |
 | 방향별 name | 불가 (양방향 동일) | @Expose 스택으로 방향별 가능 |
 | AOT | 없음 | stubs + CLI 연동 |
 | 커스텀 규칙 | `@ValidateBy` (메타데이터 기반) | `createRule()` (직접 `.emit()` 포함) |
@@ -1816,7 +1921,7 @@ packages/baker/THIRD_PARTY_LICENSES.md
 | **No reflect-metadata** | reflect-metadata 금지. `Reflect` 전역 확장 금지. `emitDecoratorMetadata` 불필요 |
 | **Symbol on Class** | 외부 저장소(WeakMap, Map, Set) 금지. Class[Symbol]만 사용. 전역 레지스트리(`Set<Function>`)는 인덱스로만 사용 (메타데이터 저장 안 함) |
 | **Strict Seal** | `seal()` 1회만 호출 가능, 전역 레지스트리 전체 봉인. 미봉인 클래스에 `deserialize()` 시 `SealError` throw. Lazy 모드 없음. `unseal()`은 테스트 전용 (`@zipbul/baker/testing`) |
-| **Throw on Error** | `deserialize()` 실패 시 `BakerValidationError` throw. `serialize()`는 무검증 전제 — 항상 `Record<string, unknown>` 반환. 내부 `_deserialize` executor만 `@zipbul/result` Result 패턴 사용. 사용자에게 `@zipbul/result` 의존 미강제 |
+| **Throw on Error** | `deserialize()` 실패 시 `BakerValidationError` throw. `serialize()`는 무검증 전제. 두 함수 모두 `async` — `Promise<T>`, `Promise<Record<string, unknown>>` 반환. 내부 executor는 sync/async 자동 분기. `_deserialize`만 `@zipbul/result` Result 패턴 사용. 사용자에게 `@zipbul/result` 의존 미강제 |
 | **ExposeAll 기본** | strategy 옵션 없음. 데코레이터 1개 이상 부착된 필드 기본 노출. @Exclude로만 숨김 |
 | **.emit() 필수** | 모든 rule은 `.emit()` 필수. @Transform 사용자 함수만 refs로 전달 |
 | **Zero Dependencies** | 외부 npm 의존 금지 (모노레포 내부 `@zipbul/result` 제외 — 사용자에게 미노출) |

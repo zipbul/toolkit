@@ -63,6 +63,18 @@ import {
   isCreditCard,
   isIBAN,
   isByteLength,
+  // Group E — new validators
+  isHash,
+  isRFC3339,
+  isMilitaryTime,
+  isLatitude,
+  isLongitude,
+  isEthereumAddress,
+  isBtcAddress,
+  isISO4217CurrencyCode,
+  isPhoneNumber,
+  isStrongPassword,
+  isTaxId,
 } from './string';
 
 function makeCtx(refIndex: number = 0) {
@@ -1591,6 +1603,553 @@ describe('isByteLength', () => {
   it('should return independent rule objects on multiple factory calls', () => {
     const r1 = isByteLength(1, 10);
     const r2 = isByteLength(1, 10);
+    expect(r1).not.toBe(r2);
+  });
+});
+
+// ─── isHash ──────────────────────────────────────────────────────────────────
+
+describe('isHash', () => {
+  it('should return true for a valid md5 hash', () => {
+    expect(isHash('md5')('d41d8cd98f00b204e9800998ecf8427e')).toBe(true);
+  });
+
+  it('should return false for a non-hex md5-length string', () => {
+    expect(isHash('md5')('z41d8cd98f00b204e9800998ecf8427e')).toBe(false);
+  });
+
+  it('should return true for a valid sha1 hash', () => {
+    expect(isHash('sha1')('da39a3ee5e6b4b0d3255bfef95601890afd80709')).toBe(true);
+  });
+
+  it('should return false for sha1 with wrong length', () => {
+    expect(isHash('sha1')('da39a3ee5e6b4b0d3255bfef95601890afd8070')).toBe(false);
+  });
+
+  it('should return true for a valid sha256 hash', () => {
+    expect(isHash('sha256')('e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855')).toBe(true);
+  });
+
+  it('should return false for sha256 with non-hex character', () => {
+    expect(isHash('sha256')('g3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855')).toBe(false);
+  });
+
+  it('should return true for valid sha384 hash', () => {
+    // sha384 of empty string = 96 hex chars
+    expect(isHash('sha384')('38b060a751ac96384cd9327eb1b1e36a21fdb71114be07434c0cc7bf63f6e1da274edebfe76f65fbd51ad2f14898b95b')).toBe(true);
+  });
+
+  it('should return true for a valid sha512 hash', () => {
+    // sha512 of empty string = 128 hex chars (exact)
+    const sha512 = 'cf83e1357eefb8bdf1542850d66d8007d620e4050b5715dc83f4a921d36ce9ce47d0d13c5d85f2b0ff8318d2877eec2f63b931bd47417a81a538327af927da3e';
+    expect(isHash('sha512')(sha512)).toBe(true);
+  });
+
+  it('should return true for valid ripemd128 hash', () => {
+    expect(isHash('ripemd128')('cdf26213a150dc3ecb610f18f6b38b46')).toBe(true);
+  });
+
+  it('should return false for ripemd128 with wrong length', () => {
+    expect(isHash('ripemd128')('cdf26213a150dc3ecb610f18f6b38')).toBe(false);
+  });
+
+  it('should return true for valid ripemd160 hash', () => {
+    expect(isHash('ripemd160')('9c1185a5c5e9fc54612808977ee8f548b2258d31')).toBe(true);
+  });
+
+  it('should return true for valid crc32 hash', () => {
+    expect(isHash('crc32')('90abcdef')).toBe(true);
+  });
+
+  it('should return false for non-string input', () => {
+    expect(isHash('md5')(42 as any)).toBe(false);
+  });
+
+  it('should have requiresType string', () => {
+    expect(isHash('md5').requiresType).toBe('string');
+  });
+
+  it('should have ruleName isHash', () => {
+    expect(isHash('md5').ruleName).toBe('isHash');
+  });
+
+  it('should generate emit code with regex check', () => {
+    const { ctx, failMock } = makeCtx();
+    const code = isHash('md5').emit('_v', ctx);
+    expect(code).toBeTruthy();
+    expect(failMock).toHaveBeenCalledWith('isHash');
+  });
+});
+
+// ─── isRFC3339 ────────────────────────────────────────────────────────────────
+
+describe('isRFC3339', () => {
+  it('should return true for UTC datetime', () => {
+    expect(isRFC3339('2021-01-01T00:00:00Z')).toBe(true);
+  });
+
+  it('should return true for datetime with timezone offset', () => {
+    expect(isRFC3339('2021-12-31T23:59:59+09:00')).toBe(true);
+  });
+
+  it('should return true for datetime with milliseconds', () => {
+    expect(isRFC3339('2021-06-15T12:30:45.123Z')).toBe(true);
+  });
+
+  it('should return false for date-only string', () => {
+    expect(isRFC3339('2021-01-01')).toBe(false);
+  });
+
+  it('should return false for a plain string', () => {
+    expect(isRFC3339('not-a-date')).toBe(false);
+  });
+
+  it('should return false for empty string', () => {
+    expect(isRFC3339('')).toBe(false);
+  });
+
+  it('should return false for non-string input', () => {
+    expect(isRFC3339(12345 as any)).toBe(false);
+  });
+
+  it('should have requiresType string and ruleName isRFC3339', () => {
+    expect(isRFC3339.requiresType).toBe('string');
+    expect(isRFC3339.ruleName).toBe('isRFC3339');
+  });
+
+  it('should generate emit code', () => {
+    const { ctx, failMock } = makeCtx();
+    const code = isRFC3339.emit('_v', ctx);
+    expect(code).toBeTruthy();
+    expect(failMock).toHaveBeenCalledWith('isRFC3339');
+  });
+});
+
+// ─── isMilitaryTime ───────────────────────────────────────────────────────────
+
+describe('isMilitaryTime', () => {
+  it('should return true for 00:00', () => {
+    expect(isMilitaryTime('00:00')).toBe(true);
+  });
+
+  it('should return true for 23:59', () => {
+    expect(isMilitaryTime('23:59')).toBe(true);
+  });
+
+  it('should return true for 12:30', () => {
+    expect(isMilitaryTime('12:30')).toBe(true);
+  });
+
+  it('should return false for 24:00', () => {
+    expect(isMilitaryTime('24:00')).toBe(false);
+  });
+
+  it('should return false for 12:60', () => {
+    expect(isMilitaryTime('12:60')).toBe(false);
+  });
+
+  it('should return false for single-digit hour', () => {
+    expect(isMilitaryTime('1:30')).toBe(false);
+  });
+
+  it('should return false for non-string input', () => {
+    expect(isMilitaryTime(1230 as any)).toBe(false);
+  });
+
+  it('should have requiresType string and ruleName isMilitaryTime', () => {
+    expect(isMilitaryTime.requiresType).toBe('string');
+    expect(isMilitaryTime.ruleName).toBe('isMilitaryTime');
+  });
+
+  it('should generate emit code', () => {
+    const { ctx, failMock } = makeCtx();
+    const code = isMilitaryTime.emit('_v', ctx);
+    expect(code).toBeTruthy();
+    expect(failMock).toHaveBeenCalledWith('isMilitaryTime');
+  });
+});
+
+// ─── isLatitude ───────────────────────────────────────────────────────────────
+
+describe('isLatitude', () => {
+  it('should return true for string "0"', () => {
+    expect(isLatitude('0')).toBe(true);
+  });
+
+  it('should return true for string "-90"', () => {
+    expect(isLatitude('-90')).toBe(true);
+  });
+
+  it('should return true for string "90"', () => {
+    expect(isLatitude('90')).toBe(true);
+  });
+
+  it('should return true for string "45.1234"', () => {
+    expect(isLatitude('45.1234')).toBe(true);
+  });
+
+  it('should return true for number 0', () => {
+    expect(isLatitude(0)).toBe(true);
+  });
+
+  it('should return true for number 45.123', () => {
+    expect(isLatitude(45.123)).toBe(true);
+  });
+
+  it('should return false for "-90.001"', () => {
+    expect(isLatitude('-90.001')).toBe(false);
+  });
+
+  it('should return false for "90.001"', () => {
+    expect(isLatitude('90.001')).toBe(false);
+  });
+
+  it('should return false for "abc"', () => {
+    expect(isLatitude('abc')).toBe(false);
+  });
+
+  it('should have ruleName isLatitude and requiresType undefined', () => {
+    expect(isLatitude.ruleName).toBe('isLatitude');
+    expect((isLatitude as any).requiresType).toBeUndefined();
+  });
+
+  it('should generate emit code', () => {
+    const { ctx, failMock } = makeCtx();
+    const code = isLatitude.emit('_v', ctx);
+    expect(code).toBeTruthy();
+    expect(failMock).toHaveBeenCalledWith('isLatitude');
+  });
+});
+
+// ─── isLongitude ──────────────────────────────────────────────────────────────
+
+describe('isLongitude', () => {
+  it('should return true for string "0"', () => {
+    expect(isLongitude('0')).toBe(true);
+  });
+
+  it('should return true for string "-180"', () => {
+    expect(isLongitude('-180')).toBe(true);
+  });
+
+  it('should return true for string "180"', () => {
+    expect(isLongitude('180')).toBe(true);
+  });
+
+  it('should return true for number 90.5', () => {
+    expect(isLongitude(90.5)).toBe(true);
+  });
+
+  it('should return false for "-180.001"', () => {
+    expect(isLongitude('-180.001')).toBe(false);
+  });
+
+  it('should return false for "180.001"', () => {
+    expect(isLongitude('180.001')).toBe(false);
+  });
+
+  it('should return false for "abc"', () => {
+    expect(isLongitude('abc')).toBe(false);
+  });
+
+  it('should have ruleName isLongitude and requiresType undefined', () => {
+    expect(isLongitude.ruleName).toBe('isLongitude');
+    expect((isLongitude as any).requiresType).toBeUndefined();
+  });
+
+  it('should generate emit code', () => {
+    const { ctx, failMock } = makeCtx();
+    const code = isLongitude.emit('_v', ctx);
+    expect(code).toBeTruthy();
+    expect(failMock).toHaveBeenCalledWith('isLongitude');
+  });
+});
+
+// ─── isEthereumAddress ────────────────────────────────────────────────────────
+
+describe('isEthereumAddress', () => {
+  it('should return true for a valid lowercase ethereum address', () => {
+    expect(isEthereumAddress('0x742d35cc6634c0532925a3b8d4c9db96590c6af5')).toBe(true);
+  });
+
+  it('should return true for a valid mixed-case ethereum address', () => {
+    expect(isEthereumAddress('0x742d35Cc6634C0532925a3b8D4C9Db96590c7aEB')).toBe(true);
+  });
+
+  it('should return false for address without 0x prefix', () => {
+    expect(isEthereumAddress('742d35cc6634c0532925a3b8d4c9db96590c6af5')).toBe(false);
+  });
+
+  it('should return false for too short address', () => {
+    expect(isEthereumAddress('0x742d35')).toBe(false);
+  });
+
+  it('should return false for non-hex chars', () => {
+    expect(isEthereumAddress('0xzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz')).toBe(false);
+  });
+
+  it('should return false for non-string input', () => {
+    expect(isEthereumAddress(123 as any)).toBe(false);
+  });
+
+  it('should have requiresType string and ruleName isEthereumAddress', () => {
+    expect(isEthereumAddress.requiresType).toBe('string');
+    expect(isEthereumAddress.ruleName).toBe('isEthereumAddress');
+  });
+
+  it('should generate emit code with regex', () => {
+    const { ctx, failMock } = makeCtx();
+    const code = isEthereumAddress.emit('_v', ctx);
+    expect(code).toBeTruthy();
+    expect(failMock).toHaveBeenCalledWith('isEthereumAddress');
+  });
+});
+
+// ─── isBtcAddress ─────────────────────────────────────────────────────────────
+
+describe('isBtcAddress', () => {
+  it('should return true for a valid P2PKH address (starts with 1)', () => {
+    expect(isBtcAddress('1A1zP1eP5QGefi2DMPTfTL5SLmv7Divf Na')).toBe(false); // has space
+  });
+
+  it('should return true for a valid P2PKH address', () => {
+    expect(isBtcAddress('1BpEi6DfDAUFd153wiGrvkiKW1iHENGLyQ')).toBe(true);
+  });
+
+  it('should return true for a valid P2SH address (starts with 3)', () => {
+    expect(isBtcAddress('3J98t1WpEZ73CNmQviecrnyiWrnqRhWNLy')).toBe(true);
+  });
+
+  it('should return true for a valid bech32 address', () => {
+    expect(isBtcAddress('bc1qar0srrr7xfkvy5l643lydnw9re59gtzzwf5mdq')).toBe(true);
+  });
+
+  it('should return false for clearly invalid address', () => {
+    expect(isBtcAddress('0invalidaddress')).toBe(false);
+  });
+
+  it('should return false for empty string', () => {
+    expect(isBtcAddress('')).toBe(false);
+  });
+
+  it('should return false for non-string input', () => {
+    expect(isBtcAddress(123 as any)).toBe(false);
+  });
+
+  it('should have requiresType string and ruleName isBtcAddress', () => {
+    expect(isBtcAddress.requiresType).toBe('string');
+    expect(isBtcAddress.ruleName).toBe('isBtcAddress');
+  });
+
+  it('should generate emit code', () => {
+    const { ctx, failMock } = makeCtx();
+    const code = isBtcAddress.emit('_v', ctx);
+    expect(code).toBeTruthy();
+    expect(failMock).toHaveBeenCalledWith('isBtcAddress');
+  });
+});
+
+// ─── isISO4217CurrencyCode ────────────────────────────────────────────────────
+
+describe('isISO4217CurrencyCode', () => {
+  it('should return true for USD', () => {
+    expect(isISO4217CurrencyCode('USD')).toBe(true);
+  });
+
+  it('should return true for EUR', () => {
+    expect(isISO4217CurrencyCode('EUR')).toBe(true);
+  });
+
+  it('should return true for KRW', () => {
+    expect(isISO4217CurrencyCode('KRW')).toBe(true);
+  });
+
+  it('should return false for lowercase usd', () => {
+    expect(isISO4217CurrencyCode('usd')).toBe(false);
+  });
+
+  it('should return false for non-existent code XXX', () => {
+    expect(isISO4217CurrencyCode('XXX')).toBe(false);
+  });
+
+  it('should return false for empty string', () => {
+    expect(isISO4217CurrencyCode('')).toBe(false);
+  });
+
+  it('should return false for non-string input', () => {
+    expect(isISO4217CurrencyCode(123 as any)).toBe(false);
+  });
+
+  it('should have requiresType string and ruleName isISO4217CurrencyCode', () => {
+    expect(isISO4217CurrencyCode.requiresType).toBe('string');
+    expect(isISO4217CurrencyCode.ruleName).toBe('isISO4217CurrencyCode');
+  });
+
+  it('should generate emit code', () => {
+    const { ctx, failMock } = makeCtx();
+    const code = isISO4217CurrencyCode.emit('_v', ctx);
+    expect(code).toBeTruthy();
+    expect(failMock).toHaveBeenCalledWith('isISO4217CurrencyCode');
+  });
+});
+
+// ─── isPhoneNumber ────────────────────────────────────────────────────────────
+
+describe('isPhoneNumber', () => {
+  it('should return true for valid E.164 US number', () => {
+    expect(isPhoneNumber('+14155552671')).toBe(true);
+  });
+
+  it('should return true for valid E.164 KR number', () => {
+    expect(isPhoneNumber('+821012345678')).toBe(true);
+  });
+
+  it('should return true for valid E.164 UK number', () => {
+    expect(isPhoneNumber('+447700900077')).toBe(true);
+  });
+
+  it('should return false for number without + prefix', () => {
+    expect(isPhoneNumber('00821012345678')).toBe(false);
+  });
+
+  it('should return false for too short number', () => {
+    expect(isPhoneNumber('+123')).toBe(false);
+  });
+
+  it('should return false for +0 leading digit after +', () => {
+    expect(isPhoneNumber('+0123456789')).toBe(false);
+  });
+
+  it('should return false for non-string input', () => {
+    expect(isPhoneNumber(123 as any)).toBe(false);
+  });
+
+  it('should have requiresType string and ruleName isPhoneNumber', () => {
+    expect(isPhoneNumber.requiresType).toBe('string');
+    expect(isPhoneNumber.ruleName).toBe('isPhoneNumber');
+  });
+
+  it('should generate emit code', () => {
+    const { ctx, failMock } = makeCtx();
+    const code = isPhoneNumber.emit('_v', ctx);
+    expect(code).toBeTruthy();
+    expect(failMock).toHaveBeenCalledWith('isPhoneNumber');
+  });
+});
+
+// ─── isStrongPassword ─────────────────────────────────────────────────────────
+
+describe('isStrongPassword', () => {
+  it('should return true for a valid strong password with defaults', () => {
+    expect(isStrongPassword()('Passw0rd!')).toBe(true);
+  });
+
+  it('should return true for complex password', () => {
+    expect(isStrongPassword()('MyP@ssw0rd123')).toBe(true);
+  });
+
+  it('should return false for too short password (< 8 chars)', () => {
+    expect(isStrongPassword()('Pass0!')).toBe(false);
+  });
+
+  it('should return false for password with no uppercase', () => {
+    expect(isStrongPassword()('password1!')).toBe(false);
+  });
+
+  it('should return false for password with no lowercase', () => {
+    expect(isStrongPassword()('PASSWORD1!')).toBe(false);
+  });
+
+  it('should return false for password with no numbers', () => {
+    expect(isStrongPassword()('Password!')).toBe(false);
+  });
+
+  it('should return false for password with no symbols', () => {
+    expect(isStrongPassword()('Password1')).toBe(false);
+  });
+
+  it('should respect custom minLength option', () => {
+    expect(isStrongPassword({ minLength: 4, minSymbols: 0 })('Pa1')).toBe(false);
+    expect(isStrongPassword({ minLength: 4, minSymbols: 0 })('Pa1x')).toBe(true);
+  });
+
+  it('should return false for non-string input', () => {
+    expect(isStrongPassword()(12345678 as any)).toBe(false);
+  });
+
+  it('should have requiresType string and ruleName isStrongPassword', () => {
+    expect(isStrongPassword().requiresType).toBe('string');
+    expect(isStrongPassword().ruleName).toBe('isStrongPassword');
+  });
+
+  it('should generate emit code', () => {
+    const { ctx, failMock } = makeCtx();
+    const code = isStrongPassword().emit('_v', ctx);
+    expect(code).toBeTruthy();
+    expect(failMock).toHaveBeenCalledWith('isStrongPassword');
+  });
+
+  it('should return independent rule objects on multiple factory calls', () => {
+    const r1 = isStrongPassword();
+    const r2 = isStrongPassword();
+    expect(r1).not.toBe(r2);
+  });
+});
+
+// ─── isTaxId ──────────────────────────────────────────────────────────────────
+
+describe('isTaxId', () => {
+  it('should return true for valid US EIN', () => {
+    expect(isTaxId('US')('12-3456789')).toBe(true);
+  });
+
+  it('should return false for invalid US format', () => {
+    expect(isTaxId('US')('1234567')).toBe(false);
+  });
+
+  it('should return true for valid KR business registration number', () => {
+    expect(isTaxId('KR')('123-45-67890')).toBe(true);
+  });
+
+  it('should return false for invalid KR format', () => {
+    expect(isTaxId('KR')('12345')).toBe(false);
+  });
+
+  it('should return true for valid DE tax id', () => {
+    expect(isTaxId('DE')('12345678901')).toBe(true);
+  });
+
+  it('should return false for invalid DE format', () => {
+    expect(isTaxId('DE')('1234567890')).toBe(false);
+  });
+
+  it('should return true for valid GB UTR', () => {
+    expect(isTaxId('GB')('1234567890')).toBe(true);
+  });
+
+  it('should return false for unsupported locale', () => {
+    expect(isTaxId('XX')('123')).toBe(false);
+  });
+
+  it('should return false for non-string input', () => {
+    expect(isTaxId('US')(123 as any)).toBe(false);
+  });
+
+  it('should have requiresType string and ruleName isTaxId', () => {
+    expect(isTaxId('US').requiresType).toBe('string');
+    expect(isTaxId('US').ruleName).toBe('isTaxId');
+  });
+
+  it('should generate emit code', () => {
+    const { ctx, failMock } = makeCtx();
+    const code = isTaxId('US').emit('_v', ctx);
+    expect(code).toBeTruthy();
+    expect(failMock).toHaveBeenCalledWith('isTaxId');
+  });
+
+  it('should return independent rule objects on multiple factory calls', () => {
+    const r1 = isTaxId('US');
+    const r2 = isTaxId('US');
     expect(r1).not.toBe(r2);
   });
 });

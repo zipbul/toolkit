@@ -22,7 +22,7 @@ export interface EmitContext {
 // ─────────────────────────────────────────────────────────────────────────────
 
 export interface EmittableRule {
-  (value: unknown): boolean;
+  (value: unknown): boolean | Promise<boolean>;
   emit(varName: string, ctx: EmitContext): string;
   readonly ruleName: string;
   /**
@@ -31,16 +31,29 @@ export interface EmittableRule {
    * @IsString 자체는 undefined (자체 typeof 포함).
    */
   readonly requiresType?: 'string' | 'number';
+  /** async validate 함수 사용 시 true — deserialize-builder가 await 코드를 생성 */
+  readonly isAsync?: boolean;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
 // RuleDef / TransformDef / ExposeDef / ExcludeDef / TypeDef (§2.1)
 // ─────────────────────────────────────────────────────────────────────────────
 
+/** 사용자 정의 메시지 콜백 인자 */
+export interface MessageArgs {
+  property: string;
+  value: unknown;
+  constraints: unknown[];
+}
+
 export interface RuleDef {
   rule: EmittableRule;
   each?: boolean;
   groups?: string[];
+  /** 검증 실패 시 BakerError.message에 포함할 값 */
+  message?: string | ((args: MessageArgs) => string);
+  /** 검증 실패 시 BakerError.context에 포함할 임의 값 */
+  context?: unknown;
 }
 
 /** @Transform 콜백 시그니처 */
@@ -125,7 +138,7 @@ import type { BakerError } from './errors';
 
 export interface SealedExecutors<T> {
   /** 내부 executor — Result 패턴. deserialize()가 감싸서 throw로 변환 */
-  _deserialize(input: unknown, options?: RuntimeOptions): T | import('@zipbul/result').Err<BakerError[]>;
+  _deserialize(input: unknown, options?: RuntimeOptions): Promise<T | import('@zipbul/result').Err<BakerError[]>>;
   /** 내부 executor — 항상 성공. serialize는 무검증 전제 */
   _serialize(instance: T, options?: RuntimeOptions): Record<string, unknown>;
 }

@@ -1,4 +1,4 @@
-export { isString, isNumber, isBoolean, isDate, isEnum, isInt } from './typechecker';
+export { isString, isNumber, isBoolean, isDate, isEnum, isInt, isArray, isObject } from './typechecker';
 export type { IsNumberOptions } from './typechecker';
 export { min, max, isPositive, isNegative, isDivisibleBy } from './number';
 export { minDate, maxDate } from './date';
@@ -14,12 +14,16 @@ export {
   isBIC, isFirebasePushId, isSemVer, isMongoId, isJSON,
   isBase32, isBase58, isBase64, isDateString, isMimeType, isCurrency, isMagnetURI,
   isCreditCard, isIBAN, isByteLength,
+  isHash, isRFC3339, isMilitaryTime, isLatitude, isLongitude,
+  isEthereumAddress, isBtcAddress, isISO4217CurrencyCode, isPhoneNumber,
+  isStrongPassword, isTaxId,
 } from './string';
 export type {
   IsEmailOptions, IsURLOptions, IsBase32Options, IsBase64Options,
   IsDateStringOptions, IsCurrencyOptions, IsMACAddressOptions,
   IsIBANOptions, IsISSNOptions, IsFQDNOptions, IsLatLongOptions,
   IsISO8601Options, IsNumberStringOptions, IsDecimalOptions,
+  IsStrongPasswordOptions,
 } from './string';
 export {
   arrayContains, arrayNotContains, arrayMinSize, arrayMaxSize,
@@ -27,3 +31,4 @@ export {
 } from './array';
 export { isNotEmptyObject, isInstance } from './object';
 export type { IsNotEmptyObjectOptions } from './object';
+export { isMobilePhone, isPostalCode, isIdentityCard, isPassportNumber } from './locales';

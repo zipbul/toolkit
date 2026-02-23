@@ -1149,3 +1149,298 @@ export function isByteLength(min: number, max?: number): EmittableRule {
 
   return fn as EmittableRule;
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Group E: New Validators
+// ─────────────────────────────────────────────────────────────────────────────
+
+// isHash — hash algorithm별 hex 정규식 (§4.8 B: 정규식 인라인)
+
+const HASH_REGEXES: Record<string, RegExp> = {
+  md5:        /^[a-f0-9]{32}$/i,
+  md4:        /^[a-f0-9]{32}$/i,
+  md2:        /^[a-f0-9]{32}$/i,
+  sha1:       /^[a-f0-9]{40}$/i,
+  sha256:     /^[a-f0-9]{64}$/i,
+  sha384:     /^[a-f0-9]{96}$/i,
+  sha512:     /^[a-f0-9]{128}$/i,
+  ripemd128:  /^[a-f0-9]{32}$/i,
+  ripemd160:  /^[a-f0-9]{40}$/i,
+  'tiger128,3': /^[a-f0-9]{32}$/i,
+  'tiger128,4': /^[a-f0-9]{32}$/i,
+  'tiger160,3': /^[a-f0-9]{40}$/i,
+  'tiger160,4': /^[a-f0-9]{40}$/i,
+  'tiger192,3': /^[a-f0-9]{48}$/i,
+  'tiger192,4': /^[a-f0-9]{48}$/i,
+  crc32:      /^[a-f0-9]{8}$/i,
+  crc32b:     /^[a-f0-9]{8}$/i,
+};
+
+export function isHash(algorithm: string): EmittableRule {
+  const re = HASH_REGEXES[algorithm];
+
+  const fn = (value: unknown): boolean => {
+    if (typeof value !== 'string') return false;
+    if (!re) return false;
+    return re.test(value);
+  };
+
+  (fn as any).emit = (varName: string, ctx: EmitContext): string => {
+    if (!re) {
+      // 알 수 없는 알고리즘 → 항상 실패
+      return ctx.fail('isHash') + ';';
+    }
+    const i = ctx.addRegex(re);
+    return `if (!_re[${i}].test(${varName})) ${ctx.fail('isHash')};`;
+  };
+  (fn as any).ruleName = 'isHash';
+  (fn as any).requiresType = 'string';
+
+  return fn as EmittableRule;
+}
+
+// isRFC3339 — RFC 3339 datetime (§4.8 B)
+
+const RFC3339_RE = /^\d{4}-\d{2}-\d{2}[T ]\d{2}:\d{2}:\d{2}(\.\d+)?(Z|[+-]\d{2}:\d{2})$/i;
+
+export const isRFC3339 = makeStringRule(
+  'isRFC3339',
+  (v) => RFC3339_RE.test(v),
+  (varName, ctx) => {
+    const i = ctx.addRegex(RFC3339_RE);
+    return `if (!_re[${i}].test(${varName})) ${ctx.fail('isRFC3339')};`;
+  },
+);
+
+// isMilitaryTime — HH:MM 24시간 형식 (§4.8 B)
+
+const MILITARY_TIME_RE = /^([01]\d|2[0-3]):[0-5]\d$/;
+
+export const isMilitaryTime = makeStringRule(
+  'isMilitaryTime',
+  (v) => MILITARY_TIME_RE.test(v),
+  (varName, ctx) => {
+    const i = ctx.addRegex(MILITARY_TIME_RE);
+    return `if (!_re[${i}].test(${varName})) ${ctx.fail('isMilitaryTime')};`;
+  },
+);
+
+// isLatitude — string 또는 number, -90 ~ 90 (requiresType none)
+
+function _checkLatitude(value: unknown): boolean {
+  if (typeof value === 'number') {
+    return value >= -90 && value <= 90;
+  }
+  if (typeof value === 'string') {
+    const n = parseFloat(value);
+    if (isNaN(n)) return false;
+    if (String(n) !== value && value !== String(n)) {
+      // extra chars check — parseFloat('90abc') = 90 but should fail
+      if (!/^-?\d+(\.\d+)?$/.test(value)) return false;
+    }
+    return n >= -90 && n <= 90;
+  }
+  return false;
+}
+
+const _isLatitude = (value: unknown): boolean => _checkLatitude(value);
+
+(_isLatitude as any).emit = (varName: string, ctx: EmitContext): string => {
+  const i = ctx.addRef(_checkLatitude);
+  return `if (!_refs[${i}](${varName})) ${ctx.fail('isLatitude')};`;
+};
+(_isLatitude as any).ruleName = 'isLatitude';
+// requiresType = undefined — string|number 모두 처리
+
+export const isLatitude = _isLatitude as EmittableRule;
+
+// isLongitude — string 또는 number, -180 ~ 180 (requiresType none)
+
+function _checkLongitude(value: unknown): boolean {
+  if (typeof value === 'number') {
+    return value >= -180 && value <= 180;
+  }
+  if (typeof value === 'string') {
+    const n = parseFloat(value);
+    if (isNaN(n)) return false;
+    if (!/^-?\d+(\.\d+)?$/.test(value)) return false;
+    return n >= -180 && n <= 180;
+  }
+  return false;
+}
+
+const _isLongitude = (value: unknown): boolean => _checkLongitude(value);
+
+(_isLongitude as any).emit = (varName: string, ctx: EmitContext): string => {
+  const i = ctx.addRef(_checkLongitude);
+  return `if (!_refs[${i}](${varName})) ${ctx.fail('isLongitude')};`;
+};
+(_isLongitude as any).ruleName = 'isLongitude';
+// requiresType = undefined — string|number 모두 처리
+
+export const isLongitude = _isLongitude as EmittableRule;
+
+// isEthereumAddress — 0x + 40 hex chars (§4.8 B)
+
+const ETH_ADDRESS_RE = /^0x[0-9a-fA-F]{40}$/;
+
+export const isEthereumAddress = makeStringRule(
+  'isEthereumAddress',
+  (v) => ETH_ADDRESS_RE.test(v),
+  (varName, ctx) => {
+    const i = ctx.addRegex(ETH_ADDRESS_RE);
+    return `if (!_re[${i}].test(${varName})) ${ctx.fail('isEthereumAddress')};`;
+  },
+);
+
+// isBtcAddress — P2PKH (1...), P2SH (3...), bech32 (bc1...) (§4.8 B)
+
+const BTC_P2PKH_RE = /^1[a-km-zA-HJ-NP-Z1-9]{25,34}$/;
+const BTC_P2SH_RE  = /^3[a-km-zA-HJ-NP-Z1-9]{25,34}$/;
+const BTC_BECH32_RE = /^(bc1)[a-z0-9]{6,87}$/;
+
+export const isBtcAddress = makeStringRule(
+  'isBtcAddress',
+  (v) => BTC_P2PKH_RE.test(v) || BTC_P2SH_RE.test(v) || BTC_BECH32_RE.test(v),
+  (varName, ctx) => {
+    const i1 = ctx.addRegex(BTC_P2PKH_RE);
+    const i2 = ctx.addRegex(BTC_P2SH_RE);
+    const i3 = ctx.addRegex(BTC_BECH32_RE);
+    return `if (!_re[${i1}].test(${varName}) && !_re[${i2}].test(${varName}) && !_re[${i3}].test(${varName})) ${ctx.fail('isBtcAddress')};`;
+  },
+);
+
+// isISO4217CurrencyCode — ISO 4217 통화 코드 집합 (§4.8 C: ref 기반)
+
+const ISO4217_CODES = new Set([
+  'AED','AFN','ALL','AMD','ANG','AOA','ARS','AUD','AWG','AZN',
+  'BAM','BBD','BDT','BGN','BHD','BIF','BMD','BND','BOB','BOV',
+  'BRL','BSD','BTN','BWP','BYN','BZD','CAD','CDF','CHE','CHF',
+  'CHW','CLF','CLP','CNY','COP','COU','CRC','CUC','CUP','CVE',
+  'CZK','DJF','DKK','DOP','DZD','EGP','ERN','ETB','EUR','FJD',
+  'FKP','GBP','GEL','GHS','GIP','GMD','GNF','GTQ','GYD','HKD',
+  'HNL','HRK','HTG','HUF','IDR','ILS','INR','IQD','IRR','ISK',
+  'JMD','JOD','JPY','KES','KGS','KHR','KMF','KPW','KRW','KWD',
+  'KYD','KZT','LAK','LBP','LKR','LRD','LSL','LYD','MAD','MDL',
+  'MGA','MKD','MMK','MNT','MOP','MRU','MUR','MVR','MWK','MXN',
+  'MXV','MYR','MZN','NAD','NGN','NIO','NOK','NPR','NZD','OMR',
+  'PAB','PEN','PGK','PHP','PKR','PLN','PYG','QAR','RON','RSD',
+  'RUB','RWF','SAR','SBD','SCR','SDG','SEK','SGD','SHP','SLE',
+  'SLL','SOS','SRD','SSP','STN','SVC','SYP','SZL','THB','TJS',
+  'TMT','TND','TOP','TRY','TTD','TWD','TZS','UAH','UGX','USD',
+  'USN','UYI','UYU','UYW','UZS','VED','VES','VND','VUV','WST',
+  'XAF','XAG','XAU','XBA','XBB','XBC','XBD','XCD','XDR','XOF',
+  'XPD','XPF','XPT','XSU','XTS','XUA','YER','ZAR','ZMW','ZWL',
+]);
+
+export const isISO4217CurrencyCode = makeStringRule(
+  'isISO4217CurrencyCode',
+  (v) => ISO4217_CODES.has(v),
+  (varName, ctx) => {
+    const i = ctx.addRef(ISO4217_CODES);
+    return `if (!_refs[${i}].has(${varName})) ${ctx.fail('isISO4217CurrencyCode')};`;
+  },
+);
+
+// isPhoneNumber — E.164 국제 전화번호 (§4.8 B)
+
+const PHONE_E164_RE = /^\+[1-9]\d{6,14}$/;
+
+export const isPhoneNumber = makeStringRule(
+  'isPhoneNumber',
+  (v) => PHONE_E164_RE.test(v),
+  (varName, ctx) => {
+    const i = ctx.addRegex(PHONE_E164_RE);
+    return `if (!_re[${i}].test(${varName})) ${ctx.fail('isPhoneNumber')};`;
+  },
+);
+
+// isStrongPassword — 강력한 비밀번호 체크 (§4.8 C: factory)
+
+export interface IsStrongPasswordOptions {
+  minLength?: number;
+  minLowercase?: number;
+  minUppercase?: number;
+  minNumbers?: number;
+  minSymbols?: number;
+}
+
+export function isStrongPassword(options?: IsStrongPasswordOptions): EmittableRule {
+  const minLength   = options?.minLength   ?? 8;
+  const minLower    = options?.minLowercase ?? 1;
+  const minUpper    = options?.minUppercase ?? 1;
+  const minNums     = options?.minNumbers   ?? 1;
+  const minSymbols  = options?.minSymbols   ?? 1;
+
+  const validate = (v: string): boolean => {
+    if (v.length < minLength) return false;
+    if (minLower > 0) {
+      const cnt = (v.match(/[a-z]/g) || []).length;
+      if (cnt < minLower) return false;
+    }
+    if (minUpper > 0) {
+      const cnt = (v.match(/[A-Z]/g) || []).length;
+      if (cnt < minUpper) return false;
+    }
+    if (minNums > 0) {
+      const cnt = (v.match(/[0-9]/g) || []).length;
+      if (cnt < minNums) return false;
+    }
+    if (minSymbols > 0) {
+      const cnt = (v.match(/[^a-zA-Z0-9]/g) || []).length;
+      if (cnt < minSymbols) return false;
+    }
+    return true;
+  };
+
+  const fn = (value: unknown): boolean => {
+    if (typeof value !== 'string') return false;
+    return validate(value);
+  };
+
+  (fn as any).emit = (varName: string, ctx: EmitContext): string => {
+    const i = ctx.addRef(validate);
+    return `if (!_refs[${i}](${varName})) ${ctx.fail('isStrongPassword')};`;
+  };
+  (fn as any).ruleName = 'isStrongPassword';
+  (fn as any).requiresType = 'string';
+
+  return fn as EmittableRule;
+}
+
+// isTaxId — 로케일별 세금 식별자 (§4.8 C: factory)
+
+const TAX_ID_REGEXES: Record<string, RegExp> = {
+  US: /^\d{2}-\d{7}$/,                      // EIN format: XX-XXXXXXX
+  KR: /^\d{3}-\d{2}-\d{5}$/,                // 사업자등록번호: XXX-XX-XXXXX
+  DE: /^\d{11}$/,                            // Steuernummer: 11자리
+  FR: /^[0-9]{13}$/,                         // SIRET: 13자리
+  GB: /^\d{10}$/,                            // UTR: 10자리
+  IT: /^[A-Z]{6}\d{2}[A-Z]\d{2}[A-Z]\d{3}[A-Z]$/i, // Codice Fiscale
+  ES: /^[0-9A-Z]\d{7}[0-9A-Z]$/i,           // NIF/NIE/CIF
+  AU: /^\d{11}$/,                            // ABN: 11자리
+  CA: /^\d{9}$/,                             // BN: 9자리
+  IN: /^[A-Z]{5}\d{4}[A-Z]$/i,              // PAN: XXXXX9999X
+};
+
+export function isTaxId(locale: string): EmittableRule {
+  const re = TAX_ID_REGEXES[locale];
+
+  const fn = (value: unknown): boolean => {
+    if (typeof value !== 'string') return false;
+    if (!re) return false;
+    return re.test(value);
+  };
+
+  (fn as any).emit = (varName: string, ctx: EmitContext): string => {
+    if (!re) {
+      return ctx.fail('isTaxId') + ';';
+    }
+    const i = ctx.addRegex(re);
+    return `if (!_re[${i}].test(${varName})) ${ctx.fail('isTaxId')};`;
+  };
+  (fn as any).ruleName = 'isTaxId';
+  (fn as any).requiresType = 'string';
+
+  return fn as EmittableRule;
+}

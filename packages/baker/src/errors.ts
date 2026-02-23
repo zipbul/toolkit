@@ -16,6 +16,10 @@
 export interface BakerError {
   readonly path: string;
   readonly code: string;
+  /** 사용자 정의 에러 메시지 — 데코레이터 message 옵션이 설정된 경우에만 포함 */
+  readonly message?: string;
+  /** 사용자 정의 컨텍스트 — 데코레이터 context 옵션이 설정된 경우에만 포함 */
+  readonly context?: unknown;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

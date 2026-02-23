@@ -1,6 +1,6 @@
 import { err as _resultErr, isErr as _resultIsErr } from '@zipbul/result';
 import { SEALED } from '../symbols';
-import type { RawClassMeta, RawPropertyMeta, EmitContext, EmittableRule, SealedExecutors } from '../types';
+import type { RawClassMeta, RawPropertyMeta, EmitContext, EmittableRule, SealedExecutors, RuleDef } from '../types';
 import type { SealOptions, RuntimeOptions } from '../interfaces';
 import type { BakerError } from '../errors';
 
@@ -40,7 +40,7 @@ export function buildDeserializeCode<T>(
   merged: RawClassMeta,
   options: SealOptions | undefined,
   needsCircularCheck: boolean,
-): (input: unknown, opts?: RuntimeOptions) => T | ReturnType<typeof _resultErr<BakerError[]>> {
+): (input: unknown, opts?: RuntimeOptions) => Promise<T | ReturnType<typeof _resultErr<BakerError[]>>> {
   const stopAtFirstError = options?.stopAtFirstError ?? false;
   const collectErrors = !stopAtFirstError;
   const exposeDefaultValues = options?.exposeDefaultValues ?? false;
@@ -115,11 +115,11 @@ export function buildDeserializeCode<T>(
 
   const executor = new Function(
     '_Cls', '_re', '_refs', '_execs', '_err', '_isErr',
-    'return function(input, _opts) { ' + body + ' }',
+    'return async function(input, _opts) { ' + body + ' }',
   )(Class, regexes, refs, execs, _resultErr, _resultIsErr) as (
     input: unknown,
     opts?: RuntimeOptions,
-  ) => T | ReturnType<typeof _resultErr<BakerError[]>>;
+  ) => Promise<T | ReturnType<typeof _resultErr<BakerError[]>>>;
 
   return executor;
 }
@@ -262,9 +262,58 @@ function generateValidationCode(
   }
 
   // Build validation with type gate
-  code += buildRulesCode(fieldKey, varName, meta.validation, collectErrors, emitCtx);
+  code += buildRulesCode(fieldKey, varName, meta.validation, collectErrors, emitCtx, ctx);
 
   return code;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// 규칙별 추가 필드(message/context) 코드 문자열 계산 헬퍼
+// ─────────────────────────────────────────────────────────────────────────────
+
+/** 규칙의 message/context 옵션을 generated code 내 extra 필드 문자열로 변환 */
+function computeRuleExtras(
+  rd: RuleDef,
+  fieldKey: string,
+  varName: string,
+  ctx: FieldCodeContext,
+): string {
+  let extra = '';
+  if (typeof rd.message === 'string') {
+    extra += `,message:${JSON.stringify(rd.message)}`;
+  } else if (typeof rd.message === 'function') {
+    const msgIdx = ctx.refs.length;
+    ctx.refs.push(rd.message as unknown);
+    extra += `,message:_refs[${msgIdx}]({property:${JSON.stringify(fieldKey)},value:${varName},constraints:[]})`;
+  }
+  if (rd.context !== undefined) {
+    const ctxIdx = ctx.refs.length;
+    ctx.refs.push(rd.context);
+    extra += `,context:_refs[${ctxIdx}]`;
+  }
+  return extra;
+}
+
+/** 규칙별 EmitContext 생성 (message/context 오버라이드) */
+function makeRuleEmitCtx(
+  baseEmitCtx: EmitContext,
+  fieldKey: string,
+  varName: string,
+  rd: RuleDef,
+  ctx: FieldCodeContext,
+): EmitContext {
+  const extra = computeRuleExtras(rd, fieldKey, varName, ctx);
+  if (!extra) return baseEmitCtx;
+  return {
+    ...baseEmitCtx,
+    fail(code: string): string {
+      if (baseEmitCtx.collectErrors) {
+        return `_errors.push({path:${JSON.stringify(fieldKey)},code:${JSON.stringify(code)}${extra}})`;
+      } else {
+        return `return _err([{path:${JSON.stringify(fieldKey)},code:${JSON.stringify(code)}${extra}}])`;
+      }
+    },
+  };
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -277,13 +326,11 @@ function buildRulesCode(
   validation: RawPropertyMeta['validation'],
   collectErrors: boolean,
   emitCtx: EmitContext,
+  ctx: FieldCodeContext,
 ): string {
   const each = validation.filter(rd => rd.each);
   const nonEach = validation.filter(rd => !rd.each);
 
-  // each: true rules — separate array loop handling
-  // For non-each rules, use the main logic below
-  // (Phase 3 simplified: basic each support)
   let code = '';
 
   // Separate by requiresType
@@ -313,48 +360,44 @@ function buildRulesCode(
     let gateErrorCode: string;
 
     if (typeAsseter) {
-      // Use the type asserter's typeof check — simplified gate condition
       if (gateType === 'string') {
         gateCondition = `typeof ${varName} !== 'string'`;
       } else {
-        // isNumber: check typeof + NaN + Infinity (assuming default options)
         gateCondition = `typeof ${varName} !== 'number' || isNaN(${varName}) || !isFinite(${varName})`;
       }
       gateErrorCode = typeAsseter.rule.ruleName;
     } else {
-      // No type asserter — builder injects
       gateCondition = `typeof ${varName} !== '${gateType}'`;
       gateErrorCode = gateDeps[0].rule.ruleName;
     }
 
+    // 타입 게이트 fail — typeAsseter rd가 있으면 message/context 반영
+    const gateEmitCtx = typeAsseter
+      ? makeRuleEmitCtx(emitCtx, fieldKey, varName, typeAsseter, ctx)
+      : emitCtx;
+
     if (collectErrors) {
-      // Type gate: if fails → push error; else { marker + rules + assign }
-      code += `if (${gateCondition}) ${emitCtx.fail(gateErrorCode)};\n`;
+      code += `if (${gateCondition}) ${gateEmitCtx.fail(gateErrorCode)};\n`;
       code += `else {\n`;
       const markVar = `_mark${toVarName(fieldKey).slice(1)}`;
       code += `  var ${markVar} = _errors.length;\n`;
-      // General rules (non-typed) inside else too — if any
       for (const rd of otherGeneral) {
-        const ruleCode = rd.rule.emit(varName, emitCtx);
+        const ruleCode = rd.rule.emit(varName, makeRuleEmitCtx(emitCtx, fieldKey, varName, rd, ctx));
         code += '  ' + ruleCode.replace(/\n/g, '\n  ') + '\n';
       }
-      // Typed dependent rules
       for (const rd of gateDeps) {
-        const ruleCode = rd.rule.emit(varName, emitCtx);
+        const ruleCode = rd.rule.emit(varName, makeRuleEmitCtx(emitCtx, fieldKey, varName, rd, ctx));
         code += '  ' + ruleCode.replace(/\n/g, '\n  ') + '\n';
       }
       code += `  if (_errors.length === ${markVar}) _out.${fieldKey} = ${varName};\n`;
       code += `}\n`;
     } else {
-      // stopAtFirstError: true — sequential early returns
-      code += `if (${gateCondition}) ${emitCtx.fail(gateErrorCode)};\n`;
-      // General rules
+      code += `if (${gateCondition}) ${gateEmitCtx.fail(gateErrorCode)};\n`;
       for (const rd of otherGeneral) {
-        code += rd.rule.emit(varName, emitCtx) + '\n';
+        code += rd.rule.emit(varName, makeRuleEmitCtx(emitCtx, fieldKey, varName, rd, ctx)) + '\n';
       }
-      // Typed rules
       for (const rd of gateDeps) {
-        code += rd.rule.emit(varName, emitCtx) + '\n';
+        code += rd.rule.emit(varName, makeRuleEmitCtx(emitCtx, fieldKey, varName, rd, ctx)) + '\n';
       }
       code += `_out.${fieldKey} = ${varName};\n`;
     }
@@ -367,34 +410,74 @@ function buildRulesCode(
         const markVar = `_mark${toVarName(fieldKey).slice(1)}`;
         code += `var ${markVar} = _errors.length;\n`;
         for (const rd of generalRules) {
-          code += rd.rule.emit(varName, emitCtx) + '\n';
+          code += rd.rule.emit(varName, makeRuleEmitCtx(emitCtx, fieldKey, varName, rd, ctx)) + '\n';
         }
         code += `if (_errors.length === ${markVar}) _out.${fieldKey} = ${varName};\n`;
       }
     } else {
       for (const rd of generalRules) {
-        code += rd.rule.emit(varName, emitCtx) + '\n';
+        code += rd.rule.emit(varName, makeRuleEmitCtx(emitCtx, fieldKey, varName, rd, ctx)) + '\n';
       }
       code += `_out.${fieldKey} = ${varName};\n`;
     }
   }
 
-  // each: true rules — basic support
+  // each: true rules — Array + Set + Map 지원
   for (const rd of each) {
     const pathKey = JSON.stringify(fieldKey);
+    const iVar = `_i_${toVarName(fieldKey).slice(1)}`;
+    const siVar = `_si_${toVarName(fieldKey).slice(1)}`;
+    const svVar = `_sv_${toVarName(fieldKey).slice(1)}`;
+    const miVar = `_mi_${toVarName(fieldKey).slice(1)}`;
+    const mvVar = `_mv_${toVarName(fieldKey).slice(1)}`;
+    const extra = computeRuleExtras(rd, fieldKey, varName, ctx);
+
     if (collectErrors) {
+      const arrFail = (c: string) => `_errors.push({path:${pathKey}+'['+${iVar}+']',code:${JSON.stringify(c)}${extra}})`;
+      const arrEmitCtx: EmitContext = { ...emitCtx, fail: arrFail };
+      const setFail = (c: string) => `_errors.push({path:${pathKey}+'['+${siVar}+']',code:${JSON.stringify(c)}${extra}})`;
+      const setEmitCtx: EmitContext = { ...emitCtx, fail: setFail };
+      const mapFail = (c: string) => `_errors.push({path:${pathKey}+'['+${miVar}+']',code:${JSON.stringify(c)}${extra}})`;
+      const mapEmitCtx: EmitContext = { ...emitCtx, fail: mapFail };
+
       code += `if (Array.isArray(${varName})) {\n`;
-      code += `  for (var _i_${toVarName(fieldKey).slice(1)}=0; _i_${toVarName(fieldKey).slice(1)}<${varName}.length; _i_${toVarName(fieldKey).slice(1)}++) {\n`;
-      // Create per-element context
-      const arrEmitCtx: EmitContext = {
-        ...emitCtx,
-        fail: (code2) => `_errors.push({path:${pathKey}+'['+_i_${toVarName(fieldKey).slice(1)}+']',code:${JSON.stringify(code2)}})`,
-      };
-      code += '    ' + rd.rule.emit(`${varName}[_i_${toVarName(fieldKey).slice(1)}]`, arrEmitCtx) + '\n';
+      code += `  for (var ${iVar}=0; ${iVar}<${varName}.length; ${iVar}++) {\n`;
+      code += '    ' + rd.rule.emit(`${varName}[${iVar}]`, arrEmitCtx) + '\n';
+      code += `  }\n`;
+      code += `} else if (${varName} instanceof Set) {\n`;
+      code += `  var ${siVar} = 0;\n`;
+      code += `  for (var ${svVar} of ${varName}) {\n`;
+      code += '    ' + rd.rule.emit(svVar, setEmitCtx) + '\n';
+      code += `    ${siVar}++;\n`;
+      code += `  }\n`;
+      code += `} else if (${varName} instanceof Map) {\n`;
+      code += `  var ${miVar} = 0;\n`;
+      code += `  for (var ${mvVar} of ${varName}.values()) {\n`;
+      code += '    ' + rd.rule.emit(mvVar, mapEmitCtx) + '\n';
+      code += `    ${miVar}++;\n`;
       code += `  }\n`;
       code += `} else { _errors.push({path:${pathKey},code:'isArray'}); }\n`;
     } else {
-      code += `if (!Array.isArray(${varName})) ${emitCtx.fail('isArray')};\n`;
+      code += `if (!Array.isArray(${varName}) && !(${varName} instanceof Set) && !(${varName} instanceof Map)) ${emitCtx.fail('isArray')};\n`;
+      const arrFail2 = (c: string) => `return _err([{path:${pathKey}+'['+${iVar}+']',code:${JSON.stringify(c)}${extra}}])`;
+      const arrEmitCtx2: EmitContext = { ...emitCtx, fail: arrFail2 };
+      code += `if (Array.isArray(${varName})) {\n`;
+      code += `  for (var ${iVar}=0; ${iVar}<${varName}.length; ${iVar}++) {\n`;
+      code += '    ' + rd.rule.emit(`${varName}[${iVar}]`, arrEmitCtx2) + '\n';
+      code += `  }\n`;
+      code += `} else if (${varName} instanceof Set) {\n`;
+      code += `  for (var ${svVar} of ${varName}) {\n`;
+      const setFail2 = (c: string) => `return _err([{path:${pathKey},code:${JSON.stringify(c)}${extra}}])`;
+      const setEmitCtx2: EmitContext = { ...emitCtx, fail: setFail2 };
+      code += '    ' + rd.rule.emit(svVar, setEmitCtx2) + '\n';
+      code += `  }\n`;
+      code += `} else if (${varName} instanceof Map) {\n`;
+      code += `  for (var ${mvVar} of ${varName}.values()) {\n`;
+      const mapFail2 = (c: string) => `return _err([{path:${pathKey},code:${JSON.stringify(c)}${extra}}])`;
+      const mapEmitCtx2: EmitContext = { ...emitCtx, fail: mapFail2 };
+      code += '    ' + rd.rule.emit(mvVar, mapEmitCtx2) + '\n';
+      code += `  }\n`;
+      code += `}\n`;
     }
   }
 
@@ -428,7 +511,7 @@ function generateNestedCode(
       const execIdx = execs.length;
       execs.push(nestedSealed as SealedExecutors<unknown>);
       code += `  case ${JSON.stringify(sub.name)}:\n`;
-      code += `    var _r${toVarName(fieldKey)} = _execs[${execIdx}]._deserialize(${varName}, _opts);\n`;
+      code += `    var _r${toVarName(fieldKey)} = await _execs[${execIdx}]._deserialize(${varName}, _opts);\n`;
       code += generateNestedResultCode(fieldKey, varName, `_r${toVarName(fieldKey)}`, collectErrors);
       code += `    break;\n`;
     }
@@ -450,7 +533,7 @@ function generateNestedCode(
       code += `if (Array.isArray(${varName})) {\n`;
       code += `  var _arr${toVarName(fieldKey)} = [];\n`;
       code += `  for (var ${iVar}=0; ${iVar}<${varName}.length; ${iVar}++) {\n`;
-      code += `    var _r${toVarName(fieldKey)} = _execs[${execIdx}]._deserialize(${varName}[${iVar}], _opts);\n`;
+      code += `    var _r${toVarName(fieldKey)} = await _execs[${execIdx}]._deserialize(${varName}[${iVar}], _opts);\n`;
       code += `    if (_isErr(_r${toVarName(fieldKey)})) {\n`;
       code += `      var _re${toVarName(fieldKey)} = _r${toVarName(fieldKey)}.data;\n`;
       code += `      for (var _j${toVarName(fieldKey)}=0; _j${toVarName(fieldKey)}<_re${toVarName(fieldKey)}.length; _j${toVarName(fieldKey)}++) {\n`;
@@ -463,7 +546,7 @@ function generateNestedCode(
     } else {
       // §8.1 simple nested object
       code += `if (${varName} != null && typeof ${varName} === 'object') {\n`;
-      code += `  var _r${toVarName(fieldKey)} = _execs[${execIdx}]._deserialize(${varName}, _opts);\n`;
+      code += `  var _r${toVarName(fieldKey)} = await _execs[${execIdx}]._deserialize(${varName}, _opts);\n`;
       code += generateNestedResultCode(fieldKey, varName, `_r${toVarName(fieldKey)}`, collectErrors);
       code += `} else { ${emitCtx.fail('isObject')}; }\n`;
     }

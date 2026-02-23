@@ -91,28 +91,28 @@ describe('seal', () => {
     expect(() => seal()).not.toThrow();
   });
 
-  it('should seal a DTO with @IsString field — _deserialize returns instance for valid input', () => {
+  it('should seal a DTO with @IsString field — _deserialize returns instance for valid input', async () => {
     // Arrange
     class PersonDto {}
     registerClass(PersonDto, makeStringField('name'));
     seal();
     // Act
     const sealed = (PersonDto as any)[SEALED];
-    const result = sealed._deserialize({ name: 'Alice' });
+    const result = await sealed._deserialize({ name: 'Alice' });
     // Assert
     expect(result).toBeInstanceOf(PersonDto);
     // @ts-ignore
     expect(result.name).toBe('Alice');
   });
 
-  it('should seal a DTO with @IsString field — _deserialize returns error for invalid input', () => {
+  it('should seal a DTO with @IsString field — _deserialize returns error for invalid input', async () => {
     // Arrange
     class PersonDto2 {}
     registerClass(PersonDto2, makeStringField('name'));
     seal();
     // Act
     const sealed = (PersonDto2 as any)[SEALED];
-    const result = sealed._deserialize({ name: 42 });
+    const result = await sealed._deserialize({ name: 42 });
     // Assert — should be Err (has .data property)
     expect((result as any).data).toBeDefined();
     expect(Array.isArray((result as any).data)).toBe(true);
@@ -260,19 +260,19 @@ describe('seal', () => {
 
   // ── Idempotency ────────────────────────────────────────────────────────────
 
-  it('should produce equivalent executors after seal → unseal → seal cycle', () => {
+  it('should produce equivalent executors after seal → unseal → seal cycle', async () => {
     // Arrange
     class IdempDto {}
     registerClass(IdempDto, makeStringField('name'));
     seal();
     const first = (IdempDto as any)[SEALED];
-    const firstResult = first._deserialize({ name: 'Bob' });
+    const firstResult = await first._deserialize({ name: 'Bob' });
 
     delete (IdempDto as any)[SEALED];
     _resetForTesting();
     seal();
     const second = (IdempDto as any)[SEALED];
-    const secondResult = second._deserialize({ name: 'Bob' });
+    const secondResult = await second._deserialize({ name: 'Bob' });
     // Assert — both produce instances with same values
     expect(firstResult).toBeInstanceOf(IdempDto);
     expect(secondResult).toBeInstanceOf(IdempDto);

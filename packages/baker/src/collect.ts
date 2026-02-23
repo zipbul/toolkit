@@ -16,7 +16,12 @@ export function ensureMeta(ctor: Function, key: string): RawPropertyMeta {
   globalRegistry.add(ctor);
 
   // Class[RAW] 없으면 생성 (null prototype 사용 — 프로토타입 체인 간섭 0)
-  const raw = ((ctor as any)[RAW] ??= Object.create(null) as Record<string, RawPropertyMeta>);
+  // 주의: hasOwnProperty 체크 필수 — 클래스 상속 시 ctor.__proto__ === ParentClass 이므로
+  // ??= 연산자가 부모의 [RAW]를 찾아 자식의 필드를 부모 RAW에 저장하는 오염 발생 방지
+  if (!Object.prototype.hasOwnProperty.call(ctor, RAW)) {
+    (ctor as any)[RAW] = Object.create(null) as Record<string, RawPropertyMeta>;
+  }
+  const raw = (ctor as any)[RAW] as Record<string, RawPropertyMeta>;
 
   // key 없으면 기본 meta 생성
   return (raw[key] ??= {

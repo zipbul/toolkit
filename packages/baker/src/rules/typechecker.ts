@@ -122,3 +122,32 @@ const _isInt = (value: unknown): boolean =>
 (_isInt as any).ruleName = 'isInt';
 
 export const isInt = _isInt as EmittableRule;
+
+// ─────────────────────────────────────────────────────────────────────────────
+// isArray — Array.isArray 체크 (§4.8 A: 연산자 인라인)
+// ─────────────────────────────────────────────────────────────────────────────
+
+const _isArray = (value: unknown): boolean => Array.isArray(value);
+
+(_isArray as any).emit = (varName: string, ctx: EmitContext): string =>
+  `if (!Array.isArray(${varName})) ${ctx.fail('isArray')};`;
+
+(_isArray as any).ruleName = 'isArray';
+// requiresType은 undefined — 자체 Array.isArray 체크 포함
+
+export const isArray = _isArray as EmittableRule;
+
+// ─────────────────────────────────────────────────────────────────────────────
+// isObject — typeof object + non-null + non-array (§4.8 A)
+// ─────────────────────────────────────────────────────────────────────────────
+
+const _isObject = (value: unknown): boolean =>
+  typeof value === 'object' && value !== null && !Array.isArray(value);
+
+(_isObject as any).emit = (varName: string, ctx: EmitContext): string =>
+  `if (typeof ${varName} !== 'object' || ${varName} === null || Array.isArray(${varName})) ${ctx.fail('isObject')};`;
+
+(_isObject as any).ruleName = 'isObject';
+// requiresType은 undefined — 자체 typeof + null + Array.isArray 체크 포함
+
+export const isObject = _isObject as EmittableRule;
