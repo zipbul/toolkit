@@ -76,6 +76,13 @@ describe('isMobilePhone', () => {
     expect(failMock).toHaveBeenCalledWith('isMobilePhone');
   });
 
+  it('should generate immediate fail code for unknown locale emit', () => {
+    const { ctx, failMock } = makeCtx();
+    const code = isMobilePhone('xx-XX' as any).emit('_v', ctx);
+    expect(code).toContain('isMobilePhone');
+    expect(failMock).toHaveBeenCalledWith('isMobilePhone');
+  });
+
   it('should return independent rule objects on multiple factory calls', () => {
     const r1 = isMobilePhone('ko-KR');
     const r2 = isMobilePhone('ko-KR');
@@ -134,6 +141,13 @@ describe('isPostalCode', () => {
     expect(failMock).toHaveBeenCalledWith('isPostalCode');
   });
 
+  it('should generate immediate fail code for unknown locale emit', () => {
+    const { ctx, failMock } = makeCtx();
+    const code = isPostalCode('XX' as any).emit('_v', ctx);
+    expect(code).toContain('isPostalCode');
+    expect(failMock).toHaveBeenCalledWith('isPostalCode');
+  });
+
   it('should return independent rule objects', () => {
     const r1 = isPostalCode('KR');
     const r2 = isPostalCode('KR');
@@ -189,6 +203,13 @@ describe('isIdentityCard', () => {
     expect(code).toBeTruthy();
     expect(failMock).toHaveBeenCalledWith('isIdentityCard');
   });
+
+  it('should generate immediate fail code for unknown locale emit', () => {
+    const { ctx, failMock } = makeCtx();
+    const code = isIdentityCard('XX' as any).emit('_v', ctx);
+    expect(code).toContain('isIdentityCard');
+    expect(failMock).toHaveBeenCalledWith('isIdentityCard');
+  });
 });
 
 // ─── isPassportNumber ─────────────────────────────────────────────────────────
@@ -232,6 +253,13 @@ describe('isPassportNumber', () => {
     const { ctx, failMock } = makeCtx();
     const code = isPassportNumber('KR').emit('_v', ctx);
     expect(code).toBeTruthy();
+    expect(failMock).toHaveBeenCalledWith('isPassportNumber');
+  });
+
+  it('should generate immediate fail code for unknown locale emit', () => {
+    const { ctx, failMock } = makeCtx();
+    const code = isPassportNumber('XX' as any).emit('_v', ctx);
+    expect(code).toContain('isPassportNumber');
     expect(failMock).toHaveBeenCalledWith('isPassportNumber');
   });
 

@@ -26,7 +26,7 @@ export async function deserialize<T>(
 
   const result = await sealed._deserialize(input, options);
   if (isErr(result)) {
-    throw new BakerValidationError(result.data as BakerError[]);
+    throw new BakerValidationError(result.data as BakerError[], Class.name);
   }
   return result as T;
 }

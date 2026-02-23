@@ -28,15 +28,15 @@ export function validateExposeStacks(merged: RawClassMeta, className?: string): 
     // serialize direction: !deserializeOnly (includes bidirectional + serializeOnly)
     const serEntries = meta.expose.filter(e => !e.deserializeOnly);
 
-    _checkDirectionOverlap(prefix + key, desEntries, 'deserializeOnly');
-    _checkDirectionOverlap(prefix + key, serEntries, 'serializeOnly');
+    _checkDirectionOverlap(prefix + key, desEntries, 'deserialize');
+    _checkDirectionOverlap(prefix + key, serEntries, 'serialize');
   }
 }
 
 /**
  * 같은 방향 내 @Expose entries 쌍마다 groups 겹침 검사
  */
-function _checkDirectionOverlap(key: string, entries: ExposeDef[], dirLabel: string): void {
+function _checkDirectionOverlap(key: string, entries: ExposeDef[], direction: string): void {
   for (let i = 0; i < entries.length; i++) {
     for (let j = i + 1; j < entries.length; j++) {
       const aGroups = entries[i].groups ?? [];
@@ -44,7 +44,7 @@ function _checkDirectionOverlap(key: string, entries: ExposeDef[], dirLabel: str
       if (_groupsOverlap(aGroups, bGroups)) {
         const overlapping = aGroups.length === 0 ? [] : aGroups.filter(g => bGroups.includes(g));
         throw new SealError(
-          `@Expose conflict on '${key}': 2 @Expose stacks with '${dirLabel}' direction and overlapping groups [${overlapping.join(', ')}]. Each direction must have at most one @Expose per group set.`,
+          `@Expose conflict on '${key}': 2 @Expose stacks with '${direction}' direction and overlapping groups [${overlapping.join(', ')}]. Each direction must have at most one @Expose per group set.`,
         );
       }
     }

@@ -279,6 +279,44 @@ describe('seal', () => {
     // @ts-ignore
     expect(firstResult.name).toBe(secondResult.name);
   });
+
+  it('should recursively seal discriminator subType classes (L106-108)', () => {
+    // Arrange — parent DTO with a polymorphic discriminator field
+    class DogDto {}
+    class CatDto {}
+    registerClass(DogDto, makeEmptyMeta());
+    registerClass(CatDto, makeEmptyMeta());
+
+    class AnimalContainerDto {}
+    const raw: RawClassMeta = {
+      animal: {
+        validation: [],
+        transform: [],
+        expose: [],
+        exclude: null,
+        type: {
+          fn: () => DogDto as any,
+          discriminator: {
+            property: 'type',
+            subTypes: [
+              { name: 'dog', value: DogDto },
+              { name: 'cat', value: CatDto },
+            ],
+          },
+        },
+        flags: { validateNested: true },
+      },
+    };
+    registerClass(AnimalContainerDto, raw);
+
+    // Act
+    seal();
+
+    // Assert — both subtype classes must be sealed by the recursive call
+    expect((DogDto as any)[SEALED]).toBeDefined();
+    expect((CatDto as any)[SEALED]).toBeDefined();
+    expect((AnimalContainerDto as any)[SEALED]).toBeDefined();
+  });
 });
 
 // ─────────────────────────────────────────────────────────────────────────────

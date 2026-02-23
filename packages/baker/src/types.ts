@@ -110,6 +110,8 @@ export interface PropertyFlags {
   validateIf?: (obj: any) => boolean;
   /** @ValidateNested() — 중첩 DTO 재귀 검증 트리거. @Type과 함께 사용 */
   validateNested?: boolean;
+  /** @ValidateNested({ each: true }) — 배열 원소별 중첩 DTO 검증 */
+  validateNestedEach?: boolean;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

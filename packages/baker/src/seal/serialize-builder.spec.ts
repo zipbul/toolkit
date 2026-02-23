@@ -350,4 +350,24 @@ describe('buildSerializeCode', () => {
     // Assert — optional undefined field is omitted or null in output
     expect(result.profile).toBeUndefined();
   });
+
+  it('should skip field when all @Expose entries are deserializeOnly', () => {
+    class UserDto { name?: string; }
+    const merged: RawClassMeta = {
+      name: {
+        validation: [],
+        transform: [],
+        expose: [{ name: 'name', deserializeOnly: true }],
+        exclude: null,
+        type: null,
+        flags: {},
+      },
+    };
+    const exec = buildSerializeCode(UserDto, merged, undefined);
+    const instance = new UserDto();
+    instance.name = 'Alice';
+    const result = exec(instance);
+    // The field is excluded from serialize output
+    expect(result.name).toBeUndefined();
+  });
 });

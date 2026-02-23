@@ -52,6 +52,14 @@ describe('isNotEmptyObject', () => {
     expect(isNotEmptyObject().ruleName).toBe('isNotEmptyObject');
   });
 
+  it('should generate ref-based check code when emit() is called with nullable:true', () => {
+    const { ctx, addRefMock, failMock } = makeCtx(0);
+    const code = isNotEmptyObject({ nullable: true }).emit('_v', ctx);
+    expect(addRefMock).toHaveBeenCalledTimes(1);
+    expect(code).toContain('_refs[');
+    expect(failMock).toHaveBeenCalledWith('isNotEmptyObject');
+  });
+
   it('should treat object with null-valued key as non-empty by default', () => {
     expect(isNotEmptyObject()({ a: null })).toBe(true);
   });

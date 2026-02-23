@@ -32,11 +32,15 @@ export interface BakerError {
  */
 export class BakerValidationError extends Error {
   readonly errors: BakerError[];
+  /** 검증 대상 DTO 클래스명 (DX-2) */
+  readonly className?: string;
 
-  constructor(errors: BakerError[]) {
-    super(`Validation failed: ${errors.length} error(s)`);
+  constructor(errors: BakerError[], className?: string) {
+    const prefix = className ? `Validation failed for ${className}` : 'Validation failed';
+    super(`${prefix}: ${errors.length} error(s)`);
     this.name = 'BakerValidationError';
     this.errors = errors;
+    this.className = className;
   }
 }
 

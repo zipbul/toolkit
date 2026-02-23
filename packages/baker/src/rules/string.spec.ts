@@ -481,6 +481,18 @@ describe('isNumberString', () => {
     expect(failMock).toHaveBeenCalledWith('isNumberString');
     expect(isNumberString().ruleName).toBe('isNumberString');
   });
+
+  it('should invoke the addRef checkFn (covers L207-209 closure body)', () => {
+    const { ctx, addRefMock } = makeCtx(0);
+    isNumberString().emit('_v', ctx);
+    const checkFn = addRefMock.mock.calls[0][0] as (s: string) => boolean;
+    // empty string → false (L208: if (s.length === 0) return false)
+    expect(checkFn('')).toBe(false);
+    // non-numeric string → false (L209-210: NaN check)
+    expect(checkFn('hello')).toBe(false);
+    // valid number string → true
+    expect(checkFn('3.14')).toBe(true);
+  });
 });
 
 describe('isDecimal', () => {
@@ -811,6 +823,22 @@ describe('isIP', () => {
     expect(failMock).toHaveBeenCalledWith('isIP');
   });
 
+  it('should generate IPv4-only check code when emit() is called with version 4', () => {
+    const { ctx, addRegexMock, failMock } = makeCtx(0);
+    const code = isIP(4).emit('_v', ctx);
+    expect(addRegexMock).toHaveBeenCalledTimes(1);
+    expect(code).toBeTruthy();
+    expect(failMock).toHaveBeenCalledWith('isIP');
+  });
+
+  it('should generate IPv6-only check code when emit() is called with version 6', () => {
+    const { ctx, addRegexMock, failMock } = makeCtx(0);
+    const code = isIP(6).emit('_v', ctx);
+    expect(addRegexMock).toHaveBeenCalledTimes(1);
+    expect(code).toBeTruthy();
+    expect(failMock).toHaveBeenCalledWith('isIP');
+  });
+
   it('should have ruleName isIP and requiresType string', () => {
     expect(isIP().ruleName).toBe('isIP');
     expect(isIP().requiresType).toBe('string');
@@ -868,6 +896,14 @@ describe('isRgbColor', () => {
     expect(failMock).toHaveBeenCalledWith('isRgbColor');
     expect(isRgbColor().ruleName).toBe('isRgbColor');
   });
+
+  it('should generate percent-regex check code when emit() is called with includePercentValues=true', () => {
+    const { ctx, addRegexMock, failMock } = makeCtx(0);
+    const code = isRgbColor(true).emit('_v', ctx);
+    expect(addRegexMock).toHaveBeenCalledTimes(1);
+    expect(code).toBeTruthy();
+    expect(failMock).toHaveBeenCalledWith('isRgbColor');
+  });
 });
 
 describe('isHSL', () => {
@@ -911,6 +947,14 @@ describe('isMACAddress', () => {
     expect(addRegexMock).toHaveBeenCalled();
     expect(failMock).toHaveBeenCalledWith('isMACAddress');
     expect(isMACAddress().ruleName).toBe('isMACAddress');
+  });
+
+  it('should generate no-separator regex check code when emit() is called with no_separators:true', () => {
+    const { ctx, addRegexMock, failMock } = makeCtx(0);
+    const code = isMACAddress({ no_separators: true }).emit('_v', ctx);
+    expect(addRegexMock).toHaveBeenCalledTimes(1);
+    expect(code).toBeTruthy();
+    expect(failMock).toHaveBeenCalledWith('isMACAddress');
   });
 });
 
@@ -1377,6 +1421,16 @@ describe('isJSON', () => {
     expect(failMock).toHaveBeenCalledWith('isJSON');
     expect(isJSON.ruleName).toBe('isJSON');
   });
+
+  it('should invoke the addRef checkFn (covers L919 catch return false)', () => {
+    const { ctx, addRefMock } = makeCtx(0);
+    isJSON.emit('_v', ctx);
+    const checkFn = addRefMock.mock.calls[0][0] as (s: string) => boolean;
+    // invalid JSON → catch → return false  (L919)
+    expect(checkFn('{invalid}')).toBe(false);
+    // valid JSON → return true
+    expect(checkFn('{"a":1}')).toBe(true);
+  });
 });
 
 describe('isBase32', () => {
@@ -1635,6 +1689,19 @@ describe('isByteLength', () => {
     expect(rule.requiresType).toBe('string');
   });
 
+  it('should invoke the addRef checkFn (covers L1165-1168 closure body)', () => {
+    const rule = isByteLength(2, 5);
+    const { ctx, addRefMock } = makeCtx(0);
+    rule.emit('_v', ctx);
+    const checkFn = addRefMock.mock.calls[0][0] as (s: string) => boolean;
+    // 'a' = 1 byte < min(2) → false  (L1167)
+    expect(checkFn('a')).toBe(false);
+    // '日本語' = 9 bytes > max(5) → false  (L1168)
+    expect(checkFn('日本語')).toBe(false);
+    // 'hi' = 2 bytes in [2,5] → true
+    expect(checkFn('hi')).toBe(true);
+  });
+
   it('should return independent rule objects on multiple factory calls', () => {
     const r1 = isByteLength(1, 10);
     const r2 = isByteLength(1, 10);
@@ -1712,6 +1779,13 @@ describe('isHash', () => {
     const { ctx, failMock } = makeCtx();
     const code = isHash('md5').emit('_v', ctx);
     expect(code).toBeTruthy();
+    expect(failMock).toHaveBeenCalledWith('isHash');
+  });
+
+  it('should generate immediate fail code for unknown algorithm emit', () => {
+    const { ctx, failMock } = makeCtx();
+    const code = isHash('unknownAlgo' as any).emit('_v', ctx);
+    expect(code).toContain('isHash');
     expect(failMock).toHaveBeenCalledWith('isHash');
   });
 });
@@ -1843,6 +1917,15 @@ describe('isLatitude', () => {
     expect(isLatitude('abc')).toBe(false);
   });
 
+  it('should return false for string with extra chars like "90abc"', () => {
+    expect(isLatitude('90abc')).toBe(false);
+  });
+
+  it('should return false for non-string non-number input', () => {
+    expect(isLatitude(null as any)).toBe(false);
+    expect(isLatitude({} as any)).toBe(false);
+  });
+
   it('should have ruleName isLatitude and requiresType undefined', () => {
     expect(isLatitude.ruleName).toBe('isLatitude');
     expect((isLatitude as any).requiresType).toBeUndefined();
@@ -1885,6 +1968,15 @@ describe('isLongitude', () => {
 
   it('should return false for "abc"', () => {
     expect(isLongitude('abc')).toBe(false);
+  });
+
+  it('should return false for string with extra chars like "180abc"', () => {
+    expect(isLongitude('180abc')).toBe(false);
+  });
+
+  it('should return false for non-string non-number input', () => {
+    expect(isLongitude(null as any)).toBe(false);
+    expect(isLongitude({} as any)).toBe(false);
   });
 
   it('should have ruleName isLongitude and requiresType undefined', () => {
@@ -2179,6 +2271,13 @@ describe('isTaxId', () => {
     const { ctx, failMock } = makeCtx();
     const code = isTaxId('US').emit('_v', ctx);
     expect(code).toBeTruthy();
+    expect(failMock).toHaveBeenCalledWith('isTaxId');
+  });
+
+  it('should emit fail-only code for unknown locale (covers L1464 !re branch)', () => {
+    const { ctx, failMock } = makeCtx();
+    const code = isTaxId('XX-UNKNOWN').emit('_v', ctx);
+    expect(code).toContain('isTaxId');
     expect(failMock).toHaveBeenCalledWith('isTaxId');
   });
 

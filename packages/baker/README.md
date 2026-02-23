@@ -82,7 +82,7 @@ try {
 ```typescript
 import { serialize } from '@zipbul/baker';
 
-const plain = await serialize(CreateUserDto, instance);
+const plain = await serialize(instance);
 // plain: Record<string, unknown>
 ```
 
@@ -137,7 +137,7 @@ interface BakerError {
 | 데코레이터 | 설명 |
 |---|---|
 | `@IsString()` | `typeof === 'string'` |
-| `@IsNumber(opts?)` | `typeof === 'number'` + NaN/Infinity 검사 |
+| `@IsNumber(opts?)` | `typeof === 'number'` + NaN/Infinity 검사. opts: `{ allowNaN?: boolean, allowInfinity?: boolean, maxDecimalPlaces?: number }` |
 | `@IsInt()` | 정수 검사 |
 | `@IsBoolean()` | `typeof === 'boolean'` |
 | `@IsDate()` | `instanceof Date && !isNaN` |

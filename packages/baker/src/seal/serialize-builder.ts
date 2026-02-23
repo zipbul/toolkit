@@ -53,6 +53,7 @@ export function buildSerializeCode<T>(
   });
   if (hasGroupsField) {
     body += 'var __bk$groups = _opts && _opts.groups;\n';
+    body += 'var __bk$groupsSet = __bk$groups ? new Set(__bk$groups) : null;\n';
   }
 
   for (const [fieldKey, meta] of Object.entries(merged)) {
@@ -108,7 +109,7 @@ function generateSerializeFieldCode(
   let fieldEnd = '';
   if (exposeGroups && exposeGroups.length > 0) {
     const groupsArr = JSON.stringify(exposeGroups);
-    fieldStart = `if (__bk$groups && ${groupsArr}.some(function(g){return __bk$groups.indexOf(g)!==-1;})) {\n`;
+    fieldStart = `if (__bk$groupsSet && ${groupsArr}.some(function(g){return __bk$groupsSet.has(g);})) {\n`;
     fieldEnd = '}\n';
   }
 
@@ -124,7 +125,7 @@ function generateSerializeFieldCode(
     execs.push(nestedSealed);
 
     // 배열/each 여부 판단
-    const hasEach = meta.validation.some(rd => rd.each);
+    const hasEach = meta.flags.validateNestedEach || meta.validation.some(rd => rd.each);
     const outputTarget = `__bk$out[${JSON.stringify(outputKey)}]`;
 
     let nestedCode: string;
@@ -140,9 +141,9 @@ function generateSerializeFieldCode(
     }
 
     if (useOptionalGuard) {
-      innerCode = `if (instance[${JSON.stringify(fieldKey)}] !== undefined) {\n  ${nestedCode}\n}\n`;
+      innerCode = `if (instance[${JSON.stringify(fieldKey)}] !== undefined && instance[${JSON.stringify(fieldKey)}] !== null) {\n  ${nestedCode}\n} else if (instance[${JSON.stringify(fieldKey)}] === null) {\n  ${outputTarget} = null;\n}\n`;
     } else {
-      innerCode = nestedCode + '\n';
+      innerCode = `if (instance[${JSON.stringify(fieldKey)}] != null) {\n  ${nestedCode}\n} else {\n  ${outputTarget} = instance[${JSON.stringify(fieldKey)}];\n}\n`;
     }
   } else {
     // 기존 @Transform or direct assign 처리

@@ -4,12 +4,20 @@ import {
   MinLength, MaxLength, Length,
   Contains, NotContains, Matches,
   IsLowercase, IsUppercase, IsAscii, IsAlpha, IsAlphanumeric,
+  IsFullWidth, IsHalfWidth, IsVariableWidth, IsMultibyte, IsSurrogatePair,
   IsEmail, IsURL, IsUUID, IsIP,
-  IsHexColor, IsJSON, IsJWT, IsSemVer,
-  IsBase64, IsMongoId, IsBooleanString, IsNumberString,
+  IsHexColor, IsRgbColor, IsHSL, IsMACAddress,
+  IsJSON, IsJWT, IsSemVer,
+  IsBase64, IsBase32, IsBase58, IsMongoId, IsBooleanString, IsNumberString,
   IsDecimal, IsHexadecimal, IsOctal, IsDataURI, IsPort,
-  IsISBN, IsISIN, IsISSN, IsBIC, IsIBAN,
+  IsISBN, IsISIN, IsISO8601, IsISRC, IsISSN, IsBIC, IsIBAN, IsIBANOptions,
   IsByteLength, IsHash,
+  IsLatLong, IsLocale, IsFQDN, IsEAN,
+  IsISO31661Alpha2, IsISO31661Alpha3, IsFirebasePushId,
+  IsDateString, IsMimeType, IsCurrency, IsMagnetURI, IsCreditCard,
+  IsRFC3339, IsMilitaryTime, IsLatitude, IsLongitude,
+  IsEthereumAddress, IsBtcAddress, IsISO4217CurrencyCode, IsPhoneNumber,
+  IsStrongPassword, IsTaxId,
 } from './string';
 
 const RAW = Symbol.for('baker:raw');
@@ -300,5 +308,221 @@ describe('string decorators — metadata collection', () => {
     const Cls = makeClass();
     IsUUID(undefined, { groups: ['admin'] })(Cls.prototype, 'id');
     expect(getRaw(Cls, 'id').validation[0].groups).toEqual(['admin']);
+  });
+
+  // ── unicode / encoding ───────────────────────────────────────────────────
+
+  it('@IsFullWidth registers ruleName', () => {
+    const Cls = makeClass();
+    IsFullWidth()(Cls.prototype, 'fw');
+    expect(ruleAt(Cls, 'fw')?.ruleName).toBe('isFullWidth');
+  });
+
+  it('@IsHalfWidth registers ruleName', () => {
+    const Cls = makeClass();
+    IsHalfWidth()(Cls.prototype, 'hw');
+    expect(ruleAt(Cls, 'hw')?.ruleName).toBe('isHalfWidth');
+  });
+
+  it('@IsVariableWidth registers ruleName', () => {
+    const Cls = makeClass();
+    IsVariableWidth()(Cls.prototype, 'vw');
+    expect(ruleAt(Cls, 'vw')?.ruleName).toBe('isVariableWidth');
+  });
+
+  it('@IsMultibyte registers ruleName', () => {
+    const Cls = makeClass();
+    IsMultibyte()(Cls.prototype, 'mb');
+    expect(ruleAt(Cls, 'mb')?.ruleName).toBe('isMultibyte');
+  });
+
+  it('@IsSurrogatePair registers ruleName', () => {
+    const Cls = makeClass();
+    IsSurrogatePair()(Cls.prototype, 'sp');
+    expect(ruleAt(Cls, 'sp')?.ruleName).toBe('isSurrogatePair');
+  });
+
+  // ── color ────────────────────────────────────────────────────────────────
+
+  it('@IsRgbColor registers ruleName', () => {
+    const Cls = makeClass();
+    IsRgbColor()(Cls.prototype, 'rgb');
+    expect(ruleAt(Cls, 'rgb')?.ruleName).toBe('isRgbColor');
+  });
+
+  it('@IsHSL registers ruleName', () => {
+    const Cls = makeClass();
+    IsHSL()(Cls.prototype, 'hsl');
+    expect(ruleAt(Cls, 'hsl')?.ruleName).toBe('isHSL');
+  });
+
+  // ── network / address ────────────────────────────────────────────────────
+
+  it('@IsMACAddress registers ruleName', () => {
+    const Cls = makeClass();
+    IsMACAddress()(Cls.prototype, 'mac');
+    expect(ruleAt(Cls, 'mac')?.ruleName).toBe('isMACAddress');
+  });
+
+  it('@IsLatLong registers ruleName', () => {
+    const Cls = makeClass();
+    IsLatLong()(Cls.prototype, 'loc');
+    expect(ruleAt(Cls, 'loc')?.ruleName).toBe('isLatLong');
+  });
+
+  it('@IsLocale registers ruleName', () => {
+    const Cls = makeClass();
+    IsLocale()(Cls.prototype, 'locale');
+    expect(ruleAt(Cls, 'locale')?.ruleName).toBe('isLocale');
+  });
+
+  it('@IsFQDN registers ruleName', () => {
+    const Cls = makeClass();
+    IsFQDN()(Cls.prototype, 'hostname');
+    expect(ruleAt(Cls, 'hostname')?.ruleName).toBe('isFQDN');
+  });
+
+  it('@IsEAN registers ruleName', () => {
+    const Cls = makeClass();
+    IsEAN()(Cls.prototype, 'ean');
+    expect(ruleAt(Cls, 'ean')?.ruleName).toBe('isEAN');
+  });
+
+  it('@IsLatitude registers ruleName', () => {
+    const Cls = makeClass();
+    IsLatitude()(Cls.prototype, 'lat');
+    expect(ruleAt(Cls, 'lat')?.ruleName).toBe('isLatitude');
+  });
+
+  it('@IsLongitude registers ruleName', () => {
+    const Cls = makeClass();
+    IsLongitude()(Cls.prototype, 'lng');
+    expect(ruleAt(Cls, 'lng')?.ruleName).toBe('isLongitude');
+  });
+
+  it('@IsEthereumAddress registers ruleName', () => {
+    const Cls = makeClass();
+    IsEthereumAddress()(Cls.prototype, 'eth');
+    expect(ruleAt(Cls, 'eth')?.ruleName).toBe('isEthereumAddress');
+  });
+
+  it('@IsBtcAddress registers ruleName', () => {
+    const Cls = makeClass();
+    IsBtcAddress()(Cls.prototype, 'btc');
+    expect(ruleAt(Cls, 'btc')?.ruleName).toBe('isBtcAddress');
+  });
+
+  it('@IsPhoneNumber registers ruleName', () => {
+    const Cls = makeClass();
+    IsPhoneNumber()(Cls.prototype, 'tel');
+    expect(ruleAt(Cls, 'tel')?.ruleName).toBe('isPhoneNumber');
+  });
+
+  // ── ISO standards ────────────────────────────────────────────────────────
+
+  it('@IsISO8601 registers ruleName', () => {
+    const Cls = makeClass();
+    IsISO8601()(Cls.prototype, 'dt');
+    expect(ruleAt(Cls, 'dt')?.ruleName).toBe('isISO8601');
+  });
+
+  it('@IsISRC registers ruleName', () => {
+    const Cls = makeClass();
+    IsISRC()(Cls.prototype, 'isrc');
+    expect(ruleAt(Cls, 'isrc')?.ruleName).toBe('isISRC');
+  });
+
+  it('@IsISO31661Alpha2 registers ruleName', () => {
+    const Cls = makeClass();
+    IsISO31661Alpha2()(Cls.prototype, 'country');
+    expect(ruleAt(Cls, 'country')?.ruleName).toBe('isISO31661Alpha2');
+  });
+
+  it('@IsISO31661Alpha3 registers ruleName', () => {
+    const Cls = makeClass();
+    IsISO31661Alpha3()(Cls.prototype, 'country3');
+    expect(ruleAt(Cls, 'country3')?.ruleName).toBe('isISO31661Alpha3');
+  });
+
+  it('@IsISO4217CurrencyCode registers ruleName', () => {
+    const Cls = makeClass();
+    IsISO4217CurrencyCode()(Cls.prototype, 'currency');
+    expect(ruleAt(Cls, 'currency')?.ruleName).toBe('isISO4217CurrencyCode');
+  });
+
+  // ── media / data ─────────────────────────────────────────────────────────
+
+  it('@IsBase32 registers ruleName', () => {
+    const Cls = makeClass();
+    IsBase32()(Cls.prototype, 'b32');
+    expect(ruleAt(Cls, 'b32')?.ruleName).toBe('isBase32');
+  });
+
+  it('@IsBase58 registers ruleName', () => {
+    const Cls = makeClass();
+    IsBase58()(Cls.prototype, 'b58');
+    expect(ruleAt(Cls, 'b58')?.ruleName).toBe('isBase58');
+  });
+
+  it('@IsDateString registers ruleName', () => {
+    const Cls = makeClass();
+    IsDateString()(Cls.prototype, 'ds');
+    expect(ruleAt(Cls, 'ds')?.ruleName).toBe('isDateString');
+  });
+
+  it('@IsMimeType registers ruleName', () => {
+    const Cls = makeClass();
+    IsMimeType()(Cls.prototype, 'mime');
+    expect(ruleAt(Cls, 'mime')?.ruleName).toBe('isMimeType');
+  });
+
+  it('@IsCurrency registers ruleName', () => {
+    const Cls = makeClass();
+    IsCurrency()(Cls.prototype, 'price');
+    expect(ruleAt(Cls, 'price')?.ruleName).toBe('isCurrency');
+  });
+
+  it('@IsMagnetURI registers ruleName', () => {
+    const Cls = makeClass();
+    IsMagnetURI()(Cls.prototype, 'magnet');
+    expect(ruleAt(Cls, 'magnet')?.ruleName).toBe('isMagnetURI');
+  });
+
+  it('@IsCreditCard registers ruleName', () => {
+    const Cls = makeClass();
+    IsCreditCard()(Cls.prototype, 'cc');
+    expect(ruleAt(Cls, 'cc')?.ruleName).toBe('isCreditCard');
+  });
+
+  it('@IsFirebasePushId registers ruleName', () => {
+    const Cls = makeClass();
+    IsFirebasePushId()(Cls.prototype, 'fbid');
+    expect(ruleAt(Cls, 'fbid')?.ruleName).toBe('isFirebasePushId');
+  });
+
+  // ── time / finance ───────────────────────────────────────────────────────
+
+  it('@IsRFC3339 registers ruleName', () => {
+    const Cls = makeClass();
+    IsRFC3339()(Cls.prototype, 'ts');
+    expect(ruleAt(Cls, 'ts')?.ruleName).toBe('isRFC3339');
+  });
+
+  it('@IsMilitaryTime registers ruleName', () => {
+    const Cls = makeClass();
+    IsMilitaryTime()(Cls.prototype, 'time');
+    expect(ruleAt(Cls, 'time')?.ruleName).toBe('isMilitaryTime');
+  });
+
+  it('@IsStrongPassword registers ruleName', () => {
+    const Cls = makeClass();
+    IsStrongPassword()(Cls.prototype, 'pw');
+    expect(ruleAt(Cls, 'pw')?.ruleName).toBe('isStrongPassword');
+  });
+
+  it('@IsTaxId registers ruleName', () => {
+    const Cls = makeClass();
+    IsTaxId('en-US')(Cls.prototype, 'tax');
+    expect(ruleAt(Cls, 'tax')?.ruleName).toBe('isTaxId');
   });
 });

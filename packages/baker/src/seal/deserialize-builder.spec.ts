@@ -1,11 +1,12 @@
 import { describe, it, expect } from 'bun:test';
 import { buildDeserializeCode } from './deserialize-builder';
-import { isErr } from '@zipbul/result';
+import { isErr, err } from '@zipbul/result';
+import { SEALED } from '../symbols';
 import { isString } from '../rules/typechecker';
 import { isNumber } from '../rules/typechecker';
 import { min, max } from '../rules/number';
 import { minLength } from '../rules/string';
-import type { RawClassMeta } from '../types';
+import type { RawClassMeta, SealedExecutors } from '../types';
 import type { SealOptions } from '../interfaces';
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -405,5 +406,296 @@ describe('buildDeserializeCode', () => {
     // Act — valid: all Map values are strings
     const result = await run(MapDto2, merged, undefined, { tags: new Map([['k1', 'v1'], ['k2', 'v2']]) });
     // Assert
+    expect(isErr(result)).toBe(false);
+  });
+
+// ─── stopAtFirstError: true — each:true with Set/Map (covers L507-528) ────────
+
+  it('should fail at first error with Set and each:true when stopAtFirstError:true', async () => {
+    class SetStopDto { names!: Set<string>; }
+    const merged: RawClassMeta = {
+      names: {
+        validation: [{ rule: isString, each: true }],
+        transform: [], expose: [], exclude: null, type: null, flags: {},
+      },
+    };
+    const exec = buildDeserializeCode<SetStopDto>(SetStopDto, merged, { stopAtFirstError: true }, false, false);
+    const result = await exec({ names: new Set(['hello', 42 as any]) });
+    expect(isErr(result)).toBe(true);
+  });
+
+  it('should pass with Set and each:true when stopAtFirstError:true and all valid', async () => {
+    class SetStopDto2 { names!: Set<string>; }
+    const merged: RawClassMeta = {
+      names: {
+        validation: [{ rule: isString, each: true }],
+        transform: [], expose: [], exclude: null, type: null, flags: {},
+      },
+    };
+    const exec = buildDeserializeCode<SetStopDto2>(SetStopDto2, merged, { stopAtFirstError: true }, false, false);
+    const result = await exec({ names: new Set(['a', 'b']) });
+    expect(isErr(result)).toBe(false);
+  });
+
+  it('should fail with Map and each:true when stopAtFirstError:true', async () => {
+    class MapStopDto { tags!: Map<string, string>; }
+    const merged: RawClassMeta = {
+      tags: {
+        validation: [{ rule: isString, each: true }],
+        transform: [], expose: [], exclude: null, type: null, flags: {},
+      },
+    };
+    const exec = buildDeserializeCode<MapStopDto>(MapStopDto, merged, { stopAtFirstError: true }, false, false);
+    const result = await exec({ tags: new Map([['k1', 'v1'], ['k2', 42 as any]]) });
+    expect(isErr(result)).toBe(true);
+  });
+
+// ─── @ValidateIf flag (covers L183-184, L233) ─────────────────────────────────
+
+  it('should skip validation when @ValidateIf returns false', async () => {
+    class ConditionalDto { age?: number; }
+    const validateIfFn = (input: object) => (input as any).checkAge === true;
+    const merged: RawClassMeta = {
+      age: {
+        validation: [{ rule: isNumber() }],
+        transform: [], expose: [], exclude: null, type: null,
+        flags: { validateIf: validateIfFn, isOptional: true },
+      },
+    };
+    const exec = buildDeserializeCode<ConditionalDto>(ConditionalDto, merged, undefined, false, false);
+    const result = await exec({ checkAge: false, age: 'notanumber' as any });
+    expect(isErr(result)).toBe(false);
+  });
+
+  it('should run validation when @ValidateIf returns true', async () => {
+    class ConditionalDto2 { age?: number; }
+    const validateIfFn = (input: object) => (input as any).checkAge === true;
+    const merged: RawClassMeta = {
+      age: {
+        validation: [{ rule: isNumber() }],
+        transform: [], expose: [], exclude: null, type: null,
+        flags: { validateIf: validateIfFn, isOptional: true },
+      },
+    };
+    const exec = buildDeserializeCode<ConditionalDto2>(ConditionalDto2, merged, undefined, false, false);
+    const result = await exec({ checkAge: true, age: 'notanumber' as any });
+    expect(isErr(result)).toBe(true);
+  });
+
+// ─── needsCircularCheck: true (covers L79-82) ─────────────────────────────────
+
+  it('should generate circular-check code when needsCircularCheck is true', async () => {
+    class CircularDto { name!: string; }
+    const merged: RawClassMeta = {
+      name: {
+        validation: [{ rule: isString }],
+        transform: [], expose: [], exclude: null, type: null, flags: {},
+      },
+    };
+    const exec = buildDeserializeCode<CircularDto>(CircularDto, merged, undefined, true, false);
+    const result = await exec({ name: 'Alice' });
+    expect(isErr(result)).toBe(false);
+  });
+
+// ─── exclude: deserializeOnly skip (covers L162-163) ─────────────────────────
+
+  it('should skip field when exclude is set without serializeOnly (deserializeOnly)', async () => {
+    class ExcludeDto { name!: string; secret?: string; }
+    const merged: RawClassMeta = {
+      name: {
+        validation: [{ rule: isString }],
+        transform: [], expose: [], exclude: null, type: null, flags: {},
+      },
+      secret: {
+        validation: [],
+        transform: [], expose: [], exclude: { serializeOnly: false }, type: null, flags: {},
+      },
+    };
+    const exec = buildDeserializeCode<ExcludeDto>(ExcludeDto, merged, undefined, false, false);
+    const result = await exec({ name: 'Alice', secret: 'hidden' });
+    expect(isErr(result)).toBe(false);
+    expect((result as any).secret).toBeUndefined();
+  });
+
+// ─── expose.every(serializeOnly) skip (covers L167-168) ──────────────────────
+
+  it('should skip field where all exposures are serializeOnly', async () => {
+    class ExposeOnlyDto { name!: string; outOnly?: string; }
+    const merged: RawClassMeta = {
+      name: {
+        validation: [{ rule: isString }],
+        transform: [], expose: [], exclude: null, type: null, flags: {},
+      },
+      outOnly: {
+        validation: [],
+        transform: [],
+        expose: [{ serializeOnly: true }],
+        exclude: null,
+        type: null,
+        flags: {},
+      },
+    };
+    const exec = buildDeserializeCode<ExposeOnlyDto>(ExposeOnlyDto, merged, undefined, false, false);
+    const result = await exec({ name: 'Alice', outOnly: 'ignored' });
+    expect(isErr(result)).toBe(false);
+    expect((result as any).outOnly).toBeUndefined();
+  });
+
+// ─── stopAtFirstError + message extras (covers L330) ─────────────────────────
+
+  it('should include message extras in error when stopAtFirstError:true', async () => {
+    class MsgDto { name!: string; }
+    const merged: RawClassMeta = {
+      name: {
+        validation: [{ rule: isString, message: 'Must be a string' }],
+        transform: [], expose: [], exclude: null, type: null, flags: {},
+      },
+    };
+    const exec = buildDeserializeCode<MsgDto>(MsgDto, merged, { stopAtFirstError: true }, false, false);
+    const result = await exec({ name: 42 as any });
+    expect(isErr(result)).toBe(true);
+  });
+
+// ─── nested type (covers L598-609, L623-627) ─────────────────────────────────
+
+  it('should deserialize nested DTO field when sealed executor is provided', async () => {
+    class AddressDto { street!: string; }
+    (AddressDto as any)[SEALED] = {
+      _deserialize: (input: unknown) => {
+        const i = input as any;
+        if (typeof i?.street === 'string') {
+          const a = new AddressDto();
+          a.street = i.street;
+          return a;
+        }
+        return err([{ path: 'street', code: 'isString' }]);
+      },
+      _serialize: () => ({}),
+      _isAsync: false,
+      _isSerializeAsync: false,
+    } satisfies SealedExecutors<AddressDto>;
+
+    class PersonDto { address!: AddressDto; }
+    const merged: RawClassMeta = {
+      address: {
+        validation: [],
+        transform: [],
+        expose: [],
+        exclude: null,
+        type: { fn: () => AddressDto as any },
+        flags: { validateNested: true },
+      },
+    };
+    const exec = buildDeserializeCode<PersonDto>(PersonDto, merged, undefined, false, false);
+    const result = await exec({ address: { street: '123 Main St' } });
+    expect(isErr(result)).toBe(false);
+    expect((result as PersonDto).address.street).toBe('123 Main St');
+  });
+
+  it('should return error when nested DTO deserialization fails', async () => {
+    class PhoneDto { number!: string; }
+    (PhoneDto as any)[SEALED] = {
+      _deserialize: (input: unknown) => {
+        const i = input as any;
+        if (typeof i?.number === 'string') {
+          const p = new PhoneDto();
+          p.number = i.number;
+          return p;
+        }
+        return err([{ path: 'number', code: 'isString' }]);
+      },
+      _serialize: () => ({}),
+      _isAsync: false,
+      _isSerializeAsync: false,
+    } satisfies SealedExecutors<PhoneDto>;
+
+    class ContactDto { phone!: PhoneDto; }
+    const merged: RawClassMeta = {
+      phone: {
+        validation: [],
+        transform: [],
+        expose: [],
+        exclude: null,
+        type: { fn: () => PhoneDto as any },
+        flags: { validateNested: true },
+      },
+    };
+    const exec = buildDeserializeCode<ContactDto>(ContactDto, merged, undefined, false, false);
+    // phone.number is not a string → nested error
+    const result = await exec({ phone: { number: 42 } });
+    expect(isErr(result)).toBe(true);
+  });
+
+  it('should return nested error when stopAtFirstError:true (covers L623-627)', async () => {
+    class CityDto { name!: string; }
+    (CityDto as any)[SEALED] = {
+      _deserialize: (input: unknown) => {
+        const i = input as any;
+        if (typeof i?.name === 'string') {
+          const c = new CityDto();
+          c.name = i.name;
+          return c;
+        }
+        return err([{ path: 'name', code: 'isString' }]);
+      },
+      _serialize: () => ({}),
+      _isAsync: false,
+      _isSerializeAsync: false,
+    } satisfies SealedExecutors<CityDto>;
+
+    class LocationDto { city!: CityDto; }
+    const merged: RawClassMeta = {
+      city: {
+        validation: [],
+        transform: [],
+        expose: [],
+        exclude: null,
+        type: { fn: () => CityDto as any },
+        flags: { validateNested: true },
+      },
+    };
+    const exec = buildDeserializeCode<LocationDto>(LocationDto, merged, { stopAtFirstError: true }, false, false);
+    // city.name is missing → nested error propagation
+    const result = await exec({ city: { name: 42 } });
+    expect(isErr(result)).toBe(true);
+  });
+
+// ─── nested hasEach (covers L582-596) ─────────────────────────────────────────
+
+  it('should deserialize array of nested DTOs when each:true (hasEach path)', async () => {
+    class TagDto { label!: string; }
+    (TagDto as any)[SEALED] = {
+      _deserialize: (input: unknown) => {
+        const i = input as any;
+        if (typeof i?.label === 'string') {
+          const t = new TagDto();
+          t.label = i.label;
+          return t;
+        }
+        return err([{ path: 'label', code: 'isString' }]);
+      },
+      _serialize: () => ({}),
+      _isAsync: false,
+      _isSerializeAsync: false,
+    } satisfies SealedExecutors<TagDto>;
+
+    // A no-op rule to trigger hasEach:true path without failing validation
+    const alwaysPass = ((v: unknown) => true) as any;
+    alwaysPass.emit = (_varName: string, _ctx: any) => '';
+    alwaysPass.ruleName = 'alwaysPass';
+
+    class PostDto { tags!: TagDto[]; }
+    const merged: RawClassMeta = {
+      tags: {
+        validation: [{ rule: alwaysPass, each: true }],
+        transform: [],
+        expose: [],
+        exclude: null,
+        type: { fn: () => TagDto as any },
+        flags: { validateNested: true },
+      },
+    };
+    const exec = buildDeserializeCode<PostDto>(PostDto, merged, undefined, false, false);
+    const result = await exec({ tags: [{ label: 'ts' }, { label: 'js' }] });
     expect(isErr(result)).toBe(false);
   });

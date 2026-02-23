@@ -245,7 +245,7 @@ interface PropertyFlags {
 interface ValidationOptions {
   each?: boolean;             // true: 배열의 각 원소에 규칙 적용
   groups?: string[];          // 이 규칙이 속하는 그룹 목록
-  /** @phase2 — Phase 1에서는 수집만 하고 생성 코드에서 미사용. Phase 2에서 BakerError.message 확장과 함께 활성화 예정. */
+  /** 검증 실패 시 BakerError.message에 포함할 값. Phase 1에서 구현 완료. */
   message?: string | ((args: { property: string; value: unknown; constraints: unknown[] }) => string);
 }
 
@@ -341,7 +341,12 @@ export function ensureMeta(ctor: Function, key: string): RawPropertyMeta {
   // 전역 레지스트리에 자동 등록 — 데코레이터가 1개라도 붙으면 등록
   globalRegistry.add(ctor);
 
-  const raw = ((ctor as any)[RAW] ??= Object.create(null));
+  // hasOwnProperty 체크 필수 — ??= 연산자가 부모의 [RAW]를 찾아 자식 필드를 부모에 오염시키는 것 방지
+  if (!Object.prototype.hasOwnProperty.call(ctor, RAW)) {
+    (ctor as any)[RAW] = Object.create(null);
+  }
+  const raw = (ctor as any)[RAW];
+
   return (raw[key] ??= {
     validation: [],
     transform: [],

@@ -147,6 +147,18 @@ describe('isNumber', () => {
     expect(rule.ruleName).toBe('isNumber');
     expect((rule as any).requiresType).toBeUndefined();
   });
+
+  it('should generate maxDecimalPlaces check code when emit() is called with maxDecimalPlaces option (covers L56)', () => {
+    // Arrange
+    const rule = isNumber({ maxDecimalPlaces: 2 });
+    const { ctx, failMock } = makeCtx();
+    // Act
+    const code = rule.emit('_v', ctx);
+    // Assert
+    expect(code).toContain('_s');
+    expect(code).toContain('_d');
+    expect(failMock).toHaveBeenCalledWith('isNumber');
+  });
 });
 
 // ─── isBoolean ────────────────────────────────────────────────────────────────

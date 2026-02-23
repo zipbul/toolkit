@@ -99,4 +99,19 @@ describe('error — integration', () => {
       expect((e as BakerValidationError).errors.length).toBe(1);
     }
   });
+
+  // ─── DX-2: BakerValidationError should include class name in message ───────
+
+  it('should include class name in BakerValidationError.message', async () => {
+    seal();
+    try {
+      await deserialize(ErrorDto, { name: 123, age: 25, email: 'x@y.com' });
+      expect(true).toBe(false);
+    } catch (e) {
+      expect(e).toBeInstanceOf(BakerValidationError);
+      expect((e as BakerValidationError).message).toContain('ErrorDto');
+      expect((e as BakerValidationError).message).toMatch(/Validation failed for ErrorDto: \d+ error/);
+      expect((e as BakerValidationError).className).toBe('ErrorDto');
+    }
+  });
 });

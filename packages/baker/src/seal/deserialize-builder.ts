@@ -8,9 +8,9 @@ import type { BakerError } from '../errors';
 // Helpers — 코드 생성 유틸
 // ─────────────────────────────────────────────────────────────────────────────
 
-/** key를 유효한 JS 식별자 접미사로 변환 */
+/** key를 유효한 JS 식별자 접미사로 변환 (비알파벳 문자를 charCode로 인코딩하여 충돌 방지) */
 function sanitizeKey(key: string): string {
-  return key.replace(/[^a-zA-Z0-9_]/g, '_');
+  return key.replace(/[^a-zA-Z0-9_]/g, (ch) => `$${ch.charCodeAt(0)}$`);
 }
 
 /** 필드명을 안전한 JS 변수명으로 변환 (내부 변수 충돌 방지 prefix 포함) */
@@ -91,6 +91,7 @@ export function buildDeserializeCode<T>(
   });
   if (hasGroupsField) {
     body += 'var __bk$groups = _opts && _opts.groups;\n';
+    body += 'var __bk$groupsSet = __bk$groups ? new Set(__bk$groups) : null;\n';
   }
 
   // ── 필드별 코드 생성 ──────────────────────────────────────────────────────
@@ -198,7 +199,7 @@ function generateFieldCode(
   let fieldEnd = '';
   if (exposeGroups && exposeGroups.length > 0) {
     const groupsArr = JSON.stringify(exposeGroups);
-    fieldStart = `if (__bk$groups && ${groupsArr}.some(function(g){return __bk$groups.indexOf(g)!==-1;})) {\n`;
+    fieldStart = `if (__bk$groupsSet && ${groupsArr}.some(function(g){return __bk$groupsSet.has(g);})) {\n`;
     fieldEnd = '}\n';
   }
 
@@ -302,6 +303,7 @@ function computeRuleExtras(
   } else if (typeof rd.message === 'function') {
     const msgIdx = ctx.refs.length;
     ctx.refs.push(rd.message as unknown);
+    // TODO(DX-4): constraints currently always empty — populate with rule-specific constraint values when EmittableRule exposes them
     extra += `,message:_refs[${msgIdx}]({property:${JSON.stringify(fieldKey)},value:${varName},constraints:[]})`;
   }
   if (rd.context !== undefined) {
@@ -345,7 +347,7 @@ function makeRuleEmitCtx(
 function wrapGroupsGuard(rd: RuleDef, code: string): string {
   if (!rd.groups || rd.groups.length === 0) return code;
   const groupsArr = JSON.stringify(rd.groups);
-  return `if (!__bk$groups || ${groupsArr}.some(function(g){return __bk$groups.indexOf(g)!==-1;})) {\n${code}\n}\n`;
+  return `if (!__bk$groupsSet || ${groupsArr}.some(function(g){return __bk$groupsSet.has(g);})) {\n${code}\n}\n`;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -413,8 +415,9 @@ function buildRulesCode(
       code += `else {\n`;
       const markVar = `__bk$mark_${sanitizeKey(fieldKey)}`;
       code += `  var ${markVar} = __bk$errors.length;\n`;
-      // typeAsseter emit — NaN/Infinity를 options에 맞게 검사 (typeof는 gate에서 이미 통과)
-      if (typeAsseter) {
+      // typeAsseter emit — isString은 gate에서 전체 typeof 체크 완료되므로 스킵 (PERF-1)
+      // isNumber 등은 NaN/Infinity 추가 검사가 필요하므로 emit 유지
+      if (typeAsseter && typeAsseter.rule.ruleName !== 'isString') {
         const taCode = wrapGroupsGuard(typeAsseter, typeAsseter.rule.emit(varName, makeRuleEmitCtx(emitCtx, fieldKey, varName, typeAsseter, ctx)));
         code += '  ' + taCode.replace(/\n/g, '\n  ') + '\n';
       }
@@ -430,8 +433,8 @@ function buildRulesCode(
       code += `}\n`;
     } else {
       code += `if (${gateCondition}) ${gateEmitCtx.fail(gateErrorCode)};\n`;
-      // typeAsseter emit — NaN/Infinity를 options에 맞게 검사
-      if (typeAsseter) {
+      // typeAsseter emit — isString은 gate에서 전체 typeof 체크 완료되므로 스킵 (PERF-1)
+      if (typeAsseter && typeAsseter.rule.ruleName !== 'isString') {
         code += wrapGroupsGuard(typeAsseter, typeAsseter.rule.emit(varName, makeRuleEmitCtx(emitCtx, fieldKey, varName, typeAsseter, ctx))) + '\n';
       }
       for (const rd of otherGeneral) {
@@ -473,7 +476,7 @@ function buildRulesCode(
     const mvVar = `__bk$mv_${sanitizeKey(fieldKey)}`;
     const extra = computeRuleExtras(rd, fieldKey, varName, ctx);
     const eachGuardOpen = (rd.groups && rd.groups.length > 0)
-      ? `if (!__bk$groups || ${JSON.stringify(rd.groups)}.some(function(g){return __bk$groups.indexOf(g)!==-1;})) {\n`
+      ? `if (!__bk$groupsSet || ${JSON.stringify(rd.groups)}.some(function(g){return __bk$groupsSet.has(g);})) {\n`
       : '';
     const eachGuardClose = (rd.groups && rd.groups.length > 0) ? '}\n' : '';
 
@@ -568,15 +571,18 @@ function generateNestedCode(
     }
     code += `  default: ${emitCtx.fail('invalidDiscriminator')};\n`;
     code += `}\n`;
+    // keepDiscriminatorProperty: discriminator 프로퍼티를 결과 객체에 유지 (PB-3)
+    if (meta.type.keepDiscriminatorProperty) {
+      code += `if (__bk$out[${JSON.stringify(fieldKey)}] != null) __bk$out[${JSON.stringify(fieldKey)}][${discProp}] = __bk$dt_${sk};\n`;
+    }
   } else {
     // §8.1 simple nested or §8.2 each array
     const nestedSealed = (meta.type.fn() as any)[SEALED] as SealedExecutors<unknown> | undefined;
     const execIdx = execs.length;
     execs.push(nestedSealed as SealedExecutors<unknown>);
 
-    // Check if validateNested each (array) — determined by RuleDef.each on validatNested rule
-    // For simplicity: check if validation has any each:true rule
-    const hasEach = meta.validation.some(rd => rd.each);
+    // Check if validateNested each (array) — determined by flags.validateNestedEach or RuleDef.each
+    const hasEach = meta.flags.validateNestedEach || meta.validation.some(rd => rd.each);
 
     if (hasEach) {
       const iVar = `__bk$i_${sk}`;
@@ -586,10 +592,15 @@ function generateNestedCode(
       code += `  for (var ${iVar}=0; ${iVar}<${varName}.length; ${iVar}++) {\n`;
       code += `    var __bk$r_${sk} = ${awaitKwE}_execs[${execIdx}]._deserialize(${varName}[${iVar}], _opts);\n`;
       code += `    if (_isErr(__bk$r_${sk})) {\n`;
-      code += `      var __bk$re_${sk} = __bk$r_${sk}.data;\n`;
-      code += `      for (var __bk$j_${sk}=0; __bk$j_${sk}<__bk$re_${sk}.length; __bk$j_${sk}++) {\n`;
-      code += `        __bk$errors.push({path:${JSON.stringify(fieldKey)}+'['+${iVar}+'].'+__bk$re_${sk}[__bk$j_${sk}].path,code:__bk$re_${sk}[__bk$j_${sk}].code});\n`;
-      code += `      }\n`;
+      if (collectErrors) {
+        code += `      var __bk$re_${sk} = __bk$r_${sk}.data;\n`;
+        code += `      for (var __bk$j_${sk}=0; __bk$j_${sk}<__bk$re_${sk}.length; __bk$j_${sk}++) {\n`;
+        code += `        __bk$errors.push({path:${JSON.stringify(fieldKey)}+'['+${iVar}+'].'+__bk$re_${sk}[__bk$j_${sk}].path,code:__bk$re_${sk}[__bk$j_${sk}].code});\n`;
+        code += `      }\n`;
+      } else {
+        code += `      var __bk$re_${sk} = __bk$r_${sk}.data;\n`;
+        code += `      return _err([{path:${JSON.stringify(fieldKey)}+'['+${iVar}+'].'+__bk$re_${sk}[0].path,code:__bk$re_${sk}[0].code}]);\n`;
+      }
       code += `    } else { __bk$arr_${sk}.push(__bk$r_${sk}); }\n`;
       code += `  }\n`;
       code += `  __bk$out[${JSON.stringify(fieldKey)}] = __bk$arr_${sk};\n`;

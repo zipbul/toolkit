@@ -12,7 +12,7 @@ import type { SealOptions } from '../interfaces';
 // analyzeAsync — sealed DTO가 async executor를 필요로 하는지 정적 분석 (C1)
 // ─────────────────────────────────────────────────────────────────────────────
 
-function analyzeAsync(merged: RawClassMeta, direction: 'deserialize' | 'serialize'): boolean {
+function analyzeAsync(merged: RawClassMeta, direction: 'deserialize' | 'serialize', visited?: Set<Function>): boolean {
   for (const meta of Object.values(merged)) {
     // 1. createRule async (deserialize 방향만)
     if (direction === 'deserialize' && meta.validation.some(rd => rd.rule.isAsync)) return true;
@@ -21,11 +21,26 @@ function analyzeAsync(merged: RawClassMeta, direction: 'deserialize' | 'serializ
       ? meta.transform.filter(td => !td.options?.serializeOnly)
       : meta.transform.filter(td => !td.options?.deserializeOnly);
     if (transforms.some(td => (td.fn as any).constructor?.name === 'AsyncFunction')) return true;
-    // 3. nested DTO async 재귀
+    // 3. nested DTO async — RAW 메타데이터를 직접 재귀 분석 (SEALED placeholder 의존 제거, BUG-2 수정)
     if (meta.type?.fn) {
-      const nested = (meta.type.fn() as any)[SEALED];
-      if (direction === 'deserialize' && nested?._isAsync) return true;
-      if (direction === 'serialize' && nested?._isSerializeAsync) return true;
+      const nestedClass = meta.type.fn();
+      const v = visited ?? new Set<Function>();
+      if (!v.has(nestedClass)) {
+        v.add(nestedClass);
+        const nestedMerged = mergeInheritance(nestedClass);
+        if (analyzeAsync(nestedMerged, direction, v)) return true;
+      }
+    }
+    // discriminator subTypes
+    if (meta.type?.discriminator) {
+      for (const sub of meta.type.discriminator.subTypes) {
+        const v = visited ?? new Set<Function>();
+        if (!v.has(sub.value)) {
+          v.add(sub.value);
+          const subMerged = mergeInheritance(sub.value);
+          if (analyzeAsync(subMerged, direction, v)) return true;
+        }
+      }
     }
   }
   return false;
@@ -87,6 +102,13 @@ function sealOne<T>(Class: Function, options?: SealOptions): void {
   for (const key of Object.keys(merged)) {
     if (BANNED_FIELD_NAMES.includes(key)) {
       throw new SealError(`${Class.name}: field name '${key}' is not allowed (reserved property name)`);
+    }
+  }
+
+  // 1b. @Type without @ValidateNested 경고 (DX-5)
+  for (const [key, meta] of Object.entries(merged)) {
+    if (meta.type && !meta.flags.validateNested && meta.transform.filter(td => !td.options?.serializeOnly).length === 0) {
+      console.warn(`[baker] ${Class.name}.${key}: @Type without @ValidateNested — nested DTO will not be validated during deserialization. Add @ValidateNested() to enable recursive validation.`);
     }
   }
 
@@ -215,6 +237,7 @@ export function mergeInheritance(Class: Function): RawClassMeta {
         if (pf.isDefined !== undefined && mf.isDefined === undefined) mf.isDefined = pf.isDefined;
         if (pf.validateIf !== undefined && mf.validateIf === undefined) mf.validateIf = pf.validateIf;
         if (pf.validateNested !== undefined && mf.validateNested === undefined) mf.validateNested = pf.validateNested;
+        if (pf.validateNestedEach !== undefined && mf.validateNestedEach === undefined) mf.validateNestedEach = pf.validateNestedEach;
       }
     }
   }

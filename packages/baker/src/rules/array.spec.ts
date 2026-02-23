@@ -189,6 +189,16 @@ describe('arrayUnique', () => {
     expect(failMock).toHaveBeenCalledWith('arrayUnique');
     expect(arrayUnique().ruleName).toBe('arrayUnique');
   });
+
+  it('should generate identifier-map code when emit() is called with an identifier function', () => {
+    const { ctx, addRefMock, failMock } = makeCtx(0);
+    const byId = (v: { id: number }) => v.id;
+    const code = arrayUnique(byId).emit('_v', ctx);
+    expect(addRefMock).toHaveBeenCalledWith(byId);
+    expect(code).toContain('_v.map(');
+    expect(code).toContain('Set');
+    expect(failMock).toHaveBeenCalledWith('arrayUnique');
+  });
 });
 
 // ─── arrayNotEmpty ────────────────────────────────────────────────────────────

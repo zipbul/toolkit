@@ -43,10 +43,11 @@ export function ValidateIf(condition: (obj: any) => boolean): PropertyDecorator 
  * 중첩 DTO 재귀 검증 트리거. @Type과 함께 사용해야 한다.
  * builder 트리거 조건: meta.type !== null && meta.flags.validateNested === true
  */
-export function ValidateNested(_options?: ValidationOptions): PropertyDecorator {
+export function ValidateNested(options?: ValidationOptions): PropertyDecorator {
   return (target, key) => {
     const meta = ensureMeta((target as any).constructor, key as string);
     meta.flags.validateNested = true;
+    if (options?.each) meta.flags.validateNestedEach = true;
   };
 }
 
