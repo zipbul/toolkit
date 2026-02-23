@@ -1,6 +1,6 @@
 {
   "name": "@zipbul/shared",
-  "version": "0.0.2",
+  "version": "0.0.3",
   "description": "Shared library for the @zipbul toolkit",
   "license": "MIT",
   "author": "Junhyung Park (https://github.com/parkrevil)",

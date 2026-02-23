@@ -1,6 +1,6 @@
 {
   "name": "@zipbul/cors",
-  "version": "0.0.2",
+  "version": "0.0.3",
   "description": "Framework-agnostic CORS library for standard Web APIs (Request/Response)",
   "license": "MIT",
   "author": "Junhyung Park (https://github.com/parkrevil)",
