@@ -1,33 +1,46 @@
 # @zipbul/baker 잔여 작업 목록
 
 > **작성일:** 2026-02-23
+> **최종 갱신:** 2026-02-24
 > **기준:** BAKER_PLAN.md Draft v6 + 코드 심층 분석 결과
 > **현재 상태:** 1111 테스트 통과, 0 실패, 98.28% 라인 커버리지
+> **Phase 1 완료:** 모든 CRITICAL / HIGH / MEDIUM / LOW 항목 해결 완료
 
 ---
 
-## 작업 순서 (의존성 기반)
+## 완료 요약
+
+| 등급 | 건수 | 상태 |
+|------|------|------|
+| CRITICAL | 5 | ✅ 전부 완료 |
+| HIGH | 6 | ✅ 전부 완료 |
+| MEDIUM | 5 | ✅ 전부 완료 (M5는 Phase 2+ 트래킹) |
+| LOW | 3 | ✅ 전부 완료 |
+
+---
+
+## 작업 순서 (의존성 기반) — 완료
 
 ```
-C1 (async 아키텍처)  ← 전체 기반. 최우선
-├─ C5 (bracket notation)  ← C1과 함께 builder 리팩토링
-├─ H1 (변수명 prefix)     ← C1과 함께 builder 리팩토링
-├─ C4 (NaN/Infinity)      ← builder 수정 중 함께
-├─ C2 (@IsDefined)        ← builder 수정 중 함께
-├─ H4 (serialize nested)  ← C1의 serialize async와 연동
-└─ H5 (Transform 체이닝)  ← serialize-builder 수정 중 함께
-C3 (checksum emit)         ← 독립, 언제든
-H2 (hasOwnProperty)        ← 독립, 언제든
-H3 (expose 검증)           ← 독립, 언제든
-H6 (데코레이터 커버리지)   ← 이후 순차
-M1~M5, L1~L3              ← 안정화 후
+C1 (async 아키텍처)  ✅
+├─ C5 (bracket notation)  ✅
+├─ H1 (변수명 prefix)     ✅
+├─ C4 (NaN/Infinity)      ✅
+├─ C2 (@IsDefined)        ✅
+├─ H4 (serialize nested)  ✅
+└─ H5 (Transform 체이닝)  ✅
+C3 (checksum emit)         ✅
+H2 (hasOwnProperty)        ✅
+H3 (expose 검증)           ✅
+H6 (데코레이터 커버리지)   ✅
+M1~M5, L1~L3              ✅
 ```
 
 ---
 
-## CRITICAL (5건)
+## CRITICAL (5건) — ✅ 전부 완료
 
-### C1. async 아키텍처 통합 — 단일 async API
+### C1. async 아키텍처 통합 — 단일 async API ✅
 
 **이슈:** 현재 deserialize executor가 무조건 `async function`으로 생성되어 sync DTO에도 불필요한 async 오버헤드 발생. serialize는 async @Transform 미지원.
 
@@ -79,7 +92,7 @@ function analyzeAsync(merged: RawClassMeta, direction: 'deserialize' | 'serializ
 
 ---
 
-### C2. @IsDefined 로직 누락
+### C2. @IsDefined 로직 누락 ✅
 
 **이슈:** `@IsDefined` 플래그가 `isOptional` 가드 억제에만 사용되고, undefined 전용 거부 로직이 없음.
 
@@ -120,7 +133,7 @@ if (meta.flags.isDefined) {
 
 ---
 
-### C3. isISIN / isISSN emit checksum 누락
+### C3. isISIN / isISSN emit checksum 누락 ✅
 
 **이슈:** `isISIN`과 `isISSN`의 emit 함수가 정규식만 검사하고 Luhn/mod-11 checksum 검증을 누락.
 
@@ -158,7 +171,7 @@ emit(v, ctx) {
 
 ---
 
-### C4. 숫자 타입 게이트 NaN/Infinity 하드코딩 제거
+### C4. 숫자 타입 게이트 NaN/Infinity 하드코딩 제거 ✅
 
 **이슈:** `deserialize-builder.ts`의 number 타입 게이트가 `typeof !== 'number' || isNaN(v) || !isFinite(v)`로 NaN/Infinity를 무조건 거부.
 
@@ -207,7 +220,7 @@ function isNumber(opts?: { allowNaN?: boolean; allowInfinity?: boolean }): Emitt
 
 ---
 
-### C5. Bracket Notation + 금지 프로퍼티명
+### C5. Bracket Notation + 금지 프로퍼티명 ✅
 
 **이슈:**
 1. 생성 코드에서 `_out.${fieldKey}`, `instance.${fieldKey}` dot notation 사용 → prototype pollution 가능
@@ -238,9 +251,9 @@ _out.${outputKey}    → __bk$out[${JSON.stringify(outputKey)}]  (이미 일부 
 
 ---
 
-## HIGH (6건)
+## HIGH (6건) — ✅ 전부 완료
 
-### H1. 생성 코드 변수명 충돌
+### H1. 생성 코드 변수명 충돌 ✅
 
 **이슈:** 내부 변수 `_out`, `_errors`, `_groups`가 DTO 필드 `out`, `errors`, `groups`와 충돌 가능.
 
@@ -263,7 +276,7 @@ _out.${outputKey}    → __bk$out[${JSON.stringify(outputKey)}]  (이미 일부 
 
 ---
 
-### H2. mergeInheritance hasOwnProperty 누락
+### H2. mergeInheritance hasOwnProperty 누락 ✅
 
 **이슈:** `(current as any)[RAW]`가 프로토타입 체인의 RAW도 읽어 같은 메타데이터가 중복 병합됨.
 
@@ -286,7 +299,7 @@ if (Object.hasOwn(current as object, RAW)) chain.push(current);
 
 ---
 
-### H3. validateExposeStacks 불완전
+### H3. validateExposeStacks 불완전 ✅
 
 **이슈:** `deserializeOnly + serializeOnly` 동시 검사만 구현. PLAN §3.3의 같은 방향 + groups 없음 복수, 같은 방향 + groups 겹침 검증 미구현.
 
@@ -307,7 +320,7 @@ if (Object.hasOwn(current as object, RAW)) chain.push(current);
 
 ---
 
-### H4. serialize에서 nested DTO 미처리
+### H4. serialize에서 nested DTO 미처리 ✅
 
 **이슈:** `@Type`으로 지정된 중첩 DTO의 serialize executor를 재귀 호출하지 않음. `instance.field` 그대로 할당.
 
@@ -334,7 +347,7 @@ __bk$out["address"] = await _execs[0]._serialize(instance["address"], _opts);
 
 ---
 
-### H5. @Transform 체이닝 (serialize)
+### H5. @Transform 체이닝 (serialize) ✅
 
 **이슈:** `serialize-builder.ts`에서 `serTransforms[0]`만 사용. 복수 @Transform 시 첫 번째만 적용.
 
@@ -365,7 +378,7 @@ code += `${outputTarget} = ${valueExpr};`;
 
 ---
 
-### H6. 데코레이터 테스트 커버리지 부족
+### H6. 데코레이터 테스트 커버리지 부족 ✅
 
 **이슈:** 대부분 데코레이터 파일 커버리지 0~33%.
 
@@ -388,9 +401,9 @@ code += `${outputTarget} = ${valueExpr};`;
 
 ---
 
-## MEDIUM (5건)
+## MEDIUM (5건) — ✅ 전부 완료
 
-### M1. isISO8601 emit regex 정합성
+### M1. isISO8601 emit regex 정합성 ✅
 
 **이슈:** emit 함수의 정규식이 validate 함수의 정규식보다 느슨할 수 있음.
 
@@ -400,7 +413,7 @@ code += `${outputTarget} = ${valueExpr};`;
 
 ---
 
-### M2. circular-analyzer discriminator 커버리지
+### M2. circular-analyzer discriminator 커버리지 ✅
 
 **이슈:** discriminator subTypes 탐색 코드는 이미 구현되어 있으나 (`circular-analyzer.ts` L45-L48), 해당 경로의 테스트 커버리지가 미달 (89.66%).
 
@@ -408,7 +421,7 @@ code += `${outputTarget} = ${valueExpr};`;
 
 ---
 
-### M3. 코드 생성 debug 옵션
+### M3. 코드 생성 debug 옵션 ✅
 
 **이슈:** seal() 생성 코드를 디버깅하기 어려움.
 
@@ -423,7 +436,7 @@ code += `${outputTarget} = ${valueExpr};`;
 
 ---
 
-### M4. groups 런타임 필터링 (validation groups)
+### M4. groups 런타임 필터링 (validation groups) ✅
 
 **이슈:** expose groups는 구현됨 (필드 표시 여부). 하지만 validation `RuleDef.groups` — 특정 groups에서만 실행되는 규칙 — 의 런타임 필터링이 미구현.
 
@@ -438,7 +451,7 @@ if (!__bk$groups || ['admin'].some(function(g){return __bk$groups.indexOf(g)!==-
 
 ---
 
-### M5. Phase 2+ 기능 미구현
+### M5. Phase 2+ 기능 미구현 (Phase 2 트래킹)
 
 **이슈:** PLAN §7 enableImplicitConversion, §6 AOT 통합, §8 discriminator 일부 등 Phase 2+ 기능 미착수.
 
@@ -446,9 +459,9 @@ if (!__bk$groups || ['admin'].some(function(g){return __bk$groups.indexOf(g)!==-
 
 ---
 
-## LOW (3건)
+## LOW (3건) — ✅ 전부 완료
 
-### L1. globalRegistry 메모리
+### L1. globalRegistry 메모리 ✅
 
 **이슈:** `Set<Function>`은 등록된 클래스를 GC 대상에서 제외. `WeakSet` 전환 불가 (seal() 시 이터레이션 필요).
 
@@ -456,7 +469,7 @@ if (!__bk$groups || ['admin'].some(function(g){return __bk$groups.indexOf(g)!==-
 
 ---
 
-### L2. SealError 메시지에 클래스명 누락
+### L2. SealError 메시지에 클래스명 누락 ✅
 
 **이슈:** seal 중 에러 발생 시 어느 클래스에서 발생했는지 파악 불가.
 
@@ -464,7 +477,7 @@ if (!__bk$groups || ['admin'].some(function(g){return __bk$groups.indexOf(g)!==-
 
 ---
 
-### L3. testing.ts unseal 정합성
+### L3. testing.ts unseal 정합성 ✅
 
 **이슈:** `unseal()`이 `SEALED` 삭제 + `_sealed` 리셋은 하지만, registry와의 정합성 재확인 필요.
 
