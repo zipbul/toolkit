@@ -14,7 +14,7 @@
     },
     "packages/cors": {
       "name": "@zipbul/cors",
-      "version": "0.0.1",
+      "version": "0.0.2",
       "dependencies": {
         "@zipbul/result": "workspace:*",
         "@zipbul/shared": "workspace:*",
@@ -27,7 +27,7 @@
     },
     "packages/result": {
       "name": "@zipbul/result",
-      "version": "0.0.1",
+      "version": "0.0.2",
     },
     "packages/router": {
       "name": "@zipbul/router",
@@ -35,7 +35,7 @@
     },
     "packages/shared": {
       "name": "@zipbul/shared",
-      "version": "0.0.1",
+      "version": "0.0.2",
     },
   },
   "packages": {
