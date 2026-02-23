@@ -49,7 +49,8 @@ export function isNumber(options?: IsNumberOptions): EmittableRule {
       code += `\nelse if (isNaN(${varName})) ${ctx.fail('isNumber')};`;
     }
     if (!allowInfinity) {
-      code += `\nelse if (!isFinite(${varName})) ${ctx.fail('isNumber')};`;
+      // !isFinite 대신 명시적 Infinity 체크 — isNaN(NaN)=false지만 !isFinite(NaN)=true이므로 분리 필요
+      code += `\nelse if (${varName} === Infinity || ${varName} === -Infinity) ${ctx.fail('isNumber')};`;
     }
     if (maxDecimalPlaces !== undefined) {
       code += `\nelse { var _s=${varName}.toString(); var _d=_s.indexOf('.'); if(_d!==-1&&_s.length-_d-1>${maxDecimalPlaces}) ${ctx.fail('isNumber')}; }`;

@@ -35,39 +35,39 @@ class ExcludedDto {
 afterEach(() => unseal());
 
 describe('serialize — integration', () => {
-  it('should serialize DTO instance to plain object', () => {
+  it('should serialize DTO instance to plain object', async () => {
     seal();
     const dto = Object.assign(new SimpleSerializeDto(), { name: 'Bob', age: 25 });
-    const result = serialize(dto);
+    const result = await serialize(dto);
     expect(result).toEqual({ name: 'Bob', age: 25 });
   });
 
-  it('should apply @Expose name when serializing', () => {
+  it('should apply @Expose name when serializing', async () => {
     seal();
     const dto = Object.assign(new ExposedDto(), { name: 'Carol', age: 40 });
-    const result = serialize(dto);
+    const result = await serialize(dto);
     expect(result['full_name']).toBe('Carol');
     expect(result['name']).toBeUndefined();
   });
 
-  it('should omit @Exclude fields', () => {
+  it('should omit @Exclude fields', async () => {
     seal();
     const dto = Object.assign(new ExcludedDto(), { public: 'visible', private: 'hidden' });
-    const result = serialize(dto);
+    const result = await serialize(dto);
     expect(result['public']).toBe('visible');
     expect(result['private']).toBeUndefined();
   });
 
-  it('should throw when trying to serialize instance of unsealed class', () => {
+  it('should throw when trying to serialize instance of unsealed class', async () => {
     // seal() not called
     const dto = Object.assign(new SimpleSerializeDto(), { name: 'Dave', age: 20 });
-    expect(() => serialize(dto)).toThrow();
+    await expect(serialize(dto)).rejects.toThrow();
   });
 
-  it('should return plain object (not class instance)', () => {
+  it('should return plain object (not class instance)', async () => {
     seal();
     const dto = Object.assign(new SimpleSerializeDto(), { name: 'Eve', age: 28 });
-    const result = serialize(dto);
+    const result = await serialize(dto);
     expect(typeof result).toBe('object');
     expect(Object.getPrototypeOf(result)).toBe(Object.prototype);
   });

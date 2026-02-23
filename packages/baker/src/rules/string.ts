@@ -543,34 +543,37 @@ export function isISBN(version?: 10 | 13): EmittableRule {
 
 // ISIN — ISO 6166
 const ISIN_RE = /^[A-Z]{2}[A-Z0-9]{9}[0-9]$/;
+
+function _validateISINStr(v: string): boolean {
+  if (!ISIN_RE.test(v)) return false;
+  // Luhn mod10 on expanded digits
+  const expanded = v
+    .split('')
+    .map((c) => {
+      const code = c.charCodeAt(0);
+      return code >= 65 ? String(code - 55) : c;
+    })
+    .join('');
+  let sum = 0;
+  let alternate = false;
+  for (let i = expanded.length - 1; i >= 0; i--) {
+    let n = parseInt(expanded[i], 10);
+    if (alternate) {
+      n *= 2;
+      if (n > 9) n -= 9;
+    }
+    sum += n;
+    alternate = !alternate;
+  }
+  return sum % 10 === 0;
+}
+
 export const isISIN = makeStringRule(
   'isISIN',
-  (v) => {
-    if (!ISIN_RE.test(v)) return false;
-    // Luhn mod10 on expanded digits
-    const expanded = v
-      .split('')
-      .map((c) => {
-        const code = c.charCodeAt(0);
-        return code >= 65 ? String(code - 55) : c;
-      })
-      .join('');
-    let sum = 0;
-    let alternate = false;
-    for (let i = expanded.length - 1; i >= 0; i--) {
-      let n = parseInt(expanded[i], 10);
-      if (alternate) {
-        n *= 2;
-        if (n > 9) n -= 9;
-      }
-      sum += n;
-      alternate = !alternate;
-    }
-    return sum % 10 === 0;
-  },
+  _validateISINStr,
   (varName, ctx) => {
-    const i = ctx.addRegex(ISIN_RE);
-    return `if (!_re[${i}].test(${varName})) ${ctx.fail('isISIN')};`;
+    const i = ctx.addRef(_validateISINStr);
+    return `if (!_refs[${i}](${varName})) ${ctx.fail('isISIN')};`;
   },
 );
 
@@ -581,7 +584,34 @@ export interface IsISO8601Options {
   strict?: boolean;
 }
 
+// Strict ISO8601: requires month/day to be valid values
+function _validateISO8601Strict(v: string): boolean {
+  if (!ISO8601_RE.test(v)) return false;
+  // Extract date components if present
+  const m = v.match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if (!m) return true; // year-only or year-month partial — still ok per regex
+  const month = Number(m[2]);
+  const day = Number(m[3]);
+  if (month < 1 || month > 12) return false;
+  const maxDay = new Date(Number(m[1]), month, 0).getDate();
+  return day >= 1 && day <= maxDay;
+}
+
 export function isISO8601(options?: IsISO8601Options): EmittableRule {
+  if (options?.strict) {
+    // strict: validate and emit use the same function ref to stay in sync
+    const fn = (v: unknown): boolean => {
+      if (typeof v !== 'string') return false;
+      return _validateISO8601Strict(v);
+    };
+    (fn as any).ruleName = 'isISO8601';
+    (fn as any).emit = (varName: string, ctx: EmitContext): string => {
+      const i = ctx.addRef(fn);
+      return `if (!_refs[${i}](${varName})) ${ctx.fail('isISO8601')};`;
+    };
+    return fn as unknown as EmittableRule;
+  }
+  // non-strict: both validate and emit use same ISO8601_RE
   return makeStringRule(
     'isISO8601',
     (v) => ISO8601_RE.test(v),
@@ -626,17 +656,14 @@ function _validateISSN(value: string, options?: IsISSNOptions): boolean {
 }
 
 export function isISSN(options?: IsISSNOptions): EmittableRule {
-  const requireHyphen = options?.requireHyphen !== false;
-  const re = requireHyphen ? /^\d{4}-\d{3}[\dX]$/ : /^\d{7}[\dX]$/;
-
   const fn = (value: unknown): boolean => {
     if (typeof value !== 'string') return false;
     return _validateISSN(value, options);
   };
 
   (fn as any).emit = (varName: string, ctx: EmitContext): string => {
-    const i = ctx.addRegex(re);
-    return `if (!_re[${i}].test(${varName}.replace(/-/g,'')) && !_re[${i}].test(${varName})) ${ctx.fail('isISSN')};`;
+    const i = ctx.addRef(fn);
+    return `if (!_refs[${i}](${varName})) ${ctx.fail('isISSN')};`;
   };
   (fn as any).ruleName = 'isISSN';
   (fn as any).requiresType = 'string';

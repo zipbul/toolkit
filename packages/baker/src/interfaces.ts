@@ -39,6 +39,12 @@ export interface SealOptions {
    * @default false
    */
   stopAtFirstError?: boolean;
+  /**
+   * true: 생성된 executor 소스코드를 `SealedExecutors._source`에 저장.
+   * 디버깅용. 프로덕션에서는 false(기본).
+   * @default false
+   */
+  debug?: boolean;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

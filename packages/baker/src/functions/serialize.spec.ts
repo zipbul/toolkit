@@ -49,19 +49,19 @@ afterEach(() => {
 describe('serialize', () => {
   // ── Happy Path ─────────────────────────────────────────────────────────────
 
-  it('should return Record when _serialize returns plain object', () => {
+  it('should return Record when _serialize returns plain object', async () => {
     // Arrange
     const Dto = makeClass();
     const record = { name: 'Alice' };
     attachSealed(Dto, () => record);
     const instance = new Dto();
     // Act
-    const result = serialize(instance);
+    const result = await serialize(instance);
     // Assert
     expect(result).toBe(record);
   });
 
-  it('should pass instance and options to _serialize when called', () => {
+  it('should pass instance and options to _serialize when called', async () => {
     // Arrange
     const Dto = makeClass();
     let capturedInstance: unknown;
@@ -74,7 +74,7 @@ describe('serialize', () => {
     const instance = new Dto();
     const opts: RuntimeOptions = { groups: ['public'] };
     // Act
-    serialize(instance, opts);
+    await serialize(instance, opts);
     // Assert
     expect(capturedInstance).toBe(instance);
     expect(capturedOpts).toBe(opts);
@@ -82,73 +82,65 @@ describe('serialize', () => {
 
   // ── Negative / Error ───────────────────────────────────────────────────────
 
-  it('should throw SealError when instance class has no [SEALED] executor', () => {
+  it('should throw SealError when instance class has no [SEALED] executor', async () => {
     // Arrange
     const Dto = makeClass('UnsealedDto');
     const instance = new Dto();
     // Act & Assert
-    expect(() => serialize(instance)).toThrow(SealError);
+    await expect(serialize(instance)).rejects.toThrow(SealError);
   });
 
-  it('should include class name in SealError message when not sealed', () => {
+  it('should include class name in SealError message when not sealed', async () => {
     // Arrange
     const Dto = makeClass('MySerializeDto');
     const instance = new Dto();
-    let caught: SealError | undefined;
-    // Act
-    try {
-      serialize(instance);
-    } catch (e) {
-      caught = e as SealError;
-    }
-    // Assert
-    expect(caught).toBeInstanceOf(SealError);
-    expect(caught!.message).toContain('MySerializeDto');
+    // Act & Assert
+    await expect(serialize(instance)).rejects.toThrow('MySerializeDto');
   });
 
   // ── Edge ──────────────────────────────────────────────────────────────────
 
-  it('should return empty object when _serialize returns {} for instance with no registered fields', () => {
+  it('should return empty object when _serialize returns {} for instance with no registered fields', async () => {
     // Arrange
     const Dto = makeClass();
     attachSealed(Dto, () => ({}));
     const instance = new Dto();
     // Act
-    const result = serialize(instance);
+    const result = await serialize(instance);
     // Assert
     expect(result).toEqual({});
   });
 
   // ── State Transition ───────────────────────────────────────────────────────
 
-  it('should work after sealed is re-attached following deletion', () => {
+  it('should work after sealed is re-attached following deletion', async () => {
     // Arrange
     const Dto = makeClass();
     const record1 = { a: 1 };
     const record2 = { b: 2 };
     attachSealed(Dto, () => record1);
     const instance = new Dto();
-    serialize(instance);
+    await serialize(instance);
     // Simulate re-seal
     delete (Dto as any)[SEALED];
     attachSealed(Dto, () => record2);
     // Act
-    const result = serialize(instance);
+    const result = await serialize(instance);
     // Assert
     expect(result).toBe(record2);
   });
 
   // ── Idempotency ────────────────────────────────────────────────────────────
 
-  it('should return identical Record on repeated calls with same instance', () => {
+  it('should return identical Record on repeated calls with same instance', async () => {
     // Arrange
     const Dto = makeClass();
     const record = { name: 'Bob' };
     attachSealed(Dto, () => record);
     const instance = new Dto();
     // Act
-    const r1 = serialize(instance);
-    const r2 = serialize(instance);
+    const r1 = await serialize(instance);
+    const r2 = await serialize(instance);
     // Assert
     expect(r1).toBe(record);
     expect(r2).toBe(record);

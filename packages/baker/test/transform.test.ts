@@ -47,10 +47,10 @@ describe('transform — integration', () => {
     expect(result.code).toBe('ABC');
   });
 
-  it('should apply serialize-only transform only during serialize', () => {
+  it('should apply serialize-only transform only during serialize', async () => {
     seal();
     const dto = Object.assign(new SerializeTransformDto(), { price: 9 });
-    const result = serialize(dto);
+    const result = await serialize(dto);
     expect(result['price']).toBe(900);
   });
 

@@ -954,10 +954,16 @@ describe('isISIN', () => {
     expect(isISIN('US03783310')).toBe(false);
   });
 
-  it('should call ctx.addRegex and generate test code when calling emit() and have ruleName isISIN', () => {
-    const { ctx, addRegexMock, failMock } = makeCtx(0);
-    const code = isISIN.emit('_v', ctx);
-    expect(addRegexMock).toHaveBeenCalled();
+  it('should return false for ISIN that passes regex but fails Luhn checksum', () => {
+    // US0378331006 matches ISIN_RE but has wrong Luhn check digit (valid: US0378331005)
+    expect(isISIN('US0378331006')).toBe(false);
+  });
+
+  it('should emit code using addRef to register full validate function (regex + Luhn)', () => {
+    // After fix: emit uses addRef (full validate), not just addRegex
+    const { ctx, addRefMock, failMock } = makeCtx(0);
+    isISIN.emit('_v', ctx);
+    expect(addRefMock).toHaveBeenCalled();
     expect(failMock).toHaveBeenCalledWith('isISIN');
     expect(isISIN.ruleName).toBe('isISIN');
   });
@@ -982,6 +988,29 @@ describe('isISO8601', () => {
     expect(addRegexMock).toHaveBeenCalled();
     expect(failMock).toHaveBeenCalledWith('isISO8601');
     expect(isISO8601().ruleName).toBe('isISO8601');
+  });
+
+  it('should return true for valid date with strict: true', () => {
+    expect(isISO8601({ strict: true })('2023-02-28')).toBe(true);
+  });
+
+  it('should return false for invalid month with strict: true', () => {
+    expect(isISO8601({ strict: true })('2023-13-01')).toBe(false);
+  });
+
+  it('should return false for invalid day with strict: true', () => {
+    expect(isISO8601({ strict: true })('2023-02-30')).toBe(false);
+  });
+
+  it('strict: true emit uses addRef (function ref path)', () => {
+    const { ctx, addRefMock, failMock } = makeCtx(0);
+    isISO8601({ strict: true }).emit('_v', ctx);
+    expect(addRefMock).toHaveBeenCalledTimes(1);
+    expect(failMock).toHaveBeenCalledWith('isISO8601');
+  });
+
+  it('strict: true ruleName is isISO8601', () => {
+    expect(isISO8601({ strict: true }).ruleName).toBe('isISO8601');
   });
 });
 
@@ -1016,10 +1045,16 @@ describe('isISSN', () => {
     expect(isISSN({ requireHyphen: false })('03785955')).toBe(true);
   });
 
-  it('should call ctx.addRegex and generate test code when calling emit() and have ruleName isISSN', () => {
-    const { ctx, addRegexMock, failMock } = makeCtx(0);
-    const code = isISSN().emit('_v', ctx);
-    expect(addRegexMock).toHaveBeenCalled();
+  it('should return false for ISSN that passes regex but fails mod-11 checksum', () => {
+    // 0378-5950 matches regex \\d{4}-\\d{3}[\\dX] but check-digit 0 is wrong (valid: 0378-5955)
+    expect(isISSN()('0378-5950')).toBe(false);
+  });
+
+  it('should emit code using addRef to register full validate function (regex + mod-11)', () => {
+    // After fix: emit uses addRef (full validate), not just addRegex
+    const { ctx, addRefMock, failMock } = makeCtx(0);
+    isISSN().emit('_v', ctx);
+    expect(addRefMock).toHaveBeenCalled();
     expect(failMock).toHaveBeenCalledWith('isISSN');
     expect(isISSN().ruleName).toBe('isISSN');
   });

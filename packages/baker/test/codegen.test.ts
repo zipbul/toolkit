@@ -58,11 +58,11 @@ describe('codegen — integration', () => {
     expect(isErr(result)).toBe(true);
   });
 
-  it('_serialize should return plain object', () => {
+  it('_serialize should return plain object', async () => {
     seal();
     const sealed = (CodegenSimpleDto as any)[SEALED];
     const instance = Object.assign(new CodegenSimpleDto(), { name: 'Bob', value: 7 });
-    const result = sealed._serialize(instance);
+    const result = await sealed._serialize(instance);
     expect(result).toEqual({ name: 'Bob', value: 7 });
   });
 

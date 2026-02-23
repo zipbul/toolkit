@@ -457,6 +457,52 @@ describe('mergeInheritance', () => {
     expect(merged.f.validation.length).toBe(1);
   });
 
+  // ── Object.hasOwn — prototype chain 체인 수집 정확성 (H2) ─────────────────
+
+  it('should not include child in chain when child has no own RAW (inherits via prototype)', () => {
+    // Arrange
+    class ParentNR {}
+    (ParentNR as any)[RAW] = makeStringField('x');
+    class ChildNR extends ParentNR {}
+    // ChildNR has NO own RAW — inherits ParentNR[RAW] via prototype chain
+    // Act
+    const merged = mergeInheritance(ChildNR);
+    // Assert — parent field accessible, not double-merged
+    expect(merged.x).toBeDefined();
+    expect(merged.x.validation.length).toBe(1);
+  });
+
+  it('should not double-merge parent rules when child inherits RAW via prototype', () => {
+    // Arrange
+    class BaseNR2 {}
+    (BaseNR2 as any)[RAW] = {
+      name: { validation: [{ rule: isString }], transform: [], expose: [], exclude: null, type: null, flags: {} },
+    };
+    class ChildNR2 extends BaseNR2 {}
+    // ChildNR2 has no own RAW — rule must appear exactly once
+    // Act
+    const merged = mergeInheritance(ChildNR2);
+    // Assert
+    expect(merged.name.validation.length).toBe(1);
+  });
+
+  it('should skip intermediate class without own RAW in 3-level chain', () => {
+    // Arrange
+    class GrandNR {}
+    (GrandNR as any)[RAW] = makeStringField('a');
+    class MidNR extends GrandNR {}
+    // MidNR has no own RAW
+    class ChildNR3 extends MidNR {}
+    (ChildNR3 as any)[RAW] = makeStringField('b');
+    // Act
+    const merged = mergeInheritance(ChildNR3);
+    // Assert — both fields present, each exactly once
+    expect(merged.a).toBeDefined();
+    expect(merged.b).toBeDefined();
+    expect(merged.a.validation.length).toBe(1);
+    expect(merged.b.validation.length).toBe(1);
+  });
+
   it('should handle 3-level inheritance chain correctly', () => {
     // Arrange
     class GrandParent {}
@@ -475,5 +521,75 @@ describe('mergeInheritance', () => {
     const merged = mergeInheritance(Child3);
     // Assert — all 3 rules in union
     expect(merged.x.validation.length).toBe(3);
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// C5: sealOne — banned field names (prototype pollution prevention)
+// ─────────────────────────────────────────────────────────────────────────────
+
+/** RAW 메타에 bannedKey 이름의 필드를 own enumerable property로 추가하는 헬퍼 */
+function makeRawWithBannedKey(bannedKey: string): RawClassMeta {
+  const fieldMeta = { validation: [], transform: [], expose: [], exclude: null, type: null, flags: {} };
+  const raw = Object.create(null) as RawClassMeta;
+  Object.defineProperty(raw, bannedKey, {
+    value: fieldMeta,
+    enumerable: true,
+    writable: true,
+    configurable: true,
+  });
+  return raw;
+}
+
+describe('sealOne — banned field names (C5)', () => {
+  it('should throw SealError when a field is named __proto__', () => {
+    // Arrange
+    class BannedProtoDto {}
+    registerClass(BannedProtoDto, makeRawWithBannedKey('__proto__'));
+    // Act / Assert
+    expect(() => seal()).toThrow(SealError);
+  });
+
+  it('should throw SealError when a field is named constructor', () => {
+    // Arrange
+    class BannedConstructorDto {}
+    const raw = { constructor: { validation: [], transform: [], expose: [], exclude: null, type: null, flags: {} } } as unknown as RawClassMeta;
+    registerClass(BannedConstructorDto, raw);
+    // Act / Assert
+    expect(() => seal()).toThrow(SealError);
+  });
+
+  it('should throw SealError when a field is named prototype', () => {
+    // Arrange
+    class BannedPrototypeDto {}
+    const raw = { prototype: { validation: [], transform: [], expose: [], exclude: null, type: null, flags: {} } } as unknown as RawClassMeta;
+    registerClass(BannedPrototypeDto, raw);
+    // Act / Assert
+    expect(() => seal()).toThrow(SealError);
+  });
+
+  it('should throw SealError even when banned field coexists with valid fields', () => {
+    // Arrange — both a valid field ('name') and a banned field ('constructor')
+    class MixedBannedDto {}
+    const raw = Object.create(null) as RawClassMeta;
+    Object.defineProperty(raw, 'name', {
+      value: { validation: [{ rule: isString }], transform: [], expose: [], exclude: null, type: null, flags: {} },
+      enumerable: true, writable: true, configurable: true,
+    });
+    Object.defineProperty(raw, 'constructor', {
+      value: { validation: [], transform: [], expose: [], exclude: null, type: null, flags: {} },
+      enumerable: true, writable: true, configurable: true,
+    });
+    registerClass(MixedBannedDto, raw);
+    // Act / Assert
+    expect(() => seal()).toThrow(SealError);
+  });
+
+  it('should not throw SealError for __PROTO__ (uppercase — not a banned name)', () => {
+    // Arrange — same letters but different case, not a reserved name
+    class UpperCaseDto {}
+    registerClass(UpperCaseDto, makeRawWithBannedKey('__PROTO__'));
+    // Act / Assert
+    expect(() => seal()).not.toThrow();
   });
 });

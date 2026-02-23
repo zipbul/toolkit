@@ -46,18 +46,18 @@ describe('inheritance — integration', () => {
     expect(result.active).toBe(true);
   });
 
-  it('should serialize child DTO including parent fields', () => {
+  it('should serialize child DTO including parent fields', async () => {
     seal();
     const dto = Object.assign(new ChildDto(), { name: 'Carol', age: 40 });
-    const result = serialize(dto);
+    const result = await serialize(dto);
     expect(result['name']).toBe('Carol');
     expect(result['age']).toBe(40);
   });
 
-  it('should serialize grandchild DTO with all inherited fields', () => {
+  it('should serialize grandchild DTO with all inherited fields', async () => {
     seal();
     const dto = Object.assign(new GrandChildDto(), { name: 'Dave', age: 35, active: false });
-    const result = serialize(dto);
+    const result = await serialize(dto);
     expect(result['name']).toBe('Dave');
     expect(result['age']).toBe(35);
     expect(result['active']).toBe(false);

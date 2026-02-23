@@ -138,9 +138,15 @@ import type { BakerError } from './errors';
 
 export interface SealedExecutors<T> {
   /** 내부 executor — Result 패턴. deserialize()가 감싸서 throw로 변환 */
-  _deserialize(input: unknown, options?: RuntimeOptions): Promise<T | import('@zipbul/result').Err<BakerError[]>>;
+  _deserialize(input: unknown, options?: RuntimeOptions): (T | import('@zipbul/result').Err<BakerError[]>) | Promise<T | import('@zipbul/result').Err<BakerError[]>>;
   /** 내부 executor — 항상 성공. serialize는 무검증 전제 */
-  _serialize(instance: T, options?: RuntimeOptions): Record<string, unknown>;
+  _serialize(instance: T, options?: RuntimeOptions): Record<string, unknown> | Promise<Record<string, unknown>>;
+  /** deserialize 방향에 async 규칙/transform/nested가 있으면 true */
+  _isAsync: boolean;
+  /** serialize 방향에 async transform/nested가 있으면 true */
+  _isSerializeAsync: boolean;
+  /** debug: true 시 생성된 executor 소스코드 저장 */
+  _source?: { deserialize: string; serialize: string };
 }
 
 // Re-export for convenience

@@ -48,17 +48,17 @@ describe('groups — integration', () => {
     expect(result.internalCode).toBeUndefined();
   });
 
-  it('should serialize group-gated field when group matches', () => {
+  it('should serialize group-gated field when group matches', async () => {
     seal();
     const dto = Object.assign(new GroupedSerialDto(), { name: 'Carol', score: 99 });
-    const result = serialize(dto, { groups: ['public'] });
+    const result = await serialize(dto, { groups: ['public'] });
     expect(result['score']).toBe(99);
   });
 
-  it('should omit group-gated field during serialize when no group provided', () => {
+  it('should omit group-gated field during serialize when no group provided', async () => {
     seal();
     const dto = Object.assign(new GroupedSerialDto(), { name: 'Dave', score: 85 });
-    const result = serialize(dto);
+    const result = await serialize(dto);
     expect(result['score']).toBeUndefined();
   });
 });

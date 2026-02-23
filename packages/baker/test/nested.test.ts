@@ -63,13 +63,13 @@ describe('nested — integration', () => {
     })).rejects.toThrow();
   });
 
-  it('should serialize instance with nested DTO', () => {
+  it('should serialize instance with nested DTO', async () => {
     seal();
     const dto = Object.assign(new UserWithAddressDto(), {
       name: 'Dave',
       address: Object.assign(new AddressDto(), { street: '456 Elm St', city: 'Shelbyville' }),
     });
-    const result = serialize(dto);
+    const result = await serialize(dto);
     expect(result['name']).toBe('Dave');
     expect((result['address'] as Record<string, unknown>)['street']).toBe('456 Elm St');
     expect((result['address'] as Record<string, unknown>)['city']).toBe('Shelbyville');

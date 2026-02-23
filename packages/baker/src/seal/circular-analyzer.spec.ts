@@ -157,6 +157,39 @@ describe('analyzeCircular', () => {
     expect(result).toBe(true);
   });
 
+  it('should detect cycle via second discriminator subType (covers discriminator loop body)', () => {
+    // Arrange — A.fn → B (no cycle), A.discriminator.subTypes[1] → C → A (cycle)
+    class BDto {}
+    (BDto as any)[RAW] = {}; // no @Type, no cycle
+
+    class CDto {}
+    class ADto {}
+
+    (CDto as any)[RAW] = makeTypeMeta(() => ADto); // C → A (creates cycle)
+    (ADto as any)[RAW] = {
+      field: {
+        validation: [], transform: [], expose: [], exclude: null,
+        type: {
+          fn: () => BDto, // fn path goes to B → no cycle
+          discriminator: {
+            property: 'kind',
+            subTypes: [
+              { value: BDto, name: 'b' },
+              { value: CDto, name: 'c' }, // ← discriminator path cycles via CDto→ADto
+            ],
+          },
+        },
+        flags: {},
+      },
+    };
+
+    const merged = (ADto as any)[RAW];
+    // Act
+    const result = analyzeCircular(ADto, merged);
+    // Assert
+    expect(result).toBe(true);
+  });
+
   // ── Corner ─────────────────────────────────────────────────────────────────
 
   it('should return true when enableCircularCheck is true even with no @Type fields', () => {

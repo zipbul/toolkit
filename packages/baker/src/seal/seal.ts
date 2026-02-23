@@ -9,6 +9,29 @@ import type { RawClassMeta, RawPropertyMeta, SealedExecutors } from '../types';
 import type { SealOptions } from '../interfaces';
 
 // ─────────────────────────────────────────────────────────────────────────────
+// analyzeAsync — sealed DTO가 async executor를 필요로 하는지 정적 분석 (C1)
+// ─────────────────────────────────────────────────────────────────────────────
+
+function analyzeAsync(merged: RawClassMeta, direction: 'deserialize' | 'serialize'): boolean {
+  for (const meta of Object.values(merged)) {
+    // 1. createRule async (deserialize 방향만)
+    if (direction === 'deserialize' && meta.validation.some(rd => rd.rule.isAsync)) return true;
+    // 2. @Transform async
+    const transforms = direction === 'deserialize'
+      ? meta.transform.filter(td => !td.options?.serializeOnly)
+      : meta.transform.filter(td => !td.options?.deserializeOnly);
+    if (transforms.some(td => (td.fn as any).constructor?.name === 'AsyncFunction')) return true;
+    // 3. nested DTO async 재귀
+    if (meta.type?.fn) {
+      const nested = (meta.type.fn() as any)[SEALED];
+      if (direction === 'deserialize' && nested?._isAsync) return true;
+      if (direction === 'serialize' && nested?._isSerializeAsync) return true;
+    }
+  }
+  return false;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 // 봉인 상태 플래그
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -51,14 +74,24 @@ function sealOne<T>(Class: Function, options?: SealOptions): void {
   const placeholder: SealedExecutors<T> = {
     _deserialize: () => { throw new Error('seal in progress'); },
     _serialize: () => { throw new Error('seal in progress'); },
+    _isAsync: false,
+    _isSerializeAsync: false,
   };
   (Class as any)[SEALED] = placeholder;
 
   // 1. 상속 메타데이터 병합
   const merged = mergeInheritance(Class);
 
+  // 1a. 금지된 필드명 검사 — prototype pollution 방지 (C5)
+  const BANNED_FIELD_NAMES = ['__proto__', 'constructor', 'prototype'];
+  for (const key of Object.keys(merged)) {
+    if (BANNED_FIELD_NAMES.includes(key)) {
+      throw new SealError(`${Class.name}: field name '${key}' is not allowed (reserved property name)`);
+    }
+  }
+
   // 2. @Expose 스택 정적 검증 (실패 시 SealError throw)
-  validateExposeStacks(merged);
+  validateExposeStacks(merged, Class.name);
 
   // 3. 순환 참조 정적 분석
   const needsCircularCheck = analyzeCircular(Class, merged, options);
@@ -76,17 +109,30 @@ function sealOne<T>(Class: Function, options?: SealOptions): void {
     }
   }
 
-  // 5. deserialize executor 코드 생성
-  const deserializeExecutor = buildDeserializeCode<T>(Class, merged, options, needsCircularCheck);
+  // 5. async 분석
+  const isAsync = analyzeAsync(merged, 'deserialize');
+  const isSerializeAsync = analyzeAsync(merged, 'serialize');
 
-  // 6. serialize executor 코드 생성
-  const serializeExecutor = buildSerializeCode<T>(Class, merged, options);
+  // 6. deserialize executor 코드 생성
+  const deserializeExecutor = buildDeserializeCode<T>(Class, merged, options, needsCircularCheck, isAsync);
 
-  // 7. placeholder를 실제 executor로 in-place 교체 (Object.assign으로 참조 무결성 보장)
-  Object.assign(placeholder, {
+  // 7. serialize executor 코드 생성
+  const serializeExecutor = buildSerializeCode<T>(Class, merged, options, isSerializeAsync);
+
+  // 8. placeholder를 실제 executor로 in-place 교체 (Object.assign으로 참조 무결성 보장)
+  const assigned: Record<string, unknown> = {
     _deserialize: deserializeExecutor,
     _serialize: serializeExecutor,
-  });
+    _isAsync: isAsync,
+    _isSerializeAsync: isSerializeAsync,
+  };
+  if (options?.debug) {
+    assigned._source = {
+      deserialize: (deserializeExecutor as any).__bakerSource ?? '',
+      serialize: (serializeExecutor as any).__bakerSource ?? '',
+    };
+  }
+  Object.assign(placeholder, assigned);
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -109,7 +155,7 @@ export function mergeInheritance(Class: Function): RawClassMeta {
   const chain: Function[] = [];
   let current: Function | null = Class;
   while (current && current !== Object) {
-    if ((current as any)[RAW]) chain.push(current);
+    if (Object.hasOwn(current as object, RAW)) chain.push(current);
     const proto = Object.getPrototypeOf(current);
     current = proto === current ? null : proto;
   }

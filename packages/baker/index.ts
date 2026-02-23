@@ -3,6 +3,7 @@ export { seal } from './src/seal/seal';
 export { deserialize } from './src/functions/deserialize';
 export { serialize } from './src/functions/serialize';
 export { createRule } from './src/create-rule';
+export { unregister } from './src/registry';
 
 // Decorators
 export * from './src/decorators/index';

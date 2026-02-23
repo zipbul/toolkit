@@ -111,4 +111,66 @@ describe('validateExposeStacks', () => {
     // Act / Assert
     expect(() => validateExposeStacks(merged)).not.toThrow();
   });
+
+  // ── H3: Multi-entry @Expose conflict detection ─────────────────────────────
+
+  it('should throw SealError when two @Expose entries have same direction and both ungrouped (groups=[])', () => {
+    // Arrange — two deserialization-direction entries, both with no groups
+    const merged = fieldWithExpose(
+      { deserializeOnly: true },   // groups = undefined → []
+      { deserializeOnly: true },   // same direction, same ungrouped
+    );
+    // Act / Assert
+    expect(() => validateExposeStacks(merged)).toThrow(SealError);
+  });
+
+  it('should throw SealError when two @Expose entries have same direction with overlapping groups', () => {
+    // Arrange — two serialize entries, both include 'admin' group
+    const merged = fieldWithExpose(
+      { serializeOnly: true, groups: ['admin'] },
+      { serializeOnly: true, groups: ['admin', 'superadmin'] },
+    );
+    // Act / Assert
+    expect(() => validateExposeStacks(merged)).toThrow(SealError);
+  });
+
+  it('should not throw when two @Expose entries have same direction with non-overlapping groups', () => {
+    // Arrange — same direction but ['admin'] vs ['user'] → no overlap
+    const merged = fieldWithExpose(
+      { deserializeOnly: true, groups: ['admin'] },
+      { deserializeOnly: true, groups: ['user'] },
+    );
+    // Act / Assert
+    expect(() => validateExposeStacks(merged)).not.toThrow();
+  });
+
+  it('should not throw when two @Expose entries have different directions (desOnly + serOnly)', () => {
+    // Arrange — different directions: not a conflict
+    const merged = fieldWithExpose(
+      { deserializeOnly: true },
+      { serializeOnly: true },
+    );
+    // Act / Assert
+    expect(() => validateExposeStacks(merged)).not.toThrow();
+  });
+
+  it('should not throw when same direction has ungrouped and grouped entries (different scopes)', () => {
+    // Arrange — one desEntry with no groups, one with ['admin'] → different scopes
+    const merged = fieldWithExpose(
+      { deserializeOnly: true, groups: [] },    // ungrouped default
+      { deserializeOnly: true, groups: ['admin'] }, // specific group
+    );
+    // Act / Assert — no conflict: one is default scope, other is admin scope
+    expect(() => validateExposeStacks(merged)).not.toThrow();
+  });
+
+  it('should not throw when each direction has exactly one entry', () => {
+    // Arrange — one desOnly, one serOnly → each direction single entry, no conflict
+    const merged = fieldWithExpose(
+      { deserializeOnly: true, name: 'des_name' },
+      { serializeOnly: true, name: 'ser_name' },
+    );
+    // Act / Assert
+    expect(() => validateExposeStacks(merged)).not.toThrow();
+  });
 });
