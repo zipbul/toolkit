@@ -1,5 +1,15 @@
 # @zipbul/result
 
+## 0.1.1
+
+### Patch Changes
+
+- fec6633: refactor(shared): move HttpMethod type from enums/ to types/
+
+  `HttpMethod` is a string literal union type, not an enum. Moved to `src/types/` to correctly reflect its nature. Public API is unchanged — still accessible via the main entry point.
+
+  build: enable minification with --production flag across all packages
+
 ## 0.1.0
 
 ### Minor Changes
