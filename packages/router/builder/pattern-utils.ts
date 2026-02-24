@@ -1,5 +1,8 @@
+import type { Result } from '@zipbul/result';
+import type { RouterErrData } from '../types';
 import type { BuilderConfig } from './types';
 
+import { err } from '@zipbul/result';
 import { START_ANCHOR_PATTERN, END_ANCHOR_PATTERN } from './constants';
 
 export class PatternUtils {
@@ -25,7 +28,7 @@ export class PatternUtils {
     return compiled;
   }
 
-  normalizeParamPatternSource(patternSrc: string): string {
+  normalizeParamPatternSource(patternSrc: string): Result<string, RouterErrData> {
     let normalized = patternSrc.trim();
 
     if (!normalized) {
@@ -54,7 +57,10 @@ export class PatternUtils {
       const msg = `[Router] Parameter regex '${patternSrc}' contained anchors which were stripped.`;
 
       if (policy === 'error') {
-        throw new Error(msg);
+        return err<RouterErrData>({
+          kind: 'regex-anchor',
+          message: msg,
+        });
       }
 
       if (policy === 'warn') {

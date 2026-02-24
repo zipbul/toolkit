@@ -372,43 +372,16 @@ export class Router<T = unknown> {
       }
     }
 
-    try {
-      this.builder.add(method, segments, value);
-    } catch (e) {
-      const message = e instanceof Error ? e.message : String(e);
+    const addResult = this.builder.add(method, segments, value);
 
+    if (isErr(addResult)) {
       return err<RouterErrData>({
-        kind: classifyBuilderError(message),
-        message,
+        ...addResult.data,
         path,
         method,
       });
     }
   }
-}
-
-function classifyBuilderError(message: string): RouterErrKind {
-  if (message.includes('already exists for')) {
-    return 'route-duplicate';
-  }
-
-  if (message.includes('Conflict:')) {
-    return 'route-conflict';
-  }
-
-  if (message.includes('Duplicate parameter name')) {
-    return 'param-duplicate';
-  }
-
-  if (message.includes('strict uniqueness')) {
-    return 'param-strict';
-  }
-
-  if (message.includes('Unsafe route regex')) {
-    return 'regex-unsafe';
-  }
-
-  return 'route-parse';
 }
 
 function classifyProcessorError(message: string): RouterErrKind {
