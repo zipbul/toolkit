@@ -1,13 +1,13 @@
-import { Logger } from '@bunner/logger';
-
+import type { Result } from '@zipbul/result';
+import type { RouterErrData } from '../types';
 import type { BuilderConfig } from './types';
 
+import { err } from '@zipbul/result';
 import { START_ANCHOR_PATTERN, END_ANCHOR_PATTERN } from './constants';
 
 export class PatternUtils {
   private readonly compiledPatternCache = new Map<string, RegExp>();
   private readonly config: BuilderConfig;
-  private readonly logger = new Logger(PatternUtils.name);
 
   constructor(config: BuilderConfig) {
     this.config = config;
@@ -28,7 +28,7 @@ export class PatternUtils {
     return compiled;
   }
 
-  normalizeParamPatternSource(patternSrc: string): string {
+  normalizeParamPatternSource(patternSrc: string): Result<string, RouterErrData> {
     let normalized = patternSrc.trim();
 
     if (!normalized) {
@@ -57,11 +57,16 @@ export class PatternUtils {
       const msg = `[Router] Parameter regex '${patternSrc}' contained anchors which were stripped.`;
 
       if (policy === 'error') {
-        throw new Error(msg);
+        return err<RouterErrData>({
+          kind: 'regex-anchor',
+          message: msg,
+          segment: patternSrc,
+          suggestion: `Remove anchor characters ('^', '$') from parameter regex — the router wraps patterns automatically`,
+        });
       }
 
       if (policy === 'warn') {
-        this.logger.warn(msg);
+        console.warn(msg);
       }
     }
 

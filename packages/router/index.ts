@@ -1,6 +1,15 @@
-export * from './types';
-export * from './schema';
-export * from './builder';
-export * from './matcher';
-export * from './processor';
-export * from './router';
+// ── Public API ──
+
+export { Router } from './src/router';
+
+export type {
+  RouterOptions,
+  EncodedSlashBehavior,
+  OptionalParamBehavior,
+  RegexSafetyOptions,
+  RouteParams,
+  RouterErrKind,
+  RouterErrData,
+  MatchMeta,
+  MatchOutput,
+} from './src/types';

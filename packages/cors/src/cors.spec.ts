@@ -1,6 +1,6 @@
 import { describe, expect, it, mock } from 'bun:test';
 
-import { HttpHeader, HttpMethod, HttpStatus } from '@zipbul/shared';
+import { HttpHeader, HttpStatus } from '@zipbul/shared';
 import { isErr } from '@zipbul/result';
 import type { Err } from '@zipbul/result';
 

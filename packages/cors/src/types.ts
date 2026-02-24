@@ -1,15 +1,6 @@
 import type { CorsContinueResult, CorsPreflightResult, CorsRejectResult } from './interfaces';
 
 /**
- * HTTP method token accepted by the `methods` option.
- * Provides autocomplete for standard RFC 9110 / RFC 5789 methods
- * while allowing any RFC 9110 §5.6.2 token (e.g. `'PROPFIND'`, `'PURGE'`).
- */
-export type CorsMethod =
-  | 'GET' | 'HEAD' | 'POST' | 'PUT' | 'PATCH' | 'DELETE' | 'OPTIONS'
-  | (string & {});
-
-/**
  * Return value of an origin function.
  * `true` to reflect, a string to override, or `false` to reject.
  */

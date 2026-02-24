@@ -1,4 +1,4 @@
-import { HttpHeader, HttpMethod } from '@zipbul/shared';
+import { HttpHeader } from '@zipbul/shared';
 import { err, isErr } from '@zipbul/result';
 import type { Err, Result } from '@zipbul/result';
 
@@ -69,7 +69,7 @@ export class Cors {
       headers.set(HttpHeader.AccessControlAllowCredentials, 'true');
     }
 
-    if (request.method !== HttpMethod.Options) {
+    if (request.method !== 'OPTIONS') {
       if (this.options.exposedHeaders !== null && this.options.exposedHeaders.length > 0) {
         const exposeHeadersValue = this.serializeExposeHeaders(this.options.exposedHeaders);
 

@@ -3,5 +3,20 @@
   "private": true,
   "version": "0.0.1",
   "module": "index.ts",
-  "type": "module"
+  "type": "module",
+  "exports": {
+    ".": "./index.ts"
+  },
+  "scripts": {
+    "test": "bun test",
+    "bench": "bun run bench/router.bench.ts"
+  },
+  "dependencies": {
+    "@zipbul/result": "workspace:*",
+    "@zipbul/shared": "workspace:*"
+  },
+  "devDependencies": {
+    "@types/bun": "latest",
+    "mitata": "^1.0.34"
+  }
 }

@@ -90,7 +90,7 @@ async function handleRequest(request: Request): Promise<Response> {
 ```typescript
 interface CorsOptions {
   origin?: OriginOptions;              // 기본값: '*'
-  methods?: CorsMethod[];              // 기본값: GET, HEAD, PUT, PATCH, POST, DELETE
+  methods?: HttpMethod[];              // 기본값: GET, HEAD, PUT, PATCH, POST, DELETE
   allowedHeaders?: string[];           // 기본값: 요청의 ACRH 반영
   exposedHeaders?: string[];           // 기본값: 없음
   credentials?: boolean;               // 기본값: false
@@ -118,7 +118,7 @@ interface CorsOptions {
 
 ### `methods`
 
-프리플라이트에서 허용할 HTTP 메서드 목록. `CorsMethod[]`를 받으며, 표준 메서드는 자동 완성되고 RFC 9110 §5.6.2 토큰(예: `'PROPFIND'`)도 허용합니다.
+프리플라이트에서 허용할 HTTP 메서드 목록. `HttpMethod[]`를 받으며, 표준 메서드는 자동 완성되고 RFC 9110 §5.6.2 토큰(예: `'PROPFIND'`)도 허용합니다.
 
 ```typescript
 Cors.create({ methods: ['GET', 'POST', 'DELETE'] });
