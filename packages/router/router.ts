@@ -1,5 +1,5 @@
 import type { HttpMethod } from '@zipbul/shared';
-import type { DynamicMatchResult, Handler, MatchResultMeta, RegexSafetyOptions, RouterOptions } from './types';
+import type { DynamicMatchResult, Handler, MatchMeta, RegexSafetyOptions, RouterOptions } from './types';
 
 import { Builder, OptionalParamDefaults, type BuilderConfig } from './builder';
 import { RouterCache } from './cache';
@@ -161,7 +161,7 @@ export class Router<R = unknown> {
         const handler = staticHandlers[METHOD_OFFSET[method]];
 
         if (handler) {
-          return handler({}, { source: 'static-fast' });
+          return handler({}, { source: 'static' });
         }
       }
     }
@@ -212,7 +212,7 @@ export class Router<R = unknown> {
         const handler = staticHandlers[METHOD_OFFSET[method]];
 
         if (handler) {
-          return handler({}, { source: 'static-fast' });
+          return handler({}, { source: 'static' });
         }
       }
     }
@@ -244,7 +244,7 @@ export class Router<R = unknown> {
         return null;
       }
 
-      const meta: MatchResultMeta = { source: 'dynamic' };
+      const meta: MatchMeta = { source: 'dynamic' };
 
       // Update Cache
       if (this.cache) {
