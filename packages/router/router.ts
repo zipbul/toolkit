@@ -24,7 +24,8 @@ export class Router<T = unknown> {
   private readonly builder: Builder<T>;
   private readonly methodRegistry = new MethodRegistry();
   private matcher: Matcher | null = null;
-  private cache: RouterCache<DynamicMatchResult> | undefined;
+  private cacheByMethod: Map<number, RouterCache<DynamicMatchResult>> | undefined;
+  private cacheMaxSize: number = 1000;
   private sealed = false;
 
   private staticMap: Map<string, T[]> = new Map();
@@ -44,7 +45,8 @@ export class Router<T = unknown> {
     this.processor = new Processor(procConfig);
 
     if (options.enableCache === true) {
-      this.cache = new RouterCache(options.cacheSize);
+      this.cacheByMethod = new Map();
+      this.cacheMaxSize = options.cacheSize ?? 1000;
     }
 
     const regexSafety: RegexSafetyOptions = {
@@ -207,22 +209,29 @@ export class Router<T = unknown> {
     }
 
     // Cache lookup
-    if (this.cache) {
-      const cacheKey = `${method}:${searchPath}`;
-      const cached = this.cache.get(cacheKey);
+    if (this.cacheByMethod) {
+      const methodCode = METHOD_OFFSET[method];
 
-      if (cached !== undefined) {
-        if (cached === null) {
-          return null;
+      if (methodCode !== undefined) {
+        const methodCache = this.cacheByMethod.get(methodCode);
+
+        if (methodCache) {
+          const cached = methodCache.get(searchPath);
+
+          if (cached !== undefined) {
+            if (cached === null) {
+              return null;
+            }
+
+            const value = this.builder.handlers[cached.handlerIndex];
+
+            if (value === undefined) {
+              return null;
+            }
+
+            return { value, params: { ...cached.params }, meta: { source: 'cache' } };
+          }
         }
-
-        const value = this.builder.handlers[cached.handlerIndex];
-
-        if (value === undefined) {
-          return null;
-        }
-
-        return { value, params: { ...cached.params }, meta: { source: 'cache' } };
       }
     }
 
@@ -297,23 +306,41 @@ export class Router<T = unknown> {
 
       const meta: MatchMeta = { source: 'dynamic' };
 
-      if (this.cache) {
-        const cacheKey = `${method}:${searchPath}`;
+      if (this.cacheByMethod) {
+        const methodCode = METHOD_OFFSET[method];
 
-        this.cache.set(cacheKey, {
-          handlerIndex,
-          params: { ...params },
-        });
+        if (methodCode !== undefined) {
+          let mc = this.cacheByMethod.get(methodCode);
+
+          if (!mc) {
+            mc = new RouterCache(this.cacheMaxSize);
+            this.cacheByMethod.set(methodCode, mc);
+          }
+
+          mc.set(searchPath, {
+            handlerIndex,
+            params: { ...params },
+          });
+        }
       }
 
       return { value, params, meta };
     }
 
     // Cache miss
-    if (this.cache) {
-      const cacheKey = `${method}:${searchPath}`;
+    if (this.cacheByMethod) {
+      const methodCode = METHOD_OFFSET[method];
 
-      this.cache.set(cacheKey, null);
+      if (methodCode !== undefined) {
+        let mc = this.cacheByMethod.get(methodCode);
+
+        if (!mc) {
+          mc = new RouterCache(this.cacheMaxSize);
+          this.cacheByMethod.set(methodCode, mc);
+        }
+
+        mc.set(searchPath, null);
+      }
     }
 
     return null;

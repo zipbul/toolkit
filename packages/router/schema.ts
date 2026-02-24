@@ -60,6 +60,8 @@ export interface BinaryRouterLayout {
 
   readonly stringOffsets: Uint32Array;
 
+  readonly decodedStrings: readonly string[];
+
   readonly patterns: ReadonlyArray<SerializedPattern>;
 
   readonly rootIndex: number;

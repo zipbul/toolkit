@@ -6,8 +6,14 @@ export class ProcessorContext {
   public segmentDecodeHints?: Uint8Array;
   public readonly config: ProcessorConfig;
 
-  constructor(path: string, config: ProcessorConfig) {
-    this.path = path;
+  constructor(config: ProcessorConfig) {
+    this.path = '';
     this.config = config;
+  }
+
+  reset(path: string): void {
+    this.path = path;
+    this.segments = [];
+    this.segmentDecodeHints = undefined;
   }
 }

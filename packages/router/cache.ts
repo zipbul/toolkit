@@ -1,36 +1,93 @@
+interface CacheEntry<T> {
+  key: string;
+  value: T | null;
+  used: boolean;
+}
+
 export class RouterCache<T> {
-  private map: Map<string, T | null>;
+  private readonly entries: Array<CacheEntry<T> | undefined>;
+  private readonly index: Map<string, number>;
   private readonly maxSize: number;
+  private hand: number = 0;
+  private count: number = 0;
 
   constructor(maxSize: number = 1000) {
     this.maxSize = maxSize;
-    this.map = new Map();
+    this.entries = new Array(maxSize);
+    this.index = new Map();
   }
 
   get(key: string): T | null | undefined {
-    const value = this.map.get(key);
+    const idx = this.index.get(key);
 
-    if (value !== undefined) {
-      this.map.delete(key);
-      this.map.set(key, value);
+    if (idx === undefined) {
+      return undefined;
     }
 
-    return value;
+    const entry = this.entries[idx];
+
+    if (entry === undefined) {
+      return undefined;
+    }
+
+    entry.used = true;
+
+    return entry.value;
   }
 
   set(key: string, value: T | null): void {
-    if (this.map.size >= this.maxSize) {
-      const first = this.map.keys().next().value;
+    const existing = this.index.get(key);
 
-      if (first !== undefined) {
-        this.map.delete(first);
+    if (existing !== undefined) {
+      const entry = this.entries[existing];
+
+      if (entry !== undefined) {
+        entry.value = value;
+        entry.used = true;
       }
+
+      return;
     }
 
-    this.map.set(key, value);
+    let slot: number;
+
+    if (this.count < this.maxSize) {
+      slot = this.count++;
+    } else {
+      // Clock-sweep eviction
+      slot = this.evict();
+    }
+
+    this.entries[slot] = { key, value, used: true };
+    this.index.set(key, slot);
   }
 
   clear(): void {
-    this.map.clear();
+    this.entries.fill(undefined);
+    this.index.clear();
+    this.hand = 0;
+    this.count = 0;
+  }
+
+  private evict(): number {
+    while (true) {
+      const entry = this.entries[this.hand];
+
+      if (entry !== undefined) {
+        if (!entry.used) {
+          this.index.delete(entry.key);
+
+          const slot = this.hand;
+
+          this.hand = (this.hand + 1) % this.maxSize;
+
+          return slot;
+        }
+
+        entry.used = false;
+      }
+
+      this.hand = (this.hand + 1) % this.maxSize;
+    }
   }
 }

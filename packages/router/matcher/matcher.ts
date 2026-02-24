@@ -45,8 +45,6 @@ export class Matcher {
   private readonly paramChildrenBuffer: Uint32Array;
   private readonly paramsBuffer: Uint32Array;
   private readonly methodsBuffer: Uint32Array;
-  private readonly stringTable: Uint8Array;
-  private readonly stringOffsets: Uint32Array;
   private readonly rootIndex: number;
 
   private readonly patternTesters: ReadonlyArray<PatternTesterFn | undefined>;
@@ -56,18 +54,20 @@ export class Matcher {
   private readonly stack: Int32Array;
   private paramNames: string[] = new Array<string>(MAX_PARAMS).fill('');
   private paramValues: string[] = new Array<string>(MAX_PARAMS).fill('');
-  private paramCache: Array<string | undefined> = new Array<string | undefined>(MAX_STACK_DEPTH).fill(undefined);
+  private paramCache: string[] = new Array<string>(MAX_STACK_DEPTH).fill('');
+  private paramCacheGen: number = 0;
+  private readonly paramCacheGens: Uint32Array = new Uint32Array(MAX_STACK_DEPTH);
   private paramCount = 0;
 
-  private readonly decoder = new TextDecoder();
-  private readonly decodedStrings: string[];
+  private readonly strings: readonly string[];
 
   private methodCode: number = 0;
   private segments: string[] = [];
   private segmentHints: Uint8Array | undefined;
 
   private normalizedPath: string = '';
-  private suffixOffsets: Uint32Array | null = null;
+  private readonly suffixOffsets: Uint32Array = new Uint32Array(MAX_STACK_DEPTH + 1);
+  private suffixOffsetsDirty: boolean = true;
 
   private resultHandlerIndex: number = -1;
   private resultParams: RouteParams | null = null;
@@ -79,14 +79,12 @@ export class Matcher {
     this.paramChildrenBuffer = layout.paramChildrenBuffer;
     this.paramsBuffer = layout.paramsBuffer;
     this.methodsBuffer = layout.methodsBuffer;
-    this.stringTable = layout.stringTable;
-    this.stringOffsets = layout.stringOffsets;
     this.rootIndex = layout.rootIndex;
     this.patternTesters = globalConfig.patternTesters;
     this.encodedSlashBehavior = globalConfig.encodedSlashBehavior;
     this.failFastOnBadEncoding = globalConfig.failFastOnBadEncoding;
     this.stack = new Int32Array(MAX_STACK_DEPTH * FRAME_SIZE);
-    this.decodedStrings = [];
+    this.strings = layout.decodedStrings;
   }
 
   public match(
@@ -107,12 +105,9 @@ export class Matcher {
     this.segments = segments;
     this.normalizedPath = normalizedPath;
     this.segmentHints = segmentHints;
-    this.suffixOffsets = null;
+    this.suffixOffsetsDirty = true;
     this.paramCount = 0;
-
-    for (let i = 0; i < segments.length; i++) {
-      this.paramCache[i] = undefined;
-    }
+    this.paramCacheGen++;
 
     const walkResult = this.walk(decodeParams);
 
@@ -168,25 +163,13 @@ export class Matcher {
   }
 
   private getString(id: number): string {
-    const cached = this.decodedStrings[id];
-
-    if (cached !== undefined) {
-      return cached;
-    }
-
-    const start = this.stringOffsets[id];
-    const end = this.stringOffsets[id + 1];
-    const val = this.decoder.decode(this.stringTable.subarray(start, end));
-
-    this.decodedStrings[id] = val;
-
-    return val;
+    return this.strings[id]!;
   }
 
   private getSuffixValue(segIdx: number): string {
-    if (!this.suffixOffsets) {
+    if (this.suffixOffsetsDirty) {
       const segments = this.segments;
-      const offsets = new Uint32Array(segments.length + 1);
+      const offsets = this.suffixOffsets;
       let ptr = 1;
 
       for (let i = 0; i < segments.length; i++) {
@@ -203,20 +186,16 @@ export class Matcher {
 
       offsets[segments.length] = ptr;
 
-      this.suffixOffsets = offsets;
+      this.suffixOffsetsDirty = false;
     }
 
-    const offset = this.suffixOffsets[segIdx];
-
-    if (offset === undefined) {
-      return this.normalizedPath;
-    }
+    const offset = this.suffixOffsets[segIdx]!;
 
     return this.normalizedPath.substring(offset);
   }
 
   private decodeAndCache(index: number, decodeParams: boolean): Result<string | undefined, RouterErrData> {
-    if (this.paramCache[index] !== undefined) {
+    if (this.paramCacheGens[index] === this.paramCacheGen) {
       return this.paramCache[index];
     }
 
@@ -228,6 +207,7 @@ export class Matcher {
 
     if (!decodeParams) {
       this.paramCache[index] = raw;
+      this.paramCacheGens[index] = this.paramCacheGen;
 
       return raw;
     }
@@ -236,6 +216,7 @@ export class Matcher {
 
     if (!hints || hints[index] === 0) {
       this.paramCache[index] = raw;
+      this.paramCacheGens[index] = this.paramCacheGen;
 
       return raw;
     }
@@ -247,6 +228,7 @@ export class Matcher {
     }
 
     this.paramCache[index] = decoded;
+    this.paramCacheGens[index] = this.paramCacheGen;
 
     return decoded;
   }
@@ -264,20 +246,20 @@ export class Matcher {
 
     while (sp > 0) {
       const framePtr = sp - FRAME_SIZE;
-      const stage = this.stack[framePtr + FRAME_OFFSET_STAGE] ?? STAGE_ENTER;
-      const nodeIdx = this.stack[framePtr + FRAME_OFFSET_NODE] ?? 0;
-      const segIdx = this.stack[framePtr + FRAME_OFFSET_SEGMENT] ?? 0;
+      const stage = this.stack[framePtr + FRAME_OFFSET_STAGE]!;
+      const nodeIdx = this.stack[framePtr + FRAME_OFFSET_NODE]!;
+      const segIdx = this.stack[framePtr + FRAME_OFFSET_SEGMENT]!;
 
       if (stage === STAGE_ENTER) {
         if (segIdx === this.segments.length) {
           const base = nodeIdx * NODE_STRIDE;
-          const methodsPtr = this.nodeBuffer[base + NODE_OFFSET_METHODS_PTR] ?? 0;
+          const methodsPtr = this.nodeBuffer[base + NODE_OFFSET_METHODS_PTR]!;
 
           if (methodsPtr > 0) {
-            const mask = this.nodeBuffer[base + NODE_OFFSET_METHOD_MASK] ?? 0;
+            const mask = this.nodeBuffer[base + NODE_OFFSET_METHOD_MASK]!;
 
-            if (this.methodCode < 31 && mask & (1 << this.methodCode)) {
-              const meta = this.nodeBuffer[base + NODE_OFFSET_META] ?? 0;
+            if (mask & (1 << this.methodCode)) {
+              const meta = this.nodeBuffer[base + NODE_OFFSET_META]!;
               const methodCount = (meta & NODE_MASK_METHOD_COUNT) >>> NODE_SHIFT_METHOD_COUNT;
               let ptr = methodsPtr;
 
@@ -307,7 +289,7 @@ export class Matcher {
         continue;
       } else if (stage === STAGE_STATIC) {
         const base = nodeIdx * NODE_STRIDE;
-        const stateIter = this.stack[framePtr + FRAME_OFFSET_ITERATOR] ?? 0;
+        const stateIter = this.stack[framePtr + FRAME_OFFSET_ITERATOR]!;
 
         if (stateIter > 0) {
           this.stack[framePtr + FRAME_OFFSET_STAGE] = STAGE_PARAM;
@@ -318,10 +300,10 @@ export class Matcher {
 
         this.stack[framePtr + FRAME_OFFSET_ITERATOR] = 1;
 
-        const staticCount = this.nodeBuffer[base + NODE_OFFSET_STATIC_CHILD_COUNT] ?? 0;
+        const staticCount = this.nodeBuffer[base + NODE_OFFSET_STATIC_CHILD_COUNT]!;
 
         if (staticCount > 0) {
-          const staticPtr = this.nodeBuffer[base + NODE_OFFSET_STATIC_CHILD_PTR] ?? 0;
+          const staticPtr = this.nodeBuffer[base + NODE_OFFSET_STATIC_CHILD_PTR]!;
           const segment = this.segments[segIdx];
 
           if (segment === undefined) {
@@ -352,9 +334,9 @@ export class Matcher {
         continue;
       } else if (stage === STAGE_PARAM) {
         const base = nodeIdx * NODE_STRIDE;
-        const meta = this.nodeBuffer[base + NODE_OFFSET_META] ?? 0;
+        const meta = this.nodeBuffer[base + NODE_OFFSET_META]!;
         const paramCount = (meta & NODE_MASK_PARAM_COUNT) >>> NODE_SHIFT_PARAM_COUNT;
-        const iter = this.stack[framePtr + FRAME_OFFSET_ITERATOR] ?? 0;
+        const iter = this.stack[framePtr + FRAME_OFFSET_ITERATOR]!;
 
         if (iter >= paramCount) {
           this.stack[framePtr + FRAME_OFFSET_STAGE] = STAGE_WILDCARD;
@@ -364,7 +346,7 @@ export class Matcher {
 
         this.stack[framePtr + FRAME_OFFSET_ITERATOR] = iter + 1;
 
-        const paramPtr = this.nodeBuffer[base + NODE_OFFSET_PARAM_CHILD_PTR] ?? 0;
+        const paramPtr = this.nodeBuffer[base + NODE_OFFSET_PARAM_CHILD_PTR]!;
         const childIdx = this.paramChildrenBuffer[paramPtr + iter];
 
         if (childIdx === undefined) {
@@ -385,7 +367,7 @@ export class Matcher {
           continue;
         }
 
-        const patternID = this.paramsBuffer[pBase + 1] ?? 0xffffffff;
+        const patternID = this.paramsBuffer[pBase + 1]!;
         const name = this.getString(nameID);
         const valueResult = this.decodeAndCache(segIdx, decodeParams);
 
@@ -432,7 +414,7 @@ export class Matcher {
         continue;
       } else if (stage === STAGE_WILDCARD) {
         const base = nodeIdx * NODE_STRIDE;
-        const wildcardPtr = this.nodeBuffer[base + NODE_OFFSET_WILDCARD_CHILD_PTR] ?? 0;
+        const wildcardPtr = this.nodeBuffer[base + NODE_OFFSET_WILDCARD_CHILD_PTR]!;
 
         if (wildcardPtr !== 0) {
           const childBase = wildcardPtr * NODE_STRIDE;
@@ -442,7 +424,7 @@ export class Matcher {
             sp -= FRAME_SIZE;
 
             if (sp > 0) {
-              this.paramCount = this.stack[sp - FRAME_SIZE + FRAME_OFFSET_PARAM_BASE] ?? 0;
+              this.paramCount = this.stack[sp - FRAME_SIZE + FRAME_OFFSET_PARAM_BASE]!;
             }
 
             continue;
@@ -456,20 +438,20 @@ export class Matcher {
 
           this.paramCount++;
 
-          const childMethodsPtr = this.nodeBuffer[childBase + NODE_OFFSET_METHODS_PTR] ?? 0;
+          const childMethodsPtr = this.nodeBuffer[childBase + NODE_OFFSET_METHODS_PTR]!;
 
           if (childMethodsPtr > 0) {
-            const mask = this.nodeBuffer[childBase + NODE_OFFSET_METHOD_MASK] ?? 0;
+            const mask = this.nodeBuffer[childBase + NODE_OFFSET_METHOD_MASK]!;
 
-            if (this.methodCode < 31 && mask & (1 << this.methodCode)) {
-              const meta = this.nodeBuffer[childBase + NODE_OFFSET_META] ?? 0;
+            if (mask & (1 << this.methodCode)) {
+              const meta = this.nodeBuffer[childBase + NODE_OFFSET_META]!;
               const origin = (meta & NODE_MASK_WILDCARD_ORIGIN) >>> NODE_SHIFT_WILDCARD_ORIGIN;
 
               if (origin === 1 && value.length === 0) {
                 sp -= FRAME_SIZE;
 
                 if (sp > 0) {
-                  this.paramCount = this.stack[sp - FRAME_SIZE + FRAME_OFFSET_PARAM_BASE] ?? 0;
+                  this.paramCount = this.stack[sp - FRAME_SIZE + FRAME_OFFSET_PARAM_BASE]!;
                 }
 
                 continue;
@@ -498,7 +480,7 @@ export class Matcher {
         sp -= FRAME_SIZE;
 
         if (sp > 0) {
-          this.paramCount = this.stack[sp - FRAME_SIZE + FRAME_OFFSET_PARAM_BASE] ?? 0;
+          this.paramCount = this.stack[sp - FRAME_SIZE + FRAME_OFFSET_PARAM_BASE]!;
         }
       }
     }
@@ -507,20 +489,32 @@ export class Matcher {
   }
 
   private findStaticChild(staticPtr: number, staticCount: number, segment: string): number {
-    if (staticCount < 8) {
+    if (staticCount === 1) {
+      const sID = this.staticChildrenBuffer[staticPtr]!;
+
+      return this.getString(sID) === segment ? this.staticChildrenBuffer[staticPtr + 1]! : -1;
+    }
+
+    if (staticCount === 2) {
+      const sID0 = this.staticChildrenBuffer[staticPtr]!;
+
+      if (this.getString(sID0) === segment) {
+        return this.staticChildrenBuffer[staticPtr + 1]!;
+      }
+
+      const sID1 = this.staticChildrenBuffer[staticPtr + 2]!;
+
+      return this.getString(sID1) === segment ? this.staticChildrenBuffer[staticPtr + 3]! : -1;
+    }
+
+    if (staticCount < 6) {
       let ptr = staticPtr;
 
       for (let i = 0; i < staticCount; i++) {
-        const sID = this.staticChildrenBuffer[ptr];
-
-        if (sID === undefined) {
-          ptr += 2;
-
-          continue;
-        }
+        const sID = this.staticChildrenBuffer[ptr]!;
 
         if (this.getString(sID) === segment) {
-          return this.staticChildrenBuffer[ptr + 1] ?? -1;
+          return this.staticChildrenBuffer[ptr + 1]!;
         }
 
         ptr += 2;
@@ -532,16 +526,11 @@ export class Matcher {
       while (low <= high) {
         const mid = (low + high) >>> 1;
         const ptr = staticPtr + (mid << 1);
-        const sID = this.staticChildrenBuffer[ptr];
-
-        if (sID === undefined) {
-          return -1;
-        }
-
+        const sID = this.staticChildrenBuffer[ptr]!;
         const midVal = this.getString(sID);
 
         if (midVal === segment) {
-          return this.staticChildrenBuffer[ptr + 1] ?? -1;
+          return this.staticChildrenBuffer[ptr + 1]!;
         }
 
         if (midVal < segment) {

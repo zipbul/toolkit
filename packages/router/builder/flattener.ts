@@ -253,6 +253,7 @@ export class Flattener {
       methodsBuffer: Uint32Array.from(methodsList),
       stringTable,
       stringOffsets: Uint32Array.from(offsets),
+      decodedStrings: stringList,
       patterns,
       rootIndex: 0,
     };
