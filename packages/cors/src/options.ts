@@ -8,8 +8,14 @@ import type { CorsError, CorsOptions } from './interfaces';
 import type { ResolvedCorsOptions } from './types';
 
 /**
- * Resolves partial {@link CorsOptions} into a fully populated
- * {@link ResolvedCorsOptions} by applying defaults via nullish coalescing.
+ * Takes partial {@link CorsOptions} and fills in every missing field with a
+ * sensible default, returning a fully populated {@link ResolvedCorsOptions}.
+ *
+ * You do not need to call this manually — {@link Cors.create} handles it for
+ * you automatically.
+ *
+ * @param options - Optional CORS configuration. Pass nothing to use all defaults.
+ * @returns A complete options object ready for validation and request handling.
  */
 export function resolveCorsOptions(options?: CorsOptions): ResolvedCorsOptions {
   return {
@@ -26,29 +32,26 @@ export function resolveCorsOptions(options?: CorsOptions): ResolvedCorsOptions {
   };
 }
 
-/** Returns true when a string is empty or contains only whitespace (RFC 9110 §5.6.2 token). */
 function isBlank(value: string): boolean {
   return value.trim().length === 0;
 }
 
 /**
- * Validates resolved CORS options against rules derived from the Fetch Standard and RFC 9110.
+ * Validates a fully resolved {@link ResolvedCorsOptions} object and returns
+ * the first problem it finds, or `undefined` when everything looks good.
  *
- * - V0a: `origin` must not be an empty/blank string (RFC 6454).
- * - V_regex: `origin` RegExp must be safe (no exponential backtracking / ReDoS).
- * - V0b: `origin` array must not be empty, and must not contain empty/blank string entries (RFC 6454).
- *          Array RegExp entries are also checked for ReDoS safety.
- * - V0c: `methods` must not be empty, and must not contain empty/blank string entries (RFC 9110 §5.6.2).
- * - V0d: `allowedHeaders` must not contain empty/blank string entries (RFC 9110 §5.6.2).
- * - V0e: `exposedHeaders` must not contain empty/blank string entries (RFC 9110 §5.6.2).
- * - V1:  `credentials:true` with wildcard origin is forbidden (Fetch Standard §3.3.5).
- * - V2:  `maxAge` must be a non-negative integer when set (RFC 9111 §1.2.1 delta-seconds).
- * - V3:  `optionsSuccessStatus` must be a 2xx integer (Fetch Standard).
+ * Covers origins (blank strings, unsafe RegExp, empty arrays), methods,
+ * allowed/exposed headers, the `credentials` + wildcard combination,
+ * `maxAge`, and `optionsSuccessStatus`.
  *
- * @returns `undefined` (void) if valid, or `Err<CorsError>` on the first violated rule.
+ * You do not need to call this manually — {@link Cors.create} handles it
+ * for you automatically.
+ *
+ * @param resolved - The fully resolved options object to validate.
+ * @returns `undefined` when valid, or `Err<CorsError>` describing the first
+ *   rule violation found.
  */
 export function validateCorsOptions(resolved: ResolvedCorsOptions): Result<void, CorsError> {
-  // V0a — origin: empty/blank string
   if (typeof resolved.origin === 'string' && resolved.origin !== '*' && isBlank(resolved.origin)) {
     return err<CorsError>({
       reason: CorsErrorReason.InvalidOrigin,
@@ -56,7 +59,6 @@ export function validateCorsOptions(resolved: ResolvedCorsOptions): Result<void,
     });
   }
 
-  // V_regex — origin: single unsafe RegExp (ReDoS)
   if (resolved.origin instanceof RegExp && !safe(resolved.origin)) {
     return err<CorsError>({
       reason: CorsErrorReason.UnsafeRegExp,
@@ -64,7 +66,6 @@ export function validateCorsOptions(resolved: ResolvedCorsOptions): Result<void,
     });
   }
 
-  // V0b — origin: empty array or array containing empty/blank string entries
   if (Array.isArray(resolved.origin)) {
     if (resolved.origin.length === 0) {
       return err<CorsError>({
@@ -82,7 +83,6 @@ export function validateCorsOptions(resolved: ResolvedCorsOptions): Result<void,
       });
     }
 
-    // V_regex — origin array: unsafe RegExp entries (ReDoS)
     const hasUnsafeRegExp = resolved.origin.some(entry => entry instanceof RegExp && !safe(entry));
 
     if (hasUnsafeRegExp) {
@@ -93,7 +93,6 @@ export function validateCorsOptions(resolved: ResolvedCorsOptions): Result<void,
     }
   }
 
-  // V0c — methods: empty array or blank entries
   if (resolved.methods.length === 0) {
     return err<CorsError>({
       reason: CorsErrorReason.InvalidMethods,
@@ -108,7 +107,6 @@ export function validateCorsOptions(resolved: ResolvedCorsOptions): Result<void,
     });
   }
 
-  // V0d — allowedHeaders: blank entries (empty array is allowed — explicit "deny all" policy)
   if (resolved.allowedHeaders !== null && resolved.allowedHeaders.some(isBlank)) {
     return err<CorsError>({
       reason: CorsErrorReason.InvalidAllowedHeaders,
@@ -116,7 +114,6 @@ export function validateCorsOptions(resolved: ResolvedCorsOptions): Result<void,
     });
   }
 
-  // V0e — exposedHeaders: blank entries (empty array is allowed)
   if (resolved.exposedHeaders !== null && resolved.exposedHeaders.some(isBlank)) {
     return err<CorsError>({
       reason: CorsErrorReason.InvalidExposedHeaders,
@@ -124,7 +121,6 @@ export function validateCorsOptions(resolved: ResolvedCorsOptions): Result<void,
     });
   }
 
-  // V1 — credentials:true with wildcard origin
   if (resolved.credentials === true && resolved.origin === '*') {
     return err<CorsError>({
       reason: CorsErrorReason.CredentialsWithWildcardOrigin,
@@ -132,7 +128,6 @@ export function validateCorsOptions(resolved: ResolvedCorsOptions): Result<void,
     });
   }
 
-  // V2 — maxAge: non-negative integer
   if (resolved.maxAge !== null && (resolved.maxAge < 0 || !Number.isInteger(resolved.maxAge))) {
     return err<CorsError>({
       reason: CorsErrorReason.InvalidMaxAge,
@@ -140,7 +135,6 @@ export function validateCorsOptions(resolved: ResolvedCorsOptions): Result<void,
     });
   }
 
-  // V3 — optionsSuccessStatus: 2xx integer
   if (!Number.isInteger(resolved.optionsSuccessStatus) || resolved.optionsSuccessStatus < 200 || resolved.optionsSuccessStatus > 299) {
     return err<CorsError>({
       reason: CorsErrorReason.InvalidStatusCode,
