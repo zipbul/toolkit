@@ -1,5 +1,19 @@
 # @zipbul/cors
 
+## 0.0.6
+
+### Patch Changes
+
+- afb893b: fix(release): use bun publish to correctly resolve workspace:\* protocol
+
+  Previously `npx changeset publish` (npm publish) shipped `"workspace:*"` to npm
+  as-is, making the package uninstallable for consumers. Switched to `bun publish`
+  which natively resolves `workspace:*` to real version numbers at publish time.
+
+- Updated dependencies [afb893b]
+  - @zipbul/shared@0.0.5
+  - @zipbul/result@0.1.2
+
 ## 0.0.5
 
 ### Patch Changes
