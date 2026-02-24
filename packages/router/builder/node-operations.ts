@@ -1,7 +1,7 @@
 import type { Node } from './node';
+import type { NodePool } from './node-pool';
 
 import { NodeKind } from '../schema';
-import { acquireNode } from './node-pool';
 import { StaticChildMap } from './static-child-map';
 
 export function matchStaticParts(parts: readonly string[], segments: readonly string[], startIdx: number): number {
@@ -15,7 +15,7 @@ export function matchStaticParts(parts: readonly string[], segments: readonly st
   return matched;
 }
 
-export function splitStaticChain(node: Node, splitIndex: number): void {
+export function splitStaticChain(node: Node, splitIndex: number, pool: NodePool): void {
   const parts = node.segmentParts;
 
   if (parts === undefined || splitIndex <= 0 || splitIndex >= parts.length) {
@@ -30,7 +30,7 @@ export function splitStaticChain(node: Node, splitIndex: number): void {
     return;
   }
 
-  const suffixNode = acquireNode(NodeKind.Static, suffixParts.length > 1 ? suffixParts.join('/') : firstSuffix);
+  const suffixNode = pool.acquire(NodeKind.Static, suffixParts.length > 1 ? suffixParts.join('/') : firstSuffix);
 
   if (suffixParts.length > 1) {
     suffixNode.segmentParts = [...suffixParts];

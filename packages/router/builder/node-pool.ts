@@ -2,20 +2,22 @@ import type { NodeKind } from '../schema';
 
 import { Node } from './node';
 
-const NODE_POOL_STACK: Node[] = [];
+export class NodePool {
+  private readonly stack: Node[] = [];
 
-export function acquireNode(kind: NodeKind, segment: string): Node {
-  const node = NODE_POOL_STACK.pop();
+  acquire(kind: NodeKind, segment: string): Node {
+    const node = this.stack.pop();
 
-  if (node) {
-    node.resetState(kind, segment);
+    if (node) {
+      node.resetState(kind, segment);
 
-    return node;
+      return node;
+    }
+
+    return new Node(kind, segment);
   }
 
-  return new Node(kind, segment);
-}
-
-export function releaseNode(node: Node): void {
-  NODE_POOL_STACK.push(node);
+  release(node: Node): void {
+    this.stack.push(node);
+  }
 }

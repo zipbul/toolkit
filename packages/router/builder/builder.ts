@@ -9,7 +9,7 @@ import { NodeKind } from '../schema';
 import { Flattener } from './flattener';
 import { Node } from './node';
 import { matchStaticParts, splitStaticChain, sortParamChildren } from './node-operations';
-import { acquireNode } from './node-pool';
+import { NodePool } from './node-pool';
 import { PatternUtils } from './pattern-utils';
 import { assessRegexSafety } from './regex-safety';
 
@@ -19,10 +19,11 @@ export class Builder<T> {
   public readonly handlers: T[] = [];
   private readonly globalParamNames = new Set<string>();
   private readonly patternUtils: PatternUtils;
+  private readonly pool: NodePool = new NodePool();
 
   constructor(config: BuilderConfig) {
     this.config = config;
-    this.root = acquireNode(NodeKind.Static, '/');
+    this.root = this.pool.acquire(NodeKind.Static, '/');
     this.patternUtils = new PatternUtils(config);
   }
 
@@ -142,7 +143,7 @@ export class Builder<T> {
         return globalResult;
       }
 
-      node.wildcardChild = acquireNode(NodeKind.Wildcard, name);
+      node.wildcardChild = this.pool.acquire(NodeKind.Wildcard, name);
       node.wildcardChild.wildcardOrigin = 'star';
     }
 
@@ -293,7 +294,7 @@ export class Builder<T> {
         return globalResult;
       }
 
-      child = acquireNode(NodeKind.Param, name);
+      child = this.pool.acquire(NodeKind.Param, name);
 
       if (typeof patternSrc === 'string' && patternSrc.length > 0) {
         const regexResult = this.applyParamRegex(child, patternSrc);
@@ -348,7 +349,7 @@ export class Builder<T> {
         return globalResult;
       }
 
-      node.wildcardChild = acquireNode(NodeKind.Wildcard, name || '*');
+      node.wildcardChild = this.pool.acquire(NodeKind.Wildcard, name || '*');
       node.wildcardChild.wildcardOrigin = type;
     } else if (node.wildcardChild.wildcardOrigin !== type || node.wildcardChild.segment !== name) {
       const label = type === 'zero' ? `:${name}*` : `:${name}+`;
@@ -404,7 +405,7 @@ export class Builder<T> {
     }
 
     // New Static Node
-    const newNode = acquireNode(NodeKind.Static, segment);
+    const newNode = this.pool.acquire(NodeKind.Static, segment);
 
     node.staticChildren.set(segment, newNode);
 
@@ -429,7 +430,7 @@ export class Builder<T> {
     const matched = matchStaticParts(parts, segments, index);
 
     if (matched < parts.length) {
-      splitStaticChain(child, matched);
+      splitStaticChain(child, matched, this.pool);
     }
 
     if (matched > 1) {

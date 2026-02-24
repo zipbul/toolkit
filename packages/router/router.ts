@@ -21,12 +21,15 @@ import { METHOD_OFFSET } from './schema';
 export class Router<T = unknown> {
   private readonly options: RouterOptions;
   private readonly processor: Processor;
-  private readonly builder: Builder<T>;
+  private builder: Builder<T> | null;
   private readonly methodRegistry = new MethodRegistry();
   private matcher: Matcher | null = null;
   private cacheByMethod: Map<number, RouterCache<DynamicMatchResult>> | undefined;
   private cacheMaxSize: number = 1000;
   private sealed = false;
+  /** build() 후 builder에서 추출. trie는 GC 수거된다. */
+  private handlers: T[] = [];
+  private optionalParamDefaults: OptionalParamDefaults | undefined;
 
   private staticMap: Map<string, T[]> = new Map();
 
@@ -151,7 +154,11 @@ export class Router<T = unknown> {
 
     this.sealed = true;
 
-    const layout = this.builder.build();
+    const b = this.builder!;
+    this.handlers = b.handlers;
+    this.optionalParamDefaults = b.config.optionalParamDefaults;
+
+    const layout = b.build();
     const testers = layout.patterns.map(p => {
       if (!p.source) {
         return undefined;
@@ -167,6 +174,9 @@ export class Router<T = unknown> {
       encodedSlashBehavior: this.options.encodedSlashBehavior ?? 'decode',
       failFastOnBadEncoding: this.options.failFastOnBadEncoding ?? false,
     });
+
+    // trie 해제 — Matcher가 layout(binary)을 소유하므로 builder 참조 불필요
+    this.builder = null;
 
     return this;
   }
@@ -223,7 +233,7 @@ export class Router<T = unknown> {
               return null;
             }
 
-            const value = this.builder.handlers[cached.handlerIndex];
+            const value = this.handlers[cached.handlerIndex];
 
             if (value === undefined) {
               return null;
@@ -292,13 +302,13 @@ export class Router<T = unknown> {
     if (matchResult) {
       const handlerIndex = matcher.getHandlerIndex();
       const params = matcher.getParams();
-      const defaults = this.builder.config.optionalParamDefaults;
+      const defaults = this.optionalParamDefaults;
 
       if (defaults) {
         defaults.apply(handlerIndex, params);
       }
 
-      const value = this.builder.handlers[handlerIndex];
+      const value = this.handlers[handlerIndex];
 
       if (value === undefined) {
         return null;
@@ -396,7 +406,7 @@ export class Router<T = unknown> {
       }
     }
 
-    const addResult = this.builder.add(method, segments, value);
+    const addResult = this.builder!.add(method, segments, value);
 
     if (isErr(addResult)) {
       return err<RouterErrData>({
