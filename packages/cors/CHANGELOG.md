@@ -1,5 +1,14 @@
 # @zipbul/cors
 
+## 0.0.7
+
+### Patch Changes
+
+- f3f036f: fix(release): resolve workspace:\* protocol and restore GitHub release creation
+- Updated dependencies [f3f036f]
+  - @zipbul/result@0.1.3
+  - @zipbul/shared@0.0.6
+
 ## 0.0.6
 
 ### Patch Changes
