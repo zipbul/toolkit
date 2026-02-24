@@ -83,7 +83,7 @@ describe('err', () => {
 
     it('should return Err with empty stack when Error constructor throws', () => {
       // Arrange
-      errorSpy = spyOn(globalThis as never, 'Error').mockImplementation(() => {
+      errorSpy = spyOn(globalThis as unknown as { Error: () => Error }, 'Error').mockImplementation(() => {
         throw 'mocked';
       });
       // Act
@@ -95,7 +95,7 @@ describe('err', () => {
 
     it('should return Err with empty stack when Error().stack is undefined', () => {
       // Arrange
-      errorSpy = spyOn(globalThis as never, 'Error').mockImplementation(
+      errorSpy = spyOn(globalThis as unknown as { Error: () => Error }, 'Error').mockImplementation(
         () => ({ stack: undefined }) as unknown as Error,
       );
       // Act
