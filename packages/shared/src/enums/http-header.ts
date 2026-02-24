@@ -1,3 +1,10 @@
+/**
+ * Common HTTP header names used internally by `@zipbul/cors`.
+ *
+ * All values follow lowercase HTTP/2 canonical header casing.
+ * Because this is a `const enum`, every member is inlined at compile time
+ * with zero runtime overhead.
+ */
 export const enum HttpHeader {
   Origin = 'origin',
   Vary = 'vary',
