@@ -1,18 +1,20 @@
 /**
- * Resolves `workspace:*` protocol in package.json dependencies
- * to actual versions from the monorepo before `changeset publish`.
+ * Publish script for changesets/action.
  *
- * This is needed because `npm publish` (used by changeset) does not
- * understand bun's `workspace:*` protocol.
+ * 1. Resolves `workspace:*` → real versions in package.json (in-place)
+ * 2. Runs `npx changeset publish` with stdout inherited so
+ *    changesets/action can parse `New tag:` lines for GitHub releases.
  */
 
 import { readdir, readFile, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 
-const packagesDir = join(import.meta.dirname, '..', 'packages');
+const root = join(import.meta.dirname, '..');
+const packagesDir = join(root, 'packages');
 const entries = await readdir(packagesDir);
 
-// 1. Build name → version map from all packages
+// ── 1. Resolve workspace:* ─────────────────────────────────
+
 const versionMap = new Map<string, string>();
 
 for (const entry of entries) {
@@ -27,7 +29,6 @@ for (const entry of entries) {
   }
 }
 
-// 2. Replace workspace:* with real versions
 for (const entry of entries) {
   const pkgJsonPath = join(packagesDir, entry, 'package.json');
   let raw: string;
@@ -66,3 +67,15 @@ for (const entry of entries) {
     console.log(`Resolved workspace protocols in ${pkg.name}`);
   }
 }
+
+// ── 2. Run changeset publish ────────────────────────────────
+
+const proc = Bun.spawn(['npx', 'changeset', 'publish'], {
+  cwd: root,
+  stdout: 'inherit',
+  stderr: 'inherit',
+  env: process.env,
+});
+
+const exitCode = await proc.exited;
+process.exit(exitCode);
