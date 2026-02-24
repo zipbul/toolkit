@@ -46,7 +46,7 @@ export class Flattener {
 
       const staticEntries = Array.from(node.staticChildren.entries());
 
-      staticEntries.sort((a, b) => (a[0] < b[0] ? -1 : 1));
+      staticEntries.sort((a, b) => (a[0] < b[0] ? -1 : a[0] > b[0] ? 1 : 0));
 
       for (const [, child] of staticEntries) {
         queue.push(child);
@@ -162,7 +162,7 @@ export class Flattener {
 
         const staticEntries = Array.from(node.staticChildren.entries());
 
-        staticEntries.sort((a, b) => (a[0] < b[0] ? -1 : 1));
+        staticEntries.sort((a, b) => (a[0] < b[0] ? -1 : a[0] > b[0] ? 1 : 0));
 
         for (const [seg, child] of staticEntries) {
           staticChildrenList.push(getStringId(seg));

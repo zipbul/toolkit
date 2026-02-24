@@ -139,23 +139,6 @@ export class Router<R = MatchResult> {
    * Resolve a request. Executes the matched handler.
    */
   match(method: HttpMethod, path: string): R | null {
-    // 1. Pre-process
-    // We don't have full path normalization here yet (handled by builder for registration).
-    // But for matching, we need to pass the raw path to matcher?
-    // Matcher expects decoded logic or raw string? Matcher.walk takes (decodeParams).
-    // We need to handle `ignoreTrailingSlash` etc. which are partially handled by structure but also inputs.
-
-    // Simplification: Processor should arguably run on input path too?
-    // If we have `Processor.process(path) -> segments[]`, we could use that.
-    // usage: `matcher.match(segments)`?
-    // Current `matcher.match` takes `path: string` (and internally slices it?).
-    // No, `matcher.exec(method, segments)`.
-    // Wait, Router implementation of `match` previously called `matcher.exec`.
-
-    // See lines 122+ of original `Router`.
-    // It normalized path manually?
-    // "path" argument is assumed to be the URL pathname.
-
     let searchPath = path;
 
     // Fast-path: Trailing slash

@@ -5,7 +5,6 @@ export interface RouterOptions {
   collapseSlashes?: boolean;
   caseSensitive?: boolean;
   decodeParams?: boolean;
-  preserveEncodedSlashes?: boolean;
   encodedSlashBehavior?: EncodedSlashBehavior;
   blockTraversal?: boolean;
   enableCache?: boolean;
@@ -15,8 +14,6 @@ export interface RouterOptions {
   optionalParamBehavior?: OptionalParamBehavior;
   regexSafety?: RegexSafetyOptions;
   regexAnchorPolicy?: 'warn' | 'error' | 'silent';
-  paramOrderTuning?: ParamOrderingOptions;
-  pipelineStages?: Partial<PipelineStageConfig>;
   failFastOnBadEncoding?: boolean;
 }
 
@@ -33,37 +30,6 @@ export interface RegexSafetyOptions {
   validator?: (pattern: string) => void;
 }
 
-export interface ParamOrderingOptions {
-  baseThreshold?: number;
-  reseedProbability?: number;
-  snapshot?: ParamOrderSnapshot;
-  sampleRate?: number;
-}
-
-export interface ParamOrderSnapshot {
-  edgeHits: number[];
-  nodeOrders?: ParamNodeOrderSnapshot[];
-}
-
-export interface ParamNodeOrderSnapshot {
-  nodeIndex: number;
-  order: number[];
-}
-
-export interface PipelineStageConfig {
-  build: Record<BuildStageName, boolean>;
-  match: Record<MatchStageName, boolean>;
-}
-
-export type BuildStageName =
-  | 'compress-static'
-  | 'param-priority'
-  | 'wildcard-suffix'
-  | 'regex-safety'
-  | 'route-flags'
-  | 'snapshot-metadata';
-
-export type MatchStageName = 'static-fast' | 'cache' | 'dynamic';
 
 export type PatternTesterFn = (value: string) => boolean;
 
@@ -79,16 +45,9 @@ export interface NormalizedPathSegments {
   segmentOffsets?: Uint32Array;
   segmentDecodeHints?: Uint8Array;
   suffixSource?: string;
-  suffixSlices?: string[];
-  suffixPlan?: SuffixPlan;
   hadTrailingSlash?: boolean;
 }
 
-export interface SuffixPlan {
-  source: string;
-  offsets: Uint32Array;
-  slices?: string[];
-}
 
 export type RouteParams = Record<string, string | undefined>;
 
@@ -104,12 +63,4 @@ export interface DynamicMatchResult {
 
 export type Handler<R = MatchResult> = (params: RouteParams, meta: MatchResultMeta) => R;
 
-export interface RouterInstance<R> {
-  match(method: HttpMethod, path: string): R | null;
-}
 
-export interface RouterBuilder<R> {
-  add(method: HttpMethod | HttpMethod[] | '*', path: string, handler: Handler<R>): void;
-  addAll(entries: Array<[HttpMethod, string, Handler<R>]>): void;
-  build(): RouterInstance<R>;
-}

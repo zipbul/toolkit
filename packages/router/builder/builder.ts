@@ -1,5 +1,3 @@
-import { Logger } from '@bunner/logger';
-
 import type { HttpMethod } from '../../types';
 import type { BinaryRouterLayout } from '../schema';
 import type { BuilderConfig } from './types';
@@ -18,7 +16,6 @@ export class Builder<T> {
   public readonly handlers: T[] = [];
   private readonly globalParamNames = new Set<string>();
   private readonly patternUtils: PatternUtils;
-  private readonly logger = new Logger(Builder.name);
 
   constructor(config: BuilderConfig) {
     this.config = config;
@@ -469,7 +466,7 @@ export class Builder<T> {
       const msg = `Unsafe route regex '${patternSrc}' (${result.reason})`;
 
       if (safety.mode === 'warn') {
-        this.logger.warn(msg);
+        console.warn(msg);
       } else {
         throw new Error(msg);
       }
