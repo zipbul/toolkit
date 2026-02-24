@@ -66,5 +66,9 @@ for (const entry of entries) {
       console.error(`Failed to publish ${pkg.name}@${pkg.version} (exit ${pubExit})`);
       process.exit(pubExit);
     }
+  } else {
+    // changesets/action parses stdout for this exact pattern to detect
+    // published packages and create git tags + GitHub releases
+    console.log(`New tag: ${pkg.name}@${pkg.version}`);
   }
 }
