@@ -1,5 +1,7 @@
+import type { HttpMethod } from '@zipbul/shared';
+
 import type { CorsAction, CorsErrorReason, CorsRejectionReason } from './enums';
-import type { CorsMethod, OriginOptions } from './types';
+import type { OriginOptions } from './types';
 
 /**
  * Normal request or `preflightContinue` preflight.
@@ -60,7 +62,7 @@ export interface CorsOptions {
    * @example ['*']  // allow all methods
    * @example ['GET', 'PROPFIND']  // custom token
    */
-  methods?: CorsMethod[];
+  methods?: HttpMethod[];
 
   /**
    * Request headers allowed in preflight.

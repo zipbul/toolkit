@@ -1,4 +1,4 @@
-import type { HttpMethod, MatchResult } from '../types';
+import type { HttpMethod } from '@zipbul/shared';
 import type { DynamicMatchResult, Handler, MatchResultMeta, RegexSafetyOptions, RouterOptions } from './types';
 
 import { Builder, OptionalParamDefaults, type BuilderConfig } from './builder';
@@ -8,7 +8,7 @@ import { buildPatternTester } from './matcher/pattern-tester';
 import { Processor, type ProcessorConfig } from './processor';
 import { METHOD_OFFSET } from './schema';
 
-export class Router<R = MatchResult> {
+export class Router<R = unknown> {
   private readonly options: RouterOptions;
   private readonly processor: Processor;
   private readonly builder: Builder<Handler<R>>;

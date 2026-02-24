@@ -1,4 +1,4 @@
-import type { HttpMethod, MatchResult } from '../types';
+import type { HttpMethod } from '@zipbul/shared';
 
 export interface RouterOptions {
   ignoreTrailingSlash?: boolean;
@@ -61,6 +61,6 @@ export interface DynamicMatchResult {
   snapshot?: Array<[string, string | undefined]>;
 }
 
-export type Handler<R = MatchResult> = (params: RouteParams, meta: MatchResultMeta) => R;
+export type Handler<R = unknown> = (params: RouteParams, meta: MatchResultMeta) => R;
 
 
