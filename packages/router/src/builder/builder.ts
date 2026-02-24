@@ -35,8 +35,8 @@ export class Builder<T> {
     return this.addSegments(this.root, 0, new Set<string>(), [], method, handlerIndex, segments);
   }
 
-  build(): BinaryRouterLayout {
-    return Flattener.flatten(this.root);
+  build(methodCodes?: ReadonlyMap<string, number>): BinaryRouterLayout {
+    return Flattener.flatten(this.root, methodCodes);
   }
 
   private addSegments(
@@ -76,6 +76,7 @@ export class Builder<T> {
       return err<RouterErrData>({
         kind: 'route-duplicate',
         message: `Route already exists for ${method} at path: /${segments.join('/')}`,
+        suggestion: `Remove the duplicate route definition or use a different HTTP method.`,
       });
     }
 
@@ -112,6 +113,7 @@ export class Builder<T> {
         message: `Conflict: adding wildcard '*' at '${this.getPathString(segments, index)}' would shadow existing routes`,
         segment: '*',
         conflictsWith: existingNames || undefined,
+        suggestion: `Register specific routes before the wildcard, or move the wildcard to a deeper path (e.g. '/api/files/*' instead of '/api/*').`,
       });
     }
 
@@ -120,6 +122,7 @@ export class Builder<T> {
         kind: 'route-parse',
         message: "Wildcard '*' must be the last segment",
         segment: '*',
+        suggestion: `Move '*' to the final position, e.g. '/files/*' instead of '/files/*/extra'.`,
       });
     }
 
@@ -134,6 +137,7 @@ export class Builder<T> {
           message: `Conflict: wildcard '${existing.segment}' already exists at '${this.getPathString(segments, index)}'`,
           segment: name,
           conflictsWith: existing.segment,
+          suggestion: `Use the same wildcard name '${existing.segment}' that was registered first, or choose a different path prefix.`,
         });
       }
     } else {
@@ -215,6 +219,7 @@ export class Builder<T> {
           kind: 'route-parse',
           message: "Parameter regex must close with '}'",
           segment,
+          suggestion: `Close the regex with '}', e.g. ':id{\\d+}' not ':id{\\d+'.`,
         });
       }
 
@@ -226,6 +231,7 @@ export class Builder<T> {
         kind: 'route-parse',
         message: "Parameter segment must have a name, eg ':id'",
         segment,
+        suggestion: `Add a name after ':', e.g. ':id', ':userId', or ':file{[^/]+}'.`,
       });
     }
 
@@ -235,6 +241,7 @@ export class Builder<T> {
         kind: 'route-parse',
         message: `Parameter ':${name}*' already allows empty matches; do not combine '*' and '?' suffixes`,
         segment,
+        suggestion: `Use ':${name}*' alone — it already matches zero or more segments without needing '?'.`,
       });
     }
 
@@ -339,6 +346,7 @@ export class Builder<T> {
         kind: 'route-parse',
         message: `${type === 'zero' ? 'Zero-or-more' : 'Multi-segment'} param '${label}' must be the last segment`,
         segment: label,
+        suggestion: `Move '${label}' to the last segment position, e.g. '/prefix/${label}' instead of '/prefix/${label}/extra'`,
       });
     }
 
@@ -359,6 +367,7 @@ export class Builder<T> {
         kind: 'route-conflict',
         message: `Conflict: ${prefix} '${label}' cannot reuse wildcard '${node.wildcardChild.segment}' at '${this.getPathString(segments, index)}'`,
         conflictsWith: node.wildcardChild.segment,
+        suggestion: `Use the same wildcard name and type as the existing one ('${node.wildcardChild.segment}'), or register this route under a different path prefix`,
       });
     }
 
@@ -397,6 +406,7 @@ export class Builder<T> {
         kind: 'route-conflict',
         message: `Conflict: adding static segment '${segment}' under existing wildcard at '${this.getPathString(segments, index)}'`,
         segment,
+        suggestion: `Remove the wildcard route or register the static segment '${segment}' at a different path prefix`,
       });
     }
 
@@ -465,6 +475,7 @@ export class Builder<T> {
         message: `Conflict: parameter ':${name}' with different regex already exists at '${this.getPathString(segments, index)}'`,
         segment: `:${name}${incomingPat}`,
         conflictsWith: `:${name}${existingPat}`,
+        suggestion: `Use the same regex pattern for ':${name}' across all routes at this path position`,
       });
     }
 
@@ -474,6 +485,7 @@ export class Builder<T> {
         message: `Conflict: adding parameter ':${name}' under existing wildcard at '${this.getPathString(segments, index)}'`,
         segment: `:${name}`,
         conflictsWith: node.wildcardChild.segment,
+        suggestion: `Remove the wildcard route at this position, or use a different path prefix for the parameter ':${name}'`,
       });
     }
   }

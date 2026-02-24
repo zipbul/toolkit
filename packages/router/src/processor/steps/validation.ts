@@ -23,6 +23,7 @@ export function validateSegments(ctx: ProcessorContext): Result<void, RouterErrD
         kind: 'segment-limit',
         message: `Segment length exceeds limit: ${seg.substring(0, 20)}...`,
         segment: seg.substring(0, 40),
+        suggestion: `Shorten the path segment to ${maxLen} characters or fewer, or increase maxSegmentLength in RouterOptions.`,
       });
     }
 
@@ -39,6 +40,7 @@ export function validateSegments(ctx: ProcessorContext): Result<void, RouterErrD
             kind: 'encoding',
             message: `Malformed percent encoded component: ${seg}`,
             segment: seg,
+            suggestion: "Ensure all '%' characters form valid percent-encoded sequences (e.g. '%20' not '%GG'). Set failFastOnBadEncoding: false to pass through silently.",
           });
         }
       }

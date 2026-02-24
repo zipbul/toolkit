@@ -1,6 +1,6 @@
 // ── Public API ──
 
-export { Router } from './router';
+export { Router } from './src/router';
 
 export type {
   RouterOptions,
@@ -12,4 +12,4 @@ export type {
   RouterErrData,
   MatchMeta,
   MatchOutput,
-} from './types';
+} from './src/types';

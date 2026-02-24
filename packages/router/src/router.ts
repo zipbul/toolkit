@@ -32,6 +32,7 @@ export class Router<T = unknown> {
   private optionalParamDefaults: OptionalParamDefaults | undefined;
 
   private staticMap: Map<string, T[]> = new Map();
+  private methodCodes: ReadonlyMap<string, number> = new Map();
 
   constructor(options: RouterOptions = {}) {
     this.options = options;
@@ -90,6 +91,7 @@ export class Router<T = unknown> {
         message: 'Cannot add routes after build(). The router is sealed.',
         path,
         method: Array.isArray(method) ? method[0] : method,
+        suggestion: 'Create a new Router instance to add more routes',
       });
     }
 
@@ -128,6 +130,7 @@ export class Router<T = unknown> {
         kind: 'router-sealed',
         message: 'Cannot add routes after build(). The router is sealed.',
         registeredCount: 0,
+        suggestion: 'Create a new Router instance to add more routes',
       });
     }
 
@@ -158,7 +161,10 @@ export class Router<T = unknown> {
     this.handlers = b.handlers;
     this.optionalParamDefaults = b.config.optionalParamDefaults;
 
-    const layout = b.build();
+    const allCodes = this.methodRegistry.getAllCodes();
+    this.methodCodes = allCodes;
+
+    const layout = b.build(allCodes);
     const testers = layout.patterns.map(p => {
       if (!p.source) {
         return undefined;
@@ -173,6 +179,7 @@ export class Router<T = unknown> {
       patternTesters: testers,
       encodedSlashBehavior: this.options.encodedSlashBehavior ?? 'decode',
       failFastOnBadEncoding: this.options.failFastOnBadEncoding ?? false,
+      methodCodes: allCodes,
     });
 
     // trie 해제 — Matcher가 layout(binary)을 소유하므로 builder 참조 불필요
@@ -188,6 +195,7 @@ export class Router<T = unknown> {
         message: 'Router must be built before matching. Call build() first.',
         path,
         method,
+        suggestion: 'Call router.build() after adding all routes',
       });
     }
 
@@ -206,7 +214,7 @@ export class Router<T = unknown> {
       const staticValues = this.staticMap.get(searchPath);
 
       if (staticValues) {
-        const offset = METHOD_OFFSET[method];
+        const offset = this.methodCodes.get(method) ?? METHOD_OFFSET[method];
 
         if (offset !== undefined) {
           const value = staticValues[offset];
@@ -220,7 +228,7 @@ export class Router<T = unknown> {
 
     // Cache lookup
     if (this.cacheByMethod) {
-      const methodCode = METHOD_OFFSET[method];
+      const methodCode = this.methodCodes.get(method) ?? METHOD_OFFSET[method];
 
       if (methodCode !== undefined) {
         const methodCache = this.cacheByMethod.get(methodCode);
@@ -269,7 +277,7 @@ export class Router<T = unknown> {
       const staticValues = this.staticMap.get(normalized);
 
       if (staticValues) {
-        const offset = METHOD_OFFSET[method];
+        const offset = this.methodCodes.get(method) ?? METHOD_OFFSET[method];
 
         if (offset !== undefined) {
           const value = staticValues[offset];
@@ -317,7 +325,7 @@ export class Router<T = unknown> {
       const meta: MatchMeta = { source: 'dynamic' };
 
       if (this.cacheByMethod) {
-        const methodCode = METHOD_OFFSET[method];
+        const methodCode = this.methodCodes.get(method) ?? METHOD_OFFSET[method];
 
         if (methodCode !== undefined) {
           let mc = this.cacheByMethod.get(methodCode);
@@ -339,7 +347,7 @@ export class Router<T = unknown> {
 
     // Cache miss
     if (this.cacheByMethod) {
-      const methodCode = METHOD_OFFSET[method];
+      const methodCode = this.methodCodes.get(method) ?? METHOD_OFFSET[method];
 
       if (methodCode !== undefined) {
         let mc = this.cacheByMethod.get(methodCode);
@@ -399,11 +407,7 @@ export class Router<T = unknown> {
         this.staticMap.set(normalized, values);
       }
 
-      const mOffset = METHOD_OFFSET[method];
-
-      if (mOffset !== undefined) {
-        values[mOffset] = value;
-      }
+      values[offsetResult] = value;
     }
 
     const addResult = this.builder!.add(method, segments, value);

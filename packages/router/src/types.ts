@@ -37,6 +37,7 @@ export interface MatcherConfig {
   patternTesters: ReadonlyArray<PatternTesterFn | undefined>;
   encodedSlashBehavior: EncodedSlashBehavior;
   failFastOnBadEncoding: boolean;
+  methodCodes?: ReadonlyMap<string, number>;
 }
 
 export interface NormalizedPathSegments {

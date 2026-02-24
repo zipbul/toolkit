@@ -90,7 +90,7 @@ async function handleRequest(request: Request): Promise<Response> {
 ```typescript
 interface CorsOptions {
   origin?: OriginOptions;              // Default: '*'
-  methods?: CorsMethod[];              // Default: GET, HEAD, PUT, PATCH, POST, DELETE
+  methods?: HttpMethod[];              // Default: GET, HEAD, PUT, PATCH, POST, DELETE
   allowedHeaders?: string[];           // Default: reflects request's ACRH
   exposedHeaders?: string[];           // Default: none
   credentials?: boolean;               // Default: false
@@ -118,7 +118,7 @@ interface CorsOptions {
 
 ### `methods`
 
-HTTP methods to allow in preflight. Accepts `CorsMethod[]` — standard methods are autocompleted, and any RFC 9110 §5.6.2 token (e.g. `'PROPFIND'`) is also valid.
+HTTP methods to allow in preflight. Accepts `HttpMethod[]` — standard methods are autocompleted, and any RFC 9110 §5.6.2 token (e.g. `'PROPFIND'`) is also valid.
 
 ```typescript
 Cors.create({ methods: ['GET', 'POST', 'DELETE'] });

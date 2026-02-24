@@ -54,4 +54,8 @@ export class MethodRegistry {
   get size(): number {
     return this.methodToOffset.size;
   }
+
+  getAllCodes(): ReadonlyMap<string, number> {
+    return this.methodToOffset;
+  }
 }

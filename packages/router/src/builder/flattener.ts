@@ -25,7 +25,7 @@ import {
 } from '../schema';
 
 export class Flattener {
-  static flatten(root: Node): BinaryRouterLayout {
+  static flatten(root: Node, methodCodes?: ReadonlyMap<string, number>): BinaryRouterLayout {
     const nodes: Node[] = [];
     const nodeToIndex = new Map<Node, number>();
     const queue: Node[] = [root];
@@ -44,11 +44,7 @@ export class Flattener {
       nodeToIndex.set(node, nodes.length);
       nodes.push(node);
 
-      const staticEntries = Array.from(node.staticChildren.entries());
-
-      staticEntries.sort((a, b) => (a[0] < b[0] ? -1 : a[0] > b[0] ? 1 : 0));
-
-      for (const [, child] of staticEntries) {
+      for (const [, child] of node.staticChildren) {
         queue.push(child);
       }
 
@@ -131,7 +127,7 @@ export class Flattener {
         const sortedEntries: MethodEntry[] = [];
 
         for (const [method, key] of node.methods.byMethod.entries()) {
-          const mCodeNum = METHOD_OFFSET[method];
+          const mCodeNum = methodCodes?.get(method as string) ?? METHOD_OFFSET[method];
 
           if (mCodeNum !== undefined) {
             if (mCodeNum < 31) {

@@ -1,9 +1,9 @@
 import { describe, it, expect, spyOn } from 'bun:test';
 import { isErr } from '@zipbul/result';
 import type { Err } from '@zipbul/result';
-import type { RouterErrData } from '../types';
+import type { RouterErrData } from '../src/types';
 
-import { Router } from '../router';
+import { Router } from '../src/router';
 
 // ── Helpers ──
 

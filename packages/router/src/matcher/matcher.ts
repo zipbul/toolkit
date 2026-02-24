@@ -1,10 +1,10 @@
 import type { HttpMethod } from '@zipbul/shared';
 import type { Result } from '@zipbul/result';
 import type { BinaryRouterLayout } from '../schema';
-import type { EncodedSlashBehavior, MatcherConfig, PatternTesterFn, RouterErrData, RouteParams } from '../types';
+import type { MatcherConfig, PatternTesterFn, RouterErrData, RouteParams } from '../types';
 
 import { err, isErr } from '@zipbul/result';
-import { decodeURIComponentSafe } from '../processor';
+import { buildDecoder, type DecoderFn } from '../processor';
 import {
   NODE_OFFSET_META,
   NODE_OFFSET_METHOD_MASK,
@@ -48,8 +48,8 @@ export class Matcher {
   private readonly rootIndex: number;
 
   private readonly patternTesters: ReadonlyArray<PatternTesterFn | undefined>;
-  private readonly encodedSlashBehavior: EncodedSlashBehavior;
-  private readonly failFastOnBadEncoding: boolean;
+  private readonly decode: DecoderFn;
+  private readonly methodCodes?: ReadonlyMap<string, number>;
 
   private readonly stack: Int32Array;
   private paramNames: string[] = new Array<string>(MAX_PARAMS).fill('');
@@ -81,8 +81,8 @@ export class Matcher {
     this.methodsBuffer = layout.methodsBuffer;
     this.rootIndex = layout.rootIndex;
     this.patternTesters = globalConfig.patternTesters;
-    this.encodedSlashBehavior = globalConfig.encodedSlashBehavior;
-    this.failFastOnBadEncoding = globalConfig.failFastOnBadEncoding;
+    this.decode = buildDecoder(globalConfig.encodedSlashBehavior, globalConfig.failFastOnBadEncoding);
+    this.methodCodes = globalConfig.methodCodes;
     this.stack = new Int32Array(MAX_STACK_DEPTH * FRAME_SIZE);
     this.strings = layout.decodedStrings;
   }
@@ -95,7 +95,7 @@ export class Matcher {
     decodeParams: boolean,
     captureSnapshot: boolean,
   ): Result<boolean, RouterErrData> {
-    const code = METHOD_OFFSET[method];
+    const code = this.methodCodes?.get(method) ?? METHOD_OFFSET[method];
 
     if (code === undefined) {
       return false;
@@ -221,7 +221,7 @@ export class Matcher {
       return raw;
     }
 
-    const decoded = decodeURIComponentSafe(raw, this.encodedSlashBehavior, this.failFastOnBadEncoding);
+    const decoded = this.decode(raw);
 
     if (isErr(decoded)) {
       return decoded;

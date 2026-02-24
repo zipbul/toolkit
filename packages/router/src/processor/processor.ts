@@ -189,6 +189,7 @@ export class Processor {
           kind: 'segment-limit',
           message: `Segment length exceeds limit: ${seg.substring(0, 20)}...`,
           segment: seg.substring(0, 40),
+          suggestion: `Shorten the path segment to ${maxLen} characters or fewer, or increase maxSegmentLength in RouterOptions.`,
         });
       }
     }

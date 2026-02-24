@@ -13,4 +13,4 @@ export const FRAME_OFFSET_ITERATOR = 4;
 export const MAX_STACK_DEPTH = 64;
 export const MAX_PARAMS = 32;
 
-export const ROUTE_REGEX_TIMEOUT = Symbol('bunner.route-regex-timeout');
+export const ROUTE_REGEX_TIMEOUT = Symbol('zipbul.route-regex-timeout');
