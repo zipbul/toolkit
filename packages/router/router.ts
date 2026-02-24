@@ -6,7 +6,6 @@ import type {
   MatchOutput,
   RegexSafetyOptions,
   RouterErrData,
-  RouterErrKind,
   RouterOptions,
 } from './types';
 
@@ -231,27 +230,18 @@ export class Router<T = unknown> {
       return null;
     }
 
-    // Normalize path — processor may throw on segment limits or encoding
-    let segments: string[];
-    let segmentDecodeHints: Uint8Array | undefined;
-    let normalized: string;
+    // Normalize path
+    const normalizeResult = this.processor.normalize(searchPath);
 
-    try {
-      const result = this.processor.normalize(searchPath);
-
-      segments = result.segments;
-      segmentDecodeHints = result.segmentDecodeHints;
-      normalized = result.normalized;
-    } catch (e) {
-      const message = e instanceof Error ? e.message : String(e);
-
+    if (isErr(normalizeResult)) {
       return err<RouterErrData>({
-        kind: classifyProcessorError(message),
-        message,
+        ...normalizeResult.data,
         path,
         method,
       });
     }
+
+    const { segments, segmentDecodeHints, normalized } = normalizeResult;
 
     // Static fallback for normalized paths
     if (normalized !== searchPath) {
@@ -270,30 +260,25 @@ export class Router<T = unknown> {
       }
     }
 
-    // Dynamic match — matcher may throw on encoded slash reject or regex timeout
-    let matched: boolean;
+    // Dynamic match
+    const matchResult = matcher.match(
+      method,
+      segments,
+      normalized,
+      segmentDecodeHints,
+      this.options.decodeParams ?? true,
+      false,
+    );
 
-    try {
-      matched = matcher.match(
-        method,
-        segments,
-        normalized,
-        segmentDecodeHints,
-        this.options.decodeParams ?? true,
-        false,
-      );
-    } catch (e) {
-      const message = e instanceof Error ? e.message : String(e);
-
+    if (isErr(matchResult)) {
       return err<RouterErrData>({
-        kind: classifyMatcherError(message),
-        message,
+        ...matchResult.data,
         path,
         method,
       });
     }
 
-    if (matched) {
+    if (matchResult) {
       const handlerIndex = matcher.getHandlerIndex();
       const params = matcher.getParams();
       const defaults = this.builder.config.optionalParamDefaults;
@@ -342,7 +327,17 @@ export class Router<T = unknown> {
       });
     }
 
-    const { segments, normalized } = this.processor.normalize(path, false);
+    const normalizeResult = this.processor.normalize(path, false);
+
+    if (isErr(normalizeResult)) {
+      return err<RouterErrData>({
+        ...normalizeResult.data,
+        path,
+        method,
+      });
+    }
+
+    const { segments, normalized } = normalizeResult;
 
     let isDynamic = false;
 
@@ -382,24 +377,4 @@ export class Router<T = unknown> {
       });
     }
   }
-}
-
-function classifyProcessorError(message: string): RouterErrKind {
-  if (message.includes('Encoded slashes')) {
-    return 'encoded-slash';
-  }
-
-  if (message.includes('exceeds limit')) {
-    return 'segment-limit';
-  }
-
-  return 'encoding';
-}
-
-function classifyMatcherError(message: string): RouterErrKind {
-  if (message.includes('Encoded slashes')) {
-    return 'encoded-slash';
-  }
-
-  return 'encoding';
 }

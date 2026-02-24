@@ -1,6 +1,10 @@
+import type { Result } from '@zipbul/result';
+import type { RouterErrData } from '../../types';
 import type { ProcessorContext } from '../context';
 
-export function validateSegments(ctx: ProcessorContext): void {
+import { err } from '@zipbul/result';
+
+export function validateSegments(ctx: ProcessorContext): Result<void, RouterErrData> {
   const maxLen = ctx.config.maxSegmentLength ?? 256;
   const failFast = ctx.config.failFastOnBadEncoding ?? false;
   const segments = ctx.segments;
@@ -15,7 +19,11 @@ export function validateSegments(ctx: ProcessorContext): void {
     }
 
     if (seg.length > maxLen) {
-      throw new Error(`Segment length exceeds limit: ${seg.substring(0, 20)}...`);
+      return err<RouterErrData>({
+        kind: 'segment-limit',
+        message: `Segment length exceeds limit: ${seg.substring(0, 20)}...`,
+        segment: seg.substring(0, 40),
+      });
     }
 
     const hasPct = seg.includes('%');
@@ -27,7 +35,11 @@ export function validateSegments(ctx: ProcessorContext): void {
         try {
           decodeURIComponent(seg);
         } catch (_e) {
-          throw new Error(`Malformed percent encoded component: ${seg}`);
+          return err<RouterErrData>({
+            kind: 'encoding',
+            message: `Malformed percent encoded component: ${seg}`,
+            segment: seg,
+          });
         }
       }
     }

@@ -1,6 +1,9 @@
-import type { EncodedSlashBehavior } from '../types';
+import type { Result } from '@zipbul/result';
+import type { EncodedSlashBehavior, RouterErrData } from '../types';
 
-export function decodeURIComponentSafe(value: string, behavior: EncodedSlashBehavior | undefined, failFast: boolean): string {
+import { err } from '@zipbul/result';
+
+export function decodeURIComponentSafe(value: string, behavior: EncodedSlashBehavior | undefined, failFast: boolean): Result<string, RouterErrData> {
   if (!value.includes('%')) {
     return value;
   }
@@ -9,7 +12,11 @@ export function decodeURIComponentSafe(value: string, behavior: EncodedSlashBeha
 
   if (behavior === 'reject') {
     if (/%(2F|2f)/.test(value)) {
-      throw new Error('Encoded slashes are forbidden');
+      return err<RouterErrData>({
+        kind: 'encoded-slash',
+        message: 'Encoded slashes are forbidden',
+        segment: value,
+      });
     }
   } else if (behavior === 'preserve') {
     return value;
@@ -17,9 +24,13 @@ export function decodeURIComponentSafe(value: string, behavior: EncodedSlashBeha
 
   try {
     return decodeURIComponent(target);
-  } catch (e) {
+  } catch (_e) {
     if (failFast) {
-      throw e;
+      return err<RouterErrData>({
+        kind: 'encoding',
+        message: `Failed to decode URI component: ${value}`,
+        segment: value,
+      });
     }
 
     return value;

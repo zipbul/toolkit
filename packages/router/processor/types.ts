@@ -1,3 +1,5 @@
+import type { Result } from '@zipbul/result';
+import type { RouterErrData } from '../types';
 import type { ProcessorContext } from './context';
 
 export interface ProcessorConfig {
@@ -9,4 +11,4 @@ export interface ProcessorConfig {
   failFastOnBadEncoding?: boolean;
 }
 
-export type PipelineStep = (ctx: ProcessorContext) => void;
+export type PipelineStep = (ctx: ProcessorContext) => Result<void, RouterErrData>;

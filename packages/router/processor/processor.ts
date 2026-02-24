@@ -1,6 +1,8 @@
-import type { NormalizedPathSegments } from '../types';
+import type { Result } from '@zipbul/result';
+import type { NormalizedPathSegments, RouterErrData } from '../types';
 import type { ProcessorConfig, PipelineStep } from './types';
 
+import { isErr } from '@zipbul/result';
 import { ProcessorContext } from './context';
 import { toLowerCase } from './steps/case-sensitivity';
 import { resolveDotSegments } from './steps/dot-segments';
@@ -39,7 +41,7 @@ export class Processor {
     this.pipeline.push(validateSegments);
   }
 
-  normalize(path: string, stripQueryParam = true): NormalizedPathSegments {
+  normalize(path: string, stripQueryParam = true): Result<NormalizedPathSegments, RouterErrData> {
     const ctx = new ProcessorContext(path, this.config);
     const startStepIndex = stripQueryParam ? 0 : 1;
 
@@ -50,7 +52,11 @@ export class Processor {
         continue;
       }
 
-      step(ctx);
+      const stepResult = step(ctx);
+
+      if (isErr(stepResult)) {
+        return stepResult;
+      }
     }
 
     const normalized: NormalizedPathSegments = {

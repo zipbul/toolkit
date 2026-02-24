@@ -1,7 +1,9 @@
 import type { HttpMethod } from '@zipbul/shared';
+import type { Result } from '@zipbul/result';
 import type { BinaryRouterLayout } from '../schema';
-import type { EncodedSlashBehavior, MatcherConfig, PatternTesterFn, RouteParams } from '../types';
+import type { EncodedSlashBehavior, MatcherConfig, PatternTesterFn, RouterErrData, RouteParams } from '../types';
 
+import { err, isErr } from '@zipbul/result';
 import { decodeURIComponentSafe } from '../processor';
 import {
   NODE_OFFSET_META,
@@ -94,7 +96,7 @@ export class Matcher {
     segmentHints: Uint8Array | undefined,
     decodeParams: boolean,
     captureSnapshot: boolean,
-  ): boolean {
+  ): Result<boolean, RouterErrData> {
     const code = METHOD_OFFSET[method];
 
     if (code === undefined) {
@@ -112,11 +114,17 @@ export class Matcher {
       this.paramCache[i] = undefined;
     }
 
-    const handlerIndex = this.walk(decodeParams);
+    const walkResult = this.walk(decodeParams);
 
-    if (handlerIndex === null) {
+    if (isErr(walkResult)) {
+      return walkResult;
+    }
+
+    if (walkResult === null) {
       return false;
     }
+
+    const handlerIndex = walkResult;
 
     const bag: RouteParams = {};
     let snapshot: Array<[string, string | undefined]> | undefined;
@@ -207,7 +215,7 @@ export class Matcher {
     return this.normalizedPath.substring(offset);
   }
 
-  private decodeAndCache(index: number, decodeParams: boolean): string | undefined {
+  private decodeAndCache(index: number, decodeParams: boolean): Result<string | undefined, RouterErrData> {
     if (this.paramCache[index] !== undefined) {
       return this.paramCache[index];
     }
@@ -234,12 +242,16 @@ export class Matcher {
 
     const decoded = decodeURIComponentSafe(raw, this.encodedSlashBehavior, this.failFastOnBadEncoding);
 
+    if (isErr(decoded)) {
+      return decoded;
+    }
+
     this.paramCache[index] = decoded;
 
     return decoded;
   }
 
-  private walk(decodeParams: boolean): number | null {
+  private walk(decodeParams: boolean): Result<number | null, RouterErrData> {
     let sp = 0;
 
     this.stack[sp + FRAME_OFFSET_NODE] = this.rootIndex;
@@ -375,7 +387,13 @@ export class Matcher {
 
         const patternID = this.paramsBuffer[pBase + 1] ?? 0xffffffff;
         const name = this.getString(nameID);
-        const value = this.decodeAndCache(segIdx, decodeParams);
+        const valueResult = this.decodeAndCache(segIdx, decodeParams);
+
+        if (isErr(valueResult)) {
+          return valueResult;
+        }
+
+        const value = valueResult;
 
         if (value === undefined) {
           continue;
@@ -384,8 +402,17 @@ export class Matcher {
         if (patternID !== 0xffffffff) {
           const tester = this.patternTesters[patternID];
 
-          if (tester?.(value) === false) {
-            continue;
+          if (tester) {
+            try {
+              if (tester(value) === false) {
+                continue;
+              }
+            } catch (e) {
+              return err<RouterErrData>({
+                kind: 'regex-timeout',
+                message: e instanceof Error ? e.message : String(e),
+              });
+            }
           }
         }
 
