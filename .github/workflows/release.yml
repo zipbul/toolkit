@@ -47,7 +47,7 @@ jobs:
         id: changesets
         uses: changesets/action@v1
         with:
-          publish: bun run scripts/resolve-workspaces.ts && npx changeset publish
+          publish: bun run scripts/publish.ts
           version: bunx changeset version
           title: "chore: version packages"
           commit: "chore: version packages"
