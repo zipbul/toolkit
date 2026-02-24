@@ -1,5 +1,15 @@
 # @zipbul/result
 
+## 0.1.0
+
+### Minor Changes
+
+- 08bfee5: Add `safe()` function and `ResultAsync` type
+
+  - `safe(fn)` / `safe(fn, mapErr)`: wraps sync functions, catches throws into `Err`
+  - `safe(promise)` / `safe(promise, mapErr)`: wraps Promises, catches rejections into `Err`
+  - `ResultAsync<T, E>`: type alias for `Promise<Result<T, E>>`
+
 ## 0.0.3
 
 ### Patch Changes
