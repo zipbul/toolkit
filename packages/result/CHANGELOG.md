@@ -1,5 +1,11 @@
 # @zipbul/result
 
+## 0.1.3
+
+### Patch Changes
+
+- f3f036f: fix(release): resolve workspace:\* protocol and restore GitHub release creation
+
 ## 0.1.2
 
 ### Patch Changes

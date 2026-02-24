@@ -1,5 +1,11 @@
 # @zipbul/shared
 
+## 0.0.6
+
+### Patch Changes
+
+- f3f036f: fix(release): resolve workspace:\* protocol and restore GitHub release creation
+
 ## 0.0.5
 
 ### Patch Changes
