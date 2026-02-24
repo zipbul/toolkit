@@ -3,7 +3,9 @@
   "compilerOptions": {
     "rootDir": ".",
     "paths": {
-      "@zipbul/router": ["./index.ts"]
+      "@zipbul/router": ["./index.ts"],
+      "@zipbul/result": ["../result/index.ts"],
+      "@zipbul/shared": ["../shared/index.ts"]
     }
   },
   "include": ["./**/*.ts"]

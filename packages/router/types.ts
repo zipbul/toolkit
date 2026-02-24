@@ -122,14 +122,10 @@ export interface MatchOutput<T> {
   meta: MatchMeta;
 }
 
-// ── Internal types (Phase 2에서 재구성 예정) ──
+// ── Internal types ──
 
 export interface DynamicMatchResult {
   handlerIndex: number;
   params: RouteParams;
   snapshot?: Array<[string, string | undefined]>;
 }
-
-export type Handler<R = unknown> = (params: RouteParams, meta: MatchMeta) => R;
-
-

@@ -1,21 +1,34 @@
 import type { HttpMethod } from '@zipbul/shared';
-import type { DynamicMatchResult, Handler, MatchMeta, RegexSafetyOptions, RouterOptions } from './types';
+import type { Result } from '@zipbul/result';
+import type {
+  DynamicMatchResult,
+  MatchMeta,
+  MatchOutput,
+  RegexSafetyOptions,
+  RouterErrData,
+  RouterErrKind,
+  RouterOptions,
+} from './types';
 
+import { err, isErr } from '@zipbul/result';
 import { Builder, OptionalParamDefaults, type BuilderConfig } from './builder';
 import { RouterCache } from './cache';
 import { Matcher } from './matcher';
 import { buildPatternTester } from './matcher/pattern-tester';
+import { MethodRegistry } from './method-registry';
 import { Processor, type ProcessorConfig } from './processor';
 import { METHOD_OFFSET } from './schema';
 
-export class Router<R = unknown> {
+export class Router<T = unknown> {
   private readonly options: RouterOptions;
   private readonly processor: Processor;
-  private readonly builder: Builder<Handler<R>>;
+  private readonly builder: Builder<T>;
+  private readonly methodRegistry = new MethodRegistry();
   private matcher: Matcher | null = null;
   private cache: RouterCache<DynamicMatchResult> | undefined;
+  private sealed = false;
 
-  private staticMap: Map<string, Handler<R>[]> = new Map();
+  private staticMap: Map<string, T[]> = new Map();
 
   constructor(options: RouterOptions = {}) {
     this.options = options;
@@ -63,23 +76,27 @@ export class Router<R = unknown> {
       buildConfig.strictParamNames = options.strictParamNames;
     }
 
-    this.builder = new Builder<Handler<R>>(buildConfig);
+    this.builder = new Builder<T>(buildConfig);
   }
 
-  add(method: HttpMethod | HttpMethod[] | '*', path: string, handler: Handler<R>): void {
-    // If the router is already built, we cannot add more routes safely without rebuilding
-    // or invalidating internal structures. For now, assume mutable phase only before build()
-    // or allow add() but warn/reset matcher.
-    if (this.matcher) {
-      // For this implementation, we simply allow adding.
-      // Real-world would likely throw or rebuild.
-      this.matcher = null; // Invalidate
+  add(method: HttpMethod | HttpMethod[] | '*', path: string, value: T): Result<void, RouterErrData> {
+    if (this.sealed) {
+      return err<RouterErrData>({
+        kind: 'router-sealed',
+        message: 'Cannot add routes after build(). The router is sealed.',
+        path,
+        method: Array.isArray(method) ? method[0] : method,
+      });
     }
 
     if (Array.isArray(method)) {
-      method.forEach(m => {
-        this.addOne(m, path, handler);
-      });
+      for (const m of method) {
+        const result = this.addOne(m, path, value);
+
+        if (isErr(result)) {
+          return result;
+        }
+      }
 
       return;
     }
@@ -87,32 +104,51 @@ export class Router<R = unknown> {
     if (method === '*') {
       const allMethods: HttpMethod[] = ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS', 'HEAD'];
 
-      allMethods.forEach(m => {
-        this.addOne(m, path, handler);
-      });
+      for (const m of allMethods) {
+        const result = this.addOne(m, path, value);
+
+        if (isErr(result)) {
+          return result;
+        }
+      }
 
       return;
     }
 
-    this.addOne(method, path, handler);
+    return this.addOne(method, path, value);
   }
 
-  /**
-   * Batch registration.
-   */
-  addAll(entries: Array<[HttpMethod, string, Handler<R>]>): void {
-    for (const [method, path, handler] of entries) {
-      this.add(method, path, handler);
+  addAll(entries: Array<[HttpMethod, string, T]>): Result<void, RouterErrData> {
+    if (this.sealed) {
+      return err<RouterErrData>({
+        kind: 'router-sealed',
+        message: 'Cannot add routes after build(). The router is sealed.',
+        registeredCount: 0,
+      });
+    }
+
+    let registeredCount = 0;
+
+    for (const [method, path, value] of entries) {
+      const result = this.addOne(method, path, value);
+
+      if (isErr(result)) {
+        return err<RouterErrData>({
+          ...result.data,
+          registeredCount,
+        });
+      }
+
+      registeredCount++;
     }
   }
 
-  /**
-   * Finalizes the router and prepares for matching.
-   */
   build(): this {
-    if (this.matcher) {
+    if (this.sealed) {
       return this;
     }
+
+    this.sealed = true;
 
     const layout = this.builder.build();
     const testers = layout.patterns.map(p => {
@@ -120,7 +156,6 @@ export class Router<R = unknown> {
         return undefined;
       }
 
-      // Re-compile regex for runtime
       const regex = new RegExp(`^(?:${p.source})$`, p.flags);
 
       return buildPatternTester(p.source, regex, undefined);
@@ -135,38 +170,42 @@ export class Router<R = unknown> {
     return this;
   }
 
-  /**
-   * Resolve a request. Executes the matched handler.
-   */
-  match(method: HttpMethod, path: string): R | null {
+  match(method: HttpMethod, path: string): Result<MatchOutput<T> | null, RouterErrData> {
+    if (!this.sealed) {
+      return err<RouterErrData>({
+        kind: 'not-built',
+        message: 'Router must be built before matching. Call build() first.',
+      });
+    }
+
     let searchPath = path;
 
-    // Fast-path: Trailing slash
     if (this.options.ignoreTrailingSlash === true && searchPath.length > 1 && searchPath.endsWith('/')) {
       searchPath = searchPath.slice(0, -1);
     }
 
-    // Case sensitivity
     if (this.options.caseSensitive === false) {
       searchPath = searchPath.toLowerCase();
     }
 
-    // Optimization: Raw Static Lookup
-    // If the path is "clean" (already normalized), we can skip Processor.normalize().
-    // We only check if searchPath starts with '/' to match our normalized keys.
+    // Static fast-path: clean path starting with '/'
     if (searchPath.charCodeAt(0) === 47 /* '/' */) {
-      const staticHandlers = this.staticMap.get(searchPath);
+      const staticValues = this.staticMap.get(searchPath);
 
-      if (staticHandlers) {
-        const handler = staticHandlers[METHOD_OFFSET[method]];
+      if (staticValues) {
+        const offset = METHOD_OFFSET[method];
 
-        if (handler) {
-          return handler({}, { source: 'static' });
+        if (offset !== undefined) {
+          const value = staticValues[offset];
+
+          if (value !== undefined) {
+            return { value, params: {}, meta: { source: 'static' } };
+          }
         }
       }
     }
 
-    // Cache Lookup
+    // Cache lookup
     if (this.cache) {
       const cacheKey = `${method}:${searchPath}`;
       const cached = this.cache.get(cacheKey);
@@ -176,20 +215,14 @@ export class Router<R = unknown> {
           return null;
         }
 
-        // Execute Handler
-        const handler = this.builder.handlers[cached.handlerIndex];
+        const value = this.builder.handlers[cached.handlerIndex];
 
-        if (handler === undefined) {
+        if (value === undefined) {
           return null;
         }
 
-        // Params are cloned from cache for safety (users might mutate)
-        return handler({ ...cached.params }, { source: 'cache' });
+        return { value, params: { ...cached.params }, meta: { source: 'cache' } };
       }
-    }
-
-    if (!this.matcher) {
-      this.build();
     }
 
     const matcher = this.matcher;
@@ -198,34 +231,67 @@ export class Router<R = unknown> {
       return null;
     }
 
-    // Process Segments
-    // "segments" are needed for Matcher.
-    // `processor.process(searchPath)` returns string[].
-    const { segments, segmentDecodeHints, normalized } = this.processor.normalize(searchPath);
+    // Normalize path — processor may throw on segment limits or encoding
+    let segments: string[];
+    let segmentDecodeHints: Uint8Array | undefined;
+    let normalized: string;
 
-    // Static Fast-path (Fallback for normalized paths)
-    // Only check if normalized != searchPath (otherwise we already checked)
+    try {
+      const result = this.processor.normalize(searchPath);
+
+      segments = result.segments;
+      segmentDecodeHints = result.segmentDecodeHints;
+      normalized = result.normalized;
+    } catch (e) {
+      const message = e instanceof Error ? e.message : String(e);
+
+      return err<RouterErrData>({
+        kind: classifyProcessorError(message),
+        message,
+        path,
+        method,
+      });
+    }
+
+    // Static fallback for normalized paths
     if (normalized !== searchPath) {
-      const staticHandlers = this.staticMap.get(normalized);
+      const staticValues = this.staticMap.get(normalized);
 
-      if (staticHandlers) {
-        const handler = staticHandlers[METHOD_OFFSET[method]];
+      if (staticValues) {
+        const offset = METHOD_OFFSET[method];
 
-        if (handler) {
-          return handler({}, { source: 'static' });
+        if (offset !== undefined) {
+          const value = staticValues[offset];
+
+          if (value !== undefined) {
+            return { value, params: {}, meta: { source: 'static' } };
+          }
         }
       }
     }
 
-    // Dynamic Match
-    const matched = matcher.match(
-      method,
-      segments,
-      normalized,
-      segmentDecodeHints,
-      this.options.decodeParams ?? true,
-      false, // captureSnapshot
-    );
+    // Dynamic match — matcher may throw on encoded slash reject or regex timeout
+    let matched: boolean;
+
+    try {
+      matched = matcher.match(
+        method,
+        segments,
+        normalized,
+        segmentDecodeHints,
+        this.options.decodeParams ?? true,
+        false,
+      );
+    } catch (e) {
+      const message = e instanceof Error ? e.message : String(e);
+
+      return err<RouterErrData>({
+        kind: classifyMatcherError(message),
+        message,
+        path,
+        method,
+      });
+    }
 
     if (matched) {
       const handlerIndex = matcher.getHandlerIndex();
@@ -236,31 +302,27 @@ export class Router<R = unknown> {
         defaults.apply(handlerIndex, params);
       }
 
-      // Execute Handler
-      const handler = this.builder.handlers[handlerIndex];
+      const value = this.builder.handlers[handlerIndex];
 
-      // Handlers are guaranteed by build process but array access returns potential undefined
-      if (!handler) {
+      if (value === undefined) {
         return null;
       }
 
       const meta: MatchMeta = { source: 'dynamic' };
 
-      // Update Cache
       if (this.cache) {
         const cacheKey = `${method}:${searchPath}`;
 
         this.cache.set(cacheKey, {
-          handlerIndex: handlerIndex,
-          params: { ...params }, // Clone for safety
+          handlerIndex,
+          params: { ...params },
         });
       }
 
-      // Optimization: Reuse params object directly.
-      return handler(params, meta);
+      return { value, params, meta };
     }
 
-    // Cache Miss
+    // Cache miss
     if (this.cache) {
       const cacheKey = `${method}:${searchPath}`;
 
@@ -270,16 +332,24 @@ export class Router<R = unknown> {
     return null;
   }
 
-  private addOne(method: HttpMethod, path: string, handler: Handler<R>): void {
+  private addOne(method: HttpMethod, path: string, value: T): Result<void, RouterErrData> {
+    const offsetResult = this.methodRegistry.getOrCreate(method);
+
+    if (isErr(offsetResult)) {
+      return err<RouterErrData>({
+        ...offsetResult.data,
+        path,
+      });
+    }
+
     const { segments, normalized } = this.processor.normalize(path, false);
-    // Check for dynamic segments (*, :)
+
     let isDynamic = false;
 
     for (const segment of segments) {
       const firstChar = segment.charCodeAt(0);
 
       if (firstChar === 42 || firstChar === 58) {
-        // '*' or ':'
         isDynamic = true;
 
         break;
@@ -287,22 +357,76 @@ export class Router<R = unknown> {
     }
 
     if (!isDynamic) {
-      let handlers = this.staticMap.get(normalized);
+      let values = this.staticMap.get(normalized);
 
-      if (!handlers) {
-        handlers = [];
+      if (!values) {
+        values = [];
 
-        this.staticMap.set(normalized, handlers);
+        this.staticMap.set(normalized, values);
       }
 
       const mOffset = METHOD_OFFSET[method];
 
       if (mOffset !== undefined) {
-        handlers[mOffset] = handler;
+        values[mOffset] = value;
       }
     }
 
-    // Trailing slash handled by processor
-    this.builder.add(method, segments, handler);
+    try {
+      this.builder.add(method, segments, value);
+    } catch (e) {
+      const message = e instanceof Error ? e.message : String(e);
+
+      return err<RouterErrData>({
+        kind: classifyBuilderError(message),
+        message,
+        path,
+        method,
+      });
+    }
   }
+}
+
+function classifyBuilderError(message: string): RouterErrKind {
+  if (message.includes('already exists for')) {
+    return 'route-duplicate';
+  }
+
+  if (message.includes('Conflict:')) {
+    return 'route-conflict';
+  }
+
+  if (message.includes('Duplicate parameter name')) {
+    return 'param-duplicate';
+  }
+
+  if (message.includes('strict uniqueness')) {
+    return 'param-strict';
+  }
+
+  if (message.includes('Unsafe route regex')) {
+    return 'regex-unsafe';
+  }
+
+  return 'route-parse';
+}
+
+function classifyProcessorError(message: string): RouterErrKind {
+  if (message.includes('Encoded slashes')) {
+    return 'encoded-slash';
+  }
+
+  if (message.includes('exceeds limit')) {
+    return 'segment-limit';
+  }
+
+  return 'encoding';
+}
+
+function classifyMatcherError(message: string): RouterErrKind {
+  if (message.includes('Encoded slashes')) {
+    return 'encoded-slash';
+  }
+
+  return 'encoding';
 }

@@ -14,7 +14,7 @@
     },
     "packages/cors": {
       "name": "@zipbul/cors",
-      "version": "0.0.2",
+      "version": "0.0.3",
       "dependencies": {
         "@zipbul/result": "workspace:*",
         "@zipbul/shared": "workspace:*",
@@ -27,15 +27,19 @@
     },
     "packages/result": {
       "name": "@zipbul/result",
-      "version": "0.0.2",
+      "version": "0.0.3",
     },
     "packages/router": {
       "name": "@zipbul/router",
       "version": "0.0.1",
+      "dependencies": {
+        "@zipbul/result": "workspace:*",
+        "@zipbul/shared": "workspace:*",
+      },
     },
     "packages/shared": {
       "name": "@zipbul/shared",
-      "version": "0.0.2",
+      "version": "0.0.3",
     },
   },
   "packages": {

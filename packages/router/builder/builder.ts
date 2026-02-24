@@ -1,4 +1,4 @@
-import type { HttpMethod } from '../../types';
+import type { HttpMethod } from '@zipbul/shared';
 import type { BinaryRouterLayout } from '../schema';
 import type { BuilderConfig } from './types';
 
