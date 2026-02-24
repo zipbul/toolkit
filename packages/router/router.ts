@@ -174,6 +174,8 @@ export class Router<T = unknown> {
       return err<RouterErrData>({
         kind: 'not-built',
         message: 'Router must be built before matching. Call build() first.',
+        path,
+        method,
       });
     }
 

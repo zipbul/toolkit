@@ -101,10 +101,16 @@ export class Builder<T> {
     }
 
     if (node.staticChildren.size || node.paramChildren.length) {
+      const existingNames = [
+        ...node.staticChildren.keys(),
+        ...node.paramChildren.map(c => `:${c.segment}`),
+      ].slice(0, 3).join(', ');
+
       return err<RouterErrData>({
         kind: 'route-conflict',
         message: `Conflict: adding wildcard '*' at '${this.getPathString(segments, index)}' would shadow existing routes`,
         segment: '*',
+        conflictsWith: existingNames || undefined,
       });
     }
 
@@ -326,11 +332,12 @@ export class Builder<T> {
     registerScope: () => Result<() => void, RouterErrData>,
   ): Result<void, RouterErrData> {
     if (index !== segments.length - 1) {
-      const label = type === 'zero' ? ':name*' : ':name+';
+      const label = type === 'zero' ? `:${name}*` : `:${name}+`;
 
       return err<RouterErrData>({
         kind: 'route-parse',
         message: `${type === 'zero' ? 'Zero-or-more' : 'Multi-segment'} param '${label}' must be the last segment`,
+        segment: label,
       });
     }
 
@@ -449,10 +456,14 @@ export class Builder<T> {
     const dup = node.paramChildren.find(c => c.segment === name && (c.pattern?.source ?? '') !== (patternSrc ?? ''));
 
     if (dup) {
+      const existingPat = dup.patternSource ? `{${dup.patternSource}}` : '(no regex)';
+      const incomingPat = patternSrc ? `{${patternSrc}}` : '(no regex)';
+
       return err<RouterErrData>({
         kind: 'route-conflict',
         message: `Conflict: parameter ':${name}' with different regex already exists at '${this.getPathString(segments, index)}'`,
-        segment: `:${name}`,
+        segment: `:${name}${incomingPat}`,
+        conflictsWith: `:${name}${existingPat}`,
       });
     }
 
@@ -512,6 +523,7 @@ export class Builder<T> {
         kind: 'param-strict',
         message: `Parameter ':${name}' already registered (strict uniqueness enabled)`,
         segment: name,
+        suggestion: `Rename the parameter in one of the routes, or set strictParamNames: false to allow reuse`,
       });
     }
 
@@ -540,6 +552,8 @@ export class Builder<T> {
         return err<RouterErrData>({
           kind: 'regex-unsafe',
           message: msg,
+          segment: patternSrc,
+          suggestion: `Simplify the regex to avoid catastrophic backtracking, or set regexSafety.mode: 'warn'`,
         });
       }
     }

@@ -60,6 +60,8 @@ export class PatternUtils {
         return err<RouterErrData>({
           kind: 'regex-anchor',
           message: msg,
+          segment: patternSrc,
+          suggestion: `Remove anchor characters ('^', '$') from parameter regex — the router wraps patterns automatically`,
         });
       }
 
