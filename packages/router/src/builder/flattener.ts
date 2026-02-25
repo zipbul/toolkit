@@ -24,8 +24,7 @@ import {
   PARAM_ENTRY_STRIDE,
 } from '../schema';
 
-export class Flattener {
-  static flatten(root: Node, methodCodes?: ReadonlyMap<string, number>): BinaryRouterLayout {
+export function flatten(root: Node, methodCodes?: ReadonlyMap<string, number>): BinaryRouterLayout {
     const nodes: Node[] = [];
     const nodeToIndex = new Map<Node, number>();
     const queue: Node[] = [root];
@@ -253,5 +252,4 @@ export class Flattener {
       patterns,
       rootIndex: 0,
     };
-  }
 }

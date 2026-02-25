@@ -8,7 +8,7 @@ import { err, isErr } from '@zipbul/result';
 import { NodeKind } from '../schema';
 import { MAX_PARAMS, MAX_STACK_DEPTH } from '../matcher/constants';
 import { assertDefined } from './assert';
-import { Flattener } from './flattener';
+import { flatten } from './flattener';
 import { Node } from './node';
 import { matchStaticParts, splitStaticChain, sortParamChildren } from './node-operations';
 import { NodeFactory } from './node-pool';
@@ -38,7 +38,7 @@ export class Builder<T> {
   }
 
   build(methodCodes?: ReadonlyMap<string, number>): BinaryRouterLayout {
-    return Flattener.flatten(this.root, methodCodes);
+    return flatten(this.root, methodCodes);
   }
 
   private addSegments(
