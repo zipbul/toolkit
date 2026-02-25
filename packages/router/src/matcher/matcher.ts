@@ -236,31 +236,10 @@ export class Matcher {
 
       if (stage === STAGE_ENTER) {
         if (segIdx === this.segments.length) {
-          const base = nodeIdx * NODE_STRIDE;
-          const methodsPtr = this.nodeBuffer[base + NODE_OFFSET_METHODS_PTR]!;
+          const result = this.checkTerminal(nodeIdx);
 
-          if (methodsPtr > 0) {
-            const mask = this.nodeBuffer[base + NODE_OFFSET_METHOD_MASK]!;
-
-            if (mask & (1 << this.methodCode)) {
-              const meta = this.nodeBuffer[base + NODE_OFFSET_META]!;
-              const methodCount = (meta & NODE_MASK_METHOD_COUNT) >>> NODE_SHIFT_METHOD_COUNT;
-              let ptr = methodsPtr;
-
-              for (let i = 0; i < methodCount; i++) {
-                if (this.methodsBuffer[ptr] === this.methodCode) {
-                  const handlerIndex = this.methodsBuffer[ptr + 1];
-
-                  if (handlerIndex !== undefined) {
-                    return handlerIndex;
-                  }
-
-                  return null;
-                }
-
-                ptr += 2;
-              }
-            }
+          if (result !== null) {
+            return result;
           }
 
           this.stack[framePtr + FRAME_OFFSET_STAGE] = STAGE_WILDCARD;
@@ -330,141 +309,197 @@ export class Matcher {
 
         this.stack[framePtr + FRAME_OFFSET_ITERATOR] = iter + 1;
 
-        const paramPtr = this.nodeBuffer[base + NODE_OFFSET_PARAM_CHILD_PTR]!;
-        const childIdx = this.paramChildrenBuffer[paramPtr + iter];
+        const result = this.tryParamChild(nodeIdx, iter, segIdx, sp, decodeParams);
 
-        if (childIdx === undefined) {
-          continue;
+        if (isErr(result)) {
+          return result;
         }
 
-        const childBase = childIdx * NODE_STRIDE;
-        const paramInfoIdx = this.nodeBuffer[childBase + NODE_OFFSET_MATCH_FUNC];
-
-        if (paramInfoIdx === undefined) {
-          continue;
+        if (result) {
+          sp += FRAME_SIZE;
         }
-
-        const pBase = paramInfoIdx * PARAM_ENTRY_STRIDE;
-        const nameID = this.paramsBuffer[pBase];
-
-        if (nameID === undefined) {
-          continue;
-        }
-
-        const patternID = this.paramsBuffer[pBase + 1]!;
-        const name = this.getString(nameID);
-        const valueResult = this.decodeAndCache(segIdx, decodeParams);
-
-        if (isErr(valueResult)) {
-          return valueResult;
-        }
-
-        const value = valueResult;
-
-        if (value === undefined) {
-          continue;
-        }
-
-        if (patternID !== 0xffffffff) {
-          const tester = this.patternTesters[patternID];
-
-          if (tester) {
-            try {
-              if (tester(value) === false) {
-                continue;
-              }
-            } catch (e) {
-              return err<RouterErrData>({
-                kind: 'regex-timeout',
-                message: e instanceof Error ? e.message : String(e),
-              });
-            }
-          }
-        }
-
-        this.paramNames[this.paramCount] = name;
-        this.paramValues[this.paramCount] = value;
-
-        this.paramCount++;
-
-        this.stack[sp + FRAME_OFFSET_NODE] = childIdx;
-        this.stack[sp + FRAME_OFFSET_SEGMENT] = segIdx + 1;
-        this.stack[sp + FRAME_OFFSET_STAGE] = STAGE_ENTER;
-        this.stack[sp + FRAME_OFFSET_PARAM_BASE] = this.paramCount;
-        this.stack[sp + FRAME_OFFSET_ITERATOR] = 0;
-
-        sp += FRAME_SIZE;
 
         continue;
       } else if (stage === STAGE_WILDCARD) {
-        const base = nodeIdx * NODE_STRIDE;
-        const wildcardPtr = this.nodeBuffer[base + NODE_OFFSET_WILDCARD_CHILD_PTR]!;
+        const result = this.tryWildcard(nodeIdx, segIdx);
 
-        if (wildcardPtr !== 0) {
-          const childBase = wildcardPtr * NODE_STRIDE;
-          const nameID = this.nodeBuffer[childBase + NODE_OFFSET_MATCH_FUNC];
-
-          if (nameID === undefined) {
-            sp -= FRAME_SIZE;
-
-            if (sp > 0) {
-              this.paramCount = this.stack[sp - FRAME_SIZE + FRAME_OFFSET_PARAM_BASE]!;
-            }
-
-            continue;
-          }
-
-          const name = this.getString(nameID);
-          const value = this.getSuffixValue(segIdx);
-
-          this.paramNames[this.paramCount] = name;
-          this.paramValues[this.paramCount] = value;
-
-          this.paramCount++;
-
-          const childMethodsPtr = this.nodeBuffer[childBase + NODE_OFFSET_METHODS_PTR]!;
-
-          if (childMethodsPtr > 0) {
-            const mask = this.nodeBuffer[childBase + NODE_OFFSET_METHOD_MASK]!;
-
-            if (mask & (1 << this.methodCode)) {
-              const meta = this.nodeBuffer[childBase + NODE_OFFSET_META]!;
-              const origin = (meta & NODE_MASK_WILDCARD_ORIGIN) >>> NODE_SHIFT_WILDCARD_ORIGIN;
-
-              if (origin === 1 && value.length === 0) {
-                sp -= FRAME_SIZE;
-
-                if (sp > 0) {
-                  this.paramCount = this.stack[sp - FRAME_SIZE + FRAME_OFFSET_PARAM_BASE]!;
-                }
-
-                continue;
-              }
-
-              const count = (meta & NODE_MASK_METHOD_COUNT) >>> NODE_SHIFT_METHOD_COUNT;
-              let ptr = childMethodsPtr;
-
-              for (let i = 0; i < count; i++) {
-                if (this.methodsBuffer[ptr] === this.methodCode) {
-                  const handlerIndex = this.methodsBuffer[ptr + 1];
-
-                  if (handlerIndex !== undefined) {
-                    return handlerIndex;
-                  }
-
-                  return null;
-                }
-
-                ptr += 2;
-              }
-            }
-          }
+        if (result !== null) {
+          return result;
         }
 
         sp -= FRAME_SIZE;
 
         if (sp > 0) {
           this.paramCount = this.stack[sp - FRAME_SIZE + FRAME_OFFSET_PARAM_BASE]!;
+        }
+      }
+    }
+
+    return null;
+  }
+
+  /**
+   * Terminal node check — verifies if the current node has a handler for this.methodCode.
+   * Returns handlerIndex on hit, null otherwise.
+   */
+  private checkTerminal(nodeIdx: number): number | null {
+    const base = nodeIdx * NODE_STRIDE;
+    const methodsPtr = this.nodeBuffer[base + NODE_OFFSET_METHODS_PTR]!;
+
+    if (methodsPtr <= 0) {
+      return null;
+    }
+
+    const mask = this.nodeBuffer[base + NODE_OFFSET_METHOD_MASK]!;
+
+    if (!(mask & (1 << this.methodCode))) {
+      return null;
+    }
+
+    const meta = this.nodeBuffer[base + NODE_OFFSET_META]!;
+    const methodCount = (meta & NODE_MASK_METHOD_COUNT) >>> NODE_SHIFT_METHOD_COUNT;
+    let ptr = methodsPtr;
+
+    for (let i = 0; i < methodCount; i++) {
+      if (this.methodsBuffer[ptr] === this.methodCode) {
+        const handlerIndex = this.methodsBuffer[ptr + 1];
+
+        return handlerIndex !== undefined ? handlerIndex : null;
+      }
+
+      ptr += 2;
+    }
+
+    return null;
+  }
+
+  /**
+   * Try matching a single param child node.
+   * Decodes the segment, tests against pattern, and pushes a new stack frame on match.
+   * Returns true if a frame was pushed, false otherwise.
+   */
+  private tryParamChild(
+    nodeIdx: number, iter: number, segIdx: number, sp: number,
+    decodeParams: boolean,
+  ): Result<boolean, RouterErrData> {
+    const base = nodeIdx * NODE_STRIDE;
+    const paramPtr = this.nodeBuffer[base + NODE_OFFSET_PARAM_CHILD_PTR]!;
+    const childIdx = this.paramChildrenBuffer[paramPtr + iter];
+
+    if (childIdx === undefined) {
+      return false;
+    }
+
+    const childBase = childIdx * NODE_STRIDE;
+    const paramInfoIdx = this.nodeBuffer[childBase + NODE_OFFSET_MATCH_FUNC];
+
+    if (paramInfoIdx === undefined) {
+      return false;
+    }
+
+    const pBase = paramInfoIdx * PARAM_ENTRY_STRIDE;
+    const nameID = this.paramsBuffer[pBase];
+
+    if (nameID === undefined) {
+      return false;
+    }
+
+    const patternID = this.paramsBuffer[pBase + 1]!;
+    const name = this.getString(nameID);
+    const valueResult = this.decodeAndCache(segIdx, decodeParams);
+
+    if (isErr(valueResult)) {
+      return valueResult;
+    }
+
+    const value = valueResult;
+
+    if (value === undefined) {
+      return false;
+    }
+
+    if (patternID !== 0xffffffff) {
+      const tester = this.patternTesters[patternID];
+
+      if (tester) {
+        try {
+          if (tester(value) === false) {
+            return false;
+          }
+        } catch (e) {
+          return err<RouterErrData>({
+            kind: 'regex-timeout',
+            message: e instanceof Error ? e.message : String(e),
+          });
+        }
+      }
+    }
+
+    this.paramNames[this.paramCount] = name;
+    this.paramValues[this.paramCount] = value;
+
+    this.paramCount++;
+
+    this.stack[sp + FRAME_OFFSET_NODE] = childIdx;
+    this.stack[sp + FRAME_OFFSET_SEGMENT] = segIdx + 1;
+    this.stack[sp + FRAME_OFFSET_STAGE] = STAGE_ENTER;
+    this.stack[sp + FRAME_OFFSET_PARAM_BASE] = this.paramCount;
+    this.stack[sp + FRAME_OFFSET_ITERATOR] = 0;
+
+    return true;
+  }
+
+  /**
+   * Try matching a wildcard child node.
+   * Returns handlerIndex on hit, null otherwise.
+   */
+  private tryWildcard(nodeIdx: number, segIdx: number): number | null {
+    const base = nodeIdx * NODE_STRIDE;
+    const wildcardPtr = this.nodeBuffer[base + NODE_OFFSET_WILDCARD_CHILD_PTR]!;
+
+    if (wildcardPtr === 0) {
+      return null;
+    }
+
+    const childBase = wildcardPtr * NODE_STRIDE;
+    const nameID = this.nodeBuffer[childBase + NODE_OFFSET_MATCH_FUNC];
+
+    if (nameID === undefined) {
+      return null;
+    }
+
+    const name = this.getString(nameID);
+    const value = this.getSuffixValue(segIdx);
+
+    this.paramNames[this.paramCount] = name;
+    this.paramValues[this.paramCount] = value;
+
+    this.paramCount++;
+
+    const childMethodsPtr = this.nodeBuffer[childBase + NODE_OFFSET_METHODS_PTR]!;
+
+    if (childMethodsPtr > 0) {
+      const mask = this.nodeBuffer[childBase + NODE_OFFSET_METHOD_MASK]!;
+
+      if (mask & (1 << this.methodCode)) {
+        const meta = this.nodeBuffer[childBase + NODE_OFFSET_META]!;
+        const origin = (meta & NODE_MASK_WILDCARD_ORIGIN) >>> NODE_SHIFT_WILDCARD_ORIGIN;
+
+        if (origin === 1 && value.length === 0) {
+          return null;
+        }
+
+        const count = (meta & NODE_MASK_METHOD_COUNT) >>> NODE_SHIFT_METHOD_COUNT;
+        let ptr = childMethodsPtr;
+
+        for (let i = 0; i < count; i++) {
+          if (this.methodsBuffer[ptr] === this.methodCode) {
+            const handlerIndex = this.methodsBuffer[ptr + 1];
+
+            return handlerIndex !== undefined ? handlerIndex : null;
+          }
+
+          ptr += 2;
         }
       }
     }
