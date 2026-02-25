@@ -71,7 +71,6 @@ export class Matcher {
 
   private resultHandlerIndex: number = -1;
   private resultParams: RouteParams | null = null;
-  private resultSnapshot: Array<[string, string | undefined]> | undefined;
 
   constructor(layout: BinaryRouterLayout, globalConfig: MatcherConfig) {
     this.nodeBuffer = layout.nodeBuffer;
@@ -93,7 +92,6 @@ export class Matcher {
     normalizedPath: string,
     segmentHints: Uint8Array | undefined,
     decodeParams: boolean,
-    captureSnapshot: boolean,
   ): Result<boolean, RouterErrData> {
     const code = this.methodCodes?.get(method) ?? METHOD_OFFSET[method];
 
@@ -122,11 +120,6 @@ export class Matcher {
     const handlerIndex = walkResult;
 
     const bag: RouteParams = {};
-    let snapshot: Array<[string, string | undefined]> | undefined;
-
-    if (captureSnapshot) {
-      snapshot = new Array(this.paramCount);
-    }
 
     for (let i = 0; i < this.paramCount; i++) {
       const name = this.paramNames[i];
@@ -137,15 +130,10 @@ export class Matcher {
       }
 
       bag[name] = value;
-
-      if (snapshot) {
-        snapshot[i] = [name, value];
-      }
     }
 
     this.resultHandlerIndex = handlerIndex;
     this.resultParams = bag;
-    this.resultSnapshot = snapshot;
 
     return true;
   }
@@ -156,10 +144,6 @@ export class Matcher {
 
   public getParams(): RouteParams {
     return this.resultParams ?? {};
-  }
-
-  public getSnapshot(): Array<[string, string | undefined]> | undefined {
-    return this.resultSnapshot;
   }
 
   private getString(id: number): string {

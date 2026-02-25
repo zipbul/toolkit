@@ -296,7 +296,6 @@ export class Router<T = unknown> {
       normalized,
       segmentDecodeHints,
       this.options.decodeParams ?? true,
-      false,
     );
 
     if (isErr(matchResult)) {

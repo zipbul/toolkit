@@ -125,5 +125,4 @@ export interface MatchOutput<T> {
 export interface DynamicMatchResult {
   handlerIndex: number;
   params: RouteParams;
-  snapshot?: Array<[string, string | undefined]>;
 }
