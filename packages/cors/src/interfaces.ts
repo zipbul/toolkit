@@ -32,11 +32,28 @@ export interface CorsRejectResult {
 }
 
 /**
- * Error data returned when CORS validation fails.
+ * Error data payload used internally with the Result pattern.
+ * @internal
  */
-export interface CorsError {
+export interface CorsErrorData {
   reason: CorsErrorReason;
   message: string;
+}
+
+/**
+ * Thrown by {@link Cors.create} on invalid options, or by {@link Cors.handle}
+ * when the origin function throws.
+ *
+ * Inspect {@link reason} to programmatically distinguish error kinds.
+ */
+export class CorsError extends Error {
+  public readonly reason: CorsErrorReason;
+
+  constructor(data: CorsErrorData) {
+    super(data.message);
+    this.name = 'CorsError';
+    this.reason = data.reason;
+  }
 }
 
 /**
