@@ -401,6 +401,18 @@ export class Router<T = unknown> {
       }
 
       values[offsetResult] = value;
+
+      const validationResult = this.builder!.addForValidation(method, segments);
+
+      if (isErr(validationResult)) {
+        return err<RouterErrData>({
+          ...validationResult.data,
+          path,
+          method,
+        });
+      }
+
+      return;
     }
 
     const addResult = this.builder!.add(method, segments, value);

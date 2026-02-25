@@ -38,6 +38,11 @@ export class Builder<T> {
     return this.addSegments(this.root, 0, new Set<string>(), [], method, handlerIndex, segments);
   }
 
+  /** 충돌 검사 전용 등록 — handler를 handlers 배열에 추가하지 않음. 정적 라우트용. */
+  addForValidation(method: HttpMethod, segments: string[]): Result<void, RouterErrData> {
+    return this.addSegments(this.root, 0, new Set<string>(), [], method, -1, segments);
+  }
+
   build(methodCodes?: ReadonlyMap<string, number>): BinaryRouterLayout {
     return flatten(this.root, methodCodes);
   }
