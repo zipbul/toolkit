@@ -24,14 +24,25 @@ import {
   PARAM_ENTRY_STRIDE,
 } from '../schema';
 
+interface BufferSizes {
+  staticChildEntries: number;
+  paramChildEntries: number;
+  paramEntries: number;
+  methodEntries: number;
+}
+
 interface FlattenContext {
   nodes: Node[];
   nodeToIndex: Map<Node, number>;
   nodeBuffer: Uint32Array;
-  staticChildrenList: number[];
-  paramChildrenList: number[];
-  paramsList: number[];
-  methodsList: number[];
+  staticChildrenBuffer: Uint32Array;
+  staticChildrenPtr: number;
+  paramChildrenBuffer: Uint32Array;
+  paramChildrenPtr: number;
+  paramsBuffer: Uint32Array;
+  paramsPtr: number;
+  methodsBuffer: Uint32Array;
+  methodsPtr: number;
   stringMap: Map<string, number>;
   stringList: string[];
   patternMap: Map<string, number>;
@@ -41,14 +52,22 @@ interface FlattenContext {
 /** Node trie → BinaryRouterLayout 변환. */
 export function flatten(root: Node, methodCodes?: ReadonlyMap<string, number>): BinaryRouterLayout {
   const { nodes, nodeToIndex } = collectNodes(root);
+  const sizes = calculateBufferSizes(nodes);
+  // methodsBuffer[0] = 0 (sentinel) — Uint32Array 기본값으로 초기화됨
+  const methodsBuffer = new Uint32Array(sizes.methodEntries);
+
   const ctx: FlattenContext = {
     nodes,
     nodeToIndex,
     nodeBuffer: new Uint32Array(nodes.length * NODE_STRIDE),
-    staticChildrenList: [],
-    paramChildrenList: [],
-    paramsList: [],
-    methodsList: [0],
+    staticChildrenBuffer: new Uint32Array(sizes.staticChildEntries),
+    staticChildrenPtr: 0,
+    paramChildrenBuffer: new Uint32Array(sizes.paramChildEntries),
+    paramChildrenPtr: 0,
+    paramsBuffer: new Uint32Array(sizes.paramEntries),
+    paramsPtr: 0,
+    methodsBuffer,
+    methodsPtr: 1, // index 0은 sentinel (이미 0)
     stringMap: new Map(),
     stringList: [],
     patternMap: new Map(),
@@ -67,10 +86,10 @@ export function flatten(root: Node, methodCodes?: ReadonlyMap<string, number>): 
 
   return {
     nodeBuffer: ctx.nodeBuffer,
-    staticChildrenBuffer: Uint32Array.from(ctx.staticChildrenList),
-    paramChildrenBuffer: Uint32Array.from(ctx.paramChildrenList),
-    paramsBuffer: Uint32Array.from(ctx.paramsList),
-    methodsBuffer: Uint32Array.from(ctx.methodsList),
+    staticChildrenBuffer: ctx.staticChildrenBuffer,
+    paramChildrenBuffer: ctx.paramChildrenBuffer,
+    paramsBuffer: ctx.paramsBuffer,
+    methodsBuffer: ctx.methodsBuffer,
     stringTable,
     stringOffsets,
     decodedStrings: ctx.stringList,
@@ -79,14 +98,15 @@ export function flatten(root: Node, methodCodes?: ReadonlyMap<string, number>): 
   };
 }
 
-/** BFS로 노드 순서 결정 + nodeToIndex 맵 생성. */
+/** BFS로 노드 순서 결정 + nodeToIndex 맵 생성 (4-6: shift() → head 포인터 O(1)). */
 function collectNodes(root: Node): { nodes: Node[]; nodeToIndex: Map<Node, number> } {
   const nodes: Node[] = [];
   const nodeToIndex = new Map<Node, number>();
   const queue: Node[] = [root];
+  let head = 0;
 
-  while (queue.length) {
-    const node = queue.shift();
+  while (head < queue.length) {
+    const node = queue[head++];
 
     if (!node || nodeToIndex.has(node)) {
       continue;
@@ -109,6 +129,30 @@ function collectNodes(root: Node): { nodes: Node[]; nodeToIndex: Map<Node, numbe
   }
 
   return { nodes, nodeToIndex };
+}
+
+/**
+ * 각 버퍼의 총 엔트리 수 사전 계산 — TypedArray 단일 할당 (4-3).
+ * nodes 배열을 한 번 순회해 staticChildren/paramChildren/params/methods 크기 산출.
+ */
+function calculateBufferSizes(nodes: Node[]): BufferSizes {
+  let staticChildEntries = 0;
+  let paramChildEntries = 0;
+  let paramEntries = 0;
+  let methodEntries = 1; // index 0은 sentinel
+
+  for (const node of nodes) {
+    staticChildEntries += node.staticChildren.size * 2; // (stringId, nodeIdx) 쌍
+    paramChildEntries += node.paramChildren.length;
+
+    if (node.kind === NodeKind.Param) {
+      paramEntries += PARAM_ENTRY_STRIDE; // (nameId, patternId)
+    }
+
+    methodEntries += node.methods.byMethod.size * 2; // (code, key) 쌍
+  }
+
+  return { staticChildEntries, paramChildEntries, paramEntries, methodEntries };
 }
 
 /** 단일 노드를 바이너리 레이아웃으로 변환. */
@@ -142,9 +186,9 @@ function flattenNode(
   flattenWildcardChild(node, base, ctx);
 
   if (node.kind === NodeKind.Param) {
-    const paramIdx = ctx.paramsList.length / PARAM_ENTRY_STRIDE;
+    const paramIdx = ctx.paramsPtr / PARAM_ENTRY_STRIDE;
 
-    ctx.paramsList.push(getStringId(node.segment, ctx));
+    ctx.paramsBuffer[ctx.paramsPtr++] = getStringId(node.segment, ctx);
 
     let patternId = 0xffffffff;
 
@@ -152,7 +196,7 @@ function flattenNode(
       patternId = getPatternId(node.patternSource, node.pattern?.flags ?? '', ctx);
     }
 
-    ctx.paramsList.push(patternId);
+    ctx.paramsBuffer[ctx.paramsPtr++] = patternId;
     ctx.nodeBuffer[base + NODE_OFFSET_MATCH_FUNC] = paramIdx;
   } else {
     ctx.nodeBuffer[base + NODE_OFFSET_MATCH_FUNC] = getStringId(node.segment, ctx);
@@ -184,11 +228,11 @@ function flattenMethods(
 
     sortedEntries.sort((a, b) => a.code - b.code);
 
-    ctx.nodeBuffer[base + NODE_OFFSET_METHODS_PTR] = ctx.methodsList.length;
+    ctx.nodeBuffer[base + NODE_OFFSET_METHODS_PTR] = ctx.methodsPtr;
 
     for (const entry of sortedEntries) {
-      ctx.methodsList.push(entry.code);
-      ctx.methodsList.push(entry.key);
+      ctx.methodsBuffer[ctx.methodsPtr++] = entry.code;
+      ctx.methodsBuffer[ctx.methodsPtr++] = entry.key;
     }
   } else {
     ctx.nodeBuffer[base + NODE_OFFSET_METHODS_PTR] = 0;
@@ -200,7 +244,7 @@ function flattenMethods(
 /** 정적 자식 노드들을 staticChildrenList에 기록. */
 function flattenStaticChildren(node: Node, base: number, ctx: FlattenContext): void {
   if (node.staticChildren.size > 0) {
-    ctx.nodeBuffer[base + NODE_OFFSET_STATIC_CHILD_PTR] = ctx.staticChildrenList.length;
+    ctx.nodeBuffer[base + NODE_OFFSET_STATIC_CHILD_PTR] = ctx.staticChildrenPtr;
     ctx.nodeBuffer[base + NODE_OFFSET_STATIC_CHILD_COUNT] = node.staticChildren.size;
 
     const staticEntries = Array.from(node.staticChildren.entries());
@@ -208,12 +252,12 @@ function flattenStaticChildren(node: Node, base: number, ctx: FlattenContext): v
     staticEntries.sort((a, b) => (a[0] < b[0] ? -1 : a[0] > b[0] ? 1 : 0));
 
     for (const [seg, child] of staticEntries) {
-      ctx.staticChildrenList.push(getStringId(seg, ctx));
+      ctx.staticChildrenBuffer[ctx.staticChildrenPtr++] = getStringId(seg, ctx);
 
       const childIndex = ctx.nodeToIndex.get(child);
 
       if (childIndex !== undefined) {
-        ctx.staticChildrenList.push(childIndex);
+        ctx.staticChildrenBuffer[ctx.staticChildrenPtr++] = childIndex;
       }
     }
   } else {
@@ -225,13 +269,13 @@ function flattenStaticChildren(node: Node, base: number, ctx: FlattenContext): v
 /** 파라미터 자식 노드들을 paramChildrenList에 기록. */
 function flattenParamChildren(node: Node, base: number, ctx: FlattenContext): void {
   if (node.paramChildren.length > 0) {
-    ctx.nodeBuffer[base + NODE_OFFSET_PARAM_CHILD_PTR] = ctx.paramChildrenList.length;
+    ctx.nodeBuffer[base + NODE_OFFSET_PARAM_CHILD_PTR] = ctx.paramChildrenPtr;
 
     for (const child of node.paramChildren) {
       const childIndex = ctx.nodeToIndex.get(child);
 
       if (childIndex !== undefined) {
-        ctx.paramChildrenList.push(childIndex);
+        ctx.paramChildrenBuffer[ctx.paramChildrenPtr++] = childIndex;
       }
     }
   } else {
