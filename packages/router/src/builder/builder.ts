@@ -11,7 +11,7 @@ import { assertDefined } from './assert';
 import { Flattener } from './flattener';
 import { Node } from './node';
 import { matchStaticParts, splitStaticChain, sortParamChildren } from './node-operations';
-import { NodePool } from './node-pool';
+import { NodeFactory } from './node-pool';
 import { PatternUtils } from './pattern-utils';
 import { assessRegexSafety } from './regex-safety';
 
@@ -21,7 +21,7 @@ export class Builder<T> {
   public readonly handlers: T[] = [];
   private readonly globalParamNames = new Set<string>();
   private readonly patternUtils: PatternUtils;
-  private readonly pool: NodePool = new NodePool();
+  private readonly pool: NodeFactory = new NodeFactory();
 
   constructor(config: BuilderConfig) {
     this.config = config;

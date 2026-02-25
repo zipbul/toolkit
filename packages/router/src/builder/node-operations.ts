@@ -1,5 +1,5 @@
 import type { Node } from './node';
-import type { NodePool } from './node-pool';
+import type { NodeFactory } from './node-pool';
 
 import { NodeKind } from '../schema';
 import { StaticChildMap } from './static-child-map';
@@ -15,7 +15,7 @@ export function matchStaticParts(parts: readonly string[], segments: readonly st
   return matched;
 }
 
-export function splitStaticChain(node: Node, splitIndex: number, pool: NodePool): void {
+export function splitStaticChain(node: Node, splitIndex: number, pool: NodeFactory): void {
   const parts = node.segmentParts;
 
   if (parts === undefined || splitIndex <= 0 || splitIndex >= parts.length) {
