@@ -1,5 +1,5 @@
 import type { HttpMethod } from '@zipbul/shared';
-import type { RegexSafetyOptions } from '../types';
+import type { RegexSafetyOptions, RouterWarning } from '../types';
 import type { Node } from './node';
 
 import { OptionalParamDefaults } from './optional-param-defaults';
@@ -8,6 +8,7 @@ export interface BuilderConfig {
   regexSafety?: RegexSafetyOptions;
   regexAnchorPolicy?: 'warn' | 'error' | 'silent';
   optionalParamDefaults?: OptionalParamDefaults;
+  onWarn?: (warning: RouterWarning) => void;
 }
 
 export interface RouteMethods {

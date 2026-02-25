@@ -548,7 +548,7 @@ export class Builder<T> {
       const msg = `Unsafe route regex '${patternSrc}' (${result.reason})`;
 
       if (safety.mode === 'warn') {
-        console.warn(msg);
+        this.config.onWarn?.({ kind: 'regex-unsafe', message: msg, segment: patternSrc });
       } else {
         return err<RouterErrData>({
           kind: 'regex-unsafe',

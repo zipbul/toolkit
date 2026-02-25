@@ -14,6 +14,7 @@ export interface RouterOptions {
   regexSafety?: RegexSafetyOptions;
   regexAnchorPolicy?: 'warn' | 'error' | 'silent';
   failFastOnBadEncoding?: boolean;
+  onWarn?: (warning: RouterWarning) => void;
 }
 
 export type EncodedSlashBehavior = 'decode' | 'preserve' | 'reject';
@@ -93,6 +94,16 @@ export interface RouterErrData {
   suggestion?: string;
   /** addAll() fail-fast 시 에러 전까지 성공한 등록 수 */
   registeredCount?: number;
+}
+
+/**
+ * 라이브러리가 발행하는 경고 정보.
+ * RouterOptions.onWarn 콜백으로 수신한다.
+ */
+export interface RouterWarning {
+  kind: 'regex-unsafe' | 'regex-anchor';
+  message: string;
+  segment?: string;
 }
 
 // ── Match output types ──

@@ -78,6 +78,10 @@ export class Router<T = unknown> {
       buildConfig.regexAnchorPolicy = options.regexAnchorPolicy;
     }
 
+    if (options.onWarn !== undefined) {
+      buildConfig.onWarn = options.onWarn;
+    }
+
     this.builder = new Builder<T>(buildConfig);
   }
 

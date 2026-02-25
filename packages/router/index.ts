@@ -12,4 +12,5 @@ export type {
   RouterErrData,
   MatchMeta,
   MatchOutput,
+  RouterWarning,
 } from './src/types';

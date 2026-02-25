@@ -293,16 +293,14 @@ describe('Router<T> errors', () => {
   });
 
   it('should not return error when regexSafety mode=warn for unsafe pattern', () => {
-    const warnSpy = spyOn(console, 'warn').mockImplementation(() => {});
-
+    const warnings: string[] = [];
     const router = new Router<string>({
       regexSafety: { mode: 'warn', forbidBackreferences: true },
+      onWarn: w => warnings.push(w.kind),
     });
     const result = router.add('GET', '/users/:id{([a-z])\\1}', 'handler');
     expectNotErr(result);
-    expect(warnSpy).toHaveBeenCalled();
-
-    warnSpy.mockRestore();
+    expect(warnings).toEqual(['regex-unsafe']);
   });
 
   it('should return regex-timeout error when patternTester throws during match', () => {
