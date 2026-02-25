@@ -34,6 +34,11 @@ export class Router<T = unknown> {
   private matcher: Matcher | null = null;
   private compiledMatch: CompiledMatchFn | null = null;
   private normalizer: ((path: string) => Result<NormalizedPathSegments, RouterErrData>) | null = null;
+  // match() hot path용 options 사전 resolve — IC 안정화 (4-9)
+  private _ignoreTrailingSlash = true;
+  private _caseSensitive = true;
+  private _decodeParams = true;
+  private _maxPathLength = 2048;
   private cacheByMethod: Map<number, RouterCache<DynamicMatchResult>> | undefined;
   private cacheMaxSize: number = 1000;
   private sealed = false;
@@ -41,7 +46,7 @@ export class Router<T = unknown> {
   private handlers: T[] = [];
   private optionalParamDefaults: OptionalParamDefaults | undefined;
 
-  private staticMap: Map<string, T[]> = new Map();
+  private staticMap: Map<string, Map<number, T>> = new Map();
   private methodCodes: ReadonlyMap<string, number> = new Map();
 
   constructor(options: RouterOptions = {}) {
@@ -203,6 +208,12 @@ export class Router<T = unknown> {
     this.normalizer = this.processor!.buildNormalizer();
     this.processor = null; // Processor 인스턴스 해제 — builder→null과 동일 패턴
 
+    // match() hot path용 options 사전 resolve — 매 호출마다 this.options 체인 제거 (4-9)
+    this._ignoreTrailingSlash = this.options.ignoreTrailingSlash ?? true;
+    this._caseSensitive = this.options.caseSensitive ?? true;
+    this._decodeParams = this.options.decodeParams ?? true;
+    this._maxPathLength = this.options.maxPathLength ?? 2048;
+
     // trie 해제 — Matcher가 layout(binary)을 소유하므로 builder 참조 불필요
     this.builder = null;
 
@@ -217,6 +228,17 @@ export class Router<T = unknown> {
         path,
         method,
         suggestion: 'Call router.build() after adding all routes',
+      });
+    }
+
+    // 경로 길이 보안 체크 — 악의적으로 긴 URL 차단 (5-1)
+    if (path.length > this._maxPathLength) {
+      return err<RouterErrData>({
+        kind: 'path-too-long',
+        message: `Path length (${path.length}) exceeds maxPathLength (${this._maxPathLength}).`,
+        path,
+        method,
+        suggestion: `Shorten the path or increase maxPathLength in RouterOptions (current: ${this._maxPathLength}).`,
       });
     }
 
@@ -279,7 +301,7 @@ export class Router<T = unknown> {
     }
 
     // Dynamic match
-    const decodeParams = this.options.decodeParams ?? true;
+    const decodeParams = this._decodeParams;
 
     if (this.compiledMatch) {
       const result = this.compiledMatch(segments, methodCode, segmentDecodeHints, decodeParams, normalized);
@@ -353,11 +375,11 @@ export class Router<T = unknown> {
   private preNormalize(path: string): string {
     let p = path;
 
-    if (this.options.ignoreTrailingSlash === true && p.length > 1 && p.endsWith('/')) {
+    if (this._ignoreTrailingSlash && p.length > 1 && p.endsWith('/')) {
       p = p.slice(0, -1);
     }
 
-    if (this.options.caseSensitive === false) {
+    if (!this._caseSensitive) {
       p = p.toLowerCase();
     }
 
@@ -369,9 +391,7 @@ export class Router<T = unknown> {
       return undefined;
     }
 
-    const values = this.staticMap.get(searchPath);
-
-    return values?.[methodCode];
+    return this.staticMap.get(searchPath)?.get(methodCode);
   }
 
   private lookupCache(searchPath: string, methodCode: number): DynamicMatchResult | null | undefined {
@@ -443,12 +463,12 @@ export class Router<T = unknown> {
       let values = this.staticMap.get(normalized);
 
       if (!values) {
-        values = [];
+        values = new Map<number, T>();
 
         this.staticMap.set(normalized, values);
       }
 
-      values[offsetResult] = value;
+      values.set(offsetResult, value);
 
       const validationResult = this.builder!.addForValidation(method, segments);
 

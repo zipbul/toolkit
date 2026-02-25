@@ -16,6 +16,8 @@ export interface RouterOptions {
   failFastOnBadEncoding?: boolean;
   onWarn?: (warning: RouterWarning) => void;
   compiledMatchThreshold?: number;
+  /** 경로 최대 길이. 기본값 2048. 초과 시 match()에서 즉시 Err('path-too-long') 반환. */
+  maxPathLength?: number;
 }
 
 export type EncodedSlashBehavior = 'decode' | 'preserve' | 'reject';
@@ -72,7 +74,8 @@ export type RouterErrKind =
   | 'segment-limit'      // maxSegmentLength 초과
   | 'encoding'           // percent-encoding 디코딩 실패
   | 'encoded-slash'      // encodedSlashBehavior=reject 시 %2F
-  | 'regex-timeout';     // 패턴 매칭 시간 초과
+  | 'regex-timeout'      // 패턴 매칭 시간 초과
+  | 'path-too-long';     // maxPathLength 초과
 
 /**
  * Result 에러에 첨부되는 데이터.
