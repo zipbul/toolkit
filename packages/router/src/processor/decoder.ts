@@ -64,10 +64,3 @@ export function buildDecoder(behavior: EncodedSlashBehavior | undefined, failFas
     }
   };
 }
-
-/**
- * @deprecated Use {@link buildDecoder} to pre-build a decoder closure instead.
- */
-export function decodeURIComponentSafe(value: string, behavior: EncodedSlashBehavior | undefined, failFast: boolean): Result<string, RouterErrData> {
-  return buildDecoder(behavior, failFast)(value);
-}
