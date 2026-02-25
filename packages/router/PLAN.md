@@ -15,17 +15,17 @@
 
 ---
 
-## Phase 0: 버그 및 크래시 수정
+## ~~Phase 0: 버그 및 크래시 수정~~ ✅
 
 운영 시 crash 또는 잘못된 동작을 유발하는 문제. 최우선 수정 대상.
 
-### 0-1. `collapseSlashes` 기본값 버그 〔Sonnet〕
+### ~~0-1. `collapseSlashes` 기본값 버그~~ ✅ 〔Sonnet〕
 
 - **파일**: `router.ts` L40
 - **현상**: `options.collapseSlashes ?? options.ignoreTrailingSlash ?? true` — collapseSlashes가 미설정 시 ignoreTrailingSlash 값에 fallback됨. 이 두 옵션은 독립적 기능인데, `{ ignoreTrailingSlash: false }`만 설정하면 collapseSlashes도 의도치 않게 `false`가 됨.
 - **조치**: `options.collapseSlashes ?? true`로 변경. ignoreTrailingSlash fallback 제거.
 
-### 0-2. `MAX_STACK_DEPTH(64)` / `MAX_PARAMS(32)` 초과 시 미방어 〔Sonnet〕
+### ~~0-2. `MAX_STACK_DEPTH(64)` / `MAX_PARAMS(32)` 초과 시 미방어~~ ✅ 〔Sonnet〕
 
 - **파일**: `matcher/constants.ts`, `builder/builder.ts`, `router.ts`
 - **현상**: matcher의 TypedArray(stack, paramNames, paramValues)가 하드코딩된 64/32 크기. 세그먼트 depth > 64 또는 파라미터 > 32이면 배열 범위 초과 → crash 또는 silent data corruption.
@@ -35,7 +35,7 @@
   3. 두 상수를 `matcher/constants.ts`에서 export하여 builder에서 import.
   4. `RouterErrKind`에 신규 kind 추가 불필요 — 기존 `'segment-limit'` 재사용 가능. 메시지로 구분.
 
-### 0-3. `builder.ts` 내부 `throw` 4곳 — Result 패턴 불일치 〔Sonnet〕
+### ~~0-3. `builder.ts` 내부 `throw` 4곳 — Result 패턴 불일치~~ ✅ 〔Sonnet〕
 
 - **파일**: `builder/builder.ts` L58, L102, L183, L399
 - **현상**: `throw new Error('Missing segment at index ...')`. 라이브러리 전체가 `@zipbul/result` 패턴을 사용하는데 이 4곳만 throw. 호출자가 catch하지 않으면 process crash.

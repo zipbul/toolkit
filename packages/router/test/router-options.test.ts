@@ -247,4 +247,31 @@ describe('Router<T> options', () => {
       expect(result.params.id).toBeUndefined();
     }
   });
+
+  // ── 0-1: collapseSlashes independent of ignoreTrailingSlash ──
+
+  it('should collapse slashes when ignoreTrailingSlash=false and collapseSlashes is not set', () => {
+    // BUG: before fix, `options.collapseSlashes ?? options.ignoreTrailingSlash ?? true`
+    // caused collapseSlashes to fall back to ignoreTrailingSlash (false), disabling collapse.
+    const router = new Router<string>({ ignoreTrailingSlash: false });
+    router.add('GET', '/a/b', 'ab');
+    router.build();
+
+    const result = router.match('GET', '/a//b');
+    expectNotErr(result);
+    expect(result).not.toBeNull();
+    if (result !== null) {
+      expect(result.value).toBe('ab');
+    }
+  });
+
+  it('should not collapse slashes when collapseSlashes=false regardless of ignoreTrailingSlash', () => {
+    const router = new Router<string>({ collapseSlashes: false, ignoreTrailingSlash: false });
+    router.add('GET', '/a/b', 'ab');
+    router.build();
+
+    const result = router.match('GET', '/a//b');
+    expectNotErr(result);
+    expect(result).toBeNull();
+  });
 });

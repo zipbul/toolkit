@@ -6,6 +6,8 @@ import type { BuilderConfig } from './types';
 
 import { err, isErr } from '@zipbul/result';
 import { NodeKind } from '../schema';
+import { MAX_PARAMS, MAX_STACK_DEPTH } from '../matcher/constants';
+import { assertDefined } from './assert';
 import { Flattener } from './flattener';
 import { Node } from './node';
 import { matchStaticParts, splitStaticChain, sortParamChildren } from './node-operations';
@@ -48,15 +50,21 @@ export class Builder<T> {
     key: number,
     segments: string[],
   ): Result<void, RouterErrData> {
+    if (index >= MAX_STACK_DEPTH && index < segments.length) {
+      return err<RouterErrData>({
+        kind: 'segment-limit',
+        message: `Route path exceeds maximum depth of ${MAX_STACK_DEPTH} segments (got ${segments.length})`,
+        suggestion: `Reduce the number of path segments to ${MAX_STACK_DEPTH} or fewer.`,
+      });
+    }
+
     if (index === segments.length) {
       return this.registerRoute(node, method, key, omittedOptionals, segments);
     }
 
     const segment = segments[index];
 
-    if (segment === undefined) {
-      throw new Error(`Missing segment at index ${index}`);
-    }
+    assertDefined(segment, `Missing segment at index ${index}`);
 
     const charCode = segment.charCodeAt(0);
 
@@ -98,9 +106,7 @@ export class Builder<T> {
   ): Result<void, RouterErrData> {
     const segment = segments[index];
 
-    if (segment === undefined) {
-      throw new Error(`Missing segment at index ${index}`);
-    }
+    assertDefined(segment, `Missing segment at index ${index}`);
 
     if (node.staticChildren.size || node.paramChildren.length) {
       const existingNames = [
@@ -179,9 +185,7 @@ export class Builder<T> {
   ): Result<void, RouterErrData> {
     const segment = segments[index];
 
-    if (segment === undefined) {
-      throw new Error(`Missing segment at index ${index}`);
-    }
+    assertDefined(segment, `Missing segment at index ${index}`);
 
     // Parse decorators (?, +, *)
     let core = segment;
@@ -395,9 +399,7 @@ export class Builder<T> {
   ): Result<void, RouterErrData> {
     const segment = segments[index];
 
-    if (segment === undefined) {
-      throw new Error(`Missing segment at index ${index}`);
-    }
+    assertDefined(segment, `Missing segment at index ${index}`);
 
     const child = node.staticChildren.get(segment);
 
@@ -522,6 +524,15 @@ export class Builder<T> {
         kind: 'param-duplicate',
         message: `Duplicate parameter name ':${name}' detected in path: /${segments.join('/')}`,
         segment: name,
+      });
+    }
+
+    if (activeParams.size >= MAX_PARAMS) {
+      return err<RouterErrData>({
+        kind: 'param-duplicate',
+        message: `Route path exceeds maximum of ${MAX_PARAMS} parameters (got ${activeParams.size + 1}) in path: /${segments.join('/')}`,
+        segment: name,
+        suggestion: `Reduce the number of parameters to ${MAX_PARAMS} or fewer.`,
       });
     }
 

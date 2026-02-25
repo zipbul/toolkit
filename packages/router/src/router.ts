@@ -38,7 +38,7 @@ export class Router<T = unknown> {
     this.options = options;
 
     const procConfig: ProcessorConfig = {
-      collapseSlashes: options.collapseSlashes ?? options.ignoreTrailingSlash ?? true,
+      collapseSlashes: options.collapseSlashes ?? true,
       ignoreTrailingSlash: options.ignoreTrailingSlash ?? true,
       blockTraversal: options.blockTraversal ?? true,
       caseSensitive: options.caseSensitive ?? true,

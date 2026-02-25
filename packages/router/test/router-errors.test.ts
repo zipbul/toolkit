@@ -330,4 +330,43 @@ describe('Router<T> errors', () => {
     expect(result.data.kind).toBe('regex-anchor');
     expect(result.data.message).toContain('anchors');
   });
+
+  // ── 0-2: MAX_STACK_DEPTH / MAX_PARAMS guard ──
+
+  it('should return err kind=\'segment-limit\' when path has more than 64 segments', () => {
+    const router = new Router<string>();
+    // 65 path segments: /s0/s1/.../s64
+    const path = '/' + Array.from({ length: 65 }, (_, i) => `s${i}`).join('/');
+
+    const result = router.add('GET', path, 'deep');
+    expectErr(result);
+    expect(result.data.kind).toBe('segment-limit');
+  });
+
+  it('should not return error when path has exactly 64 segments', () => {
+    const router = new Router<string>();
+    // 64 path segments: /s0/s1/.../s63
+    const path = '/' + Array.from({ length: 64 }, (_, i) => `s${i}`).join('/');
+
+    const result = router.add('GET', path, 'deep');
+    expectNotErr(result);
+  });
+
+  it('should return err when path has more than 32 unique param segments', () => {
+    const router = new Router<string>();
+    // 33 distinct param names: /:p0/:p1/.../:p32
+    const path = '/' + Array.from({ length: 33 }, (_, i) => `:p${i}`).join('/');
+
+    const result = router.add('GET', path, 'many-params');
+    expectErr(result);
+  });
+
+  it('should not return error when path has exactly 32 unique param segments', () => {
+    const router = new Router<string>();
+    // 32 distinct param names: /:p0/:p1/.../:p31
+    const path = '/' + Array.from({ length: 32 }, (_, i) => `:p${i}`).join('/');
+
+    const result = router.add('GET', path, 'max-params');
+    expectNotErr(result);
+  });
 });
