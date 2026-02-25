@@ -525,7 +525,6 @@ describe('Router<T> combinations', () => {
         optionalParamBehavior: 'setUndefined',
         regexSafety: { mode: 'error' },
         regexAnchorPolicy: 'silent',
-        strictParamNames: false,
       });
       router.add('GET', '/api/:category/:id?', 'val');
       router.build();

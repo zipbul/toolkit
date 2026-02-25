@@ -77,10 +77,6 @@ export class Router<T = unknown> {
       buildConfig.regexAnchorPolicy = options.regexAnchorPolicy;
     }
 
-    if (options.strictParamNames !== undefined) {
-      buildConfig.strictParamNames = options.strictParamNames;
-    }
-
     this.builder = new Builder<T>(buildConfig);
   }
 

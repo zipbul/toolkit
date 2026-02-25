@@ -208,15 +208,6 @@ describe('Router<T> options', () => {
     expect(result.data.kind).toBe('regex-unsafe');
   });
 
-  it('should handle strictParamNames=true blocking global duplicates', () => {
-    const router = new Router<string>({ strictParamNames: true });
-    router.add('GET', '/users/:id', 'user');
-
-    const result = router.add('GET', '/posts/:id', 'post');
-    expectErr(result);
-    expect(result.data.kind).toBe('param-strict');
-  });
-
   it('should silently pass through malformed encoding when failFastOnBadEncoding=false', () => {
     const router = new Router<string>({ failFastOnBadEncoding: false });
     router.add('GET', '/files/:name', 'files');

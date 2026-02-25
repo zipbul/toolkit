@@ -8,7 +8,6 @@ export interface BuilderConfig {
   regexSafety?: RegexSafetyOptions;
   regexAnchorPolicy?: 'warn' | 'error' | 'silent';
   optionalParamDefaults?: OptionalParamDefaults;
-  strictParamNames?: boolean;
 }
 
 export interface RouteMethods {

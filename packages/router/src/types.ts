@@ -10,7 +10,6 @@ export interface RouterOptions {
   enableCache?: boolean;
   cacheSize?: number;
   maxSegmentLength?: number;
-  strictParamNames?: boolean;
   optionalParamBehavior?: OptionalParamBehavior;
   regexSafety?: RegexSafetyOptions;
   regexAnchorPolicy?: 'warn' | 'error' | 'silent';
@@ -64,7 +63,6 @@ export type RouterErrKind =
   | 'route-conflict'     // wildcard/param/static 구조적 충돌
   | 'route-parse'        // 패턴 문법 오류
   | 'param-duplicate'    // 같은 경로 내 동일 이름 파라미터
-  | 'param-strict'       // strictParamNames 시 전역 이름 중복
   | 'regex-unsafe'       // regex safety 검사 실패
   | 'regex-anchor'       // anchor policy=error 시 ^/$ 포함
   | 'method-limit'       // 32개 메서드 초과 (MethodRegistry)

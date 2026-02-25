@@ -147,11 +147,7 @@ export class Builder<T> {
         });
       }
     } else {
-      const globalResult = this.registerGlobalParamName(name);
-
-      if (isErr(globalResult)) {
-        return globalResult;
-      }
+      this.registerGlobalParamName(name);
 
       node.wildcardChild = this.pool.acquire(NodeKind.Wildcard, name);
       node.wildcardChild.wildcardOrigin = 'star';
@@ -297,13 +293,7 @@ export class Builder<T> {
         return conflictResult;
       }
 
-      const globalResult = this.registerGlobalParamName(name);
-
-      if (isErr(globalResult)) {
-        releaseResult();
-
-        return globalResult;
-      }
+      this.registerGlobalParamName(name);
 
       child = this.pool.acquire(NodeKind.Param, name);
 
@@ -355,11 +345,7 @@ export class Builder<T> {
     }
 
     if (!node.wildcardChild) {
-      const globalResult = this.registerGlobalParamName(name);
-
-      if (isErr(globalResult)) {
-        return globalResult;
-      }
+      this.registerGlobalParamName(name);
 
       node.wildcardChild = this.pool.acquire(NodeKind.Wildcard, name || '*');
       node.wildcardChild.wildcardOrigin = type;
@@ -541,16 +527,7 @@ export class Builder<T> {
     return () => activeParams.delete(name);
   }
 
-  private registerGlobalParamName(name: string): Result<void, RouterErrData> {
-    if (this.config.strictParamNames === true && this.globalParamNames.has(name)) {
-      return err<RouterErrData>({
-        kind: 'param-strict',
-        message: `Parameter ':${name}' already registered (strict uniqueness enabled)`,
-        segment: name,
-        suggestion: `Rename the parameter in one of the routes, or set strictParamNames: false to allow reuse`,
-      });
-    }
-
+  private registerGlobalParamName(name: string): void {
     this.globalParamNames.add(name);
   }
 
