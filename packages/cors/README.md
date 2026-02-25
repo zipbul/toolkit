@@ -38,26 +38,17 @@ This design fits naturally into any environment — middleware pipelines, edge r
 ## 🚀 Quick Start
 
 ```typescript
-import { Cors, CorsAction } from '@zipbul/cors';
-import { isErr } from '@zipbul/result';
+import { Cors, CorsAction, CorsError } from '@zipbul/cors';
 
-const corsResult = Cors.create({
+// Cors.create() throws CorsError on invalid options
+const cors = Cors.create({
   origin: 'https://my-app.example.com',
   credentials: true,
 });
 
-if (isErr(corsResult)) {
-  throw new Error(`CORS config error: ${corsResult.data.message}`);
-}
-
-const cors = corsResult;
-
 async function handleRequest(request: Request): Promise<Response> {
+  // handle() throws CorsError if the origin function fails
   const result = await cors.handle(request);
-
-  if (isErr(result)) {
-    return new Response('Internal Error', { status: 500 });
-  }
 
   if (result.action === CorsAction.Reject) {
     return new Response('Forbidden', { status: 403 });
@@ -212,7 +203,7 @@ Returned when CORS validation fails. Use `reason` to build a detailed error resp
 | `MethodNotAllowed` | Request method not in the allowed list |
 | `HeaderNotAllowed` | Request header not in the allowed list |
 
-`Cors.create()` returns `Err<CorsError>` when options fail validation:
+`Cors.create()` throws `CorsError` when options fail validation:
 
 | `CorsErrorReason` | Meaning |
 |:------------------|:--------|
@@ -267,7 +258,7 @@ Cors.create({
 });
 ```
 
-> If the origin function throws, `handle()` returns `Err<CorsError>` with `reason: CorsErrorReason.OriginFunctionError`. The error is wrapped, not re-thrown.
+> If the origin function throws, `handle()` throws `CorsError` with `reason: CorsErrorReason.OriginFunctionError`.
 
 ### Wildcards and credentials
 
@@ -288,7 +279,7 @@ Cors.create({ origin: true, credentials: true });
 // ✅ Specific domain + credentials
 Cors.create({ origin: 'https://app.example.com', credentials: true });
 
-// ❌ origin: '*' + credentials: true → Cors.create() returns Err<CorsError>
+// ❌ origin: '*' + credentials: true → Cors.create() throws CorsError
 Cors.create({ origin: '*', credentials: true }); // CorsErrorReason.CredentialsWithWildcardOrigin
 ```
 
@@ -297,14 +288,10 @@ Cors.create({ origin: '*', credentials: true }); // CorsErrorReason.CredentialsW
 When another middleware needs to handle OPTIONS requests directly:
 
 ```typescript
-const cors = Cors.create({ preflightContinue: true }) as Cors;
+const cors = Cors.create({ preflightContinue: true });
 
 async function handle(request: Request): Promise<Response> {
   const result = await cors.handle(request);
-
-  if (isErr(result)) {
-    return new Response('Internal Error', { status: 500 });
-  }
 
   if (result.action === CorsAction.Reject) {
     return new Response('Forbidden', { status: 403 });
@@ -330,24 +317,16 @@ async function handle(request: Request): Promise<Response> {
 
 ```typescript
 import { Cors, CorsAction } from '@zipbul/cors';
-import { isErr } from '@zipbul/result';
 
-const corsResult = Cors.create({
+const cors = Cors.create({
   origin: ['https://app.example.com'],
   credentials: true,
   exposedHeaders: ['X-Request-Id'],
 });
 
-if (isErr(corsResult)) throw new Error(corsResult.data.message);
-const cors = corsResult;
-
 Bun.serve({
   async fetch(request) {
     const result = await cors.handle(request);
-
-    if (isErr(result)) {
-      return new Response('Internal Error', { status: 500 });
-    }
 
     if (result.action === CorsAction.Reject) {
       return new Response(
@@ -383,21 +362,14 @@ Bun.serve({
 ```typescript
 import { Cors, CorsAction } from '@zipbul/cors';
 import type { CorsOptions } from '@zipbul/cors';
-import { isErr } from '@zipbul/result';
 
 function corsMiddleware(options?: CorsOptions) {
-  const createResult = Cors.create(options);
-  if (isErr(createResult)) throw new Error(createResult.data.message);
-  const cors = createResult;
+  // throws CorsError on invalid options
+  const cors = Cors.create(options);
 
   return async (ctx: Context, next: () => Promise<void>) => {
+    // throws CorsError if origin function fails
     const result = await cors.handle(ctx.request);
-
-    if (isErr(result)) {
-      ctx.status = 500;
-      ctx.body = { error: 'CORS_INTERNAL_ERROR' };
-      return;
-    }
 
     if (result.action === CorsAction.Reject) {
       ctx.status = 403;

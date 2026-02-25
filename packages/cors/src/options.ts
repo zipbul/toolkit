@@ -4,7 +4,7 @@ import safe from 'safe-regex2';
 
 import { CORS_DEFAULT_METHODS, CORS_DEFAULT_OPTIONS_SUCCESS_STATUS } from './constants';
 import { CorsErrorReason } from './enums';
-import type { CorsError, CorsOptions } from './interfaces';
+import type { CorsErrorData, CorsOptions } from './interfaces';
 import type { ResolvedCorsOptions } from './types';
 
 /**
@@ -51,16 +51,16 @@ function isBlank(value: string): boolean {
  * @returns `undefined` when valid, or `Err<CorsError>` describing the first
  *   rule violation found.
  */
-export function validateCorsOptions(resolved: ResolvedCorsOptions): Result<void, CorsError> {
+export function validateCorsOptions(resolved: ResolvedCorsOptions): Result<void, CorsErrorData> {
   if (typeof resolved.origin === 'string' && resolved.origin !== '*' && isBlank(resolved.origin)) {
-    return err<CorsError>({
+    return err<CorsErrorData>({
       reason: CorsErrorReason.InvalidOrigin,
       message: 'origin must not be an empty or blank string (RFC 6454)',
     });
   }
 
   if (resolved.origin instanceof RegExp && !safe(resolved.origin)) {
-    return err<CorsError>({
+    return err<CorsErrorData>({
       reason: CorsErrorReason.UnsafeRegExp,
       message: 'origin RegExp is potentially unsafe (exponential backtracking / ReDoS)',
     });
@@ -68,7 +68,7 @@ export function validateCorsOptions(resolved: ResolvedCorsOptions): Result<void,
 
   if (Array.isArray(resolved.origin)) {
     if (resolved.origin.length === 0) {
-      return err<CorsError>({
+      return err<CorsErrorData>({
         reason: CorsErrorReason.InvalidOrigin,
         message: 'origin array must not be empty (RFC 6454)',
       });
@@ -77,7 +77,7 @@ export function validateCorsOptions(resolved: ResolvedCorsOptions): Result<void,
     const hasBlankEntry = resolved.origin.some(entry => typeof entry === 'string' && isBlank(entry));
 
     if (hasBlankEntry) {
-      return err<CorsError>({
+      return err<CorsErrorData>({
         reason: CorsErrorReason.InvalidOrigin,
         message: 'origin array must not contain empty or blank string entries (RFC 6454)',
       });
@@ -86,7 +86,7 @@ export function validateCorsOptions(resolved: ResolvedCorsOptions): Result<void,
     const hasUnsafeRegExp = resolved.origin.some(entry => entry instanceof RegExp && !safe(entry));
 
     if (hasUnsafeRegExp) {
-      return err<CorsError>({
+      return err<CorsErrorData>({
         reason: CorsErrorReason.UnsafeRegExp,
         message: 'origin array contains an unsafe RegExp (exponential backtracking / ReDoS)',
       });
@@ -94,49 +94,49 @@ export function validateCorsOptions(resolved: ResolvedCorsOptions): Result<void,
   }
 
   if (resolved.methods.length === 0) {
-    return err<CorsError>({
+    return err<CorsErrorData>({
       reason: CorsErrorReason.InvalidMethods,
       message: 'methods must not be an empty array (RFC 9110 §5.6.2)',
     });
   }
 
   if (resolved.methods.some(isBlank)) {
-    return err<CorsError>({
+    return err<CorsErrorData>({
       reason: CorsErrorReason.InvalidMethods,
       message: 'methods must not contain empty or blank string entries (RFC 9110 §5.6.2 token)',
     });
   }
 
   if (resolved.allowedHeaders !== null && resolved.allowedHeaders.some(isBlank)) {
-    return err<CorsError>({
+    return err<CorsErrorData>({
       reason: CorsErrorReason.InvalidAllowedHeaders,
       message: 'allowedHeaders must not contain empty or blank string entries (RFC 9110 §5.6.2 token)',
     });
   }
 
   if (resolved.exposedHeaders !== null && resolved.exposedHeaders.some(isBlank)) {
-    return err<CorsError>({
+    return err<CorsErrorData>({
       reason: CorsErrorReason.InvalidExposedHeaders,
       message: 'exposedHeaders must not contain empty or blank string entries (RFC 9110 §5.6.2 token)',
     });
   }
 
   if (resolved.credentials === true && resolved.origin === '*') {
-    return err<CorsError>({
+    return err<CorsErrorData>({
       reason: CorsErrorReason.CredentialsWithWildcardOrigin,
       message: 'credentials:true cannot be used with wildcard origin (*) per Fetch Standard',
     });
   }
 
   if (resolved.maxAge !== null && (resolved.maxAge < 0 || !Number.isInteger(resolved.maxAge))) {
-    return err<CorsError>({
+    return err<CorsErrorData>({
       reason: CorsErrorReason.InvalidMaxAge,
       message: 'maxAge must be a non-negative integer (delta-seconds per RFC 9111)',
     });
   }
 
   if (!Number.isInteger(resolved.optionsSuccessStatus) || resolved.optionsSuccessStatus < 200 || resolved.optionsSuccessStatus > 299) {
-    return err<CorsError>({
+    return err<CorsErrorData>({
       reason: CorsErrorReason.InvalidStatusCode,
       message: 'optionsSuccessStatus must be a 2xx integer status code (200–299)',
     });
