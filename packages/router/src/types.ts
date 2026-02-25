@@ -43,10 +43,7 @@ export interface MatcherConfig {
 export interface NormalizedPathSegments {
   normalized: string;
   segments: string[];
-  segmentOffsets?: Uint32Array;
   segmentDecodeHints?: Uint8Array;
-  suffixSource?: string;
-  hadTrailingSlash?: boolean;
 }
 
 
