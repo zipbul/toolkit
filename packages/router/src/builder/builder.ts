@@ -6,27 +6,28 @@ import type { BuilderConfig } from './types';
 
 import { err, isErr } from '@zipbul/result';
 import { NodeKind } from '../schema';
-import { MAX_PARAMS, MAX_STACK_DEPTH } from '../matcher/constants';
+import { MAX_STACK_DEPTH } from '../matcher/constants';
 import { assertDefined } from './assert';
 import { flatten } from './flattener';
 import { Node } from './node';
 import { matchStaticParts, splitStaticChain, sortParamChildren } from './node-operations';
 import { NodeFactory } from './node-pool';
 import { PatternUtils } from './pattern-utils';
-import { assessRegexSafety } from './regex-safety';
+import { RouteValidator } from './validator';
 
 export class Builder<T> {
   public root: Node;
   public readonly config: BuilderConfig;
   public readonly handlers: T[] = [];
-  private readonly globalParamNames = new Set<string>();
   private readonly patternUtils: PatternUtils;
+  private readonly validator: RouteValidator;
   private readonly pool: NodeFactory = new NodeFactory();
 
   constructor(config: BuilderConfig) {
     this.config = config;
     this.root = this.pool.acquire(NodeKind.Static, '/');
     this.patternUtils = new PatternUtils(config);
+    this.validator = new RouteValidator(config, this.patternUtils);
   }
 
   add(method: HttpMethod, segments: string[], handler: T): Result<void, RouterErrData> {
@@ -116,7 +117,7 @@ export class Builder<T> {
 
       return err<RouterErrData>({
         kind: 'route-conflict',
-        message: `Conflict: adding wildcard '*' at '${this.getPathString(segments, index)}' would shadow existing routes`,
+        message: `Conflict: adding wildcard '*' at '${this.validator.getPathString(segments, index)}' would shadow existing routes`,
         segment: '*',
         conflictsWith: existingNames || undefined,
         suggestion: `Register specific routes before the wildcard, or move the wildcard to a deeper path (e.g. '/api/files/*' instead of '/api/*').`,
@@ -140,21 +141,21 @@ export class Builder<T> {
       if (existing.wildcardOrigin !== 'star' || existing.segment !== name) {
         return err<RouterErrData>({
           kind: 'route-conflict',
-          message: `Conflict: wildcard '${existing.segment}' already exists at '${this.getPathString(segments, index)}'`,
+          message: `Conflict: wildcard '${existing.segment}' already exists at '${this.validator.getPathString(segments, index)}'`,
           segment: name,
           conflictsWith: existing.segment,
           suggestion: `Use the same wildcard name '${existing.segment}' that was registered first, or choose a different path prefix.`,
         });
       }
     } else {
-      this.registerGlobalParamName(name);
+      this.validator.registerGlobalParamName(name);
 
       node.wildcardChild = this.pool.acquire(NodeKind.Wildcard, name);
       node.wildcardChild.wildcardOrigin = 'star';
     }
 
     // Recurse (to register route)
-    const releaseResult = this.registerParamScope(name, activeParams, segments);
+    const releaseResult = this.validator.registerParamScope(name, activeParams, segments);
 
     if (isErr(releaseResult)) {
       return releaseResult;
@@ -256,7 +257,7 @@ export class Builder<T> {
       }
     }
 
-    const registerScope = () => this.registerParamScope(name, activeParams, segments);
+    const registerScope = () => this.validator.registerParamScope(name, activeParams, segments);
 
     // Special Types: Zero-or-more (*) or Multi-segment (+)
     if (isZeroOrMore || isMulti) {
@@ -281,11 +282,11 @@ export class Builder<T> {
       return releaseResult;
     }
 
-    let child = this.findMatchingParamChild(node, name, patternSrc);
+    let child = this.validator.findMatchingParamChild(node, name, patternSrc);
 
     if (child === undefined) {
       // Conflict Checks
-      const conflictResult = this.ensureNoParamConflict(node, name, patternSrc, segments, index);
+      const conflictResult = this.validator.ensureNoParamConflict(node, name, patternSrc, segments, index);
 
       if (isErr(conflictResult)) {
         releaseResult();
@@ -293,12 +294,12 @@ export class Builder<T> {
         return conflictResult;
       }
 
-      this.registerGlobalParamName(name);
+      this.validator.registerGlobalParamName(name);
 
       child = this.pool.acquire(NodeKind.Param, name);
 
       if (typeof patternSrc === 'string' && patternSrc.length > 0) {
-        const regexResult = this.applyParamRegex(child, patternSrc);
+        const regexResult = this.validator.applyParamRegex(child, patternSrc);
 
         if (isErr(regexResult)) {
           releaseResult();
@@ -345,7 +346,7 @@ export class Builder<T> {
     }
 
     if (!node.wildcardChild) {
-      this.registerGlobalParamName(name);
+      this.validator.registerGlobalParamName(name);
 
       node.wildcardChild = this.pool.acquire(NodeKind.Wildcard, name || '*');
       node.wildcardChild.wildcardOrigin = type;
@@ -355,7 +356,7 @@ export class Builder<T> {
 
       return err<RouterErrData>({
         kind: 'route-conflict',
-        message: `Conflict: ${prefix} '${label}' cannot reuse wildcard '${node.wildcardChild.segment}' at '${this.getPathString(segments, index)}'`,
+        message: `Conflict: ${prefix} '${label}' cannot reuse wildcard '${node.wildcardChild.segment}' at '${this.validator.getPathString(segments, index)}'`,
         conflictsWith: node.wildcardChild.segment,
         suggestion: `Use the same wildcard name and type as the existing one ('${node.wildcardChild.segment}'), or register this route under a different path prefix`,
       });
@@ -392,7 +393,7 @@ export class Builder<T> {
     if (!child && node.wildcardChild) {
       return err<RouterErrData>({
         kind: 'route-conflict',
-        message: `Conflict: adding static segment '${segment}' under existing wildcard at '${this.getPathString(segments, index)}'`,
+        message: `Conflict: adding static segment '${segment}' under existing wildcard at '${this.validator.getPathString(segments, index)}'`,
         segment,
         suggestion: `Remove the wildcard route or register the static segment '${segment}' at a different path prefix`,
       });
@@ -440,129 +441,4 @@ export class Builder<T> {
 
   // --- Helpers ---
 
-  private findMatchingParamChild(node: Node, name: string, patternSrc?: string): Node | undefined {
-    // Exact match on Name and Regex Source
-    return node.paramChildren.find(c => c.segment === name && (c.pattern?.source ?? undefined) === (patternSrc ?? undefined));
-  }
-
-  private ensureNoParamConflict(
-    node: Node,
-    name: string,
-    patternSrc: string | undefined,
-    segments: string[],
-    index: number,
-  ): Result<void, RouterErrData> {
-    const dup = node.paramChildren.find(c => c.segment === name && (c.pattern?.source ?? '') !== (patternSrc ?? ''));
-
-    if (dup) {
-      const existingPat = dup.patternSource ? `{${dup.patternSource}}` : '(no regex)';
-      const incomingPat = patternSrc ? `{${patternSrc}}` : '(no regex)';
-
-      return err<RouterErrData>({
-        kind: 'route-conflict',
-        message: `Conflict: parameter ':${name}' with different regex already exists at '${this.getPathString(segments, index)}'`,
-        segment: `:${name}${incomingPat}`,
-        conflictsWith: `:${name}${existingPat}`,
-        suggestion: `Use the same regex pattern for ':${name}' across all routes at this path position`,
-      });
-    }
-
-    if (node.wildcardChild) {
-      return err<RouterErrData>({
-        kind: 'route-conflict',
-        message: `Conflict: adding parameter ':${name}' under existing wildcard at '${this.getPathString(segments, index)}'`,
-        segment: `:${name}`,
-        conflictsWith: node.wildcardChild.segment,
-        suggestion: `Remove the wildcard route at this position, or use a different path prefix for the parameter ':${name}'`,
-      });
-    }
-  }
-
-  private applyParamRegex(node: Node, patternSrc: string): Result<void, RouterErrData> {
-    const normalizeResult = this.patternUtils.normalizeParamPatternSource(patternSrc);
-
-    if (isErr(normalizeResult)) {
-      return normalizeResult;
-    }
-
-    const normalizedPattern = normalizeResult;
-
-    const safetyResult = this.ensureRegexSafe(normalizedPattern);
-
-    if (isErr(safetyResult)) {
-      return safetyResult;
-    }
-
-    const patternFlags = ''; // flags support could be added here
-    const compiledPattern = this.patternUtils.acquireCompiledPattern(normalizedPattern, patternFlags);
-
-    node.pattern = compiledPattern;
-    node.patternSource = normalizedPattern;
-  }
-
-  /**
-   * Scopes a parameter name to the current path branch, detecting duplicates.
-   * Returns a cleanup function to remove the scope after recursion.
-   */
-  private registerParamScope(name: string, activeParams: Set<string>, segments: string[]): Result<() => void, RouterErrData> {
-    if (activeParams.has(name)) {
-      return err<RouterErrData>({
-        kind: 'param-duplicate',
-        message: `Duplicate parameter name ':${name}' detected in path: /${segments.join('/')}`,
-        segment: name,
-      });
-    }
-
-    if (activeParams.size >= MAX_PARAMS) {
-      return err<RouterErrData>({
-        kind: 'param-duplicate',
-        message: `Route path exceeds maximum of ${MAX_PARAMS} parameters (got ${activeParams.size + 1}) in path: /${segments.join('/')}`,
-        segment: name,
-        suggestion: `Reduce the number of parameters to ${MAX_PARAMS} or fewer.`,
-      });
-    }
-
-    activeParams.add(name);
-
-    return () => activeParams.delete(name);
-  }
-
-  private registerGlobalParamName(name: string): void {
-    this.globalParamNames.add(name);
-  }
-
-  private ensureRegexSafe(patternSrc: string): Result<void, RouterErrData> {
-    const safety = this.config.regexSafety;
-
-    if (safety === undefined) {
-      return;
-    }
-
-    const result = assessRegexSafety(patternSrc, {
-      maxLength: safety.maxLength ?? 250,
-      forbidBacktrackingTokens: safety.forbidBacktrackingTokens ?? true,
-      forbidBackreferences: safety.forbidBackreferences ?? true,
-    });
-
-    if (!result.safe) {
-      const msg = `Unsafe route regex '${patternSrc}' (${result.reason})`;
-
-      if (safety.mode === 'warn') {
-        this.config.onWarn?.({ kind: 'regex-unsafe', message: msg, segment: patternSrc });
-      } else {
-        return err<RouterErrData>({
-          kind: 'regex-unsafe',
-          message: msg,
-          segment: patternSrc,
-          suggestion: `Simplify the regex to avoid catastrophic backtracking, or set regexSafety.mode: 'warn'`,
-        });
-      }
-    }
-
-    safety.validator?.(patternSrc);
-  }
-
-  private getPathString(segments: string[], index: number): string {
-    return segments.slice(0, index).join('/') || '/';
-  }
 }
