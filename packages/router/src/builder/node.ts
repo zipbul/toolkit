@@ -16,7 +16,6 @@ export class Node {
   patternSource: string | undefined;
   segmentParts: string[] | undefined;
   wildcardOrigin: 'star' | 'multi' | 'zero' | undefined;
-  paramSortScore: number | undefined;
 
   constructor(kind: NodeKind, segment: string) {
     this.kind = kind;
@@ -40,6 +39,5 @@ export class Node {
     this.patternSource = undefined;
     this.segmentParts = undefined;
     this.wildcardOrigin = undefined;
-    this.paramSortScore = undefined;
   }
 }
