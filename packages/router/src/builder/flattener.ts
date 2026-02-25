@@ -24,232 +24,289 @@ import {
   PARAM_ENTRY_STRIDE,
 } from '../schema';
 
+interface FlattenContext {
+  nodes: Node[];
+  nodeToIndex: Map<Node, number>;
+  nodeBuffer: Uint32Array;
+  staticChildrenList: number[];
+  paramChildrenList: number[];
+  paramsList: number[];
+  methodsList: number[];
+  stringMap: Map<string, number>;
+  stringList: string[];
+  patternMap: Map<string, number>;
+  patterns: SerializedPattern[];
+}
+
+/** Node trie → BinaryRouterLayout 변환. */
 export function flatten(root: Node, methodCodes?: ReadonlyMap<string, number>): BinaryRouterLayout {
-    const nodes: Node[] = [];
-    const nodeToIndex = new Map<Node, number>();
-    const queue: Node[] = [root];
+  const { nodes, nodeToIndex } = collectNodes(root);
+  const ctx: FlattenContext = {
+    nodes,
+    nodeToIndex,
+    nodeBuffer: new Uint32Array(nodes.length * NODE_STRIDE),
+    staticChildrenList: [],
+    paramChildrenList: [],
+    paramsList: [],
+    methodsList: [0],
+    stringMap: new Map(),
+    stringList: [],
+    patternMap: new Map(),
+    patterns: [],
+  };
 
-    while (queue.length) {
-      const node = queue.shift();
+  for (let i = 0; i < nodes.length; i++) {
+    const node = nodes[i];
 
-      if (!node) {
-        continue;
-      }
+    if (node) {
+      flattenNode(node, i, ctx, methodCodes);
+    }
+  }
 
-      if (nodeToIndex.has(node)) {
-        continue;
-      }
+  const { stringTable, stringOffsets } = buildStringTable(ctx.stringList);
 
-      nodeToIndex.set(node, nodes.length);
-      nodes.push(node);
+  return {
+    nodeBuffer: ctx.nodeBuffer,
+    staticChildrenBuffer: Uint32Array.from(ctx.staticChildrenList),
+    paramChildrenBuffer: Uint32Array.from(ctx.paramChildrenList),
+    paramsBuffer: Uint32Array.from(ctx.paramsList),
+    methodsBuffer: Uint32Array.from(ctx.methodsList),
+    stringTable,
+    stringOffsets,
+    decodedStrings: ctx.stringList,
+    patterns: ctx.patterns,
+    rootIndex: 0,
+  };
+}
 
-      for (const [, child] of node.staticChildren) {
-        queue.push(child);
-      }
+/** BFS로 노드 순서 결정 + nodeToIndex 맵 생성. */
+function collectNodes(root: Node): { nodes: Node[]; nodeToIndex: Map<Node, number> } {
+  const nodes: Node[] = [];
+  const nodeToIndex = new Map<Node, number>();
+  const queue: Node[] = [root];
 
-      for (const child of node.paramChildren) {
-        queue.push(child);
-      }
+  while (queue.length) {
+    const node = queue.shift();
 
-      if (node.wildcardChild) {
-        queue.push(node.wildcardChild);
+    if (!node || nodeToIndex.has(node)) {
+      continue;
+    }
+
+    nodeToIndex.set(node, nodes.length);
+    nodes.push(node);
+
+    for (const [, child] of node.staticChildren) {
+      queue.push(child);
+    }
+
+    for (const child of node.paramChildren) {
+      queue.push(child);
+    }
+
+    if (node.wildcardChild) {
+      queue.push(node.wildcardChild);
+    }
+  }
+
+  return { nodes, nodeToIndex };
+}
+
+/** 단일 노드를 바이너리 레이아웃으로 변환. */
+function flattenNode(
+  node: Node, index: number, ctx: FlattenContext,
+  methodCodes?: ReadonlyMap<string, number>,
+): void {
+  const base = index * NODE_STRIDE;
+  const kindCode = node.kind === NodeKind.Static ? 0 : node.kind === NodeKind.Param ? 1 : 2;
+  let wildcardOriginCode = 0;
+
+  if (node.wildcardOrigin === 'multi') {
+    wildcardOriginCode = 1;
+  } else if (node.wildcardOrigin === 'zero') {
+    wildcardOriginCode = 2;
+  }
+
+  const paramCount = node.paramChildren.length;
+  const methodCount = node.methods.byMethod.size;
+  let meta = kindCode & NODE_MASK_KIND;
+
+  meta |= (wildcardOriginCode << NODE_SHIFT_WILDCARD_ORIGIN) & NODE_MASK_WILDCARD_ORIGIN;
+  meta |= (paramCount << NODE_SHIFT_PARAM_COUNT) & NODE_MASK_PARAM_COUNT;
+  meta |= (methodCount << NODE_SHIFT_METHOD_COUNT) & NODE_MASK_METHOD_COUNT;
+
+  ctx.nodeBuffer[base + NODE_OFFSET_META] = meta;
+
+  flattenMethods(node, base, ctx, methodCodes);
+  flattenStaticChildren(node, base, ctx);
+  flattenParamChildren(node, base, ctx);
+  flattenWildcardChild(node, base, ctx);
+
+  if (node.kind === NodeKind.Param) {
+    const paramIdx = ctx.paramsList.length / PARAM_ENTRY_STRIDE;
+
+    ctx.paramsList.push(getStringId(node.segment, ctx));
+
+    let patternId = 0xffffffff;
+
+    if (typeof node.patternSource === 'string' && node.patternSource.length > 0) {
+      patternId = getPatternId(node.patternSource, node.pattern?.flags ?? '', ctx);
+    }
+
+    ctx.paramsList.push(patternId);
+    ctx.nodeBuffer[base + NODE_OFFSET_MATCH_FUNC] = paramIdx;
+  } else {
+    ctx.nodeBuffer[base + NODE_OFFSET_MATCH_FUNC] = getStringId(node.segment, ctx);
+  }
+}
+
+/** 메서드 엔트리들을 methodsList에 기록. */
+function flattenMethods(
+  node: Node, base: number, ctx: FlattenContext,
+  methodCodes?: ReadonlyMap<string, number>,
+): void {
+  const methodCount = node.methods.byMethod.size;
+  let methodMask = 0;
+
+  if (methodCount > 0) {
+    const sortedEntries: MethodEntry[] = [];
+
+    for (const [method, key] of node.methods.byMethod.entries()) {
+      const mCodeNum = methodCodes?.get(method as string) ?? METHOD_OFFSET[method];
+
+      if (mCodeNum !== undefined) {
+        if (mCodeNum < 31) {
+          methodMask |= 1 << mCodeNum;
+        }
+
+        sortedEntries.push({ code: mCodeNum, key });
       }
     }
 
-    const nodeBuffer = new Uint32Array(nodes.length * NODE_STRIDE);
-    const staticChildrenList: number[] = [];
-    const paramChildrenList: number[] = [];
-    const paramsList: number[] = [];
-    const methodsList: number[] = [0];
-    const stringList: string[] = [];
-    const stringMap = new Map<string, number>();
-    const patterns: SerializedPattern[] = [];
-    const patternMap = new Map<string, number>();
+    sortedEntries.sort((a, b) => a.code - b.code);
 
-    const getStringId = (str: string): number => {
-      let id = stringMap.get(str);
+    ctx.nodeBuffer[base + NODE_OFFSET_METHODS_PTR] = ctx.methodsList.length;
 
-      if (id === undefined) {
-        id = stringList.length;
+    for (const entry of sortedEntries) {
+      ctx.methodsList.push(entry.code);
+      ctx.methodsList.push(entry.key);
+    }
+  } else {
+    ctx.nodeBuffer[base + NODE_OFFSET_METHODS_PTR] = 0;
+  }
 
-        stringList.push(str);
-        stringMap.set(str, id);
-      }
+  ctx.nodeBuffer[base + NODE_OFFSET_METHOD_MASK] = methodMask;
+}
 
-      return id;
-    };
+/** 정적 자식 노드들을 staticChildrenList에 기록. */
+function flattenStaticChildren(node: Node, base: number, ctx: FlattenContext): void {
+  if (node.staticChildren.size > 0) {
+    ctx.nodeBuffer[base + NODE_OFFSET_STATIC_CHILD_PTR] = ctx.staticChildrenList.length;
+    ctx.nodeBuffer[base + NODE_OFFSET_STATIC_CHILD_COUNT] = node.staticChildren.size;
 
-    const getPatternId = (source: string, flags: string): number => {
-      const key = `${flags}|${source}`;
-      let id = patternMap.get(key);
+    const staticEntries = Array.from(node.staticChildren.entries());
 
-      if (id === undefined) {
-        id = patterns.length;
+    staticEntries.sort((a, b) => (a[0] < b[0] ? -1 : a[0] > b[0] ? 1 : 0));
 
-        patterns.push({ source, flags });
-        patternMap.set(key, id);
-      }
+    for (const [seg, child] of staticEntries) {
+      ctx.staticChildrenList.push(getStringId(seg, ctx));
 
-      return id;
-    };
+      const childIndex = ctx.nodeToIndex.get(child);
 
-    for (let i = 0; i < nodes.length; i++) {
-      const node = nodes[i];
-
-      if (!node) {
-        continue;
-      }
-
-      const base = i * NODE_STRIDE;
-      const kindCode = node.kind === NodeKind.Static ? 0 : node.kind === NodeKind.Param ? 1 : 2;
-      let wildcardOriginCode = 0;
-
-      if (node.wildcardOrigin === 'multi') {
-        wildcardOriginCode = 1;
-      } else if (node.wildcardOrigin === 'zero') {
-        wildcardOriginCode = 2;
-      }
-
-      const paramCount = node.paramChildren.length;
-      const methodCount = node.methods.byMethod.size;
-      let meta = kindCode & NODE_MASK_KIND;
-
-      meta |= (wildcardOriginCode << NODE_SHIFT_WILDCARD_ORIGIN) & NODE_MASK_WILDCARD_ORIGIN;
-      meta |= (paramCount << NODE_SHIFT_PARAM_COUNT) & NODE_MASK_PARAM_COUNT;
-      meta |= (methodCount << NODE_SHIFT_METHOD_COUNT) & NODE_MASK_METHOD_COUNT;
-
-      nodeBuffer[base + NODE_OFFSET_META] = meta;
-
-      let methodMask = 0;
-
-      if (methodCount > 0) {
-        const sortedEntries: MethodEntry[] = [];
-
-        for (const [method, key] of node.methods.byMethod.entries()) {
-          const mCodeNum = methodCodes?.get(method as string) ?? METHOD_OFFSET[method];
-
-          if (mCodeNum !== undefined) {
-            if (mCodeNum < 31) {
-              methodMask |= 1 << mCodeNum;
-            }
-
-            sortedEntries.push({ code: mCodeNum, key });
-          }
-        }
-
-        sortedEntries.sort((a, b) => a.code - b.code);
-
-        nodeBuffer[base + NODE_OFFSET_METHODS_PTR] = methodsList.length;
-
-        for (const entry of sortedEntries) {
-          methodsList.push(entry.code);
-          methodsList.push(entry.key);
-        }
-      } else {
-        nodeBuffer[base + NODE_OFFSET_METHODS_PTR] = 0;
-      }
-
-      nodeBuffer[base + NODE_OFFSET_METHOD_MASK] = methodMask;
-
-      if (node.staticChildren.size > 0) {
-        nodeBuffer[base + NODE_OFFSET_STATIC_CHILD_PTR] = staticChildrenList.length;
-        nodeBuffer[base + NODE_OFFSET_STATIC_CHILD_COUNT] = node.staticChildren.size;
-
-        const staticEntries = Array.from(node.staticChildren.entries());
-
-        staticEntries.sort((a, b) => (a[0] < b[0] ? -1 : a[0] > b[0] ? 1 : 0));
-
-        for (const [seg, child] of staticEntries) {
-          staticChildrenList.push(getStringId(seg));
-
-          const childIndex = nodeToIndex.get(child);
-
-          if (childIndex !== undefined) {
-            staticChildrenList.push(childIndex);
-          }
-        }
-      } else {
-        nodeBuffer[base + NODE_OFFSET_STATIC_CHILD_PTR] = 0;
-        nodeBuffer[base + NODE_OFFSET_STATIC_CHILD_COUNT] = 0;
-      }
-
-      if (node.paramChildren.length > 0) {
-        nodeBuffer[base + NODE_OFFSET_PARAM_CHILD_PTR] = paramChildrenList.length;
-
-        for (const child of node.paramChildren) {
-          const childIndex = nodeToIndex.get(child);
-
-          if (childIndex !== undefined) {
-            paramChildrenList.push(childIndex);
-          }
-        }
-      } else {
-        nodeBuffer[base + NODE_OFFSET_PARAM_CHILD_PTR] = 0;
-      }
-
-      if (node.wildcardChild !== undefined) {
-        const childIndex = nodeToIndex.get(node.wildcardChild);
-
-        nodeBuffer[base + NODE_OFFSET_WILDCARD_CHILD_PTR] = childIndex ?? 0;
-      } else {
-        nodeBuffer[base + NODE_OFFSET_WILDCARD_CHILD_PTR] = 0;
-      }
-
-      if (node.kind === NodeKind.Param) {
-        const paramIdx = paramsList.length / PARAM_ENTRY_STRIDE;
-
-        paramsList.push(getStringId(node.segment));
-
-        let patternId = 0xffffffff;
-
-        if (typeof node.patternSource === 'string' && node.patternSource.length > 0) {
-          patternId = getPatternId(node.patternSource, node.pattern?.flags ?? '');
-        }
-
-        paramsList.push(patternId);
-
-        nodeBuffer[base + NODE_OFFSET_MATCH_FUNC] = paramIdx;
-      } else {
-        nodeBuffer[base + NODE_OFFSET_MATCH_FUNC] = getStringId(node.segment);
+      if (childIndex !== undefined) {
+        ctx.staticChildrenList.push(childIndex);
       }
     }
+  } else {
+    ctx.nodeBuffer[base + NODE_OFFSET_STATIC_CHILD_PTR] = 0;
+    ctx.nodeBuffer[base + NODE_OFFSET_STATIC_CHILD_COUNT] = 0;
+  }
+}
 
-    const encoder = new TextEncoder();
-    const offsets: number[] = [];
-    const encodedChunks: Uint8Array[] = [];
-    let currentOffset = 0;
+/** 파라미터 자식 노드들을 paramChildrenList에 기록. */
+function flattenParamChildren(node: Node, base: number, ctx: FlattenContext): void {
+  if (node.paramChildren.length > 0) {
+    ctx.nodeBuffer[base + NODE_OFFSET_PARAM_CHILD_PTR] = ctx.paramChildrenList.length;
 
-    for (const str of stringList) {
-      offsets.push(currentOffset);
+    for (const child of node.paramChildren) {
+      const childIndex = ctx.nodeToIndex.get(child);
 
-      const encoded = encoder.encode(str);
-
-      encodedChunks.push(encoded);
-
-      currentOffset += encoded.length;
+      if (childIndex !== undefined) {
+        ctx.paramChildrenList.push(childIndex);
+      }
     }
+  } else {
+    ctx.nodeBuffer[base + NODE_OFFSET_PARAM_CHILD_PTR] = 0;
+  }
+}
 
+/** 와일드카드 자식 노드를 nodeBuffer에 기록. */
+function flattenWildcardChild(node: Node, base: number, ctx: FlattenContext): void {
+  if (node.wildcardChild !== undefined) {
+    const childIndex = ctx.nodeToIndex.get(node.wildcardChild);
+
+    ctx.nodeBuffer[base + NODE_OFFSET_WILDCARD_CHILD_PTR] = childIndex ?? 0;
+  } else {
+    ctx.nodeBuffer[base + NODE_OFFSET_WILDCARD_CHILD_PTR] = 0;
+  }
+}
+
+/** 문자열 테이블 직렬화 (stringList → Uint8Array + offsets). */
+function buildStringTable(stringList: string[]): {
+  stringTable: Uint8Array;
+  stringOffsets: Uint32Array;
+} {
+  const encoder = new TextEncoder();
+  const offsets: number[] = [];
+  const encodedChunks: Uint8Array[] = [];
+  let currentOffset = 0;
+
+  for (const str of stringList) {
     offsets.push(currentOffset);
 
-    const stringTable = new Uint8Array(currentOffset);
-    let ptr = 0;
+    const encoded = encoder.encode(str);
 
-    for (const chunk of encodedChunks) {
-      stringTable.set(chunk, ptr);
+    encodedChunks.push(encoded);
 
-      ptr += chunk.length;
-    }
+    currentOffset += encoded.length;
+  }
 
-    return {
-      nodeBuffer,
-      staticChildrenBuffer: Uint32Array.from(staticChildrenList),
-      paramChildrenBuffer: Uint32Array.from(paramChildrenList),
-      paramsBuffer: Uint32Array.from(paramsList),
-      methodsBuffer: Uint32Array.from(methodsList),
-      stringTable,
-      stringOffsets: Uint32Array.from(offsets),
-      decodedStrings: stringList,
-      patterns,
-      rootIndex: 0,
-    };
+  offsets.push(currentOffset);
+
+  const stringTable = new Uint8Array(currentOffset);
+  let ptr = 0;
+
+  for (const chunk of encodedChunks) {
+    stringTable.set(chunk, ptr);
+
+    ptr += chunk.length;
+  }
+
+  return { stringTable, stringOffsets: Uint32Array.from(offsets) };
+}
+
+function getStringId(str: string, ctx: FlattenContext): number {
+  let id = ctx.stringMap.get(str);
+
+  if (id === undefined) {
+    id = ctx.stringList.length;
+
+    ctx.stringList.push(str);
+    ctx.stringMap.set(str, id);
+  }
+
+  return id;
+}
+
+function getPatternId(source: string, flags: string, ctx: FlattenContext): number {
+  const key = `${flags}|${source}`;
+  let id = ctx.patternMap.get(key);
+
+  if (id === undefined) {
+    id = ctx.patterns.length;
+
+    ctx.patterns.push({ source, flags });
+    ctx.patternMap.set(key, id);
+  }
+
+  return id;
 }
