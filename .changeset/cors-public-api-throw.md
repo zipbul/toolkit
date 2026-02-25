@@ -1,5 +1,6 @@
 ---
 "@zipbul/cors": minor
+"@zipbul/shared": patch
 ---
 
 ### Breaking Changes
@@ -8,6 +9,10 @@
 - `Cors.handle()` now returns `Promise<CorsResult>` and throws `CorsError` on origin function failure (previously returned `Promise<Result<CorsResult, CorsError>>`)
 - `CorsError` is now a class extending `Error` (previously an interface)
 - New `CorsErrorData` interface replaces the old `CorsError` interface shape (internal use)
+
+### @zipbul/shared
+
+- `HttpHeader` and `HttpStatus` changed from `const enum` to `enum` to fix `verbatimModuleSyntax` compatibility
 
 ### Why minor (not major)
 
