@@ -1,8 +1,8 @@
 # @zipbul/router — 개선 계획
 
-> 마지막 업데이트: 2026-02-25
+> 마지막 업데이트: 2026-02-26
 > 현재 완성도 추정: ~65-70%
-> PLAN 완료 후 추정: ~99%
+> PLAN 완료 후 추정: ~95-99% (4-1 클로저 트리 채택 여부에 따라 변동)
 
 ### 모델 배정 기준
 
@@ -11,7 +11,8 @@
 | 태그 | 기준 | 해당 작업 유형 |
 |------|------|----------------|
 | **〔Opus〕** | 다중 파일 연쇄 리팩터링, 상태 머신 분해, 새 알고리즘 설계, 복잡한 영향 분석, 섬세한 판단이 필요한 테스트 | 3-1, 3-3, 3-7, 4-1, 4-2, router.spec, matcher.spec, builder.spec |
-| **〔Sonnet〕** | 명세 확정된 기계적 변경, 단순 삭제/이동, 1-2파일 수정, 잘 정의된 인터페이스 구현, 보일러플레이트 테스트 | Phase 0-2 전체, 3-2, 3-4, 3-5, 4-3~4-9, Phase 5/7 전체, 나머지 spec |
+| **〔Sonnet〕** | 명세 확정된 기계적 변경, 단순 삭제/이동, 1-2파일 수정, 잘 정의된 인터페이스 구현, 보일러플레이트 테스트 | Phase 0-2 전체, 3-2, 3-4, 3-5, 4-3~4-9, Phase 5/7 전체, steps/*.spec, 나머지 spec |
+| **〔Sonnet〕** | 프로퍼티 기반 테스트(구조는 단순하나 시나리오 생성이 기계적) | 6-5 (property-based) |
 
 ---
 
@@ -125,7 +126,7 @@
 
 - **파일**: `router.ts` L220/L229/L316/L343, `matcher/matcher.ts`, `builder/flattener.ts`
 - **현상**: `this.methodCodes.get(method) ?? METHOD_OFFSET[method]` 패턴이 router.ts에만 4곳. `METHOD_OFFSET`은 `schema.ts`의 binary layout 내부 상수인데 Router가 직접 import하여 사용 — **계층 위반**. build() 후 `methodCodes`는 완전하므로 fallback은 dead code.
-- **조치**: Router에서 `METHOD_OFFSET` import 제거. `methodCodes.get()` 결과가 undefined이면 Err 반환.
+- **조치**: Router에서 `METHOD_OFFSET` import 제거. `methodCodes.get()` 결과가 undefined이면 Err 반환. `METHOD_OFFSET`은 binary layout 상수이므로 `schema.ts`에 유지 — `matcher/matcher.ts`·`builder/flattener.ts`에서의 사용은 계층 위반이 아님.
 
 ### 2-3. 캐시 write 로직 중복 제거 〔Sonnet〕
 
@@ -147,6 +148,34 @@
 - **파일**: `processor/index.ts`, `builder/index.ts`
 - **현상**: `ProcessorContext`, `DecoderFn`, `decodeURIComponentSafe`, `OptionalParamDefaults`, `BuilderConfig` 등 내부 구현 타입이 외부로 노출됨.
 - **조치**: 외부에 필요한 것만 export. 나머지는 패키지 내부로 제한.
+
+#### 목표 export 목록 (`index.ts` 최종 상태)
+
+```typescript
+// index.ts
+export { Router } from './src/router';
+export type {
+  RouterOptions,
+  EncodedSlashBehavior,
+  OptionalParamBehavior,
+  RegexSafetyOptions,
+  RouteParams,
+  RouterErrKind,
+  RouterErrData,
+  MatchMeta,
+  MatchOutput,
+  RouterWarning,       // 2-7에서 추가
+} from './src/types';
+```
+
+#### 제거 대상 (하위 index.ts)
+
+| 파일 | 제거 심볼 | 사유 |
+|------|----------|------|
+| `builder/index.ts` | `BuilderConfig`, `OptionalParamDefaults` | 내부 전용 |
+| `processor/index.ts` | `ProcessorContext`, `DecoderFn`, `ProcessorConfig` | 내부 전용 |
+
+하위 `index.ts`에서 내부 심볼을 제거해도 같은 패키지 내부의 직접 import (`from './builder/types'`)에는 영향 없음.
 
 ### 2-6. RegExp 리터럴 추출 〔Sonnet〕
 
@@ -192,11 +221,11 @@
 
 파일 분할, 책임 재배치, 구조 변경. 전체 리팩터링의 핵심 Phase.
 
-### 3-1. `match()` 분해 — 120줄 god method → 5개 private 메서드 〔Opus〕
+### 3-1. `match()` 분해 — 180줄 god method → 5개 private 메서드 〔Opus〕
 
-- **파일**: `router.ts` L197-L372
-- **현상**: `match()`가 ~120줄의 god method. static 매칭, 캐시 조회/기록, 정규화, dynamic 매칭, 404 처리가 모두 한 메서드에 혼재.
-- **목표**: `match()`는 오케스트레이션만 수행 (30줄 이하). 각 단계를 private 메서드로 분리.
+- **파일**: `router.ts` L191-L372
+- **현상**: `match()`가 ~180줄의 god method. static 매칭, 캐시 조회/기록, 정규화, dynamic 매칭, 404 처리가 모두 한 메서드에 혼재.
+- **목표**: `match()`는 오케스트레이션만 수행 (40줄 이하). 각 단계를 private 메서드로 분리.
 
 #### 추출할 메서드 시그니처
 
@@ -428,10 +457,11 @@ export class Builder<T> {
 - **선행**: Phase 1-6 (`strictParamNames` 삭제) → validator에서 strict 분기 불필요.
 - **선행**: Phase 2-7 (`onWarn` 콜백) → `ensureRegexSafe()`에서 onWarn 사용.
 
-### 3-3. `matcher.ts` walk() 분해 (180줄 → ~80줄 + 3개 헬퍼) 〔Opus〕
+### 3-3. `matcher.ts` walk() 분해 (284줄 → ~100줄 + 3개 헬퍼) 〔Opus〕
 
-- **파일**: `matcher/matcher.ts` L238-L470 (`walk()` 메서드)
+- **파일**: `matcher/matcher.ts` L236-L520 (`walk()` 메서드)
 - **현상**: 4단계 상태 머신(`ENTER`, `STATIC`, `PARAM`, `WILDCARD`)이 단일 while 루프 안에 모두 포함.
+- **기존 분리 메서드**: `findStaticChild()` (L522-L547, ~25줄)이 이미 private 메서드로 분리되어 있음. 이를 유지하고 추가 분리 대상은 아래 3개.
 - **목표**: `walk()`는 루프 + 디스패치만. 각 stage 처리를 private 메서드로 분리.
 
 #### 분리 전략
@@ -601,7 +631,9 @@ StaticChildMap은 small map 최적화 구현으로, flattener가 `entries()` 이
 1. **프로모션 임계값 상수** (`PROMOTE_THRESHOLD`)를 `builder/constants.ts`로 이동.
 2. **이터레이터 로직** 분리 불필요 — `[Symbol.iterator]`는 Map 위임이므로 코드 자체는 짧음. 실제 길이 원인은 `inline → entries migration` 로직.
 3. **목표**: 주석/빈 줄 정리로 300줄 이하 달성. 구조 변경은 불필요.
-4. 만약 정리 후에도 300줄 초과이면: `StaticChildMapBuilder` (생성용)와 `StaticChildMap` (읽기용)으로 분리 검토.
+4. 정리 후에도 300줄 초과 시: `StaticChildMapBuilder` (생성용)와 `StaticChildMap` (읽기용)으로 **분리 수행**.
+   - `src/builder/static-child-map.ts` — 읽기 전용 (`get`, `size`, `[Symbol.iterator]`)
+   - `src/builder/static-child-map-builder.ts` — 생성/변환 (`set`, promotion 로직)
 
 ### 3-6. `{ ...cached.params }` spread 제거 (3-1에 통합)
 
@@ -758,7 +790,7 @@ build(): this {
 
 #### 제약 및 결정 사항
 
-- **적용 범위**: 라우트 수 ≤ 500일 때만 컴파일 함수 생성. 초과 시 기존 Matcher 사용 (클로저 크기 폭증 방지).
+- **적용 범위**: 라우트 수 ≤ 500일 때만 컴파일 함수 생성 (초기 추정치). build() 시점에 **클로저 생성 시간 + heap 증가분**을 벤치마크로 측정하여 임계값 조정. 측정 기준: 클로저 트리의 heap 증가분이 기존 Matcher 대비 2배 이하일 것.
 - **임계값**: `RouterOptions.compiledMatchThreshold?: number` (기본 500).
 - **벤치마크 게이트**: 컴파일 매칭이 기존 Matcher 대비 **20% 이상** 빠르지 않으면 머지하지 않음.
 - **기존 Matcher 유지**: 항상 fallback으로 존재. 컴파일 매처가 없는 환경에서도 동작 보장.
@@ -863,7 +895,7 @@ private processor: Processor | null;        // 변경 (build 후 null)
 private normalizer: ((path: string) => Result<NormalizedPathSegments, RouterErrData>) | null = null;
 ```
 
-**주의**: `addOne()`에서도 `this.processor.normalize(path, false)`를 호출하므로, `addOne()`은 build() 전에만 호출됨을 type-level에서 보장. sealed 체크가 이미 존재하므로 런타임 안전.
+**주의**: `addOne()`에서도 `this.processor.normalize(path, false)`를 호출하므로, `addOne()`은 build() 전에만 호출됨. `addOne()` 진입 시 `!this.sealed` 가드가 이미 존재하므로 `this.processor`가 null인 경로는 도달 불가 (**런타임 sealed 검사로 방어**). non-null assertion(`!`) 사용 시 주석으로 sealed 가드 의존을 기록.
 
 ### 4-3. Flattener TypedArray 사전 할당 〔Sonnet〕
 
@@ -1054,6 +1086,7 @@ this._decodeParams,
 | 파일 | 상태 | 조치 |
 |------|------|------|
 | `method-registry.spec.ts` (424줄, 33 it) | ✅ 존재 | 커버리지 측정 후 부족분 보강 |
+| `assert.spec.ts` | ✅ 존재 | 커버리지 측정 후 부족분 보강 |
 
 ### 6-2. 신규 spec 파일 상세 계획
 
@@ -1094,6 +1127,7 @@ this._decodeParams,
 | `walk()` — param | regex 패턴 매칭, 패턴 불일치 → 다음 param으로 fallback |
 | `walk()` — wildcard | suffix 계산 정확성, wildcardOrigin='star' + empty suffix → 미매칭, 'zero' + empty → 매칭 |
 | `walk()` — backtrack | static 실패 → param 시도, param 실패 → wildcard 시도, 전체 실패 → null |
+| `walk()` — error | regex-timeout: 의도적으로 느린 regex + 타임아웃 설정 → Err('regex-timeout') |
 | `decodeAndCache()` | hints=0 → raw 반환, hints=1 → decode, 캐시 재사용 (paramCacheGen) |
 | `getParams()` / `getHandlerIndex()` | match 후 올바른 값 반환, match 실패 후 이전 결과 잔류 없음 |
 
@@ -1205,6 +1239,36 @@ this._decodeParams,
 |----------|---------------|
 | `resolveDotSegments()` | `.` 제거, `..` parent 이동, root 넘어서 `..` → 무시, 혼합 |
 
+##### `processor/steps/slashes.spec.ts` 〔Sonnet〕
+
+| describe | 대표 시나리오 |
+|----------|---------------|
+| `collapseSlashes()` | `//a///b` → `/a/b`, 선행/후행 슬래시 처리, 이미 clean 경로 → 무변경 |
+
+##### `processor/steps/split.spec.ts` 〔Sonnet〕
+
+| describe | 대표 시나리오 |
+|----------|---------------|
+| `splitPath()` | 빈 경로, 루트 `/`, 정상 분할, 빈 세그먼트 필터링 |
+
+##### `processor/steps/strip-query.spec.ts` 〔Sonnet〕
+
+| describe | 대표 시나리오 |
+|----------|---------------|
+| `stripQuery()` | `?` 위치별 동작, `#` fragment 처리, `?` 없는 경로 → 무변경 |
+
+##### `processor/steps/validation.spec.ts` 〔Sonnet〕
+
+| describe | 대표 시나리오 |
+|----------|---------------|
+| `validateSegments()` | maxSegmentLength 초과 → Err, 유효 세그먼트 → 통과, 빈 세그먼트 |
+
+##### `processor/steps/remove-leading-slash.spec.ts` 〔Sonnet〕
+
+| describe | 대표 시나리오 |
+|----------|---------------|
+| `removeLeadingSlash()` | 선행 슬래시 있는/없는 경우, 다중 선행 슬래시 |
+
 #### 🟢 낮음 우선순위
 
 ##### `builder/optional-param-defaults.spec.ts` 〔Sonnet〕
@@ -1260,7 +1324,22 @@ this._decodeParams,
 4. router.spec.ts             — builder + matcher spec 이후 (통합에 가까운 단위 테스트)
 5. 나머지 🟡 우선순위         — 병행 가능
 6. 🟢 낮음 우선순위           — 필요 시
+7. property-based (6-5)     — 선택적, router.spec 이후
 ```
+
+### 6-5. Property-Based 테스트 (선택) 〔Sonnet〕
+
+라우터처럼 입력 공간이 넓은 모듈에서는 예시 기반 테스트만으로는 edge case를 놓칠 수 있음.
+
+| 불변 속성 (invariant) | 검증 내용 |
+|------|------|
+| round-trip | 임의 경로 `add()` → `build()` → `match()` → 등록된 값 반환 |
+| params 정확성 | `match()` 결과의 `params`가 경로에서 추출 가능한 값과 일치 |
+| idempotency | 동일 경로 n회 연속 `match()` → 동일 결과 |
+| no-crash | 임의 문자열 `match()` → throw 없이 Result 반환 |
+
+- **도구**: `fast-check` 라이브러리 또는 수동 fuzzer
+- **우선순위**: `router.spec` 이후, 보조적 테스트로 위치
 
 ---
 
@@ -1313,6 +1392,8 @@ Phase 7 (Benchmarks)      → Phase 4와 병행. 최적화 효과 측정.
 2-7 → 3-2 (onWarn 콜백 후 validator에서 사용)
 2-8 → 3-4 (class→함수 후 서브함수 분해)
 3-1 → 3-6 (match 분해 시 params freeze 통합)
+3-1 → 3-7 (match 분해 후 matchStatic 동작 확인)
+3-1 → 4-8 (matchStatic 시그니쳐 변경 — Map<number, T> 전환)
 3-4 → 4-3, 4-6 (flattener 분해 후 TypedArray/BFS 최적화)
 3-1 → 4-7 (preNormalize 통합)
 3-1 → 4-9 (match 분해 후 options resolve 적용)
@@ -1340,9 +1421,12 @@ Phase 7 (Benchmarks)      → Phase 4와 병행. 최적화 효과 측정.
 
 - [ ] Phase 0 완료: throw 0건 (`assertDefined`만 잔존), depth/param 방어 확인, collapseSlashes 버그 수정
 - [ ] Phase 1-2 완료: dead code 0, `strictParamNames` 제거, lint clean, `onWarn` 콜백 동작
-- [ ] Phase 3 완료: 모든 파일 300줄 이하, `match()` 30줄 이하, `walk()` 80줄 이하
-- [ ] Phase 4 완료: param match < 400ns, 벤치마크 기준값 대비 모든 시나리오 개선, options IC resolve 확인, Processor null 해제 확인
+- [ ] Phase 3 완료: 모든 파일 300줄 이하, `match()` 40줄 이하, `walk()` 100줄 이하
+- [ ] Phase 4 완료:
+  - 4-1 채택 시: param match < 400ns
+  - 4-1 미채택 시: param match < 550ns
+  - 벤치마크 기준값 대비 모든 시나리오 개선, options IC resolve 확인, Processor null 해제 확인
 - [ ] Phase 5 완료: maxPathLength 동작 확인
-- [ ] Phase 6 완료: line coverage ≥ 80%, branch coverage ≥ 70%, spec 파일 15개 이상
+- [ ] Phase 6 완료: line coverage ≥ 80%, branch coverage ≥ 70%, spec 파일 20개 이상 (steps 5개 + property-based 포함)
 - [ ] Phase 7 완료: 벤치마크 시나리오 12개 이상
-- [ ] 전체 완성도 ≥ 95%
+- [ ] 전체 완성도 ≥ 95% (4-1 채택 여부에 따라 변동)
