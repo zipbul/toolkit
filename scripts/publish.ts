@@ -2,7 +2,8 @@
  * Publish script for changesets/action.
  *
  * 1. Resolves `workspace:*` → real versions in package.json (in-place)
- * 2. Runs `npx changeset publish` with stdout inherited so
+ * 2. Copies root LICENSE into each public package directory
+ * 3. Runs `npx changeset publish` with stdout inherited so
  *    changesets/action can parse `New tag:` lines for GitHub releases.
  */
 
@@ -68,7 +69,23 @@ for (const entry of entries) {
   }
 }
 
-// ── 2. Run changeset publish ────────────────────────────────
+// ── 2. Copy LICENSE to each public package ──────────────────
+
+const license = await readFile(join(root, 'LICENSE'), 'utf8');
+
+for (const entry of entries) {
+  const pkgJsonPath = join(packagesDir, entry, 'package.json');
+  try {
+    const pkg = JSON.parse(await readFile(pkgJsonPath, 'utf8'));
+    if (pkg.private) continue;
+    await writeFile(join(packagesDir, entry, 'LICENSE'), license);
+    console.log(`Copied LICENSE to ${pkg.name}`);
+  } catch {
+    continue;
+  }
+}
+
+// ── 3. Run changeset publish ────────────────────────────────
 
 const proc = Bun.spawn(['npx', 'changeset', 'publish'], {
   cwd: root,
