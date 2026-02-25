@@ -15,6 +15,7 @@ export interface RouterOptions {
   regexAnchorPolicy?: 'warn' | 'error' | 'silent';
   failFastOnBadEncoding?: boolean;
   onWarn?: (warning: RouterWarning) => void;
+  compiledMatchThreshold?: number;
 }
 
 export type EncodedSlashBehavior = 'decode' | 'preserve' | 'reject';

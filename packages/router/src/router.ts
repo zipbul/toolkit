@@ -15,9 +15,12 @@ import type { BuilderConfig } from './builder/types';
 import { OptionalParamDefaults } from './builder/optional-param-defaults';
 import { RouterCache } from './cache';
 import { Matcher } from './matcher';
+import { buildMatchFunction } from './matcher/compiled-matcher';
+import type { CompiledMatchFn } from './matcher/compiled-matcher';
 import { buildPatternTester } from './matcher/pattern-tester';
 import { MethodRegistry } from './method-registry';
 import { Processor } from './processor';
+import { buildDecoder } from './processor/decoder';
 import type { ProcessorConfig } from './processor/types';
 
 const ALL_METHODS: readonly HttpMethod[] = ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS', 'HEAD'];
@@ -28,6 +31,7 @@ export class Router<T = unknown> {
   private builder: Builder<T> | null;
   private readonly methodRegistry = new MethodRegistry();
   private matcher: Matcher | null = null;
+  private compiledMatch: CompiledMatchFn | null = null;
   private cacheByMethod: Map<number, RouterCache<DynamicMatchResult>> | undefined;
   private cacheMaxSize: number = 1000;
   private sealed = false;
@@ -177,12 +181,21 @@ export class Router<T = unknown> {
       return buildPatternTester(p.source, regex, undefined);
     });
 
+    const encodedSlashBehavior = this.options.encodedSlashBehavior ?? 'decode';
+    const failFastOnBadEncoding = this.options.failFastOnBadEncoding ?? false;
+
     this.matcher = new Matcher(layout, {
       patternTesters: testers,
-      encodedSlashBehavior: this.options.encodedSlashBehavior ?? 'decode',
-      failFastOnBadEncoding: this.options.failFastOnBadEncoding ?? false,
+      encodedSlashBehavior,
+      failFastOnBadEncoding,
       methodCodes: allCodes,
     });
+
+    // 클로저 트리 기반 컴파일 매처 — 노드 수가 임계값 이하일 때만 생성
+    const threshold = this.options.compiledMatchThreshold ?? 500;
+    const decoder = buildDecoder(encodedSlashBehavior, failFastOnBadEncoding);
+
+    this.compiledMatch = buildMatchFunction(layout, testers, decoder, threshold);
 
     // trie 해제 — Matcher가 layout(binary)을 소유하므로 builder 참조 불필요
     this.builder = null;
@@ -260,37 +273,65 @@ export class Router<T = unknown> {
     }
 
     // Dynamic match
-    const matchResult = matcher.match(
-      method,
-      segments,
-      normalized,
-      segmentDecodeHints,
-      this.options.decodeParams ?? true,
-    );
+    const decodeParams = this.options.decodeParams ?? true;
 
-    if (isErr(matchResult)) {
-      return err<RouterErrData>({
-        ...matchResult.data,
-        path,
-        method,
-      });
-    }
+    if (this.compiledMatch) {
+      const result = this.compiledMatch(segments, methodCode, segmentDecodeHints, decodeParams, normalized);
 
-    if (matchResult) {
-      const handlerIndex = matcher.getHandlerIndex();
-      const params = matcher.getParams();
-
-      this.optionalParamDefaults?.apply(handlerIndex, params);
-
-      const value = this.handlers[handlerIndex];
-
-      if (value === undefined) {
-        return null;
+      if (isErr(result)) {
+        return err<RouterErrData>({
+          ...result.data,
+          path,
+          method,
+        });
       }
 
-      this.writeCacheEntry(searchPath, methodCode, { handlerIndex, params: { ...params } });
+      if (result !== null) {
+        this.optionalParamDefaults?.apply(result.handlerIndex, result.params);
 
-      return { value, params, meta: { source: 'dynamic' } };
+        const value = this.handlers[result.handlerIndex];
+
+        if (value === undefined) {
+          return null;
+        }
+
+        this.writeCacheEntry(searchPath, methodCode, { handlerIndex: result.handlerIndex, params: { ...result.params } });
+
+        return { value, params: result.params, meta: { source: 'dynamic' } };
+      }
+    } else if (matcher) {
+      const matchResult = matcher.match(
+        method,
+        segments,
+        normalized,
+        segmentDecodeHints,
+        decodeParams,
+      );
+
+      if (isErr(matchResult)) {
+        return err<RouterErrData>({
+          ...matchResult.data,
+          path,
+          method,
+        });
+      }
+
+      if (matchResult) {
+        const handlerIndex = matcher.getHandlerIndex();
+        const params = matcher.getParams();
+
+        this.optionalParamDefaults?.apply(handlerIndex, params);
+
+        const value = this.handlers[handlerIndex];
+
+        if (value === undefined) {
+          return null;
+        }
+
+        this.writeCacheEntry(searchPath, methodCode, { handlerIndex, params: { ...params } });
+
+        return { value, params, meta: { source: 'dynamic' } };
+      }
     }
 
     // Cache miss
