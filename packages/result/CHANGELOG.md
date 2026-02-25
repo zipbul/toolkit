@@ -1,5 +1,11 @@
 # @zipbul/result
 
+## 0.1.4
+
+### Patch Changes
+
+- 55cf7d7: Include LICENSE file in published packages
+
 ## 0.1.3
 
 ### Patch Changes
