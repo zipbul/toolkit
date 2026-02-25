@@ -201,58 +201,34 @@ export class Router<T = unknown> {
       });
     }
 
-    let searchPath = path;
+    const methodCode = this.resolveMethodCode(method);
 
-    if (this.options.ignoreTrailingSlash === true && searchPath.length > 1 && searchPath.endsWith('/')) {
-      searchPath = searchPath.slice(0, -1);
+    if (methodCode === undefined) {
+      return null;
     }
 
-    if (this.options.caseSensitive === false) {
-      searchPath = searchPath.toLowerCase();
-    }
+    const searchPath = this.preNormalize(path);
 
-    // Static fast-path: clean path starting with '/'
-    if (searchPath.charCodeAt(0) === 47 /* '/' */) {
-      const staticValues = this.staticMap.get(searchPath);
+    // Static fast-path
+    const staticHit = this.matchStatic(searchPath, methodCode);
 
-      if (staticValues) {
-        const offset = this.methodCodes.get(method);
-
-        if (offset !== undefined) {
-          const value = staticValues[offset];
-
-          if (value !== undefined) {
-            return { value, params: {}, meta: { source: 'static' } };
-          }
-        }
-      }
+    if (staticHit !== undefined) {
+      return { value: staticHit, params: {}, meta: { source: 'static' } };
     }
 
     // Cache lookup
-    if (this.cacheByMethod) {
-      const methodCode = this.methodCodes.get(method);
+    const cached = this.lookupCache(searchPath, methodCode);
 
-      if (methodCode !== undefined) {
-        const methodCache = this.cacheByMethod.get(methodCode);
-
-        if (methodCache) {
-          const cached = methodCache.get(searchPath);
-
-          if (cached !== undefined) {
-            if (cached === null) {
-              return null;
-            }
-
-            const value = this.handlers[cached.handlerIndex];
-
-            if (value === undefined) {
-              return null;
-            }
-
-            return { value, params: { ...cached.params }, meta: { source: 'cache' } };
-          }
-        }
+    if (cached !== undefined) {
+      if (cached === null) {
+        return null;
       }
+
+      const value = this.handlers[cached.handlerIndex];
+
+      return value !== undefined
+        ? { value, params: cached.params, meta: { source: 'cache' } }
+        : null;
     }
 
     const matcher = this.matcher;
@@ -276,18 +252,10 @@ export class Router<T = unknown> {
 
     // Static fallback for normalized paths
     if (normalized !== searchPath) {
-      const staticValues = this.staticMap.get(normalized);
+      const staticHit2 = this.matchStatic(normalized, methodCode);
 
-      if (staticValues) {
-        const offset = this.methodCodes.get(method);
-
-        if (offset !== undefined) {
-          const value = staticValues[offset];
-
-          if (value !== undefined) {
-            return { value, params: {}, meta: { source: 'static' } };
-          }
-        }
+      if (staticHit2 !== undefined) {
+        return { value: staticHit2, params: {}, meta: { source: 'static' } };
       }
     }
 
@@ -311,11 +279,8 @@ export class Router<T = unknown> {
     if (matchResult) {
       const handlerIndex = matcher.getHandlerIndex();
       const params = matcher.getParams();
-      const defaults = this.optionalParamDefaults;
 
-      if (defaults) {
-        defaults.apply(handlerIndex, params);
-      }
+      this.optionalParamDefaults?.apply(handlerIndex, params);
 
       const value = this.handlers[handlerIndex];
 
@@ -323,27 +288,55 @@ export class Router<T = unknown> {
         return null;
       }
 
-      const meta: MatchMeta = { source: 'dynamic' };
+      this.writeCacheEntry(searchPath, methodCode, { handlerIndex, params: { ...params } });
 
-      this.writeCacheEntry(method, searchPath, { handlerIndex, params: { ...params } });
-
-      return { value, params, meta };
+      return { value, params, meta: { source: 'dynamic' } };
     }
 
     // Cache miss
-    this.writeCacheEntry(method, searchPath, null);
+    this.writeCacheEntry(searchPath, methodCode, null);
 
     return null;
   }
 
-  private writeCacheEntry(method: HttpMethod, searchPath: string, entry: DynamicMatchResult | null): void {
-    if (!this.cacheByMethod) {
-      return;
+  private resolveMethodCode(method: HttpMethod): number | undefined {
+    return this.methodCodes.get(method);
+  }
+
+  private preNormalize(path: string): string {
+    let p = path;
+
+    if (this.options.ignoreTrailingSlash === true && p.length > 1 && p.endsWith('/')) {
+      p = p.slice(0, -1);
     }
 
-    const methodCode = this.methodCodes.get(method);
+    if (this.options.caseSensitive === false) {
+      p = p.toLowerCase();
+    }
 
-    if (methodCode === undefined) {
+    return p;
+  }
+
+  private matchStatic(searchPath: string, methodCode: number): T | undefined {
+    if (searchPath.charCodeAt(0) !== 47 /* '/' */) {
+      return undefined;
+    }
+
+    const values = this.staticMap.get(searchPath);
+
+    return values?.[methodCode];
+  }
+
+  private lookupCache(searchPath: string, methodCode: number): DynamicMatchResult | null | undefined {
+    if (!this.cacheByMethod) {
+      return undefined;
+    }
+
+    return this.cacheByMethod.get(methodCode)?.get(searchPath);
+  }
+
+  private writeCacheEntry(searchPath: string, methodCode: number, entry: DynamicMatchResult | null): void {
+    if (!this.cacheByMethod) {
       return;
     }
 
@@ -354,7 +347,14 @@ export class Router<T = unknown> {
       this.cacheByMethod.set(methodCode, mc);
     }
 
-    mc.set(searchPath, entry);
+    if (entry) {
+      mc.set(searchPath, {
+        handlerIndex: entry.handlerIndex,
+        params: Object.freeze({ ...entry.params }),
+      });
+    } else {
+      mc.set(searchPath, null);
+    }
   }
 
   private addOne(method: HttpMethod, path: string, value: T): Result<void, RouterErrData> {
