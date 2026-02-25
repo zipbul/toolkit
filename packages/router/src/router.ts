@@ -16,7 +16,8 @@ import { Matcher } from './matcher';
 import { buildPatternTester } from './matcher/pattern-tester';
 import { MethodRegistry } from './method-registry';
 import { Processor, type ProcessorConfig } from './processor';
-import { METHOD_OFFSET } from './schema';
+
+const ALL_METHODS: readonly HttpMethod[] = ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS', 'HEAD'];
 
 export class Router<T = unknown> {
   private readonly options: RouterOptions;
@@ -104,9 +105,7 @@ export class Router<T = unknown> {
     }
 
     if (method === '*') {
-      const allMethods: HttpMethod[] = ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS', 'HEAD'];
-
-      for (const m of allMethods) {
+      for (const m of ALL_METHODS) {
         const result = this.addOne(m, path, value);
 
         if (isErr(result)) {
@@ -210,7 +209,7 @@ export class Router<T = unknown> {
       const staticValues = this.staticMap.get(searchPath);
 
       if (staticValues) {
-        const offset = this.methodCodes.get(method) ?? METHOD_OFFSET[method];
+        const offset = this.methodCodes.get(method);
 
         if (offset !== undefined) {
           const value = staticValues[offset];
@@ -224,7 +223,7 @@ export class Router<T = unknown> {
 
     // Cache lookup
     if (this.cacheByMethod) {
-      const methodCode = this.methodCodes.get(method) ?? METHOD_OFFSET[method];
+      const methodCode = this.methodCodes.get(method);
 
       if (methodCode !== undefined) {
         const methodCache = this.cacheByMethod.get(methodCode);
@@ -273,7 +272,7 @@ export class Router<T = unknown> {
       const staticValues = this.staticMap.get(normalized);
 
       if (staticValues) {
-        const offset = this.methodCodes.get(method) ?? METHOD_OFFSET[method];
+        const offset = this.methodCodes.get(method);
 
         if (offset !== undefined) {
           const value = staticValues[offset];
@@ -319,44 +318,36 @@ export class Router<T = unknown> {
 
       const meta: MatchMeta = { source: 'dynamic' };
 
-      if (this.cacheByMethod) {
-        const methodCode = this.methodCodes.get(method) ?? METHOD_OFFSET[method];
-
-        if (methodCode !== undefined) {
-          let mc = this.cacheByMethod.get(methodCode);
-
-          if (!mc) {
-            mc = new RouterCache(this.cacheMaxSize);
-            this.cacheByMethod.set(methodCode, mc);
-          }
-
-          mc.set(searchPath, {
-            handlerIndex,
-            params: { ...params },
-          });
-        }
-      }
+      this.writeCacheEntry(method, searchPath, { handlerIndex, params: { ...params } });
 
       return { value, params, meta };
     }
 
     // Cache miss
-    if (this.cacheByMethod) {
-      const methodCode = this.methodCodes.get(method) ?? METHOD_OFFSET[method];
-
-      if (methodCode !== undefined) {
-        let mc = this.cacheByMethod.get(methodCode);
-
-        if (!mc) {
-          mc = new RouterCache(this.cacheMaxSize);
-          this.cacheByMethod.set(methodCode, mc);
-        }
-
-        mc.set(searchPath, null);
-      }
-    }
+    this.writeCacheEntry(method, searchPath, null);
 
     return null;
+  }
+
+  private writeCacheEntry(method: HttpMethod, searchPath: string, entry: DynamicMatchResult | null): void {
+    if (!this.cacheByMethod) {
+      return;
+    }
+
+    const methodCode = this.methodCodes.get(method);
+
+    if (methodCode === undefined) {
+      return;
+    }
+
+    let mc = this.cacheByMethod.get(methodCode);
+
+    if (!mc) {
+      mc = new RouterCache(this.cacheMaxSize);
+      this.cacheByMethod.set(methodCode, mc);
+    }
+
+    mc.set(searchPath, entry);
   }
 
   private addOne(method: HttpMethod, path: string, value: T): Result<void, RouterErrData> {
