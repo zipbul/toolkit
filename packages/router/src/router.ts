@@ -10,12 +10,15 @@ import type {
 } from './types';
 
 import { err, isErr } from '@zipbul/result';
-import { Builder, OptionalParamDefaults, type BuilderConfig } from './builder';
+import { Builder } from './builder';
+import type { BuilderConfig } from './builder/types';
+import { OptionalParamDefaults } from './builder/optional-param-defaults';
 import { RouterCache } from './cache';
 import { Matcher } from './matcher';
 import { buildPatternTester } from './matcher/pattern-tester';
 import { MethodRegistry } from './method-registry';
-import { Processor, type ProcessorConfig } from './processor';
+import { Processor } from './processor';
+import type { ProcessorConfig } from './processor/types';
 
 const ALL_METHODS: readonly HttpMethod[] = ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS', 'HEAD'];
 

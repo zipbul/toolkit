@@ -4,7 +4,7 @@ import type { BinaryRouterLayout } from '../schema';
 import type { MatcherConfig, PatternTesterFn, RouterErrData, RouteParams } from '../types';
 
 import { err, isErr } from '@zipbul/result';
-import { buildDecoder, type DecoderFn } from '../processor';
+import { buildDecoder, type DecoderFn } from '../processor/decoder';
 import {
   NODE_OFFSET_META,
   NODE_OFFSET_METHOD_MASK,
