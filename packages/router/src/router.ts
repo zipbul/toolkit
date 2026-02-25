@@ -4,6 +4,7 @@ import type {
   DynamicMatchResult,
   MatchMeta,
   MatchOutput,
+  NormalizedPathSegments,
   RegexSafetyOptions,
   RouterErrData,
   RouterOptions,
@@ -27,11 +28,12 @@ const ALL_METHODS: readonly HttpMethod[] = ['GET', 'POST', 'PUT', 'PATCH', 'DELE
 
 export class Router<T = unknown> {
   private readonly options: RouterOptions;
-  private readonly processor: Processor;
+  private processor: Processor | null;
   private builder: Builder<T> | null;
   private readonly methodRegistry = new MethodRegistry();
   private matcher: Matcher | null = null;
   private compiledMatch: CompiledMatchFn | null = null;
+  private normalizer: ((path: string) => Result<NormalizedPathSegments, RouterErrData>) | null = null;
   private cacheByMethod: Map<number, RouterCache<DynamicMatchResult>> | undefined;
   private cacheMaxSize: number = 1000;
   private sealed = false;
@@ -197,6 +199,10 @@ export class Router<T = unknown> {
 
     this.compiledMatch = buildMatchFunction(layout, testers, decoder, threshold);
 
+    // 사전 컴파일 정규화 함수 — Processor 파이프라인을 단일 클로저로 변환
+    this.normalizer = this.processor!.buildNormalizer();
+    this.processor = null; // Processor 인스턴스 해제 — builder→null과 동일 패턴
+
     // trie 해제 — Matcher가 layout(binary)을 소유하므로 builder 참조 불필요
     this.builder = null;
 
@@ -251,7 +257,7 @@ export class Router<T = unknown> {
     }
 
     // Normalize path
-    const normalizeResult = this.processor.normalize(searchPath);
+    const normalizeResult = this.normalizer!(searchPath);
 
     if (isErr(normalizeResult)) {
       return err<RouterErrData>({
@@ -408,7 +414,8 @@ export class Router<T = unknown> {
       });
     }
 
-    const normalizeResult = this.processor.normalize(path, false);
+    // non-null assertion 안전: add()/addAll()의 sealed 가드로 build() 후 진입 불가
+    const normalizeResult = this.processor!.normalize(path, false);
 
     if (isErr(normalizeResult)) {
       return err<RouterErrData>({

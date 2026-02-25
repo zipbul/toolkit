@@ -205,4 +205,161 @@ export class Processor {
       segmentDecodeHints,
     };
   }
+
+  /**
+   * build() 시점에 호출. 활성화된 step만 인라인한 단일 정규화 클로저 생성.
+   * PipelineStep[] 순회 + 간접 호출 오버헤드를 제거한다.
+   * clean path에서 Uint8Array 할당을 생략한다 (4-4).
+   *
+   * 반환된 함수는 항상 stripQueryParam=true로 동작한다 (match 전용).
+   * Processor 인스턴스 해제 후에도 독립적으로 사용 가능하다.
+   */
+  buildNormalizer(): (path: string) => Result<NormalizedPathSegments, RouterErrData> {
+    const needsCaseCheck = this.needsCaseCheck;
+    const collapseSlashesEnabled = this.config.collapseSlashes === true;
+    const ignoreTrailingSlash = this.config.ignoreTrailingSlash !== false;
+    const blockTraversal = this.config.blockTraversal === true;
+    const maxSegLen = this.config.maxSegmentLength ?? 256;
+
+    // Dirty path용 재사용 컨텍스트
+    const ctx = new ProcessorContext(this.config);
+
+    return (path: string): Result<NormalizedPathSegments, RouterErrData> => {
+      // ── Clean path fast path ──
+      const len = path.length;
+
+      if (len > 0 && path.charCodeAt(0) === 47) {
+        let clean = true;
+        let prevSlash = true;
+        let segLen = 0;
+
+        for (let i = 1; i < len; i++) {
+          const ch = path.charCodeAt(i);
+
+          if (ch === 47) {
+            if (prevSlash) { clean = false; break; }
+
+            prevSlash = true;
+            segLen = 0;
+
+            continue;
+          }
+
+          prevSlash = false;
+          segLen++;
+
+          if (segLen > maxSegLen || ch === 63 || ch === 37) { clean = false; break; }
+
+          if (ch === 46 && segLen === 1) {
+            const next = i + 1 < len ? path.charCodeAt(i + 1) : -1;
+
+            if (next === 47 || next === -1) { clean = false; break; }
+
+            if (next === 46) {
+              const afterDot = i + 2 < len ? path.charCodeAt(i + 2) : -1;
+
+              if (afterDot === 47 || afterDot === -1) { clean = false; break; }
+            }
+          }
+
+          if (needsCaseCheck && ch >= 65 && ch <= 90) { clean = false; break; }
+        }
+
+        if (clean) {
+          const body = len > 1 ? path.slice(1) : '';
+          const segments = body === '' ? [] : body.split('/');
+
+          if (ignoreTrailingSlash && segments.length > 0 && segments[segments.length - 1] === '') {
+            segments.pop();
+          }
+
+          for (let i = 0; i < segments.length; i++) {
+            const seg = segments[i]!;
+
+            if (seg.length > maxSegLen) {
+              return err<RouterErrData>({
+                kind: 'segment-limit',
+                message: `Segment length exceeds limit: ${seg.substring(0, 20)}...`,
+                segment: seg.substring(0, 40),
+                suggestion: `Shorten the path segment to ${maxSegLen} characters or fewer, or increase maxSegmentLength in RouterOptions.`,
+              });
+            }
+          }
+
+          const normalized = segments.length > 0 ? '/' + segments.join('/') : '/';
+
+          // Clean path — no % encoding → hints undefined (할당 생략, 4-4)
+          return { normalized, segments };
+        }
+      }
+
+      // ── Dirty path: 인라인 파이프라인 (배열 순회 없음) ──
+      ctx.reset(path);
+
+      let r = stripQuery(ctx);
+
+      if (isErr(r)) {
+        return r;
+      }
+
+      r = removeLeadingSlash(ctx);
+
+      if (isErr(r)) {
+        return r;
+      }
+
+      r = splitPath(ctx);
+
+      if (isErr(r)) {
+        return r;
+      }
+
+      if (blockTraversal) {
+        r = resolveDotSegments(ctx);
+
+        if (isErr(r)) {
+          return r;
+        }
+      }
+
+      if (collapseSlashesEnabled) {
+        r = collapseSlashes(ctx);
+
+        if (isErr(r)) {
+          return r;
+        }
+      } else if (ignoreTrailingSlash) {
+        r = handleTrailingSlashOptions(ctx);
+
+        if (isErr(r)) {
+          return r;
+        }
+      }
+
+      if (needsCaseCheck) {
+        r = toLowerCase(ctx);
+
+        if (isErr(r)) {
+          return r;
+        }
+      }
+
+      r = validateSegments(ctx);
+
+      if (isErr(r)) {
+        return r;
+      }
+
+      const result: NormalizedPathSegments = {
+        normalized: '/' + ctx.segments.join('/'),
+        segments: ctx.segments,
+      };
+
+      if (ctx.segmentDecodeHints !== undefined) {
+        result.segmentDecodeHints = ctx.segmentDecodeHints;
+      }
+
+      return result;
+    };
+  }
 }
