@@ -1,5 +1,14 @@
 # @zipbul/cors
 
+## 0.0.8
+
+### Patch Changes
+
+- 55cf7d7: Include LICENSE file in published packages
+- Updated dependencies [55cf7d7]
+  - @zipbul/result@0.1.4
+  - @zipbul/shared@0.0.7
+
 ## 0.0.7
 
 ### Patch Changes
