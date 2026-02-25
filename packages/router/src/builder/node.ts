@@ -14,7 +14,6 @@ export class Node {
 
   pattern: RegExp | undefined;
   patternSource: string | undefined;
-  patternTester: ((value: string) => boolean) | undefined;
   segmentParts: string[] | undefined;
   wildcardOrigin: 'star' | 'multi' | 'zero' | undefined;
   paramSortScore: number | undefined;
@@ -39,7 +38,6 @@ export class Node {
 
     this.pattern = undefined;
     this.patternSource = undefined;
-    this.patternTester = undefined;
     this.segmentParts = undefined;
     this.wildcardOrigin = undefined;
     this.paramSortScore = undefined;
