@@ -17,6 +17,11 @@
   },
   "devDependencies": {
     "@types/bun": "latest",
-    "mitata": "^1.0.34"
+    "find-my-way": "^9.5.0",
+    "hono": "^4.12.3",
+    "koa-tree-router": "^0.13.1",
+    "memoirist": "^0.4.0",
+    "mitata": "^1.0.34",
+    "rou3": "^0.7.12"
   }
 }
