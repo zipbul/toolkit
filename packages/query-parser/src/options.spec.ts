@@ -34,28 +34,28 @@ describe('resolveQueryParserOptions', () => {
 
     // Assert
     expect(result.depth).toBe(10);
-    expect(result.parameterLimit).toBe(DEFAULT_QUERY_PARSER_OPTIONS.parameterLimit);
-    expect(result.parseArrays).toBe(DEFAULT_QUERY_PARSER_OPTIONS.parseArrays);
+    expect(result.maxParams).toBe(DEFAULT_QUERY_PARSER_OPTIONS.maxParams);
+    expect(result.nesting).toBe(DEFAULT_QUERY_PARSER_OPTIONS.nesting);
     expect(result.arrayLimit).toBe(DEFAULT_QUERY_PARSER_OPTIONS.arrayLimit);
-    expect(result.hppMode).toBe(DEFAULT_QUERY_PARSER_OPTIONS.hppMode);
-    expect(result.strictMode).toBe(DEFAULT_QUERY_PARSER_OPTIONS.strictMode);
+    expect(result.duplicates).toBe(DEFAULT_QUERY_PARSER_OPTIONS.duplicates);
+    expect(result.strict).toBe(DEFAULT_QUERY_PARSER_OPTIONS.strict);
   });
 
-  it('should return provided boolean field with rest defaults when parseArrays is given', () => {
+  it('should return provided boolean field with rest defaults when nesting is given', () => {
     // Act
-    const result = resolveQueryParserOptions({ parseArrays: true });
+    const result = resolveQueryParserOptions({ nesting: true });
 
     // Assert
-    expect(result.parseArrays).toBe(true);
+    expect(result.nesting).toBe(true);
     expect(result.depth).toBe(DEFAULT_QUERY_PARSER_OPTIONS.depth);
   });
 
-  it('should return provided string field with rest defaults when hppMode is given', () => {
+  it('should return provided string field with rest defaults when duplicates is given', () => {
     // Act
-    const result = resolveQueryParserOptions({ hppMode: 'last' });
+    const result = resolveQueryParserOptions({ duplicates: 'last' });
 
     // Assert
-    expect(result.hppMode).toBe('last');
+    expect(result.duplicates).toBe('last');
     expect(result.depth).toBe(DEFAULT_QUERY_PARSER_OPTIONS.depth);
   });
 
@@ -63,11 +63,11 @@ describe('resolveQueryParserOptions', () => {
     // Arrange
     const input = {
       depth: 3,
-      parameterLimit: 50,
-      parseArrays: true,
+      maxParams: 50,
+      nesting: true,
       arrayLimit: 10,
-      hppMode: 'array' as const,
-      strictMode: true,
+      duplicates: 'array' as const,
+      strict: true,
     };
 
     // Act
@@ -85,12 +85,12 @@ describe('resolveQueryParserOptions', () => {
     expect(result.depth).toBe(0);
   });
 
-  it('should preserve parseArrays=false as non-nullish when explicitly set', () => {
+  it('should preserve nesting=false as non-nullish when explicitly set', () => {
     // Act
-    const result = resolveQueryParserOptions({ parseArrays: false });
+    const result = resolveQueryParserOptions({ nesting: false });
 
     // Assert
-    expect(result.parseArrays).toBe(false);
+    expect(result.nesting).toBe(false);
   });
 });
 
@@ -120,9 +120,9 @@ describe('validateQueryParserOptions', () => {
     expect(result).toBeUndefined();
   });
 
-  it('should pass when parameterLimit is 1', () => {
+  it('should pass when maxParams is 1', () => {
     // Arrange
-    const resolved: ResolvedQueryParserOptions = { ...resolveQueryParserOptions(), parameterLimit: 1 };
+    const resolved: ResolvedQueryParserOptions = { ...resolveQueryParserOptions(), maxParams: 1 };
 
     // Act
     const result = validateQueryParserOptions(resolved);
@@ -142,12 +142,12 @@ describe('validateQueryParserOptions', () => {
     expect(result).toBeUndefined();
   });
 
-  it('should pass for all three valid hppMode values', () => {
+  it('should pass for all three valid duplicates values', () => {
     const modes = ['first', 'last', 'array'] as const;
 
     for (const mode of modes) {
       // Arrange
-      const resolved: ResolvedQueryParserOptions = { ...resolveQueryParserOptions(), hppMode: mode };
+      const resolved: ResolvedQueryParserOptions = { ...resolveQueryParserOptions(), duplicates: mode };
 
       // Act
       const result = validateQueryParserOptions(resolved);
@@ -183,9 +183,9 @@ describe('validateQueryParserOptions', () => {
     expect(errResult.data.reason).toBe(QueryParserErrorReason.InvalidDepth);
   });
 
-  it('should return Err with InvalidParameterLimit when parameterLimit is less than 1', () => {
+  it('should return Err with InvalidParameterLimit when maxParams is less than 1', () => {
     // Arrange
-    const resolved: ResolvedQueryParserOptions = { ...resolveQueryParserOptions(), parameterLimit: 0 };
+    const resolved: ResolvedQueryParserOptions = { ...resolveQueryParserOptions(), maxParams: 0 };
 
     // Act
     const result = validateQueryParserOptions(resolved);
@@ -196,9 +196,9 @@ describe('validateQueryParserOptions', () => {
     expect(errResult.data.reason).toBe(QueryParserErrorReason.InvalidParameterLimit);
   });
 
-  it('should return Err with InvalidParameterLimit when parameterLimit is non-integer', () => {
+  it('should return Err with InvalidParameterLimit when maxParams is non-integer', () => {
     // Arrange
-    const resolved: ResolvedQueryParserOptions = { ...resolveQueryParserOptions(), parameterLimit: 1.5 };
+    const resolved: ResolvedQueryParserOptions = { ...resolveQueryParserOptions(), maxParams: 1.5 };
 
     // Act
     const result = validateQueryParserOptions(resolved);
@@ -235,11 +235,11 @@ describe('validateQueryParserOptions', () => {
     expect(errResult.data.reason).toBe(QueryParserErrorReason.InvalidArrayLimit);
   });
 
-  it('should return Err with InvalidHppMode when hppMode is invalid', () => {
+  it('should return Err with InvalidHppMode when duplicates is invalid', () => {
     // Arrange
     const resolved = {
       ...resolveQueryParserOptions(),
-      hppMode: 'invalid',
+      duplicates: 'invalid',
     } as unknown as ResolvedQueryParserOptions;
 
     // Act
@@ -252,11 +252,11 @@ describe('validateQueryParserOptions', () => {
   });
 
   it('should return first failing validation when multiple options are invalid', () => {
-    // Arrange — depth (V1) and parameterLimit (V2) both invalid
+    // Arrange — depth (V1) and maxParams (V2) both invalid
     const resolved: ResolvedQueryParserOptions = {
       ...resolveQueryParserOptions(),
       depth: -1,
-      parameterLimit: 0,
+      maxParams: 0,
     };
 
     // Act

@@ -100,7 +100,7 @@ export class QueryParser {
 
         paramCount++;
 
-        if (paramCount >= this.options.parameterLimit) {
+        if (paramCount >= this.options.maxParams) {
           limitReached = true;
           break;
         }
@@ -172,7 +172,7 @@ export class QueryParser {
     const braceIdx = key.indexOf('[');
 
     if (braceIdx === -1) {
-      if (this.options.strictMode && key.includes(']')) {
+      if (this.options.strict && key.includes(']')) {
         return err<QueryParserErrorData>({
           reason: QueryParserErrorReason.MalformedQueryString,
           message: `Malformed query string: unbalanced brackets in key "${key}"`,
@@ -182,8 +182,8 @@ export class QueryParser {
       return this.assignLeaf(res, key, val);
     }
 
-    if (!this.options.parseArrays) {
-      if (this.options.strictMode) {
+    if (!this.options.nesting) {
+      if (this.options.strict) {
         const bracketResult = this.validateBrackets(key);
 
         if (isErr(bracketResult)) {
@@ -261,7 +261,7 @@ export class QueryParser {
 
       if (code === 91) {
         // '['
-        if (partStart !== -1 && this.options.strictMode) {
+        if (partStart !== -1 && this.options.strict) {
           return err<QueryParserErrorData>({
             reason: QueryParserErrorReason.MalformedQueryString,
             message: `Malformed query string: nested brackets in key "${key}"`,
@@ -274,7 +274,7 @@ export class QueryParser {
         if (partStart !== -1) {
           keys.push(key.slice(partStart, i));
           partStart = -1;
-        } else if (this.options.strictMode) {
+        } else if (this.options.strict) {
           return err<QueryParserErrorData>({
             reason: QueryParserErrorReason.MalformedQueryString,
             message: `Malformed query string: unbalanced brackets in key "${key}"`,
@@ -287,7 +287,7 @@ export class QueryParser {
 
     // Unclosed bracket
     if (partStart !== -1) {
-      if (this.options.strictMode) {
+      if (this.options.strict) {
         return err<QueryParserErrorData>({
           reason: QueryParserErrorReason.MalformedQueryString,
           message: `Malformed query string: unclosed bracket in key "${key}"`,
@@ -308,7 +308,7 @@ export class QueryParser {
       root[rootKey] = this.shouldCreateArray(nextKey) ? [] : {};
     } else {
       if (typeof root[rootKey] !== 'object' || root[rootKey] === null) {
-        if (this.options.strictMode) {
+        if (this.options.strict) {
           return err<QueryParserErrorData>({
             reason: QueryParserErrorReason.ConflictingStructure,
             message: `Conflict: key "${rootKey}" is both a scalar and a nested structure`,
@@ -347,7 +347,7 @@ export class QueryParser {
 
       // Conversion: Array with non-numeric key → Object
       if (Array.isArray(current) && prop !== '' && !this.isValidArrayIndex(prop)) {
-        if (this.options.strictMode) {
+        if (this.options.strict) {
           return err<QueryParserErrorData>({
             reason: QueryParserErrorReason.ConflictingStructure,
             message: `Conflict: non-numeric key "${prop}" used on an array structure at "${parentKey}"`,
@@ -445,7 +445,7 @@ export class QueryParser {
           const target = current[prop];
 
           if (typeof target !== 'object' || target === null) {
-            if (this.options.strictMode) {
+            if (this.options.strict) {
               return err<QueryParserErrorData>({
                 reason: QueryParserErrorReason.ConflictingStructure,
                 message: `Conflict: key "${prop}" is both a scalar and a nested structure`,
@@ -513,7 +513,7 @@ export class QueryParser {
 
         this.assignArrayRecordValue(obj, key, value);
       } else {
-        if (this.options.strictMode) {
+        if (this.options.strict) {
           return err<QueryParserErrorData>({
             reason: QueryParserErrorReason.ConflictingStructure,
             message: `Conflict: non-numeric key "${key}" used on an array structure`,
@@ -534,7 +534,7 @@ export class QueryParser {
   }
 
   /**
-   * Assigns a value to a record, handling HPP mode and conflict detection.
+   * Assigns a value to a record, handling duplicate key strategy and conflict detection.
    */
   private assignToRecord(obj: QueryValueRecord, key: string, value: string): Err<QueryParserErrorData> | undefined {
     if (!Object.prototype.hasOwnProperty.call(obj, key)) {
@@ -546,29 +546,29 @@ export class QueryParser {
     const existing = obj[key];
 
     if (typeof existing === 'object' && existing !== null) {
-      if (Array.isArray(existing) && this.options.hppMode === 'array') {
+      if (Array.isArray(existing) && this.options.duplicates === 'array') {
         existing.push(value);
 
         return;
       }
 
-      if (this.options.strictMode) {
+      if (this.options.strict) {
         return err<QueryParserErrorData>({
           reason: QueryParserErrorReason.ConflictingStructure,
           message: `Conflict: key "${key}" is a nested structure but being assigned a scalar value`,
         });
       }
 
-      if (this.options.hppMode !== 'last') {
+      if (this.options.duplicates !== 'last') {
         return;
       }
     }
 
-    if (this.options.hppMode === 'first') {
+    if (this.options.duplicates === 'first') {
       return;
     }
 
-    if (this.options.hppMode === 'last') {
+    if (this.options.duplicates === 'last') {
       obj[key] = value;
 
       return;
@@ -652,7 +652,7 @@ export class QueryParser {
     try {
       return decodeURIComponent(raw);
     } catch {
-      if (this.options.strictMode) {
+      if (this.options.strict) {
         return err<QueryParserErrorData>({
           reason: QueryParserErrorReason.MalformedQueryString,
           message: `Malformed query string: invalid percent encoding in "${raw}"`,

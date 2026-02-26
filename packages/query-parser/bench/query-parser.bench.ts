@@ -48,12 +48,12 @@ const ENCODED_5 = 'key%201=val%201&key%202=val%202&key%203=val%203&key%204=val%2
 // ── Parser instances (pre-built) ──
 
 const defaultParser = QueryParser.create();
-const arrayParser = QueryParser.create({ parseArrays: true });
-const strictParser = QueryParser.create({ strictMode: true });
-const strictArrayParser = QueryParser.create({ parseArrays: true, strictMode: true });
-const hppFirstParser = QueryParser.create({ hppMode: 'first' });
-const hppLastParser = QueryParser.create({ hppMode: 'last' });
-const hppArrayParser = QueryParser.create({ hppMode: 'array' });
+const nestingParser = QueryParser.create({ nesting: true });
+const strictParser = QueryParser.create({ strict: true });
+const strictNestingParser = QueryParser.create({ nesting: true, strict: true });
+const dupFirstParser = QueryParser.create({ duplicates: 'first' });
+const dupLastParser = QueryParser.create({ duplicates: 'last' });
+const dupArrayParser = QueryParser.create({ duplicates: 'array' });
 
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 //  BENCHMARKS
@@ -70,11 +70,11 @@ boxplot(() => {
     do_not_optimize(
       QueryParser.create({
         depth: 10,
-        parameterLimit: 500,
-        parseArrays: true,
+        maxParams: 500,
+        nesting: true,
         arrayLimit: 50,
-        hppMode: 'array',
-        strictMode: true,
+        duplicates: 'array',
+        strict: true,
       }),
     );
   }).gc('inner');
@@ -108,19 +108,19 @@ summary(() => {
 
 summary(() => {
   bench('nested depth 1 — a[b]=1', () => {
-    do_not_optimize(arrayParser.parse(NESTED_1));
+    do_not_optimize(nestingParser.parse(NESTED_1));
   });
 
   bench('nested depth 2 — a[b][c]=1', () => {
-    do_not_optimize(arrayParser.parse(NESTED_2));
+    do_not_optimize(nestingParser.parse(NESTED_2));
   });
 
   bench('nested depth 3 — a[b][c][d]=1', () => {
-    do_not_optimize(arrayParser.parse(NESTED_3));
+    do_not_optimize(nestingParser.parse(NESTED_3));
   });
 
   bench('nested depth 5 — a[b][c][d][e][f]=1', () => {
-    do_not_optimize(arrayParser.parse(NESTED_5));
+    do_not_optimize(nestingParser.parse(NESTED_5));
   });
 });
 
@@ -128,31 +128,31 @@ summary(() => {
 
 summary(() => {
   bench('array push ×10 — a[]=0&...', () => {
-    do_not_optimize(arrayParser.parse(ARRAY_PUSH_10));
+    do_not_optimize(nestingParser.parse(ARRAY_PUSH_10));
   });
 
   bench('array indexed ×10 — a[0]=0&...', () => {
-    do_not_optimize(arrayParser.parse(ARRAY_INDEX_10));
+    do_not_optimize(nestingParser.parse(ARRAY_INDEX_10));
   });
 
   bench('array+object mixed', () => {
-    do_not_optimize(arrayParser.parse(ARRAY_MIXED));
+    do_not_optimize(nestingParser.parse(ARRAY_MIXED));
   });
 });
 
-// ── 5. HPP mode comparison ──
+// ── 5. Duplicates mode comparison ──
 
 summary(() => {
   bench('hpp first — 20 duplicates', () => {
-    do_not_optimize(hppFirstParser.parse(HPP_20));
+    do_not_optimize(dupFirstParser.parse(HPP_20));
   });
 
   bench('hpp last — 20 duplicates', () => {
-    do_not_optimize(hppLastParser.parse(HPP_20));
+    do_not_optimize(dupLastParser.parse(HPP_20));
   });
 
   bench('hpp array — 20 duplicates', () => {
-    do_not_optimize(hppArrayParser.parse(HPP_20));
+    do_not_optimize(dupArrayParser.parse(HPP_20));
   });
 });
 
@@ -184,7 +184,7 @@ summary(() => {
   });
 
   bench('nested depth 3 (non-strict)', () => {
-    do_not_optimize(arrayParser.parse(NESTED_3));
+    do_not_optimize(nestingParser.parse(NESTED_3));
   });
 
   bench('nested depth 3 (strict)', () => {
@@ -200,11 +200,11 @@ summary(() => {
   });
 
   bench('filter API (nested)', () => {
-    do_not_optimize(arrayParser.parse(FILTER_API));
+    do_not_optimize(nestingParser.parse(FILTER_API));
   });
 
   bench('e-commerce (arrays)', () => {
-    do_not_optimize(arrayParser.parse(ECOMMERCE));
+    do_not_optimize(nestingParser.parse(ECOMMERCE));
   });
 });
 
@@ -268,7 +268,7 @@ summary(() => {
 
 summary(() => {
   bench('nested depth 3 — @zipbul/query-parser', () => {
-    do_not_optimize(arrayParser.parse(NESTED_3));
+    do_not_optimize(nestingParser.parse(NESTED_3));
   });
 
   bench('nested depth 3 — qs', () => {
@@ -278,7 +278,7 @@ summary(() => {
 
 summary(() => {
   bench('array ×10 — @zipbul/query-parser', () => {
-    do_not_optimize(arrayParser.parse(ARRAY_INDEX_10));
+    do_not_optimize(nestingParser.parse(ARRAY_INDEX_10));
   });
 
   bench('array ×10 — qs', () => {
@@ -288,7 +288,7 @@ summary(() => {
 
 summary(() => {
   bench('e-commerce — @zipbul/query-parser', () => {
-    do_not_optimize(arrayParser.parse(ECOMMERCE));
+    do_not_optimize(nestingParser.parse(ECOMMERCE));
   });
 
   bench('e-commerce — qs', () => {

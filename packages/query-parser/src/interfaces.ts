@@ -36,13 +36,13 @@ export interface QueryParserOptions {
    * Maximum number of parameters to parse.
    * @default 1000
    */
-  parameterLimit?: number;
+  maxParams?: number;
 
   /**
-   * Whether to support array parsing with brackets (e.g. `a[]=b`).
+   * Whether to support nested object and array parsing with brackets (e.g. `a[b]=1`, `a[]=b`).
    * @default false
    */
-  parseArrays?: boolean;
+  nesting?: boolean;
 
   /**
    * Maximum array index allowed.
@@ -57,7 +57,7 @@ export interface QueryParserOptions {
    * - 'array': Convert to array (Use with caution).
    * @default 'first'
    */
-  hppMode?: 'first' | 'last' | 'array';
+  duplicates?: 'first' | 'last' | 'array';
 
   /**
    * Whether to enable strict mode.
@@ -67,5 +67,5 @@ export interface QueryParserOptions {
    * - Throws on mixed array and object indices if not handled by conversion.
    * @default false
    */
-  strictMode?: boolean;
+  strict?: boolean;
 }

@@ -2,11 +2,11 @@ import type { ResolvedQueryParserOptions } from './types';
 
 export const DEFAULT_QUERY_PARSER_OPTIONS: ResolvedQueryParserOptions = {
   depth: 5,
-  parameterLimit: 1000,
-  parseArrays: false,
+  maxParams: 1000,
+  nesting: false,
   arrayLimit: 20,
-  hppMode: 'first',
-  strictMode: false,
+  duplicates: 'first',
+  strict: false,
 };
 
 /** Keys that must never be written to any parsed object (prototype pollution prevention). */

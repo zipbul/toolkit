@@ -13,23 +13,23 @@ import type { ResolvedQueryParserOptions } from './types';
 export function resolveQueryParserOptions(options?: QueryParserOptions): ResolvedQueryParserOptions {
   return {
     depth: options?.depth ?? DEFAULT_QUERY_PARSER_OPTIONS.depth,
-    parameterLimit: options?.parameterLimit ?? DEFAULT_QUERY_PARSER_OPTIONS.parameterLimit,
-    parseArrays: options?.parseArrays ?? DEFAULT_QUERY_PARSER_OPTIONS.parseArrays,
+    maxParams: options?.maxParams ?? DEFAULT_QUERY_PARSER_OPTIONS.maxParams,
+    nesting: options?.nesting ?? DEFAULT_QUERY_PARSER_OPTIONS.nesting,
     arrayLimit: options?.arrayLimit ?? DEFAULT_QUERY_PARSER_OPTIONS.arrayLimit,
-    hppMode: options?.hppMode ?? DEFAULT_QUERY_PARSER_OPTIONS.hppMode,
-    strictMode: options?.strictMode ?? DEFAULT_QUERY_PARSER_OPTIONS.strictMode,
+    duplicates: options?.duplicates ?? DEFAULT_QUERY_PARSER_OPTIONS.duplicates,
+    strict: options?.strict ?? DEFAULT_QUERY_PARSER_OPTIONS.strict,
   };
 }
 
-const VALID_HPP_MODES: ReadonlySet<string> = new Set(['first', 'last', 'array']);
+const VALID_DUPLICATE_MODES: ReadonlySet<string> = new Set(['first', 'last', 'array']);
 
 /**
  * Validates resolved query-parser options.
  *
  * - V1: `depth` must be a non-negative integer.
- * - V2: `parameterLimit` must be a positive integer (≥ 1).
+ * - V2: `maxParams` must be a positive integer (≥ 1).
  * - V3: `arrayLimit` must be a non-negative integer.
- * - V4: `hppMode` must be 'first', 'last', or 'array'.
+ * - V4: `duplicates` must be 'first', 'last', or 'array'.
  *
  * @returns `undefined` (void) if valid, or `Err<QueryParserErrorData>` on the first violated rule.
  */
@@ -42,11 +42,11 @@ export function validateQueryParserOptions(resolved: ResolvedQueryParserOptions)
     });
   }
 
-  // V2 — parameterLimit: positive integer (≥ 1)
-  if (!Number.isInteger(resolved.parameterLimit) || resolved.parameterLimit < 1) {
+  // V2 — maxParams: positive integer (≥ 1)
+  if (!Number.isInteger(resolved.maxParams) || resolved.maxParams < 1) {
     return err<QueryParserErrorData>({
       reason: QueryParserErrorReason.InvalidParameterLimit,
-      message: 'parameterLimit must be a positive integer (≥ 1)',
+      message: 'maxParams must be a positive integer (≥ 1)',
     });
   }
 
@@ -58,11 +58,11 @@ export function validateQueryParserOptions(resolved: ResolvedQueryParserOptions)
     });
   }
 
-  // V4 — hppMode: valid value
-  if (!VALID_HPP_MODES.has(resolved.hppMode)) {
+  // V4 — duplicates: valid value
+  if (!VALID_DUPLICATE_MODES.has(resolved.duplicates)) {
     return err<QueryParserErrorData>({
       reason: QueryParserErrorReason.InvalidHppMode,
-      message: "hppMode must be 'first', 'last', or 'array'",
+      message: "duplicates must be 'first', 'last', or 'array'",
     });
   }
 }

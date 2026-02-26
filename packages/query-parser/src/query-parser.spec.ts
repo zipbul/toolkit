@@ -61,7 +61,7 @@ describe('QueryParser', () => {
 
     it('should return a QueryParser instance when called with valid partial options', () => {
       // Act
-      const parser = QueryParser.create({ parseArrays: true, depth: 3 });
+      const parser = QueryParser.create({ nesting: true, depth: 3 });
 
       // Assert
       expect(parser).toBeInstanceOf(QueryParser);
@@ -76,19 +76,19 @@ describe('QueryParser', () => {
       expect(error.reason).toBe(QueryParserErrorReason.InvalidDepth);
     });
 
-    it('should throw QueryParserError when parameterLimit is invalid', () => {
+    it('should throw QueryParserError when maxParams is invalid', () => {
       // Act
-      const error = catchError(() => QueryParser.create({ parameterLimit: 0 }));
+      const error = catchError(() => QueryParser.create({ maxParams: 0 }));
 
       // Assert
       expect(error).toBeInstanceOf(QueryParserError);
       expect(error.reason).toBe(QueryParserErrorReason.InvalidParameterLimit);
     });
 
-    it('should throw QueryParserError when hppMode is invalid', () => {
+    it('should throw QueryParserError when duplicates is invalid', () => {
       // Act
       const error = catchError(() =>
-        QueryParser.create({ hppMode: 'invalid' } as unknown as QueryParserOptions),
+        QueryParser.create({ duplicates: 'invalid' } as unknown as QueryParserOptions),
       );
 
       // Assert
@@ -190,10 +190,10 @@ describe('QueryParser', () => {
   });
 
   // =========================================================================
-  // parseArrays enabled
+  // nesting enabled
   // =========================================================================
-  describe('parseArrays enabled', () => {
-    const parser = QueryParser.create({ parseArrays: true });
+  describe('nesting enabled', () => {
+    const parser = QueryParser.create({ nesting: true });
 
     it('should parse nested object when brackets are used', () => {
       // Act & Assert
@@ -267,12 +267,12 @@ describe('QueryParser', () => {
   });
 
   // =========================================================================
-  // parseArrays disabled (default)
+  // nesting disabled (default)
   // =========================================================================
-  describe('parseArrays disabled', () => {
-    const parser = QueryParser.create({ parseArrays: false });
+  describe('nesting disabled', () => {
+    const parser = QueryParser.create({ nesting: false });
 
-    it('should treat brackets as literal key characters when parseArrays is false', () => {
+    it('should treat brackets as literal key characters when nesting is false', () => {
       // Act & Assert
       expect(parser.parse('user[name]=alice')).toEqual({ 'user[name]': 'alice' });
       expect(parser.parse('arr[0]=a')).toEqual({ 'arr[0]': 'a' });
@@ -287,7 +287,7 @@ describe('QueryParser', () => {
   describe('depth', () => {
     it('should use default depth when no depth is provided', () => {
       // Arrange
-      const parser = QueryParser.create({ parseArrays: true });
+      const parser = QueryParser.create({ nesting: true });
 
       // Act & Assert
       expect(parser.parse('a[b][c][d][e][f]=deep')).toEqual({
@@ -300,7 +300,7 @@ describe('QueryParser', () => {
 
     it('should enforce depth 0 when nesting is disallowed', () => {
       // Arrange
-      const parser = QueryParser.create({ depth: 0, parseArrays: true });
+      const parser = QueryParser.create({ depth: 0, nesting: true });
 
       // Act & Assert
       expect(parser.parse('a[b]=c')).toEqual({ a: {} });
@@ -308,7 +308,7 @@ describe('QueryParser', () => {
 
     it('should enforce depth 1 when one level is allowed', () => {
       // Arrange
-      const parser = QueryParser.create({ depth: 1, parseArrays: true });
+      const parser = QueryParser.create({ depth: 1, nesting: true });
 
       // Act & Assert
       expect(parser.parse('a[b]=c')).toEqual({ a: { b: 'c' } });
@@ -317,10 +317,10 @@ describe('QueryParser', () => {
   });
 
   // =========================================================================
-  // parameterLimit
+  // maxParams
   // =========================================================================
-  describe('parameterLimit', () => {
-    it('should use default parameterLimit when not provided', () => {
+  describe('maxParams', () => {
+    it('should use default maxParams when not provided', () => {
       // Arrange
       const parser = QueryParser.create();
       const params = Array.from({ length: 1001 }, (_, i) => `p${i}=${i}`).join('&');
@@ -332,17 +332,17 @@ describe('QueryParser', () => {
       expect(Object.keys(res).length).toBe(1000);
     });
 
-    it('should enforce parameterLimit 1 when limit is set', () => {
+    it('should enforce maxParams 1 when limit is set', () => {
       // Arrange
-      const parser = QueryParser.create({ parameterLimit: 1 });
+      const parser = QueryParser.create({ maxParams: 1 });
 
       // Act & Assert
       expect(parser.parse('a=1&b=2&c=3')).toEqual({ a: '1' });
     });
 
-    it('should enforce parameterLimit 2 when limit is set', () => {
+    it('should enforce maxParams 2 when limit is set', () => {
       // Arrange
-      const parser = QueryParser.create({ parameterLimit: 2 });
+      const parser = QueryParser.create({ maxParams: 2 });
 
       // Act & Assert
       expect(parser.parse('a=1&b=2&c=3')).toEqual({ a: '1', b: '2' });
@@ -355,7 +355,7 @@ describe('QueryParser', () => {
   describe('arrayLimit', () => {
     it('should use default arrayLimit when not provided', () => {
       // Arrange
-      const parser = QueryParser.create({ parseArrays: true });
+      const parser = QueryParser.create({ nesting: true });
       const expectedArr = new Array(21);
 
       expectedArr[20] = 'ok';
@@ -371,7 +371,7 @@ describe('QueryParser', () => {
 
     it('should enforce arrayLimit 0 when limit is set', () => {
       // Arrange
-      const parser = QueryParser.create({ arrayLimit: 0, parseArrays: true });
+      const parser = QueryParser.create({ arrayLimit: 0, nesting: true });
 
       // Act
       const first = parser.parse('arr[0]=a');
@@ -386,7 +386,7 @@ describe('QueryParser', () => {
 
     it('should enforce arrayLimit 10 when limit is set', () => {
       // Arrange
-      const parser = QueryParser.create({ arrayLimit: 10, parseArrays: true });
+      const parser = QueryParser.create({ arrayLimit: 10, nesting: true });
       const expectedArr = ['a'];
 
       expectedArr[10] = 'b';
@@ -402,30 +402,30 @@ describe('QueryParser', () => {
   });
 
   // =========================================================================
-  // hppMode
+  // duplicates
   // =========================================================================
-  describe('hppMode', () => {
-    it('should keep first value when hppMode is first', () => {
+  describe('duplicates', () => {
+    it('should keep first value when duplicates is first', () => {
       // Arrange
-      const parser = QueryParser.create({ hppMode: 'first' });
+      const parser = QueryParser.create({ duplicates: 'first' });
 
       // Act & Assert
       expect(parser.parse('id=1&id=2')).toEqual({ id: '1' });
       expect(parser.parse('x=a&x=b&x=c')).toEqual({ x: 'a' });
     });
 
-    it('should keep last value when hppMode is last', () => {
+    it('should keep last value when duplicates is last', () => {
       // Arrange
-      const parser = QueryParser.create({ hppMode: 'last' });
+      const parser = QueryParser.create({ duplicates: 'last' });
 
       // Act & Assert
       expect(parser.parse('id=1&id=2')).toEqual({ id: '2' });
       expect(parser.parse('x=a&x=b&x=c')).toEqual({ x: 'c' });
     });
 
-    it('should collect all values when hppMode is array', () => {
+    it('should collect all values when duplicates is array', () => {
       // Arrange
-      const parser = QueryParser.create({ hppMode: 'array' });
+      const parser = QueryParser.create({ duplicates: 'array' });
 
       // Act
       const two = parser.parse('id=1&id=2');
@@ -436,17 +436,17 @@ describe('QueryParser', () => {
       expect(expectQueryArray(many.id)).toEqual(['1', '2', '3', '4']);
     });
 
-    it('should not wrap single value when hppMode is array', () => {
+    it('should not wrap single value when duplicates is array', () => {
       // Arrange
-      const parser = QueryParser.create({ hppMode: 'array' });
+      const parser = QueryParser.create({ duplicates: 'array' });
 
       // Act & Assert
       expect(parser.parse('id=1')).toEqual({ id: '1' });
     });
 
-    it('should allow explicit array brackets when hppMode is first and parseArrays is true', () => {
+    it('should allow explicit array brackets when duplicates is first and nesting is true', () => {
       // Arrange
-      const parser = QueryParser.create({ hppMode: 'first', parseArrays: true });
+      const parser = QueryParser.create({ duplicates: 'first', nesting: true });
 
       // Act
       const res = parser.parse('arr[]=1&arr[]=2');
@@ -496,7 +496,7 @@ describe('QueryParser', () => {
 
     it('should block nested POISONED keys when parsing nested structures', () => {
       // Arrange
-      const parser = QueryParser.create({ parseArrays: true });
+      const parser = QueryParser.create({ nesting: true });
 
       // Act & Assert
       const protoRes = parser.parse('__proto__[polluted]=true');
@@ -562,7 +562,7 @@ describe('QueryParser', () => {
 
     it('should throw QueryParserError for malformed percent encoding in value when strict', () => {
       // Arrange
-      const strictParser = QueryParser.create({ strictMode: true });
+      const strictParser = QueryParser.create({ strict: true });
 
       // Act & Assert
       const error = catchError(() => strictParser.parse('bad=%E0%A4'));
@@ -573,7 +573,7 @@ describe('QueryParser', () => {
 
     it('should throw QueryParserError for malformed percent encoding in key when strict', () => {
       // Arrange
-      const strictParser = QueryParser.create({ strictMode: true });
+      const strictParser = QueryParser.create({ strict: true });
 
       // Act & Assert
       const error = catchError(() => strictParser.parse('%E0%A4=value'));
@@ -636,14 +636,14 @@ describe('QueryParser', () => {
   // Bracket Edge Cases
   // =========================================================================
   describe('bracket edge cases', () => {
-    const parser = QueryParser.create({ parseArrays: true });
+    const parser = QueryParser.create({ nesting: true });
 
-    it('should handle unclosed bracket as literal when strictMode is false', () => {
+    it('should handle unclosed bracket as literal when strict is false', () => {
       // Act & Assert
       expect(parser.parse('a[=b')).toEqual({ 'a[': 'b' });
     });
 
-    it('should handle unmatched close bracket as literal when strictMode is false', () => {
+    it('should handle unmatched close bracket as literal when strict is false', () => {
       // Act & Assert
       expect(parser.parse('a]=b')).toEqual({ 'a]': 'b' });
     });
@@ -683,9 +683,9 @@ describe('QueryParser', () => {
   // Combined Options
   // =========================================================================
   describe('combined options', () => {
-    it('should handle HPP with parseArrays when both enabled', () => {
+    it('should handle HPP with nesting when both enabled', () => {
       // Arrange
-      const parser = QueryParser.create({ hppMode: 'array', parseArrays: true });
+      const parser = QueryParser.create({ duplicates: 'array', nesting: true });
 
       // Act
       const res = parser.parse('a=1&a=2&b[]=x&b[]=y');
@@ -695,17 +695,17 @@ describe('QueryParser', () => {
       expect(expectQueryArray(res.b)).toEqual(['x', 'y']);
     });
 
-    it('should handle depth with parseArrays when depth is set', () => {
+    it('should handle depth with nesting when depth is set', () => {
       // Arrange
-      const parser = QueryParser.create({ depth: 1, parseArrays: true });
+      const parser = QueryParser.create({ depth: 1, nesting: true });
 
       // Act & Assert
       expect(parser.parse('a[b][c]=d')).toEqual({ a: { b: {} } });
     });
 
-    it('should handle arrayLimit with parseArrays when limit is set', () => {
+    it('should handle arrayLimit with nesting when limit is set', () => {
       // Arrange
-      const parser = QueryParser.create({ arrayLimit: 2, parseArrays: true });
+      const parser = QueryParser.create({ arrayLimit: 2, nesting: true });
 
       // Act
       const res = parser.parse('arr[0]=a&arr[2]=b&arr[3]=blocked');
@@ -722,7 +722,7 @@ describe('QueryParser', () => {
   // Array/Object Conflict
   // =========================================================================
   describe('array/object conflict', () => {
-    const parser = QueryParser.create({ parseArrays: true });
+    const parser = QueryParser.create({ nesting: true });
 
     it('should handle array first then object notation when mixed', () => {
       // Act
@@ -747,7 +747,7 @@ describe('QueryParser', () => {
   describe('additional edge cases', () => {
     it('should handle negative array index when treated as object property', () => {
       // Arrange
-      const parser = QueryParser.create({ parseArrays: true });
+      const parser = QueryParser.create({ nesting: true });
 
       // Act & Assert
       expect(parser.parse('arr[-1]=negative')).toEqual({ arr: { '-1': 'negative' } });
@@ -755,15 +755,15 @@ describe('QueryParser', () => {
 
     it('should handle very large index when exceeding arrayLimit', () => {
       // Arrange
-      const parser = QueryParser.create({ parseArrays: true, arrayLimit: 20 });
+      const parser = QueryParser.create({ nesting: true, arrayLimit: 20 });
 
       // Act & Assert
       expect(parser.parse('arr[999999]=huge')).toEqual({ arr: { '999999': 'huge' } });
     });
 
-    it('should reject leading zeros in array index when parseArrays is true', () => {
+    it('should reject leading zeros in array index when nesting is true', () => {
       // Arrange
-      const parser = QueryParser.create({ parseArrays: true });
+      const parser = QueryParser.create({ nesting: true });
 
       // Act & Assert — '007' has leading zero → object property, not array index
       expect(parser.parse('arr[007]=val')).toEqual({ arr: { '007': 'val' } });
@@ -775,7 +775,7 @@ describe('QueryParser', () => {
 
     it('should handle mixed empty and indexed brackets when provided', () => {
       // Arrange
-      const parser = QueryParser.create({ parseArrays: true });
+      const parser = QueryParser.create({ nesting: true });
 
       // Act
       const res = parser.parse('arr[]=a&arr[1]=b&arr[]=c');
@@ -803,34 +803,34 @@ describe('QueryParser', () => {
   // Strict Mode
   // =========================================================================
   describe('strict mode', () => {
-    it('should throw on unbalanced brackets when strictMode is true', () => {
+    it('should throw on unbalanced brackets when strict is true', () => {
       // Arrange
-      const parser = QueryParser.create({ strictMode: true });
+      const parser = QueryParser.create({ strict: true });
 
       // Act & Assert
       expect(() => parser.parse('a]b=1')).toThrow(/unbalanced brackets/);
       expect(() => parser.parse('a[b=1')).toThrow(/unclosed bracket/);
     });
 
-    it('should throw on nested brackets when strictMode is true', () => {
+    it('should throw on nested brackets when strict is true', () => {
       // Arrange
-      const parser = QueryParser.create({ strictMode: true });
+      const parser = QueryParser.create({ strict: true });
 
       // Act & Assert
       expect(() => parser.parse('a[[b]]=1')).toThrow(/nested brackets/);
     });
 
-    it('should throw on mixed scalar and nested keys when strictMode is true', () => {
+    it('should throw on mixed scalar and nested keys when strict is true', () => {
       // Arrange
-      const parser = QueryParser.create({ strictMode: true, parseArrays: true });
+      const parser = QueryParser.create({ strict: true, nesting: true });
 
       // Act & Assert — scalar first, then bracket key triggers conflict in parseComplexKey
       expect(() => parser.parse('a=1&a[b]=2')).toThrow(/Conflict/);
     });
 
-    it('should throw when non-numeric key is mixed in array and strictMode is true', () => {
+    it('should throw when non-numeric key is mixed in array and strict is true', () => {
       // Arrange
-      const parser = QueryParser.create({ parseArrays: true, strictMode: true });
+      const parser = QueryParser.create({ nesting: true, strict: true });
 
       // Act & Assert
       expect(() => parser.parse('a[0]=1&a[foo]=2')).toThrow(/non-numeric key/);
@@ -838,7 +838,7 @@ describe('QueryParser', () => {
 
     it('should convert array to object when non-numeric key is mixed in non-strict mode', () => {
       // Arrange
-      const parser = QueryParser.create({ parseArrays: true, strictMode: false });
+      const parser = QueryParser.create({ nesting: true, strict: false });
 
       // Act
       const res = parser.parse('a[0]=1&a[foo]=2');
@@ -849,7 +849,7 @@ describe('QueryParser', () => {
 
     it('should handle deep array-to-object conversion when mixed keys appear', () => {
       // Arrange
-      const parser = QueryParser.create({ parseArrays: true });
+      const parser = QueryParser.create({ nesting: true });
 
       // Act
       const res = parser.parse('user[roles][0]=admin&user[roles][name]=editor');
