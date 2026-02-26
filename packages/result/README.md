@@ -207,6 +207,82 @@ type Err<E = never> = {
 
 <br>
 
+### `safe()`
+
+Wraps a sync function or Promise into a `Result` / `ResultAsync`. Catches throws and rejections, converting them to `Err`.
+
+```typescript
+import { safe } from '@zipbul/result';
+```
+
+| Overload | Return | Description |
+|:---------|:-------|:------------|
+| `safe(fn)` | `Result<T, unknown>` | Sync — calls `fn()`, catches throws |
+| `safe(fn, mapErr)` | `Result<T, E>` | Sync — catches throws, maps via `mapErr` |
+| `safe(promise)` | `ResultAsync<T, unknown>` | Async — wraps rejection |
+| `safe(promise, mapErr)` | `ResultAsync<T, E>` | Async — wraps rejection, maps via `mapErr` |
+
+```typescript
+// Sync — wrap a function that might throw
+const result = safe(() => JSON.parse(rawJson));
+if (isErr(result)) {
+  console.error('Parse failed:', result.data);
+} else {
+  console.log(result); // parsed object
+}
+
+// Sync with mapErr — convert unknown throw to typed error
+const typed = safe(
+  () => JSON.parse(rawJson),
+  (e) => ({ code: 'PARSE_ERROR', message: String(e) }),
+);
+
+// Async — wrap a Promise that might reject
+const asyncResult = await safe(fetch('/api/data'));
+
+// Async with mapErr
+const apiResult = await safe(
+  fetch('/api/users/1'),
+  (e) => ({ code: 'NETWORK', message: String(e) }),
+);
+```
+
+> **Sync path** — `safe(fn)` detects a function via `!(fn instanceof Promise)`. A function that _returns_ a Promise is treated as sync — the Promise object becomes the success value `T`.
+>
+> **mapErr panic** — if `mapErr` itself throws, the throw propagates (sync) or the returned promise rejects (async). This is by design — `mapErr` is user code, and its failure is a panic, not an `Err`.
+
+<br>
+
+### `ResultAsync<T, E>`
+
+A type alias for async results — not a wrapper class.
+
+```typescript
+type ResultAsync<T, E = never> = Promise<Result<T, E>>;
+```
+
+| Parameter | Default | Description |
+|:----------|:--------|:------------|
+| `T` | — | Success value type |
+| `E` | `never` | Error data type |
+
+```typescript
+// Use as return type for async Result-returning functions
+async function fetchUser(id: number): ResultAsync<User, string> {
+  const res = await fetch(`/api/users/${id}`);
+  if (!res.ok) return err(res.statusText);
+  return await res.json();
+}
+
+// Or wrap an existing Promise with safe()
+const result: ResultAsync<Response, string> = safe(
+  fetch('/api/data'),
+  (e) => String(e),
+);
+```
+
+<br>
+
 ### Marker Key
 
 The marker key is a unique hidden property used to identify `Err` objects. It defaults to a collision-resistant string.

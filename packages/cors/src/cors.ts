@@ -1,9 +1,10 @@
 import { HttpHeader } from '@zipbul/shared';
-import { err, isErr } from '@zipbul/result';
-import type { Err, Result } from '@zipbul/result';
+import { isErr, safe } from '@zipbul/result';
+import type { ResultAsync } from '@zipbul/result';
 
 import { CorsAction, CorsErrorReason, CorsRejectionReason } from './enums';
-import type { CorsError, CorsOptions, CorsPreflightResult, CorsRejectResult } from './interfaces';
+import { CorsError } from './interfaces';
+import type { CorsErrorData, CorsOptions, CorsPreflightResult, CorsRejectResult } from './interfaces';
 import { resolveCorsOptions, validateCorsOptions } from './options';
 import type { CorsResult, ResolvedCorsOptions } from './types';
 import type { OriginResult } from './types';
@@ -19,14 +20,15 @@ export class Cors {
   /**
    * Creates a Cors instance after resolving and validating options.
    *
-   * @returns Cors instance on success, Err<CorsError> on validation failure.
+   * @throws {CorsError} when options fail validation (invalid origin, methods, maxAge, etc.)
+   * @returns A ready-to-use Cors instance.
    */
-  public static create(options?: CorsOptions): Result<Cors, CorsError> {
+  public static create(options?: CorsOptions): Cors {
     const resolved = resolveCorsOptions(options);
-    const validationResult = validateCorsOptions(resolved);
+    const validation = validateCorsOptions(resolved);
 
-    if (isErr(validationResult)) {
-      return validationResult;
+    if (isErr(validation)) {
+      throw new CorsError(validation.data);
     }
 
     return new Cors(resolved);
@@ -35,12 +37,12 @@ export class Cors {
   /**
    * Evaluates CORS policy for the given request.
    *
+   * @throws {CorsError} when the origin function throws at runtime.
    * @returns `Continue` — attach headers and proceed,
    *          `RespondPreflight` — return preflight response,
-   *          `Reject` — deny with reason,
-   *          `Err<CorsError>` — origin function threw.
+   *          `Reject` — deny with reason.
    */
-  public async handle(request: Request): Promise<Result<CorsResult, CorsError>> {
+  public async handle(request: Request): Promise<CorsResult> {
     const origin = request.headers.get(HttpHeader.Origin);
 
     if (origin === null || origin.length === 0) {
@@ -50,7 +52,7 @@ export class Cors {
     const allowedOrigin = await this.matchOrigin(origin, request);
 
     if (isErr(allowedOrigin)) {
-      return allowedOrigin;
+      throw new CorsError(allowedOrigin.data);
     }
 
     if (allowedOrigin === undefined) {
@@ -133,7 +135,7 @@ export class Cors {
     return { action: CorsAction.Reject, reason };
   }
 
-  private async matchOrigin(origin: string, request: Request): Promise<string | undefined | Err<CorsError>> {
+  private async matchOrigin(origin: string, request: Request): ResultAsync<string | undefined, CorsErrorData> {
     const originOption = this.options.origin;
 
     if (originOption === false) {
@@ -170,16 +172,19 @@ export class Cors {
       return matched ? origin : undefined;
     }
 
-    try {
-      const originResult = await originOption(origin, request);
-
-      return this.resolveOriginResult(origin, originResult);
-    } catch {
-      return err<CorsError>({
+    const originResult = await safe(
+      (async () => originOption(origin, request))(),
+      (): CorsErrorData => ({
         reason: CorsErrorReason.OriginFunctionError,
         message: 'Origin function threw an error',
-      });
+      }),
+    );
+
+    if (isErr(originResult)) {
+      return originResult;
     }
+
+    return this.resolveOriginResult(origin, originResult);
   }
 
   private resolveOriginResult(origin: string, result: OriginResult): string | undefined {

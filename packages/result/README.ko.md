@@ -207,6 +207,82 @@ type Err<E = never> = {
 
 <br>
 
+### `safe()`
+
+동기 함수 또는 Promise를 `Result` / `ResultAsync`로 감쌉니다. throw와 rejection을 캐치하여 `Err`로 변환합니다.
+
+```typescript
+import { safe } from '@zipbul/result';
+```
+
+| 오버로드 | 반환 | 설명 |
+|:---------|:-----|:-----|
+| `safe(fn)` | `Result<T, unknown>` | 동기 — `fn()` 호출, throw 캐치 |
+| `safe(fn, mapErr)` | `Result<T, E>` | 동기 — throw 캐치, `mapErr`로 변환 |
+| `safe(promise)` | `ResultAsync<T, unknown>` | 비동기 — rejection 래핑 |
+| `safe(promise, mapErr)` | `ResultAsync<T, E>` | 비동기 — rejection 래핑, `mapErr`로 변환 |
+
+```typescript
+// 동기 — throw할 수 있는 함수 래핑
+const result = safe(() => JSON.parse(rawJson));
+if (isErr(result)) {
+  console.error('파싱 실패:', result.data);
+} else {
+  console.log(result); // 파싱된 객체
+}
+
+// 동기 + mapErr — unknown throw를 타입이 있는 에러로 변환
+const typed = safe(
+  () => JSON.parse(rawJson),
+  (e) => ({ code: 'PARSE_ERROR', message: String(e) }),
+);
+
+// 비동기 — reject될 수 있는 Promise 래핑
+const asyncResult = await safe(fetch('/api/data'));
+
+// 비동기 + mapErr
+const apiResult = await safe(
+  fetch('/api/users/1'),
+  (e) => ({ code: 'NETWORK', message: String(e) }),
+);
+```
+
+> **동기 경로** — `safe(fn)`은 `!(fn instanceof Promise)`로 함수를 감지합니다. Promise를 _반환하는_ 함수는 동기로 처리되며, Promise 객체가 성공값 `T`가 됩니다.
+>
+> **mapErr 패닉** — `mapErr` 자체가 throw하면, 동기의 경우 throw가 전파되고 비동기의 경우 반환된 promise가 reject됩니다. 이는 의도된 설계입니다 — `mapErr`는 사용자 코드이며, 그 실패는 패닉(panic)이지 `Err`가 아닙니다.
+
+<br>
+
+### `ResultAsync<T, E>`
+
+비동기 결과를 위한 타입 별칭 — 래퍼 클래스가 아닙니다.
+
+```typescript
+type ResultAsync<T, E = never> = Promise<Result<T, E>>;
+```
+
+| 파라미터 | 기본값 | 설명 |
+|:---------|:-------|:-----|
+| `T` | — | 성공 값 타입 |
+| `E` | `never` | 에러 데이터 타입 |
+
+```typescript
+// 비동기 Result 반환 함수의 반환 타입으로 사용
+async function fetchUser(id: number): ResultAsync<User, string> {
+  const res = await fetch(`/api/users/${id}`);
+  if (!res.ok) return err(res.statusText);
+  return await res.json();
+}
+
+// 또는 기존 Promise를 safe()로 래핑
+const result: ResultAsync<Response, string> = safe(
+  fetch('/api/data'),
+  (e) => String(e),
+);
+```
+
+<br>
+
 ### 마커 키(Marker Key)
 
 마커 키는 `Err` 객체를 식별하는 데 사용되는 숨겨진 고유 프로퍼티입니다. 충돌에 강한 문자열이 기본값입니다.

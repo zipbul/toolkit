@@ -1,6 +1,6 @@
 {
   "name": "@zipbul/cors",
-  "version": "0.0.3",
+  "version": "0.1.0",
   "description": "Framework-agnostic CORS library for standard Web APIs (Request/Response)",
   "license": "MIT",
   "author": "Junhyung Park (https://github.com/parkrevil)",
@@ -37,7 +37,7 @@
     "dist"
   ],
   "scripts": {
-    "build": "bun build index.ts --outdir dist --target bun --format esm --packages external --sourcemap=linked && tsc -p tsconfig.build.json",
+    "build": "bun build index.ts --outdir dist --target bun --format esm --packages external --production --sourcemap=linked && tsc -p tsconfig.build.json",
     "test": "bun test",
     "coverage": "bun test --coverage"
   },

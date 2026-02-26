@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it } from 'bun:test';
 
-import { DEFAULT_MARKER_KEY, err, isErr, setMarkerKey } from '../index';
-import type { Err, Result } from '../index';
+import { DEFAULT_MARKER_KEY, err, isErr, safe, setMarkerKey } from '../index';
+import type { Err, Result, ResultAsync } from '../index';
 
 describe('result', () => {
   afterEach(() => {
@@ -173,5 +173,56 @@ describe('result', () => {
     // Act / Assert
     expect(isErr(success)).toBe(false);
     expect(isErr(failure)).toBe(true);
+  });
+
+  describe('safe integration', () => {
+    it('should produce Result narrowable by isErr when sync fn succeeds', () => {
+      // Arrange
+      const result: Result<number, unknown> = safe(() => 10);
+      // Act / Assert
+      expect(isErr(result)).toBe(false);
+      if (!isErr(result)) {
+        expect(result).toBe(10);
+      }
+    });
+
+    it('should produce Result narrowable by isErr when sync fn fails', () => {
+      // Arrange
+      const result: Result<number, unknown> = safe(() => {
+        throw new Error('fail');
+      });
+      // Act / Assert
+      expect(isErr(result)).toBe(true);
+      if (isErr(result)) {
+        expect(result.data).toBeInstanceOf(Error);
+        expect(typeof result.stack).toBe('string');
+      }
+    });
+
+    it('should produce ResultAsync narrowable by isErr when promise resolves', async () => {
+      // Arrange
+      const resultAsync: ResultAsync<string, unknown> = safe(Promise.resolve('hello'));
+      const result = await resultAsync;
+      // Act / Assert
+      expect(isErr(result)).toBe(false);
+      if (!isErr(result)) {
+        expect(result).toBe('hello');
+      }
+    });
+
+    it('should produce ResultAsync narrowable by isErr when promise rejects with mapErr', async () => {
+      // Arrange
+      const resultAsync: ResultAsync<string, string> = safe(
+        Promise.reject(new Error('async fail')),
+        (e) => (e as Error).message,
+      );
+      const result = await resultAsync;
+      // Act / Assert
+      expect(isErr(result)).toBe(true);
+      if (isErr<string>(result)) {
+        expect(result.data).toBe('async fail');
+        expect(typeof result.stack).toBe('string');
+      }
+    });
   });
 });

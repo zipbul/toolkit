@@ -1,28 +1,54 @@
 /**
- * 기본 에러 마커 키.
- * 에러 객체의 판별 프로퍼티명으로 사용된다.
- * zipbul 프레임워크와 무관한 유니크한 값으로, 충돌 가능성을 최소화한다.
+ * The default marker key used to identify {@link Err} objects.
+ *
+ * This collision-resistant string is set as a hidden property on every `Err`
+ * created by `err()`. You rarely need to reference it directly — it is
+ * provided for advanced use cases like cross-module error domain isolation.
+ *
+ * @example
+ * ```ts
+ * import { DEFAULT_MARKER_KEY } from '@zipbul/result';
+ * console.log(DEFAULT_MARKER_KEY); // '__$$e_9f4a1c7b__'
+ * ```
  */
 export const DEFAULT_MARKER_KEY = '__$$e_9f4a1c7b__';
 
 let currentMarkerKey: string = DEFAULT_MARKER_KEY;
 
 /**
- * 현재 설정된 마커 키를 반환한다.
+ * Returns the marker key currently in use.
  *
- * @returns 현재 마커 키 문자열
+ * Both `err()` and `isErr()` rely on this key to tag and detect error objects.
+ *
+ * @returns The current marker key string.
+ *
+ * @example
+ * ```ts
+ * console.log(getMarkerKey()); // '__$$e_9f4a1c7b__'
+ * ```
  */
 export function getMarkerKey(): string {
   return currentMarkerKey;
 }
 
 /**
- * 마커 키를 변경한다.
- * error()와 isError()가 이 키를 참조하여 에러를 판별한다.
- * 빈 문자열 및 공백만으로 이루어진 문자열은 허용하지 않는다.
+ * Replaces the marker key used by `err()` and `isErr()`.
  *
- * @param key - 새 마커 키. 비어있지 않은(공백 제외) 문자열이어야 한다.
- * @throws {TypeError} key가 빈/공백 문자열인 경우
+ * After calling this, newly-created `Err` objects will use the new key, and
+ * `isErr()` will only recognise objects carrying the new key. Previously
+ * created `Err` objects will **no longer** be detected.
+ *
+ * Only change this if you need to isolate error domains across independent
+ * modules — in most applications the default key is perfectly fine.
+ *
+ * @param key - A non-empty, non-whitespace-only string to use as the new key.
+ * @throws {TypeError} If `key` is empty or contains only whitespace.
+ *
+ * @example
+ * ```ts
+ * setMarkerKey('__my_app_err__');
+ * console.log(getMarkerKey()); // '__my_app_err__'
+ * ```
  */
 export function setMarkerKey(key: string): void {
   if (key.trim().length === 0) {

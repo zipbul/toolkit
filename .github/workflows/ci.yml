@@ -31,10 +31,6 @@ jobs:
         run: bun run build
         working-directory: packages/cors
 
-      - name: Test shared
-        run: bun test
-        working-directory: packages/shared
-
       - name: Test result
         run: bun test
         working-directory: packages/result
@@ -42,20 +38,6 @@ jobs:
       - name: Test cors
         run: bun test
         working-directory: packages/cors
-
-      - name: Extract shared coverage
-        if: github.ref == 'refs/heads/main' && github.event_name == 'push'
-        id: shared-cov
-        working-directory: packages/shared
-        run: |
-          LF=$(grep -oP '^LF:\K\d+' coverage/lcov.info | paste -sd+ | bc)
-          LH=$(grep -oP '^LH:\K\d+' coverage/lcov.info | paste -sd+ | bc)
-          PCT=$(echo "scale=1; $LH * 100 / $LF" | bc)
-          echo "percentage=$PCT" >> "$GITHUB_OUTPUT"
-          if (( $(echo "$PCT >= 95" | bc -l) )); then echo "color=brightgreen" >> "$GITHUB_OUTPUT"
-          elif (( $(echo "$PCT >= 80" | bc -l) )); then echo "color=green" >> "$GITHUB_OUTPUT"
-          elif (( $(echo "$PCT >= 60" | bc -l) )); then echo "color=yellow" >> "$GITHUB_OUTPUT"
-          else echo "color=red" >> "$GITHUB_OUTPUT"; fi
 
       - name: Extract result coverage
         if: github.ref == 'refs/heads/main' && github.event_name == 'push'
@@ -92,7 +74,6 @@ jobs:
         run: |
           badge() { printf '{"schemaVersion":1,"label":"coverage","message":"%s%%","color":"%s"}' "$1" "$2"; }
           gh api --method PATCH /gists/3965fb9d1fe2d6fc5c321cb38d88c823 \
-            -f "files[shared-coverage.json][content]=$(badge '${{ steps.shared-cov.outputs.percentage }}' '${{ steps.shared-cov.outputs.color }}')" \
             -f "files[result-coverage.json][content]=$(badge '${{ steps.result-cov.outputs.percentage }}' '${{ steps.result-cov.outputs.color }}')" \
             -f "files[cors-coverage.json][content]=$(badge '${{ steps.cors-cov.outputs.percentage }}' '${{ steps.cors-cov.outputs.color }}')" \
             > /dev/null

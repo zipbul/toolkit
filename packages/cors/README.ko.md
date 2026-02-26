@@ -38,26 +38,17 @@ CorsResult
 ## 🚀 빠른 시작
 
 ```typescript
-import { Cors, CorsAction } from '@zipbul/cors';
-import { isErr } from '@zipbul/result';
+import { Cors, CorsAction, CorsError } from '@zipbul/cors';
 
-const corsResult = Cors.create({
+// Cors.create()는 잘못된 옵션이면 CorsError를 throw합니다
+const cors = Cors.create({
   origin: 'https://my-app.example.com',
   credentials: true,
 });
 
-if (isErr(corsResult)) {
-  throw new Error(`CORS 설정 오류: ${corsResult.data.message}`);
-}
-
-const cors = corsResult;
-
 async function handleRequest(request: Request): Promise<Response> {
+  // handle()은 origin 함수 실패 시 CorsError를 throw합니다
   const result = await cors.handle(request);
-
-  if (isErr(result)) {
-    return new Response('Internal Error', { status: 500 });
-  }
 
   if (result.action === CorsAction.Reject) {
     return new Response('Forbidden', { status: 403 });
@@ -212,7 +203,7 @@ CORS 검증 실패 시 반환됩니다. `reason`으로 상세한 에러 응답�
 | `MethodNotAllowed` | 요청 메서드가 허용 목록에 없음 |
 | `HeaderNotAllowed` | 요청 헤더가 허용 목록에 없음 |
 
-`Cors.create()`는 옵션 검증 실패 시 `Err<CorsError>`를 반환합니다:
+`Cors.create()`는 옵션 검증 실패 시 `CorsError`를 throw합니다:
 
 | `CorsErrorReason` | 의미 |
 |:------------------|:--------|
@@ -267,7 +258,7 @@ Cors.create({
 });
 ```
 
-> origin 함수에서 예외가 발생하면 `handle()`은 `Err<CorsError>`를 `reason: CorsErrorReason.OriginFunctionError`와 함께 반환합니다. 에러는 래핑되며 다시 throw되지 않습니다.
+> origin 함수에서 예외가 발생하면 `handle()`은 `reason: CorsErrorReason.OriginFunctionError`와 함께 `CorsError`를 throw합니다.
 
 ### 와일드카드와 credentials
 
@@ -288,7 +279,7 @@ Cors.create({ origin: true, credentials: true });
 // ✅ 특정 도메인 + credentials
 Cors.create({ origin: 'https://app.example.com', credentials: true });
 
-// ❌ origin: '*' + credentials: true → Cors.create()가 Err<CorsError> 반환
+// ❌ origin: '*' + credentials: true → Cors.create()가 CorsError를 throw
 Cors.create({ origin: '*', credentials: true }); // CorsErrorReason.CredentialsWithWildcardOrigin
 ```
 
@@ -297,14 +288,10 @@ Cors.create({ origin: '*', credentials: true }); // CorsErrorReason.CredentialsW
 다른 미들웨어가 OPTIONS 요청을 직접 처리해야 하는 경우:
 
 ```typescript
-const cors = Cors.create({ preflightContinue: true }) as Cors;
+const cors = Cors.create({ preflightContinue: true });
 
 async function handle(request: Request): Promise<Response> {
   const result = await cors.handle(request);
-
-  if (isErr(result)) {
-    return new Response('Internal Error', { status: 500 });
-  }
 
   if (result.action === CorsAction.Reject) {
     return new Response('Forbidden', { status: 403 });
@@ -330,24 +317,16 @@ async function handle(request: Request): Promise<Response> {
 
 ```typescript
 import { Cors, CorsAction } from '@zipbul/cors';
-import { isErr } from '@zipbul/result';
 
-const corsResult = Cors.create({
+const cors = Cors.create({
   origin: ['https://app.example.com'],
   credentials: true,
   exposedHeaders: ['X-Request-Id'],
 });
 
-if (isErr(corsResult)) throw new Error(corsResult.data.message);
-const cors = corsResult;
-
 Bun.serve({
   async fetch(request) {
     const result = await cors.handle(request);
-
-    if (isErr(result)) {
-      return new Response('Internal Error', { status: 500 });
-    }
 
     if (result.action === CorsAction.Reject) {
       return new Response(
@@ -383,21 +362,14 @@ Bun.serve({
 ```typescript
 import { Cors, CorsAction } from '@zipbul/cors';
 import type { CorsOptions } from '@zipbul/cors';
-import { isErr } from '@zipbul/result';
 
 function corsMiddleware(options?: CorsOptions) {
-  const createResult = Cors.create(options);
-  if (isErr(createResult)) throw new Error(createResult.data.message);
-  const cors = createResult;
+  // 잘못된 옵션이면 CorsError를 throw
+  const cors = Cors.create(options);
 
   return async (ctx: Context, next: () => Promise<void>) => {
+    // origin 함수 실패 시 CorsError를 throw
     const result = await cors.handle(ctx.request);
-
-    if (isErr(result)) {
-      ctx.status = 500;
-      ctx.body = { error: 'CORS_INTERNAL_ERROR' };
-      return;
-    }
 
     if (result.action === CorsAction.Reject) {
       ctx.status = 403;

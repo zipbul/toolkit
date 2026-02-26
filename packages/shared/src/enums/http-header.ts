@@ -1,4 +1,9 @@
-export const enum HttpHeader {
+/**
+ * Common HTTP header names used internally by `@zipbul` packages.
+ *
+ * All values follow lowercase HTTP/2 canonical header casing.
+ */
+export enum HttpHeader {
   Origin = 'origin',
   Vary = 'vary',
   AccessControlAllowOrigin = 'access-control-allow-origin',
