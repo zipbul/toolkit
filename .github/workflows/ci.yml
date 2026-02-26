@@ -31,6 +31,10 @@ jobs:
         run: bun run build
         working-directory: packages/cors
 
+      - name: Build query-parser
+        run: bun run build
+        working-directory: packages/query-parser
+
       - name: Test result
         run: bun test
         working-directory: packages/result
@@ -38,6 +42,10 @@ jobs:
       - name: Test cors
         run: bun test
         working-directory: packages/cors
+
+      - name: Test query-parser
+        run: bun test
+        working-directory: packages/query-parser
 
       - name: Extract result coverage
         if: github.ref == 'refs/heads/main' && github.event_name == 'push'
@@ -67,6 +75,20 @@ jobs:
           elif (( $(echo "$PCT >= 60" | bc -l) )); then echo "color=yellow" >> "$GITHUB_OUTPUT"
           else echo "color=red" >> "$GITHUB_OUTPUT"; fi
 
+      - name: Extract query-parser coverage
+        if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+        id: query-parser-cov
+        working-directory: packages/query-parser
+        run: |
+          LF=$(grep -oP '^LF:\K\d+' coverage/lcov.info | paste -sd+ | bc)
+          LH=$(grep -oP '^LH:\K\d+' coverage/lcov.info | paste -sd+ | bc)
+          PCT=$(echo "scale=1; $LH * 100 / $LF" | bc)
+          echo "percentage=$PCT" >> "$GITHUB_OUTPUT"
+          if (( $(echo "$PCT >= 95" | bc -l) )); then echo "color=brightgreen" >> "$GITHUB_OUTPUT"
+          elif (( $(echo "$PCT >= 80" | bc -l) )); then echo "color=green" >> "$GITHUB_OUTPUT"
+          elif (( $(echo "$PCT >= 60" | bc -l) )); then echo "color=yellow" >> "$GITHUB_OUTPUT"
+          else echo "color=red" >> "$GITHUB_OUTPUT"; fi
+
       - name: Update coverage badges
         if: github.ref == 'refs/heads/main' && github.event_name == 'push'
         env:
@@ -76,4 +98,5 @@ jobs:
           gh api --method PATCH /gists/3965fb9d1fe2d6fc5c321cb38d88c823 \
             -f "files[result-coverage.json][content]=$(badge '${{ steps.result-cov.outputs.percentage }}' '${{ steps.result-cov.outputs.color }}')" \
             -f "files[cors-coverage.json][content]=$(badge '${{ steps.cors-cov.outputs.percentage }}' '${{ steps.cors-cov.outputs.color }}')" \
+            -f "files[query-parser-coverage.json][content]=$(badge '${{ steps.query-parser-cov.outputs.percentage }}' '${{ steps.query-parser-cov.outputs.color }}')" \
             > /dev/null
