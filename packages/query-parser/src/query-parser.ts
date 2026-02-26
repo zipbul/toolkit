@@ -54,7 +54,7 @@ export class QueryParser {
   }
 
   private parseInternal(qs: string): Result<QueryValueRecord, QueryParserErrorData> {
-    if (!qs || qs.length === 0) {
+    if (qs.length === 0) {
       return {};
     }
 
@@ -142,7 +142,13 @@ export class QueryParser {
   ): Err<QueryParserErrorData> | undefined {
     // Decode Key
     const keyRaw = qs.slice(keyStart, keyEnd);
-    const key = keyRaw.includes('%') ? decodeURIComponent(keyRaw) : keyRaw;
+    const keyDecoded = keyRaw.includes('%') ? this.safeDecode(keyRaw) : keyRaw;
+
+    if (isErr(keyDecoded)) {
+      return keyDecoded;
+    }
+
+    const key = keyDecoded;
 
     if (!key) {
       return;
@@ -153,8 +159,13 @@ export class QueryParser {
 
     if (valStart < valEnd) {
       const valRaw = qs.slice(valStart, valEnd);
+      const valDecoded = valRaw.includes('%') ? this.safeDecode(valRaw) : valRaw;
 
-      val = valRaw.includes('%') ? decodeURIComponent(valRaw) : valRaw;
+      if (isErr(valDecoded)) {
+        return valDecoded;
+      }
+
+      val = valDecoded;
     }
 
     // Check for Nesting
@@ -168,9 +179,7 @@ export class QueryParser {
         });
       }
 
-      this.assignLeaf(res, key, val);
-
-      return;
+      return this.assignLeaf(res, key, val);
     }
 
     if (!this.options.parseArrays) {
@@ -182,9 +191,7 @@ export class QueryParser {
         }
       }
 
-      this.assignLeaf(res, key, val);
-
-      return;
+      return this.assignLeaf(res, key, val);
     }
 
     return this.parseComplexKey(res, key, braceIdx, val);
@@ -287,15 +294,11 @@ export class QueryParser {
         });
       }
 
-      this.assignLeaf(root, key, value);
-
-      return;
+      return this.assignLeaf(root, key, value);
     }
 
     if (keys.length === 1) {
-      this.assignLeaf(root, key, value);
-
-      return;
+      return this.assignLeaf(root, key, value);
     }
 
     // Initialize/Validate root container
@@ -367,7 +370,12 @@ export class QueryParser {
       if (Array.isArray(current)) {
         if (prop === '') {
           if (isLast) {
-            this.assignLeaf(current, prop, value);
+            const leafErr = this.assignLeaf(current, prop, value);
+
+            if (isErr(leafErr)) {
+              return leafErr;
+            }
+
             depth++;
 
             continue;
@@ -393,7 +401,12 @@ export class QueryParser {
           }
 
           if (isLast) {
-            this.assignLeaf(current, prop, value);
+            const leafErr = this.assignLeaf(current, prop, value);
+
+            if (isErr(leafErr)) {
+              return leafErr;
+            }
+
             depth++;
 
             continue;
@@ -417,7 +430,7 @@ export class QueryParser {
       }
 
       if (isLast) {
-        const leafResult = this.assignLeafStrict(current, prop, value);
+        const leafResult = this.assignLeaf(current, prop, value);
 
         if (isErr(leafResult)) {
           return leafResult;
@@ -477,47 +490,9 @@ export class QueryParser {
   }
 
   /**
-   * Assigns a value to a leaf position. Used in non-strict contexts
-   * where errors are silently ignored.
+   * Assigns a value to a leaf position, with optional strict mode error reporting.
    */
-  private assignLeaf(obj: QueryContainer, key: string, value: string): void {
-    if (POISONED_KEYS.has(key)) {
-      return;
-    }
-
-    if (key === '' && Array.isArray(obj)) {
-      obj.push(value);
-
-      return;
-    }
-
-    if (Array.isArray(obj)) {
-      if (this.isValidArrayIndex(key)) {
-        const idx = parseInt(key, 10);
-
-        if (idx > this.options.arrayLimit) {
-          return;
-        }
-
-        this.assignArrayRecordValue(obj, key, value);
-      } else {
-        this.assignArrayRecordValue(obj, key, value);
-      }
-
-      return;
-    }
-
-    if (!this.isRecordValue(obj)) {
-      return;
-    }
-
-    this.assignToRecord(obj, key, value);
-  }
-
-  /**
-   * Assigns a value to a leaf position with strict mode error reporting.
-   */
-  private assignLeafStrict(obj: QueryContainer, key: string, value: string): Err<QueryParserErrorData> | undefined {
+  private assignLeaf(obj: QueryContainer, key: string, value: string): Err<QueryParserErrorData> | undefined {
     if (POISONED_KEYS.has(key)) {
       return;
     }
@@ -555,55 +530,13 @@ export class QueryParser {
       return;
     }
 
-    return this.assignToRecordStrict(obj, key, value);
+    return this.assignToRecord(obj, key, value);
   }
 
   /**
    * Assigns a value to a record, handling HPP mode and conflict detection.
    */
-  private assignToRecord(obj: QueryValueRecord, key: string, value: string): void {
-    if (!Object.prototype.hasOwnProperty.call(obj, key)) {
-      obj[key] = value;
-
-      return;
-    }
-
-    const existing = obj[key];
-
-    if (typeof existing === 'object' && existing !== null) {
-      if (Array.isArray(existing) && this.options.hppMode === 'array') {
-        existing.push(value);
-
-        return;
-      }
-
-      if (this.options.hppMode !== 'last') {
-        return;
-      }
-    }
-
-    if (this.options.hppMode === 'first') {
-      return;
-    }
-
-    if (this.options.hppMode === 'last') {
-      obj[key] = value;
-
-      return;
-    }
-
-    // Array mode
-    if (Array.isArray(existing)) {
-      existing.push(value);
-    } else {
-      obj[key] = existing === undefined ? [value] : [existing, value];
-    }
-  }
-
-  /**
-   * Assigns a value to a record with strict mode reporting.
-   */
-  private assignToRecordStrict(obj: QueryValueRecord, key: string, value: string): Err<QueryParserErrorData> | undefined {
+  private assignToRecord(obj: QueryValueRecord, key: string, value: string): Err<QueryParserErrorData> | undefined {
     if (!Object.prototype.hasOwnProperty.call(obj, key)) {
       obj[key] = value;
 
@@ -700,11 +633,11 @@ export class QueryParser {
   private arrayToObject(arr: QueryArray): QueryValueRecord {
     const obj: QueryValueRecord = {};
 
-    for (let i = 0; i < arr.length; i++) {
-      const entry = arr[i];
+    for (const key of Object.keys(arr)) {
+      const value = (arr as unknown as Record<string, QueryValue>)[key];
 
-      if (entry !== undefined) {
-        obj[i.toString()] = entry;
+      if (value !== undefined) {
+        obj[key] = value;
       }
     }
 
@@ -713,5 +646,20 @@ export class QueryParser {
 
   private isRecordValue(value: QueryValue | undefined): value is QueryValueRecord {
     return typeof value === 'object' && value !== null && !Array.isArray(value);
+  }
+
+  private safeDecode(raw: string): string | Err<QueryParserErrorData> {
+    try {
+      return decodeURIComponent(raw);
+    } catch {
+      if (this.options.strictMode) {
+        return err<QueryParserErrorData>({
+          reason: QueryParserErrorReason.MalformedQueryString,
+          message: `Malformed query string: invalid percent encoding in "${raw}"`,
+        });
+      }
+
+      return raw;
+    }
   }
 }

@@ -481,6 +481,19 @@ describe('QueryParser', () => {
       expect(Object.prototype.hasOwnProperty.call(res, '__defineGetter__')).toBe(false);
     });
 
+    it('should block __lookupGetter__ and __lookupSetter__ when provided', () => {
+      // Arrange
+      const parser = QueryParser.create();
+
+      // Act
+      const lookupGetter = parser.parse('__lookupGetter__=bad');
+      const lookupSetter = parser.parse('__lookupSetter__=bad');
+
+      // Assert
+      expect(Object.prototype.hasOwnProperty.call(lookupGetter, '__lookupGetter__')).toBe(false);
+      expect(Object.prototype.hasOwnProperty.call(lookupSetter, '__lookupSetter__')).toBe(false);
+    });
+
     it('should block nested POISONED keys when parsing nested structures', () => {
       // Arrange
       const parser = QueryParser.create({ parseArrays: true });
@@ -536,9 +549,37 @@ describe('QueryParser', () => {
       expect(parser.parse('eq=%3D&amp=%26')).toEqual({ eq: '=', amp: '&' });
     });
 
-    it('should throw on malformed percent encoding when input is invalid', () => {
+    it('should return raw string for malformed percent encoding in value when non-strict', () => {
+      // Act & Assert — non-strict falls back to raw string
+      expect(parser.parse('bad=%E0%A4')).toEqual({ bad: '%E0%A4' });
+      expect(parser.parse('key=%zz')).toEqual({ key: '%zz' });
+    });
+
+    it('should return raw string for malformed percent encoding in key when non-strict', () => {
+      // Act & Assert — non-strict falls back to raw key string
+      expect(parser.parse('%E0%A4=value')).toEqual({ '%E0%A4': 'value' });
+    });
+
+    it('should throw QueryParserError for malformed percent encoding in value when strict', () => {
+      // Arrange
+      const strictParser = QueryParser.create({ strictMode: true });
+
       // Act & Assert
-      expect(() => parser.parse('bad=%E0%A4')).toThrow();
+      const error = catchError(() => strictParser.parse('bad=%E0%A4'));
+
+      expect(error).toBeInstanceOf(QueryParserError);
+      expect(error.reason).toBe(QueryParserErrorReason.MalformedQueryString);
+    });
+
+    it('should throw QueryParserError for malformed percent encoding in key when strict', () => {
+      // Arrange
+      const strictParser = QueryParser.create({ strictMode: true });
+
+      // Act & Assert
+      const error = catchError(() => strictParser.parse('%E0%A4=value'));
+
+      expect(error).toBeInstanceOf(QueryParserError);
+      expect(error.reason).toBe(QueryParserErrorReason.MalformedQueryString);
     });
 
     it('should handle null bytes when present', () => {

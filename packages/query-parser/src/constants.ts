@@ -16,4 +16,6 @@ export const POISONED_KEYS: ReadonlySet<string> = new Set([
   'prototype',
   '__defineGetter__',
   '__defineSetter__',
+  '__lookupGetter__',
+  '__lookupSetter__',
 ]);

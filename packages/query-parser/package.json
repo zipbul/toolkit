@@ -38,10 +38,15 @@
   "scripts": {
     "build": "bun build index.ts --outdir dist --target bun --format esm --packages external --production --sourcemap=linked && tsc -p tsconfig.build.json",
     "test": "bun test",
-    "coverage": "bun test --coverage"
+    "coverage": "bun test --coverage",
+    "bench": "bun run bench/query-parser.bench.ts"
   },
   "dependencies": {
     "@zipbul/result": "workspace:*"
   },
-  "devDependencies": {}
+  "devDependencies": {
+    "mitata": "^1.0.34",
+    "qs": "^6.14.0",
+    "@types/qs": "^6.9.18"
+  }
 }
