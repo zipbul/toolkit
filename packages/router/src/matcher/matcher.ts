@@ -468,40 +468,47 @@ export class Matcher {
       return null;
     }
 
-    const name = this.getString(nameID);
-    const value = this.getSuffixValue(segIdx);
-
-    this.paramNames[this.paramCount] = name;
-    this.paramValues[this.paramCount] = value;
-
-    this.paramCount++;
-
     const childMethodsPtr = this.nodeBuffer[childBase + NODE_OFFSET_METHODS_PTR]!;
 
-    if (childMethodsPtr > 0) {
-      const mask = this.nodeBuffer[childBase + NODE_OFFSET_METHOD_MASK]!;
+    if (childMethodsPtr <= 0) {
+      return null;
+    }
 
-      if (mask & (1 << this.methodCode)) {
-        const meta = this.nodeBuffer[childBase + NODE_OFFSET_META]!;
-        const origin = (meta & NODE_MASK_WILDCARD_ORIGIN) >>> NODE_SHIFT_WILDCARD_ORIGIN;
+    const mask = this.nodeBuffer[childBase + NODE_OFFSET_METHOD_MASK]!;
 
-        if (origin === 1 && value.length === 0) {
+    if (!(mask & (1 << this.methodCode))) {
+      return null;
+    }
+
+    const meta = this.nodeBuffer[childBase + NODE_OFFSET_META]!;
+    const origin = (meta & NODE_MASK_WILDCARD_ORIGIN) >>> NODE_SHIFT_WILDCARD_ORIGIN;
+    const value = this.getSuffixValue(segIdx);
+
+    if (origin === 1 && value.length === 0) {
+      return null;
+    }
+
+    const count = (meta & NODE_MASK_METHOD_COUNT) >>> NODE_SHIFT_METHOD_COUNT;
+    let ptr = childMethodsPtr;
+
+    for (let i = 0; i < count; i++) {
+      if (this.methodsBuffer[ptr] === this.methodCode) {
+        const handlerIndex = this.methodsBuffer[ptr + 1];
+
+        if (handlerIndex === undefined) {
           return null;
         }
 
-        const count = (meta & NODE_MASK_METHOD_COUNT) >>> NODE_SHIFT_METHOD_COUNT;
-        let ptr = childMethodsPtr;
+        const name = this.getString(nameID);
 
-        for (let i = 0; i < count; i++) {
-          if (this.methodsBuffer[ptr] === this.methodCode) {
-            const handlerIndex = this.methodsBuffer[ptr + 1];
+        this.paramNames[this.paramCount] = name;
+        this.paramValues[this.paramCount] = value;
+        this.paramCount++;
 
-            return handlerIndex !== undefined ? handlerIndex : null;
-          }
-
-          ptr += 2;
-        }
+        return handlerIndex;
       }
+
+      ptr += 2;
     }
 
     return null;

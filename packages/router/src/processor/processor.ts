@@ -194,15 +194,11 @@ export class Processor {
       }
     }
 
-    // No percent-encoding in clean path → all hints are 0
-    const segmentDecodeHints = new Uint8Array(segments.length);
-
     const normalized = segments.length > 0 ? '/' + segments.join('/') : '/';
 
     return {
       normalized,
       segments,
-      segmentDecodeHints,
     };
   }
 

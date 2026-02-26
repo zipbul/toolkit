@@ -1,17 +1,10 @@
 import type { Node } from './node';
 import type { SortedChildArrays, StaticChildEntry, StaticChildEntryFingerprint } from './types';
 
-import { INLINE_THRESHOLD, FNV_OFFSET, FNV_PRIME } from './constants';
+import { INLINE_THRESHOLD } from './constants';
 
 function fingerprintSegment(segment: string): number {
-  let hash = FNV_OFFSET;
-
-  for (let i = 0; i < segment.length; i++) {
-    hash ^= segment.charCodeAt(i);
-    hash = Math.imul(hash, FNV_PRIME);
-  }
-
-  return hash >>> 0;
+  return Bun.hash.crc32(segment);
 }
 
 function compareFingerprintAndSegment(fpA: number, segA: string, fpB: number, segB: string): number {

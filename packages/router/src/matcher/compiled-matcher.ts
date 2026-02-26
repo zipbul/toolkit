@@ -46,6 +46,7 @@ type NodeMatchFn = (
   hints: Uint8Array | undefined,
   decodeParams: boolean,
   normalizedPath: string,
+  pathOffset: number,
 ) => Result<CompiledMatchResult | null, RouterErrData>;
 
 /** 와일드카드 노드 정보 (빌드 타임에 추출). */
@@ -78,7 +79,7 @@ export function buildMatchFunction(
   const rootMatch = compileNode(layout, layout.rootIndex, patternTesters, decode);
 
   return (segments, methodCode, hints, decodeParams, normalizedPath) =>
-    rootMatch(segments, 0, methodCode, hints, decodeParams, normalizedPath);
+    rootMatch(segments, 0, methodCode, hints, decodeParams, normalizedPath, 1);
 }
 
 /**
@@ -207,6 +208,7 @@ function compileNode(
     hints: Uint8Array | undefined,
     decodeParams: boolean,
     normalizedPath: string,
+    pathOffset: number,
   ): Result<CompiledMatchResult | null, RouterErrData> {
     if (segIdx === segments.length) {
       // 터미널 체크: 모든 세그먼트를 소비한 경우
@@ -224,7 +226,7 @@ function compileNode(
       // 정적 자식 시도
       for (let i = 0; i < sLen; i++) {
         if (staticSegments[i] === seg) {
-          const r = staticMatchers[i]!(segments, segIdx + 1, methodCode, hints, decodeParams, normalizedPath);
+          const r = staticMatchers[i]!(segments, segIdx + 1, methodCode, hints, decodeParams, normalizedPath, pathOffset + seg.length + 1);
 
           if (isErr(r) || r !== null) {
             return r;
@@ -266,7 +268,7 @@ function compileNode(
             }
           }
 
-          const r = paramMatchers[i]!(segments, segIdx + 1, methodCode, hints, decodeParams, normalizedPath);
+          const r = paramMatchers[i]!(segments, segIdx + 1, methodCode, hints, decodeParams, normalizedPath, pathOffset + seg.length + 1);
 
           if (isErr(r)) {
             return r;
@@ -284,13 +286,7 @@ function compileNode(
 
     // 와일드카드 체크 — 세그먼트 소비 여부와 무관하게 도달
     if (wildcard !== null && (wildcard.methodMask & (1 << methodCode))) {
-      let ptr = 1;
-
-      for (let i = 0; i < segIdx; i++) {
-        ptr += segments[i]!.length + 1;
-      }
-
-      const suffix = normalizedPath.substring(ptr);
+      const suffix = normalizedPath.substring(pathOffset);
 
       if (!(wildcard.origin === 1 && suffix.length === 0)) {
         const idx = wildcard.methodHandlers.get(methodCode);

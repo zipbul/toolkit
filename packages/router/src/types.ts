@@ -75,7 +75,8 @@ export type RouterErrKind =
   | 'encoding'           // percent-encoding 디코딩 실패
   | 'encoded-slash'      // encodedSlashBehavior=reject 시 %2F
   | 'regex-timeout'      // 패턴 매칭 시간 초과
-  | 'path-too-long';     // maxPathLength 초과
+  | 'path-too-long'      // maxPathLength 초과
+  | 'method-not-found';  // 한 번도 등록되지 않은 메서드로 match() 시도
 
 /**
  * Result 에러에 첨부되는 데이터.

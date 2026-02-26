@@ -6,6 +6,7 @@ import type {
   MatchOutput,
   NormalizedPathSegments,
   RegexSafetyOptions,
+  RouteParams,
   RouterErrData,
   RouterOptions,
 } from './types';
@@ -26,6 +27,16 @@ import type { ProcessorConfig } from './processor/types';
 
 const ALL_METHODS: readonly HttpMethod[] = ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS', 'HEAD'];
 
+const EMPTY_PARAMS: RouteParams = Object.freeze({});
+const STATIC_META: MatchMeta = Object.freeze({ source: 'static' } as const);
+const CACHE_META: MatchMeta = Object.freeze({ source: 'cache' } as const);
+const DYNAMIC_META: MatchMeta = Object.freeze({ source: 'dynamic' } as const);
+
+interface CachedMatchEntry<T> {
+  value: T;
+  params: RouteParams;
+}
+
 export class Router<T = unknown> {
   private readonly options: RouterOptions;
   private processor: Processor | null;
@@ -39,7 +50,7 @@ export class Router<T = unknown> {
   private _caseSensitive = true;
   private _decodeParams = true;
   private _maxPathLength = 2048;
-  private cacheByMethod: Map<number, RouterCache<DynamicMatchResult>> | undefined;
+  private cacheByMethod: Map<number, RouterCache<CachedMatchEntry<T>>> | undefined;
   private cacheMaxSize: number = 1000;
   private sealed = false;
   /** build() 후 builder에서 추출. trie는 GC 수거된다. */
@@ -161,6 +172,8 @@ export class Router<T = unknown> {
 
       registeredCount++;
     }
+
+    return;
   }
 
   build(): this {
@@ -220,6 +233,16 @@ export class Router<T = unknown> {
     return this;
   }
 
+  clearCache(): void {
+    if (!this.cacheByMethod) {
+      return;
+    }
+
+    for (const cache of this.cacheByMethod.values()) {
+      cache.clear();
+    }
+  }
+
   match(method: HttpMethod, path: string): Result<MatchOutput<T> | null, RouterErrData> {
     if (!this.sealed) {
       return err<RouterErrData>({
@@ -231,7 +254,6 @@ export class Router<T = unknown> {
       });
     }
 
-    // 경로 길이 보안 체크 — 악의적으로 긴 URL 차단 (5-1)
     if (path.length > this._maxPathLength) {
       return err<RouterErrData>({
         kind: 'path-too-long',
@@ -244,20 +266,18 @@ export class Router<T = unknown> {
 
     const methodCode = this.resolveMethodCode(method);
 
-    if (methodCode === undefined) {
-      return null;
+    if (isErr(methodCode)) {
+      return methodCode;
     }
 
     const searchPath = this.preNormalize(path);
 
-    // Static fast-path
     const staticHit = this.matchStatic(searchPath, methodCode);
 
     if (staticHit !== undefined) {
-      return { value: staticHit, params: {}, meta: { source: 'static' } };
+      return { value: staticHit, params: EMPTY_PARAMS, meta: STATIC_META };
     }
 
-    // Cache lookup
     const cached = this.lookupCache(searchPath, methodCode);
 
     if (cached !== undefined) {
@@ -265,111 +285,92 @@ export class Router<T = unknown> {
         return null;
       }
 
-      const value = this.handlers[cached.handlerIndex];
-
-      return value !== undefined
-        ? { value, params: cached.params, meta: { source: 'cache' } }
-        : null;
+      return { value: cached.value, params: cached.params, meta: CACHE_META };
     }
 
-    const matcher = this.matcher;
-
-    if (!matcher) {
+    if (!this.matcher) {
       return null;
     }
 
-    // Normalize path
     const normalizeResult = this.normalizer!(searchPath);
 
     if (isErr(normalizeResult)) {
-      return err<RouterErrData>({
-        ...normalizeResult.data,
-        path,
-        method,
-      });
+      return err<RouterErrData>({ ...normalizeResult.data, path, method });
     }
 
     const { segments, segmentDecodeHints, normalized } = normalizeResult;
 
-    // Static fallback for normalized paths
     if (normalized !== searchPath) {
       const staticHit2 = this.matchStatic(normalized, methodCode);
 
       if (staticHit2 !== undefined) {
-        return { value: staticHit2, params: {}, meta: { source: 'static' } };
+        return { value: staticHit2, params: EMPTY_PARAMS, meta: STATIC_META };
       }
     }
 
-    // Dynamic match
-    const decodeParams = this._decodeParams;
+    const dynResult = this.dynamicMatch(method, methodCode, segments, normalized, segmentDecodeHints, this._decodeParams);
 
-    if (this.compiledMatch) {
-      const result = this.compiledMatch(segments, methodCode, segmentDecodeHints, decodeParams, normalized);
-
-      if (isErr(result)) {
-        return err<RouterErrData>({
-          ...result.data,
-          path,
-          method,
-        });
-      }
-
-      if (result !== null) {
-        this.optionalParamDefaults?.apply(result.handlerIndex, result.params);
-
-        const value = this.handlers[result.handlerIndex];
-
-        if (value === undefined) {
-          return null;
-        }
-
-        this.writeCacheEntry(searchPath, methodCode, { handlerIndex: result.handlerIndex, params: { ...result.params } });
-
-        return { value, params: result.params, meta: { source: 'dynamic' } };
-      }
-    } else if (matcher) {
-      const matchResult = matcher.match(
-        method,
-        segments,
-        normalized,
-        segmentDecodeHints,
-        decodeParams,
-      );
-
-      if (isErr(matchResult)) {
-        return err<RouterErrData>({
-          ...matchResult.data,
-          path,
-          method,
-        });
-      }
-
-      if (matchResult) {
-        const handlerIndex = matcher.getHandlerIndex();
-        const params = matcher.getParams();
-
-        this.optionalParamDefaults?.apply(handlerIndex, params);
-
-        const value = this.handlers[handlerIndex];
-
-        if (value === undefined) {
-          return null;
-        }
-
-        this.writeCacheEntry(searchPath, methodCode, { handlerIndex, params: { ...params } });
-
-        return { value, params, meta: { source: 'dynamic' } };
-      }
+    if (isErr(dynResult)) {
+      return err<RouterErrData>({ ...dynResult.data, path, method });
     }
 
-    // Cache miss
+    if (dynResult !== null) {
+      this.optionalParamDefaults?.apply(dynResult.handlerIndex, dynResult.params);
+
+      const value = this.handlers[dynResult.handlerIndex];
+
+      if (value === undefined) {
+        return null;
+      }
+
+      this.writeCacheEntry(searchPath, methodCode, { value, params: dynResult.params });
+
+      return { value, params: dynResult.params, meta: DYNAMIC_META };
+    }
+
     this.writeCacheEntry(searchPath, methodCode, null);
 
     return null;
   }
 
-  private resolveMethodCode(method: HttpMethod): number | undefined {
-    return this.methodCodes.get(method);
+  private dynamicMatch(
+    method: HttpMethod,
+    methodCode: number,
+    segments: string[],
+    normalized: string,
+    segmentHints: Uint8Array | undefined,
+    decodeParams: boolean,
+  ): Result<DynamicMatchResult | null, RouterErrData> {
+    if (this.compiledMatch) {
+      return this.compiledMatch(segments, methodCode, segmentHints, decodeParams, normalized);
+    }
+
+    const matcher = this.matcher!;
+    const matchResult = matcher.match(method, segments, normalized, segmentHints, decodeParams);
+
+    if (isErr(matchResult)) {
+      return matchResult;
+    }
+
+    if (!matchResult) {
+      return null;
+    }
+
+    return { handlerIndex: matcher.getHandlerIndex(), params: matcher.getParams() };
+  }
+
+  private resolveMethodCode(method: HttpMethod): Result<number, RouterErrData> {
+    const code = this.methodCodes.get(method);
+
+    if (code === undefined) {
+      return err<RouterErrData>({
+        kind: 'method-not-found',
+        message: `No routes registered for method '${method}'.`,
+        method,
+      });
+    }
+
+    return code;
   }
 
   private preNormalize(path: string): string {
@@ -394,7 +395,7 @@ export class Router<T = unknown> {
     return this.staticMap.get(searchPath)?.get(methodCode);
   }
 
-  private lookupCache(searchPath: string, methodCode: number): DynamicMatchResult | null | undefined {
+  private lookupCache(searchPath: string, methodCode: number): CachedMatchEntry<T> | null | undefined {
     if (!this.cacheByMethod) {
       return undefined;
     }
@@ -402,7 +403,7 @@ export class Router<T = unknown> {
     return this.cacheByMethod.get(methodCode)?.get(searchPath);
   }
 
-  private writeCacheEntry(searchPath: string, methodCode: number, entry: DynamicMatchResult | null): void {
+  private writeCacheEntry(searchPath: string, methodCode: number, entry: CachedMatchEntry<T> | null): void {
     if (!this.cacheByMethod) {
       return;
     }
@@ -416,7 +417,7 @@ export class Router<T = unknown> {
 
     if (entry) {
       mc.set(searchPath, {
-        handlerIndex: entry.handlerIndex,
+        value: entry.value,
         params: Object.freeze({ ...entry.params }),
       });
     } else {

@@ -2,6 +2,8 @@ import type { BinaryRouterLayout, SerializedPattern } from '../schema';
 import type { Node } from './node';
 import type { MethodEntry } from './types';
 
+import { assertDefined } from './assert';
+
 import {
   NodeKind,
   NODE_MASK_KIND,
@@ -256,9 +258,8 @@ function flattenStaticChildren(node: Node, base: number, ctx: FlattenContext): v
 
       const childIndex = ctx.nodeToIndex.get(child);
 
-      if (childIndex !== undefined) {
-        ctx.staticChildrenBuffer[ctx.staticChildrenPtr++] = childIndex;
-      }
+      assertDefined(childIndex, `Static child node not found in nodeToIndex for segment '${seg}'`);
+      ctx.staticChildrenBuffer[ctx.staticChildrenPtr++] = childIndex;
     }
   } else {
     ctx.nodeBuffer[base + NODE_OFFSET_STATIC_CHILD_PTR] = 0;
@@ -274,9 +275,8 @@ function flattenParamChildren(node: Node, base: number, ctx: FlattenContext): vo
     for (const child of node.paramChildren) {
       const childIndex = ctx.nodeToIndex.get(child);
 
-      if (childIndex !== undefined) {
-        ctx.paramChildrenBuffer[ctx.paramChildrenPtr++] = childIndex;
-      }
+      assertDefined(childIndex, `Param child node not found in nodeToIndex for segment '${child.segment}'`);
+      ctx.paramChildrenBuffer[ctx.paramChildrenPtr++] = childIndex;
     }
   } else {
     ctx.nodeBuffer[base + NODE_OFFSET_PARAM_CHILD_PTR] = 0;
@@ -288,44 +288,44 @@ function flattenWildcardChild(node: Node, base: number, ctx: FlattenContext): vo
   if (node.wildcardChild !== undefined) {
     const childIndex = ctx.nodeToIndex.get(node.wildcardChild);
 
-    ctx.nodeBuffer[base + NODE_OFFSET_WILDCARD_CHILD_PTR] = childIndex ?? 0;
+    assertDefined(childIndex, `Wildcard child node not found in nodeToIndex for segment '${node.wildcardChild.segment}'`);
+    ctx.nodeBuffer[base + NODE_OFFSET_WILDCARD_CHILD_PTR] = childIndex;
   } else {
     ctx.nodeBuffer[base + NODE_OFFSET_WILDCARD_CHILD_PTR] = 0;
   }
 }
 
-/** 문자열 테이블 직렬화 (stringList → Uint8Array + offsets). */
+/**
+ * 문자열 테이블 직렬화 (stringList → Uint8Array + offsets).
+ * Bun.ArrayBufferSink로 네이티브 UTF-8 인코딩 (B-2).
+ * stringOffsets 사전 할당으로 중간 number[] 제거 (M-5).
+ */
 function buildStringTable(stringList: string[]): {
   stringTable: Uint8Array;
   stringOffsets: Uint32Array;
 } {
-  const encoder = new TextEncoder();
-  const offsets: number[] = [];
-  const encodedChunks: Uint8Array[] = [];
+  const count = stringList.length;
+  const stringOffsets = new Uint32Array(count + 1);
+
+  const sink = new Bun.ArrayBufferSink();
+
+  sink.start({ asUint8Array: true });
+
   let currentOffset = 0;
 
-  for (const str of stringList) {
-    offsets.push(currentOffset);
+  for (let i = 0; i < count; i++) {
+    stringOffsets[i] = currentOffset;
 
-    const encoded = encoder.encode(str);
+    const written = sink.write(stringList[i]!);
 
-    encodedChunks.push(encoded);
-
-    currentOffset += encoded.length;
+    currentOffset += written;
   }
 
-  offsets.push(currentOffset);
+  stringOffsets[count] = currentOffset;
 
-  const stringTable = new Uint8Array(currentOffset);
-  let ptr = 0;
+  const stringTable = sink.end() as Uint8Array;
 
-  for (const chunk of encodedChunks) {
-    stringTable.set(chunk, ptr);
-
-    ptr += chunk.length;
-  }
-
-  return { stringTable, stringOffsets: Uint32Array.from(offsets) };
+  return { stringTable, stringOffsets };
 }
 
 function getStringId(str: string, ctx: FlattenContext): number {
