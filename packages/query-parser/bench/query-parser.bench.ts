@@ -45,6 +45,9 @@ const ECOMMERCE =
 
 const ENCODED_5 = 'key%201=val%201&key%202=val%202&key%203=val%203&key%204=val%204&key%205=val%205';
 
+const FORM_ENCODED = 'username=john+doe&password=p%40ss+word&remember=on&redirect=%2Fdashboard';
+const PLUS_HEAVY = 'q=hello+world+foo+bar+baz&lang=en&page=1';
+
 // ── Parser instances (pre-built) ──
 
 const defaultParser = QueryParser.create();
@@ -54,6 +57,7 @@ const strictNestingParser = QueryParser.create({ nesting: true, strict: true });
 const dupFirstParser = QueryParser.create({ duplicates: 'first' });
 const dupLastParser = QueryParser.create({ duplicates: 'last' });
 const dupArrayParser = QueryParser.create({ duplicates: 'array' });
+const urlEncodedParser = QueryParser.create({ urlEncoded: true });
 
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 //  BENCHMARKS
@@ -188,7 +192,7 @@ summary(() => {
   });
 
   bench('nested depth 3 (strict)', () => {
-    do_not_optimize(strictArrayParser.parse(NESTED_3));
+    do_not_optimize(strictNestingParser.parse(NESTED_3));
   });
 });
 
@@ -293,6 +297,32 @@ summary(() => {
 
   bench('e-commerce — qs', () => {
     do_not_optimize(qs.parse(ECOMMERCE));
+  });
+});
+
+// ── 11. urlEncoded (+ as space) overhead ──
+
+summary(() => {
+  bench('form payload (urlEncoded: false)', () => {
+    do_not_optimize(defaultParser.parse(FORM_ENCODED));
+  });
+
+  bench('form payload (urlEncoded: true)', () => {
+    do_not_optimize(urlEncodedParser.parse(FORM_ENCODED));
+  });
+});
+
+summary(() => {
+  bench('plus-heavy (urlEncoded: true) — @zipbul/query-parser', () => {
+    do_not_optimize(urlEncodedParser.parse(PLUS_HEAVY));
+  });
+
+  bench('plus-heavy — qs', () => {
+    do_not_optimize(qs.parse(PLUS_HEAVY));
+  });
+
+  bench('plus-heavy — URLSearchParams', () => {
+    do_not_optimize(Object.fromEntries(new URLSearchParams(PLUS_HEAVY)));
   });
 });
 

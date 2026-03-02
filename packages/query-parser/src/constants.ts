@@ -7,6 +7,7 @@ export const DEFAULT_QUERY_PARSER_OPTIONS: ResolvedQueryParserOptions = {
   arrayLimit: 20,
   duplicates: 'first',
   strict: false,
+  urlEncoded: false,
 };
 
 /** Keys that must never be written to any parsed object (prototype pollution prevention). */

@@ -142,7 +142,8 @@ export class QueryParser {
   ): Err<QueryParserErrorData> | undefined {
     // Decode Key
     const keyRaw = qs.slice(keyStart, keyEnd);
-    const keyDecoded = keyRaw.includes('%') ? this.safeDecode(keyRaw) : keyRaw;
+    const keyNeedsDecode = keyRaw.includes('%') || (this.options.urlEncoded && keyRaw.includes('+'));
+    const keyDecoded = keyNeedsDecode ? this.safeDecode(keyRaw) : keyRaw;
 
     if (isErr(keyDecoded)) {
       return keyDecoded;
@@ -159,7 +160,8 @@ export class QueryParser {
 
     if (valStart < valEnd) {
       const valRaw = qs.slice(valStart, valEnd);
-      const valDecoded = valRaw.includes('%') ? this.safeDecode(valRaw) : valRaw;
+      const valNeedsDecode = valRaw.includes('%') || (this.options.urlEncoded && valRaw.includes('+'));
+      const valDecoded = valNeedsDecode ? this.safeDecode(valRaw) : valRaw;
 
       if (isErr(valDecoded)) {
         return valDecoded;
@@ -650,7 +652,9 @@ export class QueryParser {
 
   private safeDecode(raw: string): string | Err<QueryParserErrorData> {
     try {
-      return decodeURIComponent(raw);
+      const input = this.options.urlEncoded && raw.includes('+') ? raw.replaceAll('+', ' ') : raw;
+
+      return decodeURIComponent(input);
     } catch {
       if (this.options.strict) {
         return err<QueryParserErrorData>({
