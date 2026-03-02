@@ -68,6 +68,7 @@ describe('resolveQueryParserOptions', () => {
       arrayLimit: 10,
       duplicates: 'array' as const,
       strict: true,
+      urlEncoded: false,
     };
 
     // Act
@@ -183,7 +184,7 @@ describe('validateQueryParserOptions', () => {
     expect(errResult.data.reason).toBe(QueryParserErrorReason.InvalidDepth);
   });
 
-  it('should return Err with InvalidParameterLimit when maxParams is less than 1', () => {
+  it('should return Err with InvalidMaxParams when maxParams is less than 1', () => {
     // Arrange
     const resolved: ResolvedQueryParserOptions = { ...resolveQueryParserOptions(), maxParams: 0 };
 
@@ -193,10 +194,10 @@ describe('validateQueryParserOptions', () => {
     // Assert
     const errResult = assertErr(result);
 
-    expect(errResult.data.reason).toBe(QueryParserErrorReason.InvalidParameterLimit);
+    expect(errResult.data.reason).toBe(QueryParserErrorReason.InvalidMaxParams);
   });
 
-  it('should return Err with InvalidParameterLimit when maxParams is non-integer', () => {
+  it('should return Err with InvalidMaxParams when maxParams is non-integer', () => {
     // Arrange
     const resolved: ResolvedQueryParserOptions = { ...resolveQueryParserOptions(), maxParams: 1.5 };
 
@@ -206,7 +207,7 @@ describe('validateQueryParserOptions', () => {
     // Assert
     const errResult = assertErr(result);
 
-    expect(errResult.data.reason).toBe(QueryParserErrorReason.InvalidParameterLimit);
+    expect(errResult.data.reason).toBe(QueryParserErrorReason.InvalidMaxParams);
   });
 
   it('should return Err with InvalidArrayLimit when arrayLimit is negative', () => {
@@ -235,7 +236,7 @@ describe('validateQueryParserOptions', () => {
     expect(errResult.data.reason).toBe(QueryParserErrorReason.InvalidArrayLimit);
   });
 
-  it('should return Err with InvalidHppMode when duplicates is invalid', () => {
+  it('should return Err with InvalidDuplicates when duplicates is invalid', () => {
     // Arrange
     const resolved = {
       ...resolveQueryParserOptions(),
@@ -248,7 +249,7 @@ describe('validateQueryParserOptions', () => {
     // Assert
     const errResult = assertErr(result);
 
-    expect(errResult.data.reason).toBe(QueryParserErrorReason.InvalidHppMode);
+    expect(errResult.data.reason).toBe(QueryParserErrorReason.InvalidDuplicates);
   });
 
   it('should return first failing validation when multiple options are invalid', () => {

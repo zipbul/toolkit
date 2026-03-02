@@ -68,4 +68,14 @@ export interface QueryParserOptions {
    * @default false
    */
   strict?: boolean;
+
+  /**
+   * Whether to decode `+` as space (`application/x-www-form-urlencoded`).
+   *
+   * When `true`, `+` in both keys and values is treated as a space character,
+   * matching the behavior of HTML form submissions. When `false` (default),
+   * `+` is treated as a literal character per RFC 3986.
+   * @default false
+   */
+  urlEncoded?: boolean;
 }

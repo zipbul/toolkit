@@ -18,6 +18,7 @@ export function resolveQueryParserOptions(options?: QueryParserOptions): Resolve
     arrayLimit: options?.arrayLimit ?? DEFAULT_QUERY_PARSER_OPTIONS.arrayLimit,
     duplicates: options?.duplicates ?? DEFAULT_QUERY_PARSER_OPTIONS.duplicates,
     strict: options?.strict ?? DEFAULT_QUERY_PARSER_OPTIONS.strict,
+    urlEncoded: options?.urlEncoded ?? DEFAULT_QUERY_PARSER_OPTIONS.urlEncoded,
   };
 }
 
@@ -45,7 +46,7 @@ export function validateQueryParserOptions(resolved: ResolvedQueryParserOptions)
   // V2 — maxParams: positive integer (≥ 1)
   if (!Number.isInteger(resolved.maxParams) || resolved.maxParams < 1) {
     return err<QueryParserErrorData>({
-      reason: QueryParserErrorReason.InvalidParameterLimit,
+      reason: QueryParserErrorReason.InvalidMaxParams,
       message: 'maxParams must be a positive integer (≥ 1)',
     });
   }
@@ -61,7 +62,7 @@ export function validateQueryParserOptions(resolved: ResolvedQueryParserOptions)
   // V4 — duplicates: valid value
   if (!VALID_DUPLICATE_MODES.has(resolved.duplicates)) {
     return err<QueryParserErrorData>({
-      reason: QueryParserErrorReason.InvalidHppMode,
+      reason: QueryParserErrorReason.InvalidDuplicates,
       message: "duplicates must be 'first', 'last', or 'array'",
     });
   }

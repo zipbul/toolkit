@@ -82,7 +82,7 @@ describe('QueryParser', () => {
 
       // Assert
       expect(error).toBeInstanceOf(QueryParserError);
-      expect(error.reason).toBe(QueryParserErrorReason.InvalidParameterLimit);
+      expect(error.reason).toBe(QueryParserErrorReason.InvalidMaxParams);
     });
 
     it('should throw QueryParserError when duplicates is invalid', () => {
@@ -93,7 +93,7 @@ describe('QueryParser', () => {
 
       // Assert
       expect(error).toBeInstanceOf(QueryParserError);
-      expect(error.reason).toBe(QueryParserErrorReason.InvalidHppMode);
+      expect(error.reason).toBe(QueryParserErrorReason.InvalidDuplicates);
     });
   });
 
@@ -508,6 +508,29 @@ describe('QueryParser', () => {
       expect(Object.prototype.hasOwnProperty.call(ctorRes, 'constructor')).toBe(false);
     });
 
+    it('should block POISONED keys at child positions when nesting is true', () => {
+      // Arrange
+      const parser = QueryParser.create({ nesting: true });
+
+      // Act
+      const protoChild = parser.parse('safe[__proto__]=polluted');
+      const ctorChild = parser.parse('safe[constructor]=polluted');
+      const prototypeChild = parser.parse('safe[prototype]=polluted');
+
+      // Assert — child poisoned keys are silently dropped
+      const safeProto = expectQueryRecord(protoChild.safe);
+
+      expect(Object.prototype.hasOwnProperty.call(safeProto, '__proto__')).toBe(false);
+
+      const safeCtor = expectQueryRecord(ctorChild.safe);
+
+      expect(Object.prototype.hasOwnProperty.call(safeCtor, 'constructor')).toBe(false);
+
+      const safePrototype = expectQueryRecord(prototypeChild.safe);
+
+      expect(Object.prototype.hasOwnProperty.call(safePrototype, 'prototype')).toBe(false);
+    });
+
     it('should allow non-dangerous inherited method names when used as keys', () => {
       // Arrange
       const parser = QueryParser.create();
@@ -878,6 +901,66 @@ describe('QueryParser', () => {
       expect(res1).toEqual({ a: '1' });
       expect(res2).toEqual({ b: '2' });
       expect(res3).toEqual({ a: '1' });
+    });
+  });
+
+  // =========================================================================
+  // URL-Encoded (application/x-www-form-urlencoded)
+  // =========================================================================
+  describe('urlEncoded', () => {
+    const parser = QueryParser.create({ urlEncoded: true });
+
+    it('should decode plus sign as space in values when urlEncoded is true', () => {
+      // Act & Assert
+      expect(parser.parse('name=hello+world')).toEqual({ name: 'hello world' });
+      expect(parser.parse('q=foo+bar+baz')).toEqual({ q: 'foo bar baz' });
+    });
+
+    it('should decode plus sign as space in keys when urlEncoded is true', () => {
+      // Act & Assert
+      expect(parser.parse('hello+world=test')).toEqual({ 'hello world': 'test' });
+    });
+
+    it('should decode plus sign combined with percent encoding when urlEncoded is true', () => {
+      // Act & Assert
+      expect(parser.parse('name=hello+world%21')).toEqual({ name: 'hello world!' });
+      expect(parser.parse('q=%EC%84%9C%EC%9A%B8+%EC%8B%9C')).toEqual({ q: '서울 시' });
+    });
+
+    it('should decode multiple plus signs as multiple spaces when urlEncoded is true', () => {
+      // Act & Assert
+      expect(parser.parse('q=a++b+++c')).toEqual({ q: 'a  b   c' });
+    });
+
+    it('should not decode plus when urlEncoded is false', () => {
+      // Arrange
+      const defaultParser = QueryParser.create();
+
+      // Act & Assert
+      expect(defaultParser.parse('name=hello+world')).toEqual({ name: 'hello+world' });
+    });
+
+    it('should handle form-typical payload when urlEncoded is true', () => {
+      // Act & Assert
+      expect(parser.parse('username=john+doe&password=p%40ss+word&remember=on')).toEqual({
+        username: 'john doe',
+        password: 'p@ss word',
+        remember: 'on',
+      });
+    });
+
+    it('should handle plus in nested keys when urlEncoded and nesting are true', () => {
+      // Arrange
+      const nestingParser = QueryParser.create({ urlEncoded: true, nesting: true });
+
+      // Act & Assert
+      expect(nestingParser.parse('user[full+name]=alice')).toEqual({ user: { 'full name': 'alice' } });
+    });
+
+    it('should handle only-plus values when urlEncoded is true', () => {
+      // Act & Assert
+      expect(parser.parse('space=+')).toEqual({ space: ' ' });
+      expect(parser.parse('spaces=+++')).toEqual({ spaces: '   ' });
     });
   });
 });

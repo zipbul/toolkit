@@ -19,11 +19,23 @@
 - Add `safeDecode` helper that catches malformed percent-encoding: returns raw string in non-strict mode, returns `Err` in strict mode (previously threw uncaught `URIError`)
 - Apply `safeDecode` to both keys and values during `processPair`
 
+### Features
+
+- Add `urlEncoded` option to decode `+` as space (`application/x-www-form-urlencoded`) — disabled by default
+
+### Breaking Changes
+
+- Rename `QueryParserErrorReason.InvalidParameterLimit` → `InvalidMaxParams`
+- Rename `QueryParserErrorReason.InvalidHppMode` → `InvalidDuplicates`
+
 ### Tests
 
 - Add tests for `__lookupGetter__` / `__lookupSetter__` blocking
 - Split malformed percent-encoding test into strict vs non-strict cases covering both keys and values
+- Add child-position poisoned key tests (`safe[__proto__]`, `safe[constructor]`, `safe[prototype]`)
+- Add `urlEncoded` test suite (8 cases)
 
 ### Benchmark
 
-- Add comprehensive benchmark suite (`bench/query-parser.bench.ts`) using mitata with 10 groups: factory cost, flat scaling, nested depth, array parsing, HPP modes, encoding overhead, strict mode overhead, realistic payloads, and competitor comparison (qs, node:querystring, URLSearchParams)
+- Add comprehensive benchmark suite (`bench/query-parser.bench.ts`) using mitata with 11 groups: factory cost, flat scaling, nested depth, array parsing, HPP modes, encoding overhead, strict mode overhead, realistic payloads, competitor comparison, and urlEncoded overhead
+- Fix incorrect `strictArrayParser` → `strictNestingParser` variable in strict mode benchmark
