@@ -100,9 +100,7 @@ const fullOptionsRouter = buildRouter([
   ['GET', '/static/page', 5],
 ], {
   ignoreTrailingSlash: true,
-  collapseSlashes: true,
   caseSensitive: false,
-  blockTraversal: true,
   enableCache: true,
   cacheSize: 500,
 });

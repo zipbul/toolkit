@@ -163,7 +163,7 @@ function setupZipbul(routes: Route[]): Router<number> {
 
 // ── find-my-way ──
 
-function setupFindMyWay(routes: Route[]): InstanceType<typeof FindMyWay> {
+function setupFindMyWay(routes: Route[]): ReturnType<typeof FindMyWay> {
   const router = FindMyWay();
   for (const [method, path, value] of routes) {
     router.on(method as 'GET', toFindMyWayPath(path), () => value);
@@ -213,8 +213,8 @@ function setupHonoTrie(routes: Route[]): TrieRouter<number> {
 
 // ── koa-tree-router ──
 
-function setupKoaTree(routes: Route[]): InstanceType<typeof KoaTreeRouter> {
-  const router = new KoaTreeRouter();
+function setupKoaTree(routes: Route[]) {
+  const router = new KoaTreeRouter() as any;
   for (const [method, path, value] of routes) {
     router.on(method, toKoaTreePath(path), () => value);
   }

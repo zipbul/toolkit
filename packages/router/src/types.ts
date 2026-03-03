@@ -2,25 +2,18 @@ import type { HttpMethod } from '@zipbul/shared';
 
 export interface RouterOptions {
   ignoreTrailingSlash?: boolean;
-  collapseSlashes?: boolean;
   caseSensitive?: boolean;
   decodeParams?: boolean;
-  encodedSlashBehavior?: EncodedSlashBehavior;
-  blockTraversal?: boolean;
   enableCache?: boolean;
   cacheSize?: number;
   maxSegmentLength?: number;
   optionalParamBehavior?: OptionalParamBehavior;
   regexSafety?: RegexSafetyOptions;
   regexAnchorPolicy?: 'warn' | 'error' | 'silent';
-  failFastOnBadEncoding?: boolean;
   onWarn?: (warning: RouterWarning) => void;
-  compiledMatchThreshold?: number;
-  /** 경로 최대 길이. 기본값 2048. 초과 시 match()에서 즉시 Err('path-too-long') 반환. */
+  /** 경로 최대 길이. 기본값 2048. 초과 시 match()에서 즉시 throw RouterError 반환. */
   maxPathLength?: number;
 }
-
-export type EncodedSlashBehavior = 'decode' | 'preserve' | 'reject';
 
 export type OptionalParamBehavior = 'omit' | 'setUndefined' | 'setEmptyString';
 
@@ -35,20 +28,6 @@ export interface RegexSafetyOptions {
 
 
 export type PatternTesterFn = (value: string) => boolean;
-
-export interface MatcherConfig {
-  patternTesters: ReadonlyArray<PatternTesterFn | undefined>;
-  encodedSlashBehavior: EncodedSlashBehavior;
-  failFastOnBadEncoding: boolean;
-  methodCodes?: ReadonlyMap<string, number>;
-}
-
-export interface NormalizedPathSegments {
-  normalized: string;
-  segments: string[];
-  segmentDecodeHints?: Uint8Array;
-}
-
 
 export type RouteParams = Record<string, string | undefined>;
 
@@ -72,8 +51,6 @@ export type RouterErrKind =
   | 'method-limit'       // 32개 메서드 초과 (MethodRegistry)
   // 매치타임
   | 'segment-limit'      // maxSegmentLength 초과
-  | 'encoding'           // percent-encoding 디코딩 실패
-  | 'encoded-slash'      // encodedSlashBehavior=reject 시 %2F
   | 'regex-timeout'      // 패턴 매칭 시간 초과
   | 'path-too-long'      // maxPathLength 초과
   | 'method-not-found';  // 한 번도 등록되지 않은 메서드로 match() 시도
@@ -134,9 +111,3 @@ export interface MatchOutput<T> {
   meta: MatchMeta;
 }
 
-// ── Internal types ──
-
-export interface DynamicMatchResult {
-  handlerIndex: number;
-  params: RouteParams;
-}

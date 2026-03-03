@@ -1,10 +1,10 @@
 // ── Public API ──
 
 export { Router } from './src/router';
+export { RouterError } from './src/error';
 
 export type {
   RouterOptions,
-  EncodedSlashBehavior,
   OptionalParamBehavior,
   RegexSafetyOptions,
   RouteParams,

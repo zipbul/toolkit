@@ -215,19 +215,22 @@ describe('RouterCache', () => {
   });
 
   it('should evict unreferenced entry while preserving recently-used entry (second chance)', () => {
-    // maxSize=3 to demonstrate real second-chance benefit:
-    // After first eviction: /d(u=T), /b(u=F), /c(u=F), hand=1
+    // maxSize=4 (power of 2) to demonstrate real second-chance benefit:
+    // Fill 4 slots: /a(0), /b(1), /c(2), /d(3)
+    // Insert /e → evicts /a (hand=0, u=F→evict), hand=1
+    // All others get used=false after eviction sweep
     // Refresh /b: /b.used=true
-    // Second eviction: hand=1, /b.u=T→false; hand=2, /c.u=F→evict /c
-    const cache = new RouterCache<string>(3);
+    // Insert /f → hand=1, /b.u=T→false, skip; hand=2, /c.u=F→evict /c
+    const cache = new RouterCache<string>(4);
     cache.set('/a', 'a'); // slot 0
     cache.set('/b', 'b'); // slot 1
     cache.set('/c', 'c'); // slot 2
-    cache.set('/d', 'd'); // triggers first eviction → evicts /a, hand=1; /b.u=F, /c.u=F
+    cache.set('/d', 'd'); // slot 3
+    cache.set('/e', 'e'); // triggers first eviction → evicts /a, hand=1
 
     cache.get('/b'); // refresh /b: used=true
 
-    cache.set('/e', 'e'); // second eviction: /b gets second chance; /c.u=F → evicted
+    cache.set('/f', 'f'); // second eviction: /b gets second chance; /c.u=F → evicted
 
     expect(cache.get('/c')).toBeUndefined(); // /c evicted (no second chance)
     expect(cache.get('/b')).toBe('b'); // /b survived (had second chance)

@@ -1,8 +1,7 @@
 import { describe, it, expect } from 'bun:test';
 
-import { isErr } from '@zipbul/result';
-
 import { Router } from './router';
+import { RouterError } from './error';
 import type { RouterOptions } from './types';
 
 // ── Fixtures ──
@@ -18,16 +17,22 @@ function buildWith(
   const r = makeRouter<number>(opts);
 
   for (const [method, path, handler] of routes) {
-    const result = r.add(method as any, path, handler);
-
-    if (isErr(result)) {
-      throw new Error(`Failed to add route ${method} ${path}: ${result.data.message}`);
-    }
+    r.add(method as any, path, handler);
   }
 
   r.build();
 
   return r;
+}
+
+function catchRouterError(fn: () => void): RouterError {
+  try {
+    fn();
+  } catch (e) {
+    expect(e).toBeInstanceOf(RouterError);
+    return e as RouterError;
+  }
+  throw new Error('Expected RouterError to be thrown');
 }
 
 describe('Router', () => {
@@ -42,52 +47,40 @@ describe('Router', () => {
 
     it('should add a single static route via add(method, path, value)', () => {
       const r = makeRouter<number>();
-      const result = r.add('GET', '/users', 1);
-
-      expect(isErr(result)).toBe(false);
+      // add() returns void (throws on error)
+      r.add('GET', '/users', 1);
     });
 
     it('should add routes for method array via add([methods], path, value)', () => {
       const r = makeRouter<number>();
-      const result = r.add(['GET', 'POST'], '/users', 1);
-
-      expect(isErr(result)).toBe(false);
-
+      r.add(['GET', 'POST'], '/users', 1);
       r.build();
 
       const get = r.match('GET', '/users');
       const post = r.match('POST', '/users');
 
-      expect(isErr(get)).toBe(false);
       expect(get).not.toBeNull();
-      expect(isErr(post)).toBe(false);
       expect(post).not.toBeNull();
     });
 
     it('should add routes for all methods via add("*", path, value)', () => {
       const r = makeRouter<number>();
-      const result = r.add('*', '/health', 1);
-
-      expect(isErr(result)).toBe(false);
-
+      r.add('*', '/health', 1);
       r.build();
 
       for (const method of ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS', 'HEAD'] as const) {
         const m = r.match(method, '/health');
 
-        expect(isErr(m)).toBe(false);
         expect(m).not.toBeNull();
       }
     });
 
     it('should add multiple routes via addAll', () => {
       const r = makeRouter<number>();
-      const result = r.addAll([
+      r.addAll([
         ['GET', '/a', 1],
         ['POST', '/b', 2],
       ]);
-
-      expect(isErr(result)).toBe(false);
 
       r.build();
 
@@ -108,7 +101,6 @@ describe('Router', () => {
       const r = buildWith([['GET', '/users', 42]]);
       const result = r.match('GET', '/users');
 
-      expect(isErr(result)).toBe(false);
       expect(result).not.toBeNull();
       expect(result!.value).toBe(42);
       expect(result!.params).toEqual({});
@@ -119,7 +111,6 @@ describe('Router', () => {
       const r = buildWith([['GET', '/users/:id', 10]]);
       const result = r.match('GET', '/users/123');
 
-      expect(isErr(result)).toBe(false);
       expect(result).not.toBeNull();
       expect(result!.value).toBe(10);
       expect(result!.params.id).toBe('123');
@@ -169,51 +160,36 @@ describe('Router', () => {
   // ---- NE (Negative/Error) ----
 
   describe('negative', () => {
-    it('should return err(router-sealed) when add() after build', () => {
+    it('should throw RouterError(router-sealed) when add() after build', () => {
       const r = buildWith([['GET', '/x', 1]]);
-      const result = r.add('GET', '/y', 2);
+      const e = catchRouterError(() => r.add('GET', '/y', 2));
 
-      expect(isErr(result)).toBe(true);
-
-      if (isErr(result)) {
-        expect(result.data.kind).toBe('router-sealed');
-      }
+      expect(e.data.kind).toBe('router-sealed');
     });
 
-    it('should return err(router-sealed) when addAll() after build', () => {
+    it('should throw RouterError(router-sealed) when addAll() after build', () => {
       const r = buildWith([['GET', '/x', 1]]);
-      const result = r.addAll([['GET', '/y', 2]]);
+      const e = catchRouterError(() => r.addAll([['GET', '/y', 2]]));
 
-      expect(isErr(result)).toBe(true);
-
-      if (isErr(result)) {
-        expect(result.data.kind).toBe('router-sealed');
-      }
+      expect(e.data.kind).toBe('router-sealed');
     });
 
-    it('should return err(not-built) when match() before build', () => {
+    it('should throw RouterError(not-built) when match() before build', () => {
       const r = makeRouter<number>();
       r.add('GET', '/x', 1);
 
-      const result = r.match('GET', '/x');
+      const e = catchRouterError(() => r.match('GET', '/x'));
 
-      expect(isErr(result)).toBe(true);
-
-      if (isErr(result)) {
-        expect(result.data.kind).toBe('not-built');
-      }
+      expect(e.data.kind).toBe('not-built');
     });
 
-    it('should return err(path-too-long) when path exceeds maxPathLength', () => {
+    it('should throw RouterError(path-too-long) when path exceeds maxPathLength', () => {
       const r = buildWith([['GET', '/x', 1]], { maxPathLength: 10 });
       const longPath = '/' + 'a'.repeat(20);
-      const result = r.match('GET', longPath);
 
-      expect(isErr(result)).toBe(true);
+      const e = catchRouterError(() => r.match('GET', longPath));
 
-      if (isErr(result)) {
-        expect(result.data.kind).toBe('path-too-long');
-      }
+      expect(e.data.kind).toBe('path-too-long');
     });
 
     it('should return null for unregistered method', () => {
@@ -223,46 +199,26 @@ describe('Router', () => {
       expect(result).toBeNull();
     });
 
-    it('should propagate err from addOne in addAll with registeredCount', () => {
+    it('should throw RouterError with registeredCount from addAll on duplicate', () => {
       const r = makeRouter<number>();
-      // Add first route normally, second is duplicate of first
       r.add('GET', '/a', 1);
-      const result = r.addAll([
+
+      const e = catchRouterError(() => r.addAll([
         ['POST', '/b', 2],
         ['GET', '/a', 3], // duplicate → should fail
-      ]);
+      ]));
 
-      expect(isErr(result)).toBe(true);
-
-      if (isErr(result)) {
-        expect(result.data.registeredCount).toBe(1);
-      }
+      expect(e.data.registeredCount).toBe(1);
     });
 
-    it('should propagate err when method array add has failure', () => {
+    it('should throw RouterError when method array add has failure', () => {
       const r = makeRouter<number>();
       r.add('GET', '/x', 1);
 
       // Adding ['GET', 'POST'] to same path — GET will duplicate
-      const result = r.add(['GET', 'POST'], '/x', 2);
-
-      expect(isErr(result)).toBe(true);
+      expect(() => r.add(['GET', 'POST'], '/x', 2)).toThrow(RouterError);
     });
 
-    it('should propagate err from normalizer on match', () => {
-      const r = buildWith(
-        [['GET', '/x', 1]],
-        { failFastOnBadEncoding: true },
-      );
-
-      const result = r.match('GET', '/x/%GG');
-
-      expect(isErr(result)).toBe(true);
-
-      if (isErr(result)) {
-        expect(result.data.kind).toBe('encoding');
-      }
-    });
   });
 
   // ---- ED (Edge) ----
@@ -272,16 +228,13 @@ describe('Router', () => {
       const r = buildWith([['GET', '/', 99]]);
       const result = r.match('GET', '/');
 
-      expect(isErr(result)).toBe(false);
       expect(result).not.toBeNull();
       expect(result!.value).toBe(99);
     });
 
     it('should accept addAll with empty array', () => {
       const r = makeRouter<number>();
-      const result = r.addAll([]);
-
-      expect(isErr(result)).toBe(false);
+      r.addAll([]); // should not throw
     });
 
     it('should not error on second build() call (sealed no-op)', () => {
@@ -304,43 +257,34 @@ describe('Router', () => {
 
       const result = r.match('GET', path);
 
-      // Should not err(path-too-long)
-      expect(isErr(result)).toBe(false);
+      expect(result).not.toBeNull();
     });
 
-    it('should err at maxPathLength+1', () => {
+    it('should throw at maxPathLength+1', () => {
       const maxLen = 30;
       const path = '/' + 'a'.repeat(maxLen); // 31 chars > maxLen
       const r = buildWith([['GET', '/x', 1]], { maxPathLength: maxLen });
-      const result = r.match('GET', path);
 
-      expect(isErr(result)).toBe(true);
+      const e = catchRouterError(() => r.match('GET', path));
 
-      if (isErr(result)) {
-        expect(result.data.kind).toBe('path-too-long');
-      }
+      expect(e.data.kind).toBe('path-too-long');
     });
   });
 
   // ---- CO (Corner) ----
 
   describe('corner', () => {
-    it('should return err on add but allow match when sealed', () => {
+    it('should throw on add but allow match when sealed', () => {
       const r = buildWith([['GET', '/a', 1]]);
 
-      // add should fail
-      const addResult = r.add('POST', '/b', 2);
+      // add should throw
+      const e = catchRouterError(() => r.add('POST', '/b', 2));
 
-      expect(isErr(addResult)).toBe(true);
-
-      if (isErr(addResult)) {
-        expect(addResult.data.kind).toBe('router-sealed');
-      }
+      expect(e.data.kind).toBe('router-sealed');
 
       // match should work
       const matchResult = r.match('GET', '/a');
 
-      expect(isErr(matchResult)).toBe(false);
       expect(matchResult).not.toBeNull();
       expect(matchResult!.value).toBe(1);
     });
@@ -354,7 +298,6 @@ describe('Router', () => {
       // Trailing slash + uppercase → both normalized
       const result = r.match('GET', '/Users/');
 
-      expect(isErr(result)).toBe(false);
       expect(result).not.toBeNull();
       expect(result!.value).toBe(1);
     });
@@ -371,19 +314,6 @@ describe('Router', () => {
       expect(miss2).toBeNull();
     });
 
-    it('should use Matcher when compiledMatch is null (high threshold)', () => {
-      const r = buildWith(
-        [['GET', '/users/:id', 42]],
-        { compiledMatchThreshold: 0 }, // threshold 0 → no compiled match
-      );
-
-      const result = r.match('GET', '/users/123');
-
-      expect(isErr(result)).toBe(false);
-      expect(result).not.toBeNull();
-      expect(result!.value).toBe(42);
-      expect(result!.params.id).toBe('123');
-    });
   });
 
   // ---- ST (State Transition) ----
@@ -404,21 +334,19 @@ describe('Router', () => {
       expect(r.match('PUT', '/c')).not.toBeNull();
     });
 
-    it('should release build-time resources after build (match still works, add returns sealed)', () => {
+    it('should release build-time resources after build (match still works, add throws sealed)', () => {
       const r = makeRouter<number>();
       r.add('GET', '/users/:id', 10);
       r.build();
 
-      // Match still works → normalizer captured before processor released
+      // Match still works
       const result = r.match('GET', '/users/1');
 
       expect(result).not.toBeNull();
       expect(result!.value).toBe(10);
 
-      // Add blocked → sealed state
-      const addResult = r.add('GET', '/y', 2);
-
-      expect(isErr(addResult)).toBe(true);
+      // Add blocked → sealed
+      expect(() => r.add('GET', '/y', 2)).toThrow(RouterError);
     });
 
     it('should write cache entry on dynamic match hit', () => {
@@ -549,9 +477,7 @@ describe('Router', () => {
       r.add('GET', '/x', 1);
 
       // ['GET', 'POST'] where GET is duplicate → error on first (GET)
-      const result = r.add(['GET', 'POST'], '/x', 2);
-
-      expect(isErr(result)).toBe(true);
+      expect(() => r.add(['GET', 'POST'], '/x', 2)).toThrow(RouterError);
 
       // POST was NOT registered because GET failed first
       r.build();
