@@ -51,8 +51,17 @@ jobs:
         run: bun test
         working-directory: packages/query-parser
 
+      - name: Start Redis for rate-limiter
+        run: docker compose up -d --wait
+        working-directory: packages/rate-limiter
+
       - name: Test rate-limiter
-        run: bun test
+        run: bun run test
+        working-directory: packages/rate-limiter
+
+      - name: Stop Redis
+        if: always()
+        run: docker compose down
         working-directory: packages/rate-limiter
 
       - name: Extract result coverage

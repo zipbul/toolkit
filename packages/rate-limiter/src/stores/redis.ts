@@ -1,4 +1,4 @@
-import type { RateLimiterStore, StoreEntry } from '../src/interfaces';
+import type { RateLimiterStore, StoreEntry } from '../interfaces';
 
 /**
  * Minimal Redis client interface for eval-based operations.
@@ -14,7 +14,7 @@ const LUA_GET = `
 local key = KEYS[1]
 local v = redis.call('HMGET', key, 'v', 'p', 'ws')
 if v[1] == false then return nil end
-return {tonumber(v[1]), tonumber(v[2]), tonumber(v[3])}
+return v
 `;
 
 /**
@@ -29,12 +29,6 @@ return {tonumber(v[1]), tonumber(v[2]), tonumber(v[3])}
  */
 const LUA_CAS = `
 local key = KEYS[1]
-local exp_v = tonumber(ARGV[1])
-local exp_p = tonumber(ARGV[2])
-local exp_ws = tonumber(ARGV[3])
-local new_v = tonumber(ARGV[4])
-local new_p = tonumber(ARGV[5])
-local new_ws = tonumber(ARGV[6])
 local ttl = tonumber(ARGV[7])
 local is_new = tonumber(ARGV[8])
 
@@ -43,12 +37,12 @@ if is_new == 1 then
   if v[1] ~= false then return 0 end
 else
   if v[1] == false then return 0 end
-  if tonumber(v[1]) ~= exp_v or tonumber(v[2]) ~= exp_p or tonumber(v[3]) ~= exp_ws then
+  if v[1] ~= ARGV[1] or v[2] ~= ARGV[2] or v[3] ~= ARGV[3] then
     return 0
   end
 end
 
-redis.call('HMSET', key, 'v', new_v, 'p', new_p, 'ws', new_ws)
+redis.call('HMSET', key, 'v', ARGV[4], 'p', ARGV[5], 'ws', ARGV[6])
 if ttl > 0 then redis.call('PEXPIRE', key, ttl) end
 return 1
 `;
@@ -79,8 +73,6 @@ export interface RedisStoreOptions {
  *
  * Uses optimistic locking (compare-and-swap via Lua) for atomic updates.
  * Under contention, operations are retried up to `maxRetries` times.
- *
- * Import from `@zipbul/rate-limiter/redis`.
  */
 export class RedisStore implements RateLimiterStore {
   private readonly client: RedisClient;

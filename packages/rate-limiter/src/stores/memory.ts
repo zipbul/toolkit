@@ -5,6 +5,8 @@ export interface MemoryStoreOptions {
   maxSize?: number;
   /** TTL in milliseconds for stored entries. Expired entries are lazily removed on access. */
   ttl?: number;
+  /** Clock function for TTL checks. Defaults to `Date.now`. */
+  clock?: () => number;
 }
 
 interface TimedEntry {
@@ -23,17 +25,24 @@ export class MemoryStore implements RateLimiterStore {
   private readonly map: Map<string, TimedEntry>;
   private readonly maxSize: number;
   private readonly ttl: number;
+  private readonly clock: () => number;
 
   constructor(options?: MemoryStoreOptions) {
     this.map = new Map();
     this.maxSize = options?.maxSize ?? 0;
     this.ttl = options?.ttl ?? 0;
+    this.clock = options?.clock ?? Date.now;
   }
 
   update(key: string, updater: (current: StoreEntry | null) => StoreEntry): StoreEntry {
     const current = this.getValid(key);
     const next = updater(current);
-    this.map.set(key, { entry: next, createdAt: Date.now() });
+    const existing = this.map.get(key);
+    // Preserve createdAt when entry exists and state is unchanged (deny path)
+    const createdAt = existing !== undefined && next === current
+      ? existing.createdAt
+      : this.clock();
+    this.map.set(key, { entry: next, createdAt });
     this.evictIfNeeded();
     return next;
   }
@@ -59,7 +68,7 @@ export class MemoryStore implements RateLimiterStore {
     const timed = this.map.get(key);
     if (timed === undefined) return null;
 
-    if (this.ttl > 0 && Date.now() - timed.createdAt >= this.ttl) {
+    if (this.ttl > 0 && this.clock() - timed.createdAt >= this.ttl) {
       this.map.delete(key);
       return null;
     }

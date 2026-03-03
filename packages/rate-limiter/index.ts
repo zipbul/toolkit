@@ -7,5 +7,7 @@ export { RateLimitAction, RateLimiterErrorReason, Algorithm } from './src/enums'
 export type { RateLimitResult } from './src/types';
 export { MemoryStore } from './src/stores/memory';
 export type { MemoryStoreOptions } from './src/stores/memory';
+export { RedisStore } from './src/stores/redis';
+export type { RedisClient, RedisStoreOptions } from './src/stores/redis';
 export { withFallback, WithFallbackStore } from './src/stores/with-fallback';
 export type { WithFallbackOptions } from './src/stores/with-fallback';

@@ -108,7 +108,7 @@ export function refundGcra(
   const increment = emissionInterval * cost;
   const result = store.update(key, (current: StoreEntry | null) => {
     if (current === null) return { value: 0, prev: 0, windowStart: 0 };
-    return { value: current.value - increment, prev: 0, windowStart: 0 };
+    return { value: Math.max(0, current.value - increment), prev: 0, windowStart: 0 };
   });
   if (result instanceof Promise) return result.then(() => {});
 }

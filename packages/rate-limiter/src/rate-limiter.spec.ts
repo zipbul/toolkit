@@ -388,6 +388,23 @@ describe('GCRA algorithm', () => {
     expect(Number.isFinite((r as RateLimitDenyResult).retryAfter)).toBe(true);
   });
 
+  test('normal request succeeds after first-request deny', async () => {
+    const limiter = RateLimiter.create({
+      rules: { limit: 2, window: 2000 },
+      algorithm: Algorithm.GCRA,
+      clock: clock.now,
+    });
+
+    // First request denied (cost > limit writes sentinel entry)
+    const denied = await limiter.consume('user1', { cost: 5 });
+    expect(denied.action).toBe(RateLimitAction.Deny);
+
+    // Subsequent normal request should still work as if fresh
+    const allowed = await limiter.consume('user1');
+    expect(allowed.action).toBe(RateLimitAction.Allow);
+    expect(allowed.remaining).toBe(1);
+  });
+
   test('works with async store', async () => {
     const limiter = RateLimiter.create({
       rules: { limit: 2, window: 2000 },
@@ -455,16 +472,24 @@ describe('TokenBucket algorithm', () => {
     expect(r.remaining).toBe(4); // 5 refilled - 1 consumed
   });
 
-  test('token bucket caps at limit', async () => {
+  test('token bucket caps at limit after over-refill', async () => {
     const limiter = RateLimiter.create({
       rules: { limit: 5, window: 5000 },
       algorithm: Algorithm.TokenBucket,
       clock: clock.now,
     });
 
+    // Drain all tokens
+    for (let i = 0; i < 5; i++) await limiter.consume('user1');
+    expect((await limiter.consume('user1')).action).toBe(RateLimitAction.Deny);
+
+    // Wait much longer than needed to fully refill
     clock.advance(100000);
+
+    // Should cap at limit, not exceed it
     const r = await limiter.consume('user1');
-    expect(r.remaining).toBe(4);
+    expect(r.action).toBe(RateLimitAction.Allow);
+    expect(r.remaining).toBe(4); // limit(5) - cost(1) = 4, not more
   });
 
   test('cost=0 does not consume', async () => {
@@ -942,6 +967,49 @@ describe('compound rules', () => {
     },
   );
 
+  test('refund errors during TOCTOU rollback are swallowed', async () => {
+    const clock = createClock(1000);
+    const inner = new MemoryStore();
+    let rule0UpdateCount = 0;
+    const racyStore: RateLimiterStore = {
+      get: (key) => inner.get(key),
+      delete: (key) => inner.delete(key),
+      clear: () => inner.clear(),
+      update: (key, updater) => {
+        const result = inner.update(key, updater);
+        if (key.endsWith(':rule_0')) {
+          rule0UpdateCount++;
+          if (rule0UpdateCount === 2) {
+            // Set rule_1 to 0 tokens to force deny
+            inner.update(key.replace(':rule_0', ':rule_1'), () => ({
+              value: 0, prev: 0, windowStart: clock.now(),
+            }));
+          }
+          // After the race is triggered, make rule_0 refund fail
+          if (rule0UpdateCount === 3) {
+            throw new Error('refund store failure');
+          }
+        }
+        return result;
+      },
+    };
+
+    const limiter = RateLimiter.create({
+      rules: [
+        { limit: 10, window: 10000 },
+        { limit: 2, window: 2000 },
+      ],
+      algorithm: Algorithm.TokenBucket,
+      clock: clock.now,
+      store: racyStore,
+    });
+
+    await limiter.consume('user1');
+    // Should not throw even though refund fails — best-effort rollback
+    const result = await limiter.consume('user1');
+    expect(result.action).toBe(RateLimitAction.Deny);
+  });
+
   test('compound peek works', async () => {
     const clock = createClock(1000);
     const limiter = RateLimiter.create({
@@ -956,6 +1024,41 @@ describe('compound rules', () => {
     expect((await limiter.peek('user1')).action).toBe(RateLimitAction.Allow);
     await limiter.consume('user1');
     expect((await limiter.peek('user1')).action).toBe(RateLimitAction.Deny);
+  });
+
+  test('compound peek returns most restrictive deny (longest retryAfter)', async () => {
+    const clock = createClock(1000);
+    const limiter = RateLimiter.create({
+      rules: [
+        { limit: 1, window: 1000 },
+        { limit: 1, window: 5000 },
+      ],
+      algorithm: Algorithm.SlidingWindow,
+      clock: clock.now,
+    });
+
+    await limiter.consume('user1');
+    const peek = await limiter.peek('user1');
+    expect(peek.action).toBe(RateLimitAction.Deny);
+    expect((peek as RateLimitDenyResult).retryAfter).toBe(5000);
+  });
+
+  test('compound peek returns most restrictive allow (lowest remaining)', async () => {
+    const clock = createClock(1000);
+    const limiter = RateLimiter.create({
+      rules: [
+        { limit: 10, window: 1000 },
+        { limit: 3, window: 5000 },
+      ],
+      algorithm: Algorithm.SlidingWindow,
+      clock: clock.now,
+    });
+
+    await limiter.consume('user1');
+    const peek = await limiter.peek('user1');
+    expect(peek.action).toBe(RateLimitAction.Allow);
+    // rule_0: remaining=10-1-1=8, rule_1: remaining=3-1-1=1 → min is 1
+    expect(peek.remaining).toBe(1);
   });
 });
 
@@ -1151,7 +1254,8 @@ describe('MemoryStore', () => {
       received = current;
       return { value: 2, prev: 0, windowStart: 1000 };
     });
-    expect(received).toEqual({ value: 1, prev: 0, windowStart: 1000 });
+    expect(received).not.toBeNull();
+    expect(received!).toEqual({ value: 1, prev: 0, windowStart: 1000 });
   });
 
   test('delete removes a single entry', () => {
@@ -1184,20 +1288,22 @@ describe('MemoryStore', () => {
     expect(store.size).toBe(2);
   });
 
-  test('ttl expires entries lazily', async () => {
-    const store = new MemoryStore({ ttl: 50 });
+  test('ttl expires entries lazily', () => {
+    const clock = createClock(1000);
+    const store = new MemoryStore({ ttl: 50, clock: clock.now });
     store.update('key', () => ({ value: 1, prev: 0, windowStart: 0 }));
     expect(store.get('key')).not.toBeNull();
 
-    await new Promise(resolve => setTimeout(resolve, 60));
+    clock.advance(50);
     expect(store.get('key')).toBeNull();
   });
 
-  test('ttl expired entries are not passed to updater', async () => {
-    const store = new MemoryStore({ ttl: 50 });
+  test('ttl expired entries are not passed to updater', () => {
+    const clock = createClock(1000);
+    const store = new MemoryStore({ ttl: 50, clock: clock.now });
     store.update('key', () => ({ value: 1, prev: 0, windowStart: 0 }));
 
-    await new Promise(resolve => setTimeout(resolve, 60));
+    clock.advance(50);
 
     let receivedCurrent: StoreEntry | null = { value: 999, prev: 0, windowStart: 0 };
     store.update('key', (current) => {
@@ -1214,6 +1320,28 @@ describe('MemoryStore', () => {
     expect(store.size).toBe(1);
     store.delete('a');
     expect(store.size).toBe(0);
+  });
+
+  test('deny path does not refresh TTL', () => {
+    const clock = createClock(1000);
+    const store = new MemoryStore({ ttl: 100, clock: clock.now });
+    store.update('key', () => ({ value: 5, prev: 0, windowStart: 0 }));
+
+    // Advance 80ms, then do a "deny" update that returns existing state
+    clock.advance(80);
+    const existing = store.get('key')!;
+    store.update('key', () => existing); // simulate deny returning same ref
+
+    // At 100ms from creation, TTL should expire (not reset by the deny update)
+    clock.advance(20);
+    expect(store.get('key')).toBeNull();
+  });
+
+  test('clock option defaults to Date.now', () => {
+    const store = new MemoryStore({ ttl: 100_000 });
+    store.update('key', () => ({ value: 1, prev: 0, windowStart: 0 }));
+    // Should be valid since Date.now() - createdAt < 100_000
+    expect(store.get('key')).not.toBeNull();
   });
 
   test('no maxSize or ttl — backward compatible', () => {
@@ -1496,7 +1624,7 @@ describe('reset', () => {
     expect((await limiter.consume('user1')).action).toBe(RateLimitAction.Allow);
   });
 
-  test('wraps store errors', async () => {
+  test('wraps store errors (single rule)', async () => {
     const limiter = RateLimiter.create({
       rules: { limit: 10, window: 1000 },
       store: {
@@ -1513,6 +1641,34 @@ describe('reset', () => {
     } catch (e) {
       expect(e).toBeInstanceOf(RateLimiterError);
       expect((e as RateLimiterError).reason).toBe(RateLimiterErrorReason.StoreError);
+    }
+  });
+
+  test('wraps store errors (compound rule partial failure)', async () => {
+    let deleteCount = 0;
+    const limiter = RateLimiter.create({
+      rules: [
+        { limit: 10, window: 1000 },
+        { limit: 5, window: 5000 },
+      ],
+      store: {
+        update: () => ({ value: 0, prev: 0, windowStart: 0 }),
+        get: () => null,
+        delete: () => {
+          deleteCount++;
+          if (deleteCount === 2) throw new Error('second delete fails');
+        },
+        clear: () => {},
+      },
+    });
+
+    try {
+      await limiter.reset('user1');
+      expect(true).toBe(false);
+    } catch (e) {
+      expect(e).toBeInstanceOf(RateLimiterError);
+      expect((e as RateLimiterError).reason).toBe(RateLimiterErrorReason.StoreError);
+      expect((e as RateLimiterError).message).toBe('second delete fails');
     }
   });
 });

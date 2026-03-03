@@ -185,9 +185,13 @@ export class RateLimiter {
       const consumeResult = await this.algorithmFn(ruleKey, rules[i]!, cost, now, store, false);
 
       if (consumeResult.action === RateLimitAction.Deny) {
-        // TOCTOU race: refund all previously consumed rules
+        // TOCTOU race: refund all previously consumed rules (best-effort)
         for (let j = 0; j < i; j++) {
-          await this.refundFn(`${key}:rule_${j}`, rules[j]!, cost, store);
+          try {
+            await this.refundFn(`${key}:rule_${j}`, rules[j]!, cost, store);
+          } catch {
+            // Best-effort rollback — store failure during refund is non-fatal
+          }
         }
         return consumeResult;
       }

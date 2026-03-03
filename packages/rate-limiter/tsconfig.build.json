@@ -7,6 +7,6 @@
     "verbatimModuleSyntax": false,
     "outDir": "dist"
   },
-  "include": ["index.ts", "src/**/*.ts", "redis/**/*.ts"],
+  "include": ["index.ts", "src/**/*.ts"],
   "exclude": ["**/*.spec.ts", "**/*.test.ts", "test"]
 }
