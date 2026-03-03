@@ -157,6 +157,39 @@ describe('Router', () => {
     });
   });
 
+  // ---- CA (Cache) ----
+
+  describe('cache', () => {
+    it('should clear hit and miss caches via clearCache()', () => {
+      const r = buildWith([['GET', '/users/:id', 10]], { enableCache: true });
+
+      // Warm up cache with a hit and a miss
+      r.match('GET', '/users/1'); // dynamic → hit cache
+      r.match('GET', '/users/1'); // cache hit
+      r.match('GET', '/nope/1'); // miss → miss cache
+
+      // Clear all caches
+      r.clearCache();
+
+      // After clear, dynamic route should re-match from trie (source: 'dynamic')
+      const result = r.match('GET', '/users/1');
+
+      expect(result).not.toBeNull();
+      expect(result!.meta.source).toBe('dynamic');
+    });
+
+    it('should be a no-op when cache is not enabled', () => {
+      const r = buildWith([['GET', '/users/:id', 10]]);
+
+      // Should not throw even when cache is disabled
+      r.clearCache();
+
+      const result = r.match('GET', '/users/1');
+
+      expect(result).not.toBeNull();
+    });
+  });
+
   // ---- NE (Negative/Error) ----
 
   describe('negative', () => {
