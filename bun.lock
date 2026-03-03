@@ -14,7 +14,7 @@
     },
     "packages/cors": {
       "name": "@zipbul/cors",
-      "version": "0.0.8",
+      "version": "0.1.0",
       "dependencies": {
         "@zipbul/result": "workspace:*",
         "@zipbul/shared": "workspace:*",
@@ -23,7 +23,7 @@
     },
     "packages/query-parser": {
       "name": "@zipbul/query-parser",
-      "version": "0.0.1",
+      "version": "0.2.0",
       "dependencies": {
         "@zipbul/result": "workspace:*",
       },
@@ -31,6 +31,13 @@
         "@types/qs": "^6.9.18",
         "mitata": "^1.0.34",
         "qs": "^6.14.0",
+      },
+    },
+    "packages/rate-limiter": {
+      "name": "@zipbul/rate-limiter",
+      "version": "0.0.1",
+      "dependencies": {
+        "@zipbul/result": "workspace:*",
       },
     },
     "packages/result": {
@@ -51,7 +58,7 @@
     },
     "packages/shared": {
       "name": "@zipbul/shared",
-      "version": "0.0.7",
+      "version": "0.0.8",
     },
   },
   "packages": {
@@ -112,6 +119,8 @@
     "@zipbul/cors": ["@zipbul/cors@workspace:packages/cors"],
 
     "@zipbul/query-parser": ["@zipbul/query-parser@workspace:packages/query-parser"],
+
+    "@zipbul/rate-limiter": ["@zipbul/rate-limiter@workspace:packages/rate-limiter"],
 
     "@zipbul/result": ["@zipbul/result@workspace:packages/result"],
 

@@ -1,0 +1,51 @@
+{
+  "name": "@zipbul/rate-limiter",
+  "version": "0.0.1",
+  "description": "Framework-agnostic rate limiter engine with multiple algorithms and pluggable stores",
+  "license": "MIT",
+  "author": "Junhyung Park (https://github.com/parkrevil)",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/zipbul/toolkit",
+    "directory": "packages/rate-limiter"
+  },
+  "bugs": "https://github.com/zipbul/toolkit/issues",
+  "homepage": "https://github.com/zipbul/toolkit/tree/main/packages/rate-limiter#readme",
+  "keywords": [
+    "rate-limiter",
+    "rate-limit",
+    "throttle",
+    "http",
+    "bun",
+    "typescript",
+    "zipbul"
+  ],
+  "engines": {
+    "bun": ">=1.0.0"
+  },
+  "type": "module",
+  "module": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./redis": {
+      "types": "./dist/redis/index.d.ts",
+      "import": "./dist/redis/index.js"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "bun build index.ts redis/index.ts --outdir dist --target bun --format esm --packages external --production --sourcemap=linked && tsc -p tsconfig.build.json",
+    "test": "bun test",
+    "coverage": "bun test --coverage"
+  },
+  "sideEffects": false,
+  "dependencies": {
+    "@zipbul/result": "workspace:*"
+  }
+}
