@@ -6,5 +6,6 @@ export type { RateLimiterStore, StoreEntry } from './src/interfaces';
 export { RateLimitAction, RateLimiterErrorReason, Algorithm } from './src/enums';
 export type { RateLimitResult } from './src/types';
 export { MemoryStore } from './src/stores/memory';
+export type { MemoryStoreOptions } from './src/stores/memory';
 export { withFallback, WithFallbackStore } from './src/stores/with-fallback';
 export type { WithFallbackOptions } from './src/stores/with-fallback';

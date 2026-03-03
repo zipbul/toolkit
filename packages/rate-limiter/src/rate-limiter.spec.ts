@@ -25,6 +25,7 @@ function createAsyncStore(): RateLimiterStore & { inner: MemoryStore } {
     inner,
     update: async (key: string, updater: (current: StoreEntry | null) => StoreEntry) => inner.update(key, updater),
     get: async (key: string) => inner.get(key),
+    delete: async (key: string) => inner.delete(key),
     clear: async () => inner.clear(),
   };
 }
@@ -575,6 +576,39 @@ describe('peek', () => {
     expect(peek3.action).toBe(RateLimitAction.Deny);
   });
 
+  test('peek with per-call cost', async () => {
+    const clock = createClock(1000);
+    const limiter = RateLimiter.create({
+      rules: { limit: 10, window: 1000 },
+      algorithm: Algorithm.SlidingWindow,
+      clock: clock.now,
+    });
+
+    // Peek with high cost should show deny
+    const peek1 = await limiter.peek('user1', { cost: 11 });
+    expect(peek1.action).toBe(RateLimitAction.Deny);
+
+    // Peek with low cost should show allow
+    const peek2 = await limiter.peek('user1', { cost: 5 });
+    expect(peek2.action).toBe(RateLimitAction.Allow);
+    expect(peek2.remaining).toBe(5);
+
+    // State should not have changed — consume still has full capacity
+    const r = await limiter.consume('user1');
+    expect(r.remaining).toBe(9);
+  });
+
+  test('peek validates per-call cost', async () => {
+    const limiter = RateLimiter.create({ rules: { limit: 10, window: 1000 } });
+    try {
+      await limiter.peek('user1', { cost: -1 });
+      expect(true).toBe(false);
+    } catch (e) {
+      expect(e).toBeInstanceOf(RateLimiterError);
+      expect((e as RateLimiterError).reason).toBe(RateLimiterErrorReason.InvalidCost);
+    }
+  });
+
   test('peek deny shows correct retryAfter (SlidingWindow)', async () => {
     const clock = createClock(1000);
     const limiter = RateLimiter.create({
@@ -719,6 +753,195 @@ describe('compound rules', () => {
     expect(r.remaining).toBe(2); // min(9, 2) = 2
   });
 
+  test('refunds consumed rules on TOCTOU race deny (SlidingWindow)', async () => {
+    // Simulate race: after rule_0 phase 2 consume, deplete rule_1 externally
+    const clock = createClock(1000);
+    const inner = new MemoryStore();
+    let rule0UpdateCount = 0;
+    const racyStore: RateLimiterStore = {
+      get: (key) => inner.get(key),
+      delete: (key) => inner.delete(key),
+      clear: () => inner.clear(),
+      update: (key, updater) => {
+        const result = inner.update(key, updater);
+        if (key.endsWith(':rule_0')) {
+          rule0UpdateCount++;
+          // 2nd update of rule_0 = phase 2 of 2nd compound consume
+          // After rule_0 consumed, deplete rule_1 to trigger race
+          if (rule0UpdateCount === 2) {
+            inner.update(key.replace(':rule_0', ':rule_1'), () => ({
+              value: 2, prev: 0, windowStart: 1000,
+            }));
+          }
+        }
+        return result;
+      },
+    };
+
+    const limiter = RateLimiter.create({
+      rules: [
+        { limit: 10, window: 1000 },
+        { limit: 2, window: 1000 },  // limit=2 so first consume passes, race depletes it
+      ],
+      algorithm: Algorithm.SlidingWindow,
+      clock: clock.now,
+      store: racyStore,
+    });
+
+    // 1st consume: rule_0 update #1, rule_1 count→1 (both pass)
+    await limiter.consume('user1');
+
+    // 2nd consume:
+    //   Phase 1: peek rule_0 (get→count=1, ok), peek rule_1 (get→count=1, 1+1<=2, ok)
+    //   Phase 2: update rule_0 (count→2, rule0UpdateCount=2 → sets rule_1.value=2)
+    //            update rule_1 (updater sees count=2, 2+1>2 → DENY!)
+    //   → refund rule_0 (count→2-1=1)
+    const result = await limiter.consume('user1');
+    expect(result.action).toBe(RateLimitAction.Deny);
+
+    // Rule_0 should have been refunded back to 1
+    const entry0 = inner.get('user1:rule_0');
+    expect(entry0!.value).toBe(1);
+  });
+
+  test('refunds consumed rules on TOCTOU race deny (GCRA)', async () => {
+    const clock = createClock(1000);
+    const inner = new MemoryStore();
+    let rule0UpdateCount = 0;
+    const racyStore: RateLimiterStore = {
+      get: (key) => inner.get(key),
+      delete: (key) => inner.delete(key),
+      clear: () => inner.clear(),
+      update: (key, updater) => {
+        const result = inner.update(key, updater);
+        if (key.endsWith(':rule_0')) {
+          rule0UpdateCount++;
+          if (rule0UpdateCount === 2) {
+            // Set rule_1 TAT far in the future to force deny
+            inner.update(key.replace(':rule_0', ':rule_1'), () => ({
+              value: clock.now() + 50000, prev: 0, windowStart: 0,
+            }));
+          }
+        }
+        return result;
+      },
+    };
+
+    const limiter = RateLimiter.create({
+      rules: [
+        { limit: 10, window: 10000 },
+        { limit: 2, window: 2000 },
+      ],
+      algorithm: Algorithm.GCRA,
+      clock: clock.now,
+      store: racyStore,
+    });
+
+    // After 1st consume: TAT_0 = 1000 + 1000 = 2000
+    await limiter.consume('user1');
+    const tat0Before = inner.get('user1:rule_0')!.value;
+
+    const result = await limiter.consume('user1');
+    expect(result.action).toBe(RateLimitAction.Deny);
+
+    // Rule_0 TAT should be refunded back
+    const entry0 = inner.get('user1:rule_0');
+    expect(entry0!.value).toBe(tat0Before);
+  });
+
+  test('refunds consumed rules on TOCTOU race deny (TokenBucket)', async () => {
+    const clock = createClock(1000);
+    const inner = new MemoryStore();
+    let rule0UpdateCount = 0;
+    const racyStore: RateLimiterStore = {
+      get: (key) => inner.get(key),
+      delete: (key) => inner.delete(key),
+      clear: () => inner.clear(),
+      update: (key, updater) => {
+        const result = inner.update(key, updater);
+        if (key.endsWith(':rule_0')) {
+          rule0UpdateCount++;
+          if (rule0UpdateCount === 2) {
+            // Set rule_1 tokens to 0 to force deny
+            inner.update(key.replace(':rule_0', ':rule_1'), () => ({
+              value: 0, prev: 0, windowStart: clock.now(),
+            }));
+          }
+        }
+        return result;
+      },
+    };
+
+    const limiter = RateLimiter.create({
+      rules: [
+        { limit: 10, window: 10000 },
+        { limit: 2, window: 2000 },
+      ],
+      algorithm: Algorithm.TokenBucket,
+      clock: clock.now,
+      store: racyStore,
+    });
+
+    await limiter.consume('user1');
+    // After 1st consume: tokens_0 = 10-1 = 9
+    const tokens0Before = inner.get('user1:rule_0')!.value;
+    expect(tokens0Before).toBe(9);
+
+    const result = await limiter.consume('user1');
+    expect(result.action).toBe(RateLimitAction.Deny);
+
+    // Rule_0 tokens should be refunded back to 9
+    const entry0 = inner.get('user1:rule_0');
+    expect(entry0!.value).toBe(9);
+  });
+
+  test.each([Algorithm.SlidingWindow, Algorithm.GCRA, Algorithm.TokenBucket])(
+    'refunds with async store (%s)',
+    async (algorithm) => {
+      const clock = createClock(1000);
+      const inner = new MemoryStore();
+      let rule0UpdateCount = 0;
+      const racyAsyncStore: RateLimiterStore = {
+        get: async (key) => inner.get(key),
+        delete: async (key) => inner.delete(key),
+        clear: async () => inner.clear(),
+        update: async (key, updater) => {
+          const result = inner.update(key, updater);
+          if (key.endsWith(':rule_0')) {
+            rule0UpdateCount++;
+            if (rule0UpdateCount === 2) {
+              const rule1Key = key.replace(':rule_0', ':rule_1');
+              if (algorithm === Algorithm.SlidingWindow) {
+                inner.update(rule1Key, () => ({ value: 2, prev: 0, windowStart: 1000 }));
+              } else if (algorithm === Algorithm.GCRA) {
+                inner.update(rule1Key, () => ({ value: clock.now() + 50000, prev: 0, windowStart: 0 }));
+              } else {
+                inner.update(rule1Key, () => ({ value: 0, prev: 0, windowStart: clock.now() }));
+              }
+            }
+          }
+          return result;
+        },
+      };
+
+      const limiter = RateLimiter.create({
+        rules: [
+          { limit: 10, window: 10000 },
+          { limit: 2, window: 2000 },
+        ],
+        algorithm,
+        clock: clock.now,
+        store: racyAsyncStore,
+      });
+
+      await limiter.consume('user1');
+      const before = inner.get('user1:rule_0')!.value;
+      const result = await limiter.consume('user1');
+      expect(result.action).toBe(RateLimitAction.Deny);
+      expect(inner.get('user1:rule_0')!.value).toBe(before);
+    },
+  );
+
   test('compound peek works', async () => {
     const clock = createClock(1000);
     const limiter = RateLimiter.create({
@@ -824,6 +1047,7 @@ describe('store error handling', () => {
     const failingStore: RateLimiterStore = {
       update: () => { throw originalError; },
       get: () => { throw originalError; },
+      delete: () => { throw originalError; },
       clear: () => { throw originalError; },
     };
 
@@ -849,6 +1073,7 @@ describe('store error handling', () => {
       store: {
         update: () => Promise.reject(new Error('timeout')),
         get: () => Promise.reject(new Error('timeout')),
+        delete: () => Promise.reject(new Error('timeout')),
         clear: () => Promise.reject(new Error('timeout')),
       },
     });
@@ -868,6 +1093,7 @@ describe('store error handling', () => {
       store: {
         update: () => { throw 'string error'; },
         get: () => { throw 'string error'; },
+        delete: () => {},
         clear: () => {},
       },
     });
@@ -886,6 +1112,7 @@ describe('store error handling', () => {
       store: {
         update: () => { throw new Error('fail'); },
         get: () => { throw new Error('fail'); },
+        delete: () => {},
         clear: () => {},
       },
     });
@@ -927,6 +1154,15 @@ describe('MemoryStore', () => {
     expect(received).toEqual({ value: 1, prev: 0, windowStart: 1000 });
   });
 
+  test('delete removes a single entry', () => {
+    const store = new MemoryStore();
+    store.update('key1', () => ({ value: 1, prev: 0, windowStart: 0 }));
+    store.update('key2', () => ({ value: 2, prev: 0, windowStart: 0 }));
+    store.delete('key1');
+    expect(store.get('key1')).toBeNull();
+    expect(store.get('key2')).toEqual({ value: 2, prev: 0, windowStart: 0 });
+  });
+
   test('clear removes all entries', () => {
     const store = new MemoryStore();
     store.update('key1', () => ({ value: 1, prev: 0, windowStart: 0 }));
@@ -934,6 +1170,59 @@ describe('MemoryStore', () => {
     store.clear();
     expect(store.get('key1')).toBeNull();
     expect(store.get('key2')).toBeNull();
+  });
+
+  test('maxSize evicts oldest entries (FIFO)', () => {
+    const store = new MemoryStore({ maxSize: 2 });
+    store.update('a', () => ({ value: 1, prev: 0, windowStart: 0 }));
+    store.update('b', () => ({ value: 2, prev: 0, windowStart: 0 }));
+    store.update('c', () => ({ value: 3, prev: 0, windowStart: 0 }));
+
+    expect(store.get('a')).toBeNull(); // evicted
+    expect(store.get('b')).toEqual({ value: 2, prev: 0, windowStart: 0 });
+    expect(store.get('c')).toEqual({ value: 3, prev: 0, windowStart: 0 });
+    expect(store.size).toBe(2);
+  });
+
+  test('ttl expires entries lazily', async () => {
+    const store = new MemoryStore({ ttl: 50 });
+    store.update('key', () => ({ value: 1, prev: 0, windowStart: 0 }));
+    expect(store.get('key')).not.toBeNull();
+
+    await new Promise(resolve => setTimeout(resolve, 60));
+    expect(store.get('key')).toBeNull();
+  });
+
+  test('ttl expired entries are not passed to updater', async () => {
+    const store = new MemoryStore({ ttl: 50 });
+    store.update('key', () => ({ value: 1, prev: 0, windowStart: 0 }));
+
+    await new Promise(resolve => setTimeout(resolve, 60));
+
+    let receivedCurrent: StoreEntry | null = { value: 999, prev: 0, windowStart: 0 };
+    store.update('key', (current) => {
+      receivedCurrent = current;
+      return { value: 2, prev: 0, windowStart: 0 };
+    });
+    expect(receivedCurrent).toBeNull();
+  });
+
+  test('size reflects current entry count', () => {
+    const store = new MemoryStore();
+    expect(store.size).toBe(0);
+    store.update('a', () => ({ value: 1, prev: 0, windowStart: 0 }));
+    expect(store.size).toBe(1);
+    store.delete('a');
+    expect(store.size).toBe(0);
+  });
+
+  test('no maxSize or ttl — backward compatible', () => {
+    const store = new MemoryStore();
+    for (let i = 0; i < 100; i++) {
+      store.update(`key${i}`, () => ({ value: i, prev: 0, windowStart: 0 }));
+    }
+    expect(store.size).toBe(100);
+    expect(store.get('key0')).not.toBeNull();
   });
 });
 
@@ -958,6 +1247,7 @@ describe('WithFallbackStore', () => {
     const primary: RateLimiterStore = {
       update: () => { throw new Error('down'); },
       get: () => { throw new Error('down'); },
+      delete: () => { throw new Error('down'); },
       clear: () => {},
     };
     const fallback = new MemoryStore();
@@ -972,6 +1262,44 @@ describe('WithFallbackStore', () => {
 
     const entry = await store.get('key');
     expect(entry).toEqual({ value: 1, prev: 0, windowStart: 0 });
+    store.dispose();
+  });
+
+  test('delete delegates to active store', async () => {
+    const primary = new MemoryStore();
+    const fallback = new MemoryStore();
+    const store = withFallback(primary, fallback, {
+      healthCheck: async () => true,
+      restoreInterval: 60_000,
+    });
+
+    // Primary active — delete goes to primary
+    primary.update('key', () => ({ value: 1, prev: 0, windowStart: 0 }));
+    await store.delete('key');
+    expect(primary.get('key')).toBeNull();
+
+    store.dispose();
+  });
+
+  test('delete falls back when primary fails', async () => {
+    const primary: RateLimiterStore = {
+      update: () => { throw new Error('down'); },
+      get: () => { throw new Error('down'); },
+      delete: () => { throw new Error('down'); },
+      clear: () => {},
+    };
+    const fallback = new MemoryStore();
+
+    const store = withFallback(primary, fallback, {
+      healthCheck: async () => false,
+      restoreInterval: 60_000,
+    });
+
+    // Force fallback via update first
+    await store.update('key', () => ({ value: 1, prev: 0, windowStart: 0 }));
+    await store.delete('key');
+    expect(fallback.get('key')).toBeNull();
+
     store.dispose();
   });
 
@@ -1129,6 +1457,63 @@ describe('RateLimiterError', () => {
     expect(error.message).toBe('test message');
     expect(error.cause).toBe(cause);
     expect(error).toBeInstanceOf(Error);
+  });
+});
+
+// ── Reset ────────────────────────────────────────────────────────────
+
+describe('reset', () => {
+  test('resets single rule state', async () => {
+    const clock = createClock(1000);
+    const limiter = RateLimiter.create({
+      rules: { limit: 1, window: 1000 },
+      algorithm: Algorithm.SlidingWindow,
+      clock: clock.now,
+    });
+
+    await limiter.consume('user1');
+    expect((await limiter.consume('user1')).action).toBe(RateLimitAction.Deny);
+
+    await limiter.reset('user1');
+    expect((await limiter.consume('user1')).action).toBe(RateLimitAction.Allow);
+  });
+
+  test('resets compound rule state', async () => {
+    const clock = createClock(1000);
+    const limiter = RateLimiter.create({
+      rules: [
+        { limit: 1, window: 1000 },
+        { limit: 5, window: 10000 },
+      ],
+      algorithm: Algorithm.SlidingWindow,
+      clock: clock.now,
+    });
+
+    await limiter.consume('user1');
+    expect((await limiter.consume('user1')).action).toBe(RateLimitAction.Deny);
+
+    await limiter.reset('user1');
+    expect((await limiter.consume('user1')).action).toBe(RateLimitAction.Allow);
+  });
+
+  test('wraps store errors', async () => {
+    const limiter = RateLimiter.create({
+      rules: { limit: 10, window: 1000 },
+      store: {
+        update: () => ({ value: 0, prev: 0, windowStart: 0 }),
+        get: () => null,
+        delete: () => { throw new Error('fail'); },
+        clear: () => {},
+      },
+    });
+
+    try {
+      await limiter.reset('user1');
+      expect(true).toBe(false);
+    } catch (e) {
+      expect(e).toBeInstanceOf(RateLimiterError);
+      expect((e as RateLimiterError).reason).toBe(RateLimiterErrorReason.StoreError);
+    }
   });
 });
 

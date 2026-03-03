@@ -1,5 +1,5 @@
 import { RateLimitAction } from '../enums';
-import type { RateLimitRule, RateLimiterStore } from '../interfaces';
+import type { RateLimitRule, RateLimiterStore, StoreEntry } from '../interfaces';
 import type { RateLimitResult } from '../types';
 
 /**
@@ -93,4 +93,22 @@ async function peekGcra(
     limit: rule.limit,
     resetAt: Math.ceil(newTat),
   };
+}
+
+/**
+ * Refunds a previously consumed GCRA request by reducing the TAT.
+ */
+export function refundGcra(
+  key: string,
+  rule: RateLimitRule,
+  cost: number,
+  store: RateLimiterStore,
+): void | Promise<void> {
+  const emissionInterval = rule.window / rule.limit;
+  const increment = emissionInterval * cost;
+  const result = store.update(key, (current: StoreEntry | null) => {
+    if (current === null) return { value: 0, prev: 0, windowStart: 0 };
+    return { value: current.value - increment, prev: 0, windowStart: 0 };
+  });
+  if (result instanceof Promise) return result.then(() => {});
 }

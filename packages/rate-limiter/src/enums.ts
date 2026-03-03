@@ -4,9 +4,9 @@
  */
 export enum RateLimitAction {
   /** Request is within rate limits. */
-  Allow,
+  Allow = 'allow',
   /** Request exceeds rate limits. */
-  Deny,
+  Deny = 'deny',
 }
 
 /**
@@ -14,17 +14,17 @@ export enum RateLimitAction {
  */
 export enum RateLimiterErrorReason {
   /** limit must be a positive integer. */
-  InvalidLimit,
+  InvalidLimit = 'invalid_limit',
   /** window must be a positive integer (milliseconds). */
-  InvalidWindow,
+  InvalidWindow = 'invalid_window',
   /** cost must be a non-negative integer. */
-  InvalidCost,
+  InvalidCost = 'invalid_cost',
   /** Unsupported algorithm value. */
-  InvalidAlgorithm,
+  InvalidAlgorithm = 'invalid_algorithm',
   /** rules must not be empty. */
-  EmptyRules,
+  EmptyRules = 'empty_rules',
   /** Store operation failed at runtime. */
-  StoreError,
+  StoreError = 'store_error',
 }
 
 /**
@@ -32,9 +32,9 @@ export enum RateLimiterErrorReason {
  */
 export enum Algorithm {
   /** Generic Cell Rate Algorithm. */
-  GCRA,
+  GCRA = 'gcra',
   /** Sliding window counter. */
-  SlidingWindow,
+  SlidingWindow = 'sliding_window',
   /** Token bucket. */
-  TokenBucket,
+  TokenBucket = 'token_bucket',
 }

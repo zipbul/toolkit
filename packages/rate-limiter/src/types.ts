@@ -37,3 +37,14 @@ export type AlgorithmFn = (
   store: RateLimiterStore,
   peek: boolean,
 ) => RateLimitResult | Promise<RateLimitResult>;
+
+/**
+ * Signature for algorithm refund functions.
+ * Used to undo a consume when compound rules encounter a TOCTOU race.
+ */
+export type RefundFn = (
+  key: string,
+  rule: RateLimitRule,
+  cost: number,
+  store: RateLimiterStore,
+) => void | Promise<void>;

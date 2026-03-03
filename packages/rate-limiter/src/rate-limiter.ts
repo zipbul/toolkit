@@ -4,15 +4,21 @@ import { Algorithm, RateLimitAction, RateLimiterErrorReason } from './enums';
 import { RateLimiterError } from './interfaces';
 import type { ConsumeOptions, RateLimiterOptions } from './interfaces';
 import { resolveRateLimiterOptions, validateRateLimiterOptions } from './options';
-import type { AlgorithmFn, RateLimitResult, ResolvedRateLimiterOptions } from './types';
-import { gcra } from './algorithms/gcra';
-import { slidingWindow } from './algorithms/sliding-window';
-import { tokenBucket } from './algorithms/token-bucket';
+import type { AlgorithmFn, RateLimitResult, RefundFn, ResolvedRateLimiterOptions } from './types';
+import { gcra, refundGcra } from './algorithms/gcra';
+import { slidingWindow, refundSlidingWindow } from './algorithms/sliding-window';
+import { tokenBucket, refundTokenBucket } from './algorithms/token-bucket';
 
 const ALGORITHM_MAP: Record<Algorithm, AlgorithmFn> = {
   [Algorithm.GCRA]: gcra,
   [Algorithm.SlidingWindow]: slidingWindow,
   [Algorithm.TokenBucket]: tokenBucket,
+};
+
+const REFUND_MAP: Record<Algorithm, RefundFn> = {
+  [Algorithm.GCRA]: refundGcra,
+  [Algorithm.SlidingWindow]: refundSlidingWindow,
+  [Algorithm.TokenBucket]: refundTokenBucket,
 };
 
 /**
@@ -21,9 +27,11 @@ const ALGORITHM_MAP: Record<Algorithm, AlgorithmFn> = {
  */
 export class RateLimiter {
   private readonly algorithmFn: AlgorithmFn;
+  private readonly refundFn: RefundFn;
 
   private constructor(private readonly options: ResolvedRateLimiterOptions) {
     this.algorithmFn = ALGORITHM_MAP[options.algorithm];
+    this.refundFn = REFUND_MAP[options.algorithm];
   }
 
   /**
@@ -92,21 +100,55 @@ export class RateLimiter {
 
   /**
    * Peeks at the current state for the given key without consuming tokens.
-   * Uses the instance-level cost for the check.
    *
-   * @throws {RateLimiterError} when the store fails at runtime.
+   * @throws {RateLimiterError} when the store fails at runtime or per-call cost is invalid.
    * @returns {RateLimitResult} A discriminated union — branch on `action` to determine the outcome.
    */
-  public async peek(key: string): Promise<RateLimitResult> {
+  public async peek(key: string, opts?: ConsumeOptions): Promise<RateLimitResult> {
+    const cost = opts?.cost ?? this.options.cost;
+
+    if (opts?.cost !== undefined && (!Number.isInteger(opts.cost) || opts.cost < 0)) {
+      throw new RateLimiterError({
+        reason: RateLimiterErrorReason.InvalidCost,
+        message: 'cost must be a non-negative integer',
+      });
+    }
+
     const now = this.options.clock();
     const { rules, store } = this.options;
 
     try {
       if (rules.length === 1) {
-        return await this.algorithmFn(key, rules[0]!, this.options.cost, now, store, true);
+        return await this.algorithmFn(key, rules[0]!, cost, now, store, true);
       }
 
-      return await this.peekCompound(key, now);
+      return await this.peekCompound(key, cost, now);
+    } catch (error) {
+      if (error instanceof RateLimiterError) throw error;
+      throw new RateLimiterError(
+        { reason: RateLimiterErrorReason.StoreError, message: error instanceof Error ? error.message : 'Store operation failed' },
+        { cause: error },
+      );
+    }
+  }
+
+  /**
+   * Resets rate limit state for the given key, removing all associated entries.
+   * For compound rules, removes entries for all rules.
+   *
+   * @throws {RateLimiterError} when the store fails at runtime.
+   */
+  public async reset(key: string): Promise<void> {
+    const { rules, store } = this.options;
+
+    try {
+      if (rules.length === 1) {
+        await store.delete(key);
+      } else {
+        for (let i = 0; i < rules.length; i++) {
+          await store.delete(`${key}:rule_${i}`);
+        }
+      }
     } catch (error) {
       if (error instanceof RateLimiterError) throw error;
       throw new RateLimiterError(
@@ -118,8 +160,8 @@ export class RateLimiter {
 
   /**
    * Compound consume: peek all rules first, then consume all if allowed.
-   * Note: not atomic across concurrent callers — another request may
-   * interleave between peek and consume phases.
+   * If a TOCTOU race causes a deny during phase 2, already-consumed rules
+   * are refunded (best-effort rollback).
    */
   private async consumeCompound(key: string, cost: number, now: number): Promise<RateLimitResult> {
     const { rules, store } = this.options;
@@ -136,28 +178,36 @@ export class RateLimiter {
     const mostRestrictiveDeny = this.findMostRestrictiveDeny(peekResults);
     if (mostRestrictiveDeny !== null) return mostRestrictiveDeny;
 
-    // Phase 2: All passed — consume all rules
+    // Phase 2: All passed — consume all rules, with rollback on race deny
     const consumeResults: RateLimitResult[] = [];
     for (let i = 0; i < rules.length; i++) {
       const ruleKey = `${key}:rule_${i}`;
       const consumeResult = await this.algorithmFn(ruleKey, rules[i]!, cost, now, store, false);
+
+      if (consumeResult.action === RateLimitAction.Deny) {
+        // TOCTOU race: refund all previously consumed rules
+        for (let j = 0; j < i; j++) {
+          await this.refundFn(`${key}:rule_${j}`, rules[j]!, cost, store);
+        }
+        return consumeResult;
+      }
+
       consumeResults.push(consumeResult);
     }
 
-    // Return the most restrictive allow (lowest remaining)
     return this.findMostRestrictiveAllow(consumeResults);
   }
 
   /**
    * Compound peek: peek all rules, return most restrictive result.
    */
-  private async peekCompound(key: string, now: number): Promise<RateLimitResult> {
+  private async peekCompound(key: string, cost: number, now: number): Promise<RateLimitResult> {
     const { rules, store } = this.options;
     const results: RateLimitResult[] = [];
 
     for (let i = 0; i < rules.length; i++) {
       const ruleKey = `${key}:rule_${i}`;
-      const peekResult = await this.algorithmFn(ruleKey, rules[i]!, this.options.cost, now, store, true);
+      const peekResult = await this.algorithmFn(ruleKey, rules[i]!, cost, now, store, true);
       results.push(peekResult);
     }
 

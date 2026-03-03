@@ -154,6 +154,10 @@ export interface RateLimiterStore {
    */
   get(key: string): StoreEntry | null | Promise<StoreEntry | null>;
   /**
+   * Remove a single entry by key.
+   */
+  delete(key: string): void | Promise<void>;
+  /**
    * Remove all entries.
    */
   clear(): void | Promise<void>;

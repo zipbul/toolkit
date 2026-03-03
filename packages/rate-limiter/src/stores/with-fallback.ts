@@ -50,6 +50,18 @@ export class WithFallbackStore implements RateLimiterStore {
     return this.fallback.get(key);
   }
 
+  async delete(key: string): Promise<void> {
+    if (this.usePrimary) {
+      try {
+        await this.primary.delete(key);
+        return;
+      } catch {
+        this.usePrimary = false;
+      }
+    }
+    await this.fallback.delete(key);
+  }
+
   async clear(): Promise<void> {
     await Promise.allSettled([this.primary.clear(), this.fallback.clear()]);
   }

@@ -1,5 +1,5 @@
 import { RateLimitAction } from '../enums';
-import type { RateLimitRule, RateLimiterStore } from '../interfaces';
+import type { RateLimitRule, RateLimiterStore, StoreEntry } from '../interfaces';
 import type { RateLimitResult } from '../types';
 
 /**
@@ -121,4 +121,20 @@ async function peekSlidingWindow(
     limit: rule.limit,
     resetAt,
   };
+}
+
+/**
+ * Refunds a previously consumed sliding window request by reducing the count.
+ */
+export function refundSlidingWindow(
+  key: string,
+  _rule: RateLimitRule,
+  cost: number,
+  store: RateLimiterStore,
+): void | Promise<void> {
+  const result = store.update(key, (current: StoreEntry | null) => {
+    if (current === null) return { value: 0, prev: 0, windowStart: 0 };
+    return { value: Math.max(0, current.value - cost), prev: current.prev, windowStart: current.windowStart };
+  });
+  if (result instanceof Promise) return result.then(() => {});
 }

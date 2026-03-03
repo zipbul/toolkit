@@ -1,5 +1,5 @@
 import { RateLimitAction } from '../enums';
-import type { RateLimitRule, RateLimiterStore } from '../interfaces';
+import type { RateLimitRule, RateLimiterStore, StoreEntry } from '../interfaces';
 import type { RateLimitResult } from '../types';
 
 /**
@@ -120,4 +120,20 @@ async function peekTokenBucket(
     limit: rule.limit,
     resetAt,
   };
+}
+
+/**
+ * Refunds a previously consumed token bucket request by adding tokens back.
+ */
+export function refundTokenBucket(
+  key: string,
+  rule: RateLimitRule,
+  cost: number,
+  store: RateLimiterStore,
+): void | Promise<void> {
+  const result = store.update(key, (current: StoreEntry | null) => {
+    if (current === null) return { value: rule.limit, prev: 0, windowStart: 0 };
+    return { value: Math.min(rule.limit, current.value + cost), prev: 0, windowStart: current.windowStart };
+  });
+  if (result instanceof Promise) return result.then(() => {});
 }
