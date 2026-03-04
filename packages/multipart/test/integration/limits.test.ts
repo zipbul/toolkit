@@ -464,6 +464,107 @@ describe('Multipart — security limits', () => {
     }
   });
 
+  test('enforces maxParts limit with file parts', async () => {
+    const mp = Multipart.create({ maxParts: 2 });
+    const body = buildBody(boundary, [
+      {
+        headers:
+          'Content-Disposition: form-data; name="f1"; filename="a.txt"\r\nContent-Type: text/plain',
+        body: 'a',
+      },
+      {
+        headers:
+          'Content-Disposition: form-data; name="f2"; filename="b.txt"\r\nContent-Type: text/plain',
+        body: 'b',
+      },
+      {
+        headers:
+          'Content-Disposition: form-data; name="f3"; filename="c.txt"\r\nContent-Type: text/plain',
+        body: 'c',
+      },
+    ]);
+
+    try {
+      await consumeAll(mp.parse(createRequest(boundary, body)));
+      expect.unreachable('should have thrown');
+    } catch (e) {
+      expect(e).toBeInstanceOf(MultipartError);
+      expect((e as MultipartError).reason).toBe(MultipartErrorReason.TooManyParts);
+    }
+  });
+
+  test('enforces maxParts limit with mixed fields and files', async () => {
+    const mp = Multipart.create({ maxParts: 2 });
+    const body = buildBody(boundary, [
+      { headers: 'Content-Disposition: form-data; name="field1"', body: 'val' },
+      {
+        headers:
+          'Content-Disposition: form-data; name="f1"; filename="a.txt"\r\nContent-Type: text/plain',
+        body: 'a',
+      },
+      { headers: 'Content-Disposition: form-data; name="field2"', body: 'val2' },
+    ]);
+
+    try {
+      await consumeAll(mp.parse(createRequest(boundary, body)));
+      expect.unreachable('should have thrown');
+    } catch (e) {
+      expect(e).toBeInstanceOf(MultipartError);
+      expect((e as MultipartError).reason).toBe(MultipartErrorReason.TooManyParts);
+    }
+  });
+
+  test('enforces maxParts via parseAll', async () => {
+    const mp = Multipart.create({ maxParts: 1 });
+    const body = buildBody(boundary, [
+      {
+        headers:
+          'Content-Disposition: form-data; name="f1"; filename="a.txt"\r\nContent-Type: text/plain',
+        body: 'a',
+      },
+      {
+        headers:
+          'Content-Disposition: form-data; name="f2"; filename="b.txt"\r\nContent-Type: text/plain',
+        body: 'b',
+      },
+    ]);
+
+    try {
+      await mp.parseAll(createRequest(boundary, body));
+      expect.unreachable('should have thrown');
+    } catch (e) {
+      expect(e).toBeInstanceOf(MultipartError);
+      expect((e as MultipartError).reason).toBe(MultipartErrorReason.TooManyParts);
+    }
+  });
+
+  test('truncated body during file part throws UnexpectedEnd', async () => {
+    // Build a body that cuts off in the middle of a file part
+    const truncated = `--${boundary}\r\nContent-Disposition: form-data; name="f"; filename="a.txt"\r\nContent-Type: text/plain\r\n\r\npartial file content here`;
+
+    try {
+      const mp = Multipart.create();
+      await consumeAll(mp.parse(createRequest(boundary, truncated)));
+      expect.unreachable('should have thrown');
+    } catch (e) {
+      expect(e).toBeInstanceOf(MultipartError);
+      expect((e as MultipartError).reason).toBe(MultipartErrorReason.UnexpectedEnd);
+    }
+  });
+
+  test('truncated body during file part via parseAll throws UnexpectedEnd', async () => {
+    const truncated = `--${boundary}\r\nContent-Disposition: form-data; name="f"; filename="a.txt"\r\nContent-Type: text/plain\r\n\r\npartial content`;
+
+    try {
+      const mp = Multipart.create();
+      await mp.parseAll(createRequest(boundary, truncated));
+      expect.unreachable('should have thrown');
+    } catch (e) {
+      expect(e).toBeInstanceOf(MultipartError);
+      expect((e as MultipartError).reason).toBe(MultipartErrorReason.UnexpectedEnd);
+    }
+  });
+
   test('maxTotalSize fires before maxFileSize when both would be exceeded', async () => {
     const mp = Multipart.create({ maxTotalSize: 50, maxFileSize: 100 });
     const body = buildBody(boundary, [

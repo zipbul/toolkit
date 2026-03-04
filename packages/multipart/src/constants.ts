@@ -25,3 +25,6 @@ export const DEFAULT_MAX_PARTS: number = Infinity;
 
 /** Reusable zero-length buffer to avoid repeated allocations. */
 export const EMPTY_BUF: Buffer = Buffer.alloc(0);
+
+/** Shared no-op function for `.catch()` handlers in error cleanup paths. */
+export const noop = (): void => {};

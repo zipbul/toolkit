@@ -95,7 +95,7 @@ export class MultipartFileImpl implements MultipartFile {
    * @returns The number of bytes written.
    */
   public async saveTo(path: string): Promise<number> {
-    return Bun.write(path, this.getStream() as unknown as Blob);
+    return Bun.write(path, await new Response(this.getStream()).blob());
   }
 
   /**

@@ -450,4 +450,64 @@ describe('Multipart.parse — integration', () => {
 
     expect(result).toEqual(['consumed data', 'value']);
   });
+
+  test('consumer breaking early does not hang (abandoned)', async () => {
+    const boundary = 'abandon-test';
+    const body = buildBody(boundary, [
+      {
+        headers:
+          'Content-Disposition: form-data; name="f1"; filename="a.txt"\r\nContent-Type: text/plain',
+        body: 'file-data-1',
+      },
+      {
+        headers:
+          'Content-Disposition: form-data; name="f2"; filename="b.txt"\r\nContent-Type: text/plain',
+        body: 'file-data-2',
+      },
+      {
+        headers: 'Content-Disposition: form-data; name="field"',
+        body: 'value',
+      },
+    ]);
+
+    const names: string[] = [];
+
+    for await (const part of mp.parse(createRequest(boundary, body))) {
+      names.push(part.name);
+
+      if (part.isFile) {
+        await part.bytes();
+      }
+
+      // Break after first part — abandon the rest
+      break;
+    }
+
+    expect(names).toEqual(['f1']);
+  });
+
+  test('consumer breaking during file stream does not hang', async () => {
+    const boundary = 'abandon-mid-file';
+    const body = buildBody(boundary, [
+      {
+        headers:
+          'Content-Disposition: form-data; name="big"; filename="big.bin"\r\nContent-Type: application/octet-stream',
+        body: 'x'.repeat(1000),
+      },
+      {
+        headers: 'Content-Disposition: form-data; name="after"',
+        body: 'unreachable',
+      },
+    ]);
+
+    let count = 0;
+
+    for await (const part of mp.parse(createRequest(boundary, body))) {
+      count++;
+      // Don't consume the file, just break
+      break;
+    }
+
+    expect(count).toBe(1);
+  });
 });

@@ -118,6 +118,25 @@ describe('MultipartFileImpl', () => {
     expect(bytes.length).toBe(0);
   });
 
+  test('saveTo() writes file to disk', async () => {
+    const data = encoder.encode('save-to-test');
+    const { readable, writer } = makeStream(data);
+
+    void writer.write(data).then(() => writer.close());
+
+    const file = new MultipartFileImpl('f', 'f.txt', 'text/plain', readable);
+    const tmpPath = `/tmp/multipart-test-streaming-${Date.now()}.txt`;
+
+    try {
+      const written = await file.saveTo(tmpPath);
+
+      expect(written).toBe(data.length);
+      expect(await Bun.file(tmpPath).text()).toBe('save-to-test');
+    } finally {
+      try { await Bun.file(tmpPath).unlink?.(); } catch { /* ignore */ }
+    }
+  });
+
   test('properties are set correctly', () => {
     const { readable } = makeStream(new Uint8Array(0));
     const file = new MultipartFileImpl('myfile', 'photo.jpg', 'image/jpeg', readable);
@@ -228,6 +247,21 @@ describe('BufferedMultipartFile', () => {
     const ab = await file.arrayBuffer();
 
     expect(new TextDecoder().decode(ab)).toBe('ab');
+  });
+
+  test('saveTo() writes file to disk', async () => {
+    const data = encoder.encode('buffered-save');
+    const file = new BufferedMultipartFile('f', 'f.txt', 'text/plain', data);
+    const tmpPath = `/tmp/multipart-test-buffered-${Date.now()}.txt`;
+
+    try {
+      const written = await file.saveTo(tmpPath);
+
+      expect(written).toBe(data.length);
+      expect(await Bun.file(tmpPath).text()).toBe('buffered-save');
+    } finally {
+      try { await Bun.file(tmpPath).unlink?.(); } catch { /* ignore */ }
+    }
   });
 
   test('properties are set correctly', () => {

@@ -100,7 +100,6 @@ describe('PartQueue', () => {
   test('abandon() wakes a waiting consumer', async () => {
     const queue = new PartQueue();
 
-    // The consumer will be waiting for data, but we call abandon + finish
     queueMicrotask(() => {
       queue.abandon();
       queue.finish();

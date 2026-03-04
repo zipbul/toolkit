@@ -2,6 +2,7 @@ import type { MultipartFile } from '../interfaces';
 
 import { MultipartFieldImpl } from './part';
 import type { PartQueue } from './part-queue';
+import { noop } from '../constants';
 import { MultipartFileImpl, BufferedMultipartFile } from './streaming-part';
 
 // ── Interfaces ─────────────────────────────────────────────────────
@@ -143,7 +144,7 @@ class StreamingFileWriter implements FileWriter {
   }
 
   abort(reason?: unknown): void {
-    try { this.writer.abort(reason).catch(() => {}); } catch { /* already released */ }
+    try { this.writer.abort(reason).catch(noop); } catch { /* already released */ }
   }
 }
 

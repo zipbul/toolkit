@@ -12,11 +12,19 @@ import type { MultipartPart } from '../interfaces';
  * the consumer drives iteration at its own pace.
  */
 export class PartQueue {
-  private queue: MultipartPart[] = [];
+  private queue: MultipartPart[];
   private resolve: (() => void) | undefined;
-  private done = false;
-  private error: unknown = undefined;
-  private _abandoned = false;
+  private done: boolean;
+  private error: unknown;
+  private _abandoned: boolean;
+
+  constructor() {
+    this.queue = [];
+    this.resolve = undefined;
+    this.done = false;
+    this.error = undefined;
+    this._abandoned = false;
+  }
 
   /** True when the consumer has stopped iterating (break / return). */
   get abandoned(): boolean {
@@ -52,32 +60,33 @@ export class PartQueue {
    * Async iterator protocol.
    * The consumer calls `for await (const part of queue)`.
    */
-  async *[Symbol.asyncIterator](): AsyncGenerator<MultipartPart, void, undefined> {
-    try {
-      while (true) {
-        // Drain any buffered parts first
-        while (this.queue.length > 0) {
-          yield this.queue.shift()!;
-        }
+  [Symbol.asyncIterator](): AsyncIterator<MultipartPart> {
+    return {
+      next: async (): Promise<IteratorResult<MultipartPart>> => {
+        while (true) {
+          if (this.queue.length > 0) {
+            return { done: false, value: this.queue.shift()! };
+          }
 
-        // Check for terminal states
-        if (this.error !== undefined) {
-          throw this.error;
-        }
+          if (this.error !== undefined) {
+            throw this.error;
+          }
 
-        if (this.done) {
-          return;
-        }
+          if (this.done) {
+            return { done: true, value: undefined };
+          }
 
-        // Wait for more data
-        await new Promise<void>((r) => {
-          this.resolve = r;
-        });
-      }
-    } finally {
-      // Consumer exited (break, return, or throw) — signal abandonment
-      this._abandoned = true;
-    }
+          const { promise, resolve } = Promise.withResolvers<void>();
+          this.resolve = resolve;
+          await promise;
+        }
+      },
+
+      return: async (): Promise<IteratorResult<MultipartPart>> => {
+        this._abandoned = true;
+        return { done: true, value: undefined };
+      },
+    };
   }
 
   private wake(): void {

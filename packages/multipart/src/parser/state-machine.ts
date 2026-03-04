@@ -1,6 +1,6 @@
 import { isErr } from '@zipbul/result';
 
-import { CRLF, CRLFCRLF, EMPTY_BUF } from '../constants';
+import { CRLF, CRLFCRLF, EMPTY_BUF, noop } from '../constants';
 import { MultipartErrorReason } from '../enums';
 import { MultipartError } from '../interfaces';
 import type { AllowedMimeTypes } from '../interfaces';
@@ -9,6 +9,7 @@ import type { ResolvedMultipartOptions } from '../types';
 import type { FileWriter, ParserCallbacks } from './callbacks';
 import type { PartHeaders } from './header-parser';
 import { parsePartHeaders } from './header-parser';
+
 
 /**
  * FSM states for the multipart parser.
@@ -374,7 +375,7 @@ export async function parseMultipart(
     }
 
     // Ensure the stream reader is released on any error
-    try { body.cancel().catch(() => {}); } catch { /* already released */ }
+    try { body.cancel().catch(noop); } catch { /* already released */ }
 
     // If consumer has abandoned, swallow the error
     if (callbacks.abandoned) {
@@ -404,7 +405,7 @@ export async function parseMultipart(
       fileWriter = undefined;
     }
 
-    try { body.cancel().catch(() => {}); } catch { /* ignore */ }
+    try { body.cancel().catch(noop); } catch { /* ignore */ }
 
     return;
   }
