@@ -1,5 +1,14 @@
 # @zipbul/router
 
+## 0.2.2
+
+### Patch Changes
+
+- 2ebbfa4: chore: remove sourcemap generation from build scripts
+- Updated dependencies [2ebbfa4]
+  - @zipbul/shared@0.0.11
+  - @zipbul/result@0.1.7
+
 ## 0.2.1
 
 ### Patch Changes

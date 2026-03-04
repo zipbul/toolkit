@@ -1,6 +1,6 @@
 {
   "name": "@zipbul/result",
-  "version": "0.1.6",
+  "version": "0.1.7",
   "description": "Lightweight Result type for error handling without exceptions",
   "license": "MIT",
   "author": "Junhyung Park (https://github.com/parkrevil)",
