@@ -200,24 +200,6 @@ try {
 
 <br>
 
-## 📤 내보내기
-
-```typescript
-// 클래스
-export { QueryParser } from '@zipbul/query-parser';
-export { QueryParserError } from '@zipbul/query-parser';
-
-// 열거형
-export { QueryParserErrorReason } from '@zipbul/query-parser';
-
-// 타입
-export type { QueryParserOptions } from '@zipbul/query-parser';
-export type { QueryParserErrorData } from '@zipbul/query-parser';
-export type { QueryValue, QueryArray, QueryValueRecord } from '@zipbul/query-parser';
-```
-
-<br>
-
 ## ⚡ 성능
 
 [mitata](https://github.com/evanwashere/mitata)로 Bun에서 벤치마크.

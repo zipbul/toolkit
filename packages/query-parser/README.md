@@ -200,24 +200,6 @@ Default `duplicates: 'first'` prevents attackers from injecting values by append
 
 <br>
 
-## 📤 Exports
-
-```typescript
-// Classes
-export { QueryParser } from '@zipbul/query-parser';
-export { QueryParserError } from '@zipbul/query-parser';
-
-// Enum
-export { QueryParserErrorReason } from '@zipbul/query-parser';
-
-// Types
-export type { QueryParserOptions } from '@zipbul/query-parser';
-export type { QueryParserErrorData } from '@zipbul/query-parser';
-export type { QueryValue, QueryArray, QueryValueRecord } from '@zipbul/query-parser';
-```
-
-<br>
-
 ## ⚡ Performance
 
 Benchmarked with [mitata](https://github.com/evanwashere/mitata) on Bun.

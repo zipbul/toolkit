@@ -428,23 +428,6 @@ Bun.serve({
 
 <br>
 
-## 📤 Exports
-
-```typescript
-// Core
-export { err } from '@zipbul/result';
-export { isErr } from '@zipbul/result';
-export { safe } from '@zipbul/result';
-
-// Types
-export type { Result, ResultAsync, Err } from '@zipbul/result';
-
-// Marker key
-export { DEFAULT_MARKER_KEY, getMarkerKey, setMarkerKey } from '@zipbul/result';
-```
-
-<br>
-
 ## 📄 License
 
 MIT
