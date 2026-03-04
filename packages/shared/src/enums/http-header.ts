@@ -14,4 +14,6 @@ export enum HttpHeader {
   AccessControlMaxAge = 'access-control-max-age',
   AccessControlRequestMethod = 'access-control-request-method',
   AccessControlRequestHeaders = 'access-control-request-headers',
+  ContentType = 'content-type',
+  ContentDisposition = 'content-disposition',
 }

@@ -22,6 +22,17 @@
         "safe-regex2": "^5.0.0",
       },
     },
+    "packages/multipart": {
+      "name": "@zipbul/multipart",
+      "version": "0.0.0",
+      "dependencies": {
+        "@zipbul/result": "workspace:*",
+        "@zipbul/shared": "workspace:*",
+      },
+      "devDependencies": {
+        "mitata": "^1.0.34",
+      },
+    },
     "packages/query-parser": {
       "name": "@zipbul/query-parser",
       "version": "0.2.0",
@@ -36,7 +47,7 @@
     },
     "packages/rate-limiter": {
       "name": "@zipbul/rate-limiter",
-      "version": "0.0.1",
+      "version": "0.2.0",
       "dependencies": {
         "@zipbul/result": "workspace:*",
       },
@@ -159,6 +170,8 @@
     "@types/serve-static": ["@types/serve-static@2.2.0", "", { "dependencies": { "@types/http-errors": "*", "@types/node": "*" } }, "sha512-8mam4H1NHLtu7nmtalF7eyBH14QyOASmcxHhSfEoRyr0nP/YdoesEtU+uSRvMe96TW/HPTtkoKqQLl53N7UXMQ=="],
 
     "@zipbul/cors": ["@zipbul/cors@workspace:packages/cors"],
+
+    "@zipbul/multipart": ["@zipbul/multipart@workspace:packages/multipart"],
 
     "@zipbul/query-parser": ["@zipbul/query-parser@workspace:packages/query-parser"],
 
