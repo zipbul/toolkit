@@ -1,6 +1,6 @@
 {
   "name": "@zipbul/router",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "High-performance radix-tree URL router for Bun",
   "license": "MIT",
   "author": "Junhyung Park (https://github.com/parkrevil)",

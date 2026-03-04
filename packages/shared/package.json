@@ -1,6 +1,6 @@
 {
   "name": "@zipbul/shared",
-  "version": "0.0.8",
+  "version": "0.0.9",
   "description": "Type-safe HTTP enums and constants (methods, headers, status codes) for TypeScript",
   "license": "MIT",
   "author": "Junhyung Park (https://github.com/parkrevil)",
