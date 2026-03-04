@@ -1,5 +1,13 @@
 # @zipbul/rate-limiter
 
+## 0.2.3
+
+### Patch Changes
+
+- 2ebbfa4: chore: remove sourcemap generation from build scripts
+- Updated dependencies [2ebbfa4]
+  - @zipbul/result@0.1.7
+
 ## 0.2.2
 
 ### Patch Changes

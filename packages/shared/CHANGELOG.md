@@ -1,5 +1,11 @@
 # @zipbul/shared
 
+## 0.0.11
+
+### Patch Changes
+
+- 2ebbfa4: chore: remove sourcemap generation from build scripts
+
 ## 0.0.10
 
 ### Patch Changes
