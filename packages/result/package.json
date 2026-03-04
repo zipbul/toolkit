@@ -43,7 +43,7 @@
     "provenance": true
   },
   "scripts": {
-    "build": "bun build index.ts --outdir dist --target bun --format esm --production --sourcemap=linked && tsc -p tsconfig.build.json",
+    "build": "bun build index.ts --outdir dist --target bun --format esm --production && tsc -p tsconfig.build.json",
     "typecheck": "tsc --noEmit",
     "test": "bun test",
     "coverage": "bun test --coverage"
