@@ -1,2 +1,2 @@
-export * from './src/enums';
-export * from './src/types';
+export { HttpHeader, HttpStatus } from './src/enums';
+export type { HttpMethod } from './src/types';

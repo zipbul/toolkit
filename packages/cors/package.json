@@ -51,6 +51,5 @@
     "@zipbul/result": "workspace:*",
     "@zipbul/shared": "workspace:*",
     "safe-regex2": "^5.0.0"
-  },
-  "devDependencies": {}
+  }
 }
