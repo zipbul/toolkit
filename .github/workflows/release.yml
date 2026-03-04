@@ -51,6 +51,10 @@ jobs:
         run: bun run build
         working-directory: packages/rate-limiter
 
+      - name: Build router
+        run: bun run build
+        working-directory: packages/router
+
       - name: Create Release PR or Publish
         id: changesets
         uses: changesets/action@v1

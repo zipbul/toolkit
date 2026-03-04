@@ -39,6 +39,10 @@ jobs:
         run: bun run build
         working-directory: packages/rate-limiter
 
+      - name: Build router
+        run: bun run build
+        working-directory: packages/router
+
       - name: Test result
         run: bun test
         working-directory: packages/result
@@ -50,6 +54,10 @@ jobs:
       - name: Test query-parser
         run: bun test
         working-directory: packages/query-parser
+
+      - name: Test router
+        run: bun test
+        working-directory: packages/router
 
       - name: Start Redis for rate-limiter
         run: docker compose up -d --wait
@@ -106,6 +114,20 @@ jobs:
           elif (( $(echo "$PCT >= 60" | bc -l) )); then echo "color=yellow" >> "$GITHUB_OUTPUT"
           else echo "color=red" >> "$GITHUB_OUTPUT"; fi
 
+      - name: Extract router coverage
+        if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+        id: router-cov
+        working-directory: packages/router
+        run: |
+          LF=$(grep -oP '^LF:\K\d+' coverage/lcov.info | paste -sd+ | bc)
+          LH=$(grep -oP '^LH:\K\d+' coverage/lcov.info | paste -sd+ | bc)
+          PCT=$(echo "scale=1; $LH * 100 / $LF" | bc)
+          echo "percentage=$PCT" >> "$GITHUB_OUTPUT"
+          if (( $(echo "$PCT >= 95" | bc -l) )); then echo "color=brightgreen" >> "$GITHUB_OUTPUT"
+          elif (( $(echo "$PCT >= 80" | bc -l) )); then echo "color=green" >> "$GITHUB_OUTPUT"
+          elif (( $(echo "$PCT >= 60" | bc -l) )); then echo "color=yellow" >> "$GITHUB_OUTPUT"
+          else echo "color=red" >> "$GITHUB_OUTPUT"; fi
+
       - name: Extract rate-limiter coverage
         if: github.ref == 'refs/heads/main' && github.event_name == 'push'
         id: rate-limiter-cov
@@ -131,4 +153,5 @@ jobs:
             -f "files[cors-coverage.json][content]=$(badge '${{ steps.cors-cov.outputs.percentage }}' '${{ steps.cors-cov.outputs.color }}')" \
             -f "files[query-parser-coverage.json][content]=$(badge '${{ steps.query-parser-cov.outputs.percentage }}' '${{ steps.query-parser-cov.outputs.color }}')" \
             -f "files[rate-limiter-coverage.json][content]=$(badge '${{ steps.rate-limiter-cov.outputs.percentage }}' '${{ steps.rate-limiter-cov.outputs.color }}')" \
+            -f "files[router-coverage.json][content]=$(badge '${{ steps.router-cov.outputs.percentage }}' '${{ steps.router-cov.outputs.color }}')" \
             > /dev/null
