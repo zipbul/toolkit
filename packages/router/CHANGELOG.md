@@ -1,5 +1,14 @@
 # @zipbul/router
 
+## 0.2.1
+
+### Patch Changes
+
+- b6c0f72: docs: remove redundant Exports sections from READMEs
+- Updated dependencies [b6c0f72]
+  - @zipbul/shared@0.0.10
+  - @zipbul/result@0.1.6
+
 ## 0.2.0
 
 ### Minor Changes
