@@ -4,16 +4,36 @@ interface CacheEntry<T> {
   used: boolean;
 }
 
+/**
+ * Round up to the next power of 2.
+ * Enables bitwise AND masking instead of modulo.
+ */
+function nextPow2(n: number): number {
+  if (n <= 1) return 1;
+
+  let v = n - 1;
+
+  v |= v >>> 1;
+  v |= v >>> 2;
+  v |= v >>> 4;
+  v |= v >>> 8;
+  v |= v >>> 16;
+
+  return v + 1;
+}
+
 export class RouterCache<T> {
   private readonly entries: Array<CacheEntry<T> | undefined>;
   private readonly index: Map<string, number>;
-  private readonly maxSize: number;
+  private readonly capacity: number;
+  private readonly mask: number;
   private hand: number = 0;
   private count: number = 0;
 
   constructor(maxSize: number = 1000) {
-    this.maxSize = maxSize;
-    this.entries = new Array(maxSize);
+    this.capacity = nextPow2(maxSize);
+    this.mask = this.capacity - 1;
+    this.entries = new Array(this.capacity);
     this.index = new Map();
   }
 
@@ -51,10 +71,9 @@ export class RouterCache<T> {
 
     let slot: number;
 
-    if (this.count < this.maxSize) {
+    if (this.count < this.capacity) {
       slot = this.count++;
     } else {
-      // Clock-sweep eviction
       slot = this.evict();
     }
 
@@ -79,7 +98,7 @@ export class RouterCache<T> {
 
           const slot = this.hand;
 
-          this.hand = (this.hand + 1) % this.maxSize;
+          this.hand = (this.hand + 1) & this.mask;
 
           return slot;
         }
@@ -87,7 +106,7 @@ export class RouterCache<T> {
         entry.used = false;
       }
 
-      this.hand = (this.hand + 1) % this.maxSize;
+      this.hand = (this.hand + 1) & this.mask;
     }
   }
 }
