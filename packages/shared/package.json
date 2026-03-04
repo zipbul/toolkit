@@ -15,6 +15,11 @@
     "enum",
     "constants",
     "shared",
+    "http",
+    "http-header",
+    "http-status",
+    "http-method",
+    "bun",
     "typescript",
     "zipbul"
   ],
@@ -33,6 +38,10 @@
   "files": [
     "dist"
   ],
+  "sideEffects": false,
+  "publishConfig": {
+    "provenance": true
+  },
   "scripts": {
     "build": "bun build index.ts --outdir dist --target bun --format esm --production --sourcemap=linked && tsc -p tsconfig.build.json"
   }

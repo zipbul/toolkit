@@ -13,8 +13,13 @@
   "homepage": "https://github.com/zipbul/toolkit/tree/main/packages/result#readme",
   "keywords": [
     "result",
+    "result-type",
+    "error-handling",
     "error",
     "either",
+    "functional",
+    "no-exceptions",
+    "bun",
     "typescript",
     "zipbul"
   ],
@@ -33,6 +38,10 @@
   "files": [
     "dist"
   ],
+  "sideEffects": false,
+  "publishConfig": {
+    "provenance": true
+  },
   "scripts": {
     "build": "bun build index.ts --outdir dist --target bun --format esm --production --sourcemap=linked && tsc -p tsconfig.build.json",
     "typecheck": "tsc --noEmit",
