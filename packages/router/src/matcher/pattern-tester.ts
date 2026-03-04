@@ -1,6 +1,15 @@
-import type { PatternTesterOptions, RouteRegexTimeoutError } from './types';
+export const ROUTE_REGEX_TIMEOUT = Symbol('zipbul.route-regex-timeout');
 
-import { ROUTE_REGEX_TIMEOUT } from './constants';
+export interface PatternTesterOptions {
+  readonly maxExecutionMs?: number;
+  readonly onTimeout?: (pattern: string, durationMs: number) => boolean | void;
+}
+
+interface RouteRegexTimeoutMarker {
+  readonly [ROUTE_REGEX_TIMEOUT]?: true;
+}
+
+type RouteRegexTimeoutError = Error & RouteRegexTimeoutMarker;
 
 const DIGIT_PATTERNS = new Set(['\\d+', '\\d{1,}', '[0-9]+', '[0-9]{1,}']);
 const ALPHA_PATTERNS = new Set(['[a-zA-Z]+', '[A-Za-z]+']);
@@ -128,5 +137,5 @@ function isAlphaNumericDash(value: string): boolean {
   return true;
 }
 
-export { buildPatternTester, ROUTE_REGEX_TIMEOUT };
-export type { PatternTesterOptions, RouteRegexTimeoutError };
+export { buildPatternTester };
+export type { RouteRegexTimeoutError };
