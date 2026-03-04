@@ -426,34 +426,22 @@ Bun.serve({
 
 </details>
 
-<details>
-<summary><b>@zipbul/cors와 함께</b></summary>
+<br>
+
+## 📤 내보내기
 
 ```typescript
-import { Cors, CorsAction } from '@zipbul/cors';
-import { isErr } from '@zipbul/result';
+// 핵심
+export { err } from '@zipbul/result';
+export { isErr } from '@zipbul/result';
+export { safe } from '@zipbul/result';
 
-const corsResult = Cors.create({
-  origin: 'https://app.example.com',
-  credentials: true,
-});
+// 타입
+export type { Result, ResultAsync, Err } from '@zipbul/result';
 
-// Cors.create()는 Result<Cors, CorsError>를 반환합니다
-if (isErr(corsResult)) {
-  throw new Error(`CORS 설정 에러: ${corsResult.data.message}`);
-}
-
-const cors = corsResult;
-
-// cors.handle()는 Promise<Result<CorsResult, CorsError>>를 반환합니다
-const result = await cors.handle(request);
-
-if (isErr(result)) {
-  return new Response('Internal Error', { status: 500 });
-}
+// 마커 키
+export { DEFAULT_MARKER_KEY, getMarkerKey, setMarkerKey } from '@zipbul/result';
 ```
-
-</details>
 
 <br>
 

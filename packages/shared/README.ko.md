@@ -3,10 +3,11 @@
 [English](./README.md) | **한국어**
 
 [![npm](https://img.shields.io/npm/v/@zipbul/shared)](https://www.npmjs.com/package/@zipbul/shared)
-![coverage](https://img.shields.io/endpoint?url=https://gist.githubusercontent.com/parkrevil/3965fb9d1fe2d6fc5c321cb38d88c823/raw/shared-coverage.json)
 
-`@zipbul` 툴킷의 공유 라이브러리입니다.
-여러 `@zipbul` 패키지에서 공통으로 사용하는 열거형(enum), 상수, 타입, 유틸리티 등을 제공합니다.
+`@zipbul` 툴킷을 위한 타입 안전 HTTP 열거형·상수 라이브러리입니다.
+HTTP 메서드, 헤더, 상태 코드에 대한 `const enum` 선언을 제공하며, 여러 `@zipbul` 패키지에서 공통으로 사용합니다.
+
+> `const enum` 인라이닝으로 런타임 비용 제로.
 
 <br>
 

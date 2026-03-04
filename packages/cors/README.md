@@ -398,6 +398,24 @@ function corsMiddleware(options?: CorsOptions) {
 
 <br>
 
+## 📤 Exports
+
+```typescript
+// Classes
+export { Cors } from '@zipbul/cors';
+export { CorsError } from '@zipbul/cors';
+
+// Enums
+export { CorsAction, CorsRejectionReason, CorsErrorReason } from '@zipbul/cors';
+
+// Types
+export type { CorsOptions, CorsErrorData } from '@zipbul/cors';
+export type { CorsContinueResult, CorsPreflightResult, CorsRejectResult } from '@zipbul/cors';
+export type { CorsResult, OriginFn, OriginOptions } from '@zipbul/cors';
+```
+
+<br>
+
 ## 📄 License
 
 MIT
