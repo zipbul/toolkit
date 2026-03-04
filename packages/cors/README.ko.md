@@ -398,24 +398,6 @@ function corsMiddleware(options?: CorsOptions) {
 
 <br>
 
-## 📤 내보내기
-
-```typescript
-// 클래스
-export { Cors } from '@zipbul/cors';
-export { CorsError } from '@zipbul/cors';
-
-// 열거형
-export { CorsAction, CorsRejectionReason, CorsErrorReason } from '@zipbul/cors';
-
-// 타입
-export type { CorsOptions, CorsErrorData } from '@zipbul/cors';
-export type { CorsContinueResult, CorsPreflightResult, CorsRejectResult } from '@zipbul/cors';
-export type { CorsResult, OriginFn, OriginOptions } from '@zipbul/cors';
-```
-
-<br>
-
 ## 📄 라이선스
 
 MIT

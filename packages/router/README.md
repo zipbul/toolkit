@@ -326,29 +326,6 @@ Static routes are faster than memoirist thanks to O(1) Map lookup. The dynamic r
 
 <br>
 
-## 📤 Exports
-
-```typescript
-// Classes
-export { Router } from '@zipbul/router';
-export { RouterError } from '@zipbul/router';
-
-// Types
-export type {
-  RouterOptions,
-  OptionalParamBehavior,
-  RegexSafetyOptions,
-  RouteParams,
-  RouterErrKind,
-  RouterErrData,
-  MatchMeta,
-  MatchOutput,
-  RouterWarning,
-} from '@zipbul/router';
-```
-
-<br>
-
 ## 📄 License
 
 MIT

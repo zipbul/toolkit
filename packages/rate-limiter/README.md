@@ -281,26 +281,6 @@ class MyStore implements RateLimiterStore {
 
 <br>
 
-## 📤 Exports
-
-```typescript
-export { RateLimiter } from '@zipbul/rate-limiter';
-export { RateLimiterError } from '@zipbul/rate-limiter';
-export { RateLimitAction, RateLimiterErrorReason, Algorithm } from '@zipbul/rate-limiter';
-export { MemoryStore, RedisStore } from '@zipbul/rate-limiter';
-export { withFallback, WithFallbackStore } from '@zipbul/rate-limiter';
-
-export type { RateLimitResult } from '@zipbul/rate-limiter';
-export type { RateLimiterOptions, RateLimitRule, ConsumeOptions, RateLimiterHooks } from '@zipbul/rate-limiter';
-export type { RateLimiterErrorData } from '@zipbul/rate-limiter';
-export type { RateLimiterStore, StoreEntry } from '@zipbul/rate-limiter';
-export type { RateLimitAllowResult, RateLimitDenyResult } from '@zipbul/rate-limiter';
-export type { MemoryStoreOptions, RedisClient, RedisStoreOptions } from '@zipbul/rate-limiter';
-export type { WithFallbackOptions } from '@zipbul/rate-limiter';
-```
-
-<br>
-
 ## 📄 License
 
 MIT

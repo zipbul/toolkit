@@ -428,23 +428,6 @@ Bun.serve({
 
 <br>
 
-## 📤 내보내기
-
-```typescript
-// 핵심
-export { err } from '@zipbul/result';
-export { isErr } from '@zipbul/result';
-export { safe } from '@zipbul/result';
-
-// 타입
-export type { Result, ResultAsync, Err } from '@zipbul/result';
-
-// 마커 키
-export { DEFAULT_MARKER_KEY, getMarkerKey, setMarkerKey } from '@zipbul/result';
-```
-
-<br>
-
 ## 📄 라이선스
 
 MIT
