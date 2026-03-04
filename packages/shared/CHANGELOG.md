@@ -1,5 +1,19 @@
 # @zipbul/shared
 
+## 0.0.9
+
+### Patch Changes
+
+- 665e37c: chore: quality audit across all public packages
+
+  - Add `sideEffects: false` and `publishConfig.provenance` to all packages
+  - Add `.npmignore` to all packages
+  - Expand npm keywords for better discoverability
+  - Use explicit named exports in barrel files (shared, cors)
+  - Improve README descriptions, add Exports sections, fix inaccuracies
+  - Add root `.editorconfig`
+  - Add router to CI/CD pipeline
+
 ## 0.0.8
 
 ### Patch Changes
