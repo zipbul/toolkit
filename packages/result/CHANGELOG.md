@@ -1,5 +1,11 @@
 # @zipbul/result
 
+## 0.1.6
+
+### Patch Changes
+
+- b6c0f72: docs: remove redundant Exports sections from READMEs
+
 ## 0.1.5
 
 ### Patch Changes
