@@ -1,5 +1,11 @@
-export * from './src/cors';
-export * from './src/enums';
-export * from './src/interfaces';
-export * from './src/options';
-export * from './src/types';
+export { Cors } from './src/cors';
+export { CorsAction, CorsRejectionReason, CorsErrorReason } from './src/enums';
+export { CorsError } from './src/interfaces';
+export type {
+  CorsOptions,
+  CorsErrorData,
+  CorsContinueResult,
+  CorsPreflightResult,
+  CorsRejectResult,
+} from './src/interfaces';
+export type { CorsResult, OriginFn, OriginOptions } from './src/types';

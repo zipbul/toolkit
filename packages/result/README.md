@@ -426,34 +426,22 @@ Bun.serve({
 
 </details>
 
-<details>
-<summary><b>With @zipbul/cors</b></summary>
+<br>
+
+## 📤 Exports
 
 ```typescript
-import { Cors, CorsAction } from '@zipbul/cors';
-import { isErr } from '@zipbul/result';
+// Core
+export { err } from '@zipbul/result';
+export { isErr } from '@zipbul/result';
+export { safe } from '@zipbul/result';
 
-const corsResult = Cors.create({
-  origin: 'https://app.example.com',
-  credentials: true,
-});
+// Types
+export type { Result, ResultAsync, Err } from '@zipbul/result';
 
-// Cors.create() returns Result<Cors, CorsError>
-if (isErr(corsResult)) {
-  throw new Error(`CORS config error: ${corsResult.data.message}`);
-}
-
-const cors = corsResult;
-
-// cors.handle() returns Promise<Result<CorsResult, CorsError>>
-const result = await cors.handle(request);
-
-if (isErr(result)) {
-  return new Response('Internal Error', { status: 500 });
-}
+// Marker key
+export { DEFAULT_MARKER_KEY, getMarkerKey, setMarkerKey } from '@zipbul/result';
 ```
-
-</details>
 
 <br>
 

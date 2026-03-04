@@ -15,6 +15,8 @@
     "rate-limiter",
     "rate-limit",
     "throttle",
+    "sliding-window",
+    "token-bucket",
     "http",
     "bun",
     "typescript",
@@ -35,12 +37,15 @@
   "files": [
     "dist"
   ],
+  "sideEffects": false,
+  "publishConfig": {
+    "provenance": true
+  },
   "scripts": {
     "build": "bun build index.ts --outdir dist --target bun --format esm --packages external --production --sourcemap=linked && tsc -p tsconfig.build.json",
     "test": "bun test",
     "coverage": "bun test --coverage"
   },
-  "sideEffects": false,
   "dependencies": {
     "@zipbul/result": "workspace:*"
   },

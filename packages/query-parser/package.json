@@ -14,8 +14,11 @@
   "keywords": [
     "query-string",
     "query-parser",
+    "querystring",
     "url",
     "http",
+    "rfc3986",
+    "security",
     "bun",
     "typescript",
     "zipbul"
@@ -35,6 +38,10 @@
   "files": [
     "dist"
   ],
+  "sideEffects": false,
+  "publishConfig": {
+    "provenance": true
+  },
   "scripts": {
     "build": "bun build index.ts --outdir dist --target bun --format esm --packages external --production --sourcemap=linked && tsc -p tsconfig.build.json",
     "test": "bun test",

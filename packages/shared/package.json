@@ -1,7 +1,7 @@
 {
   "name": "@zipbul/shared",
   "version": "0.0.8",
-  "description": "Shared library for the @zipbul toolkit",
+  "description": "Type-safe HTTP enums and constants (methods, headers, status codes) for TypeScript",
   "license": "MIT",
   "author": "Junhyung Park (https://github.com/parkrevil)",
   "repository": {
@@ -15,6 +15,11 @@
     "enum",
     "constants",
     "shared",
+    "http",
+    "http-header",
+    "http-status",
+    "http-method",
+    "bun",
     "typescript",
     "zipbul"
   ],
@@ -33,6 +38,10 @@
   "files": [
     "dist"
   ],
+  "sideEffects": false,
+  "publishConfig": {
+    "provenance": true
+  },
   "scripts": {
     "build": "bun build index.ts --outdir dist --target bun --format esm --production --sourcemap=linked && tsc -p tsconfig.build.json"
   }

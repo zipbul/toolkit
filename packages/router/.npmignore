@@ -1,0 +1,21 @@
+# Sources (dist/ is the only published artifact via "files")
+src/
+index.ts
+
+# Tests
+test/
+*.spec.ts
+*.test.ts
+
+# Config
+tsconfig.json
+tsconfig.build.json
+bunfig.toml
+
+# Dev
+coverage/
+bench/
+docker-compose.yml
+
+# Docs (README/LICENSE/CHANGELOG auto-included by npm)
+README.ko.md
