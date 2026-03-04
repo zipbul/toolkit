@@ -2,18 +2,22 @@ import type { HttpMethod } from '@zipbul/shared';
 
 export interface RouterOptions {
   ignoreTrailingSlash?: boolean;
+  collapseSlashes?: boolean;
   caseSensitive?: boolean;
   decodeParams?: boolean;
+  encodedSlashBehavior?: EncodedSlashBehavior;
+  blockTraversal?: boolean;
   enableCache?: boolean;
   cacheSize?: number;
   maxSegmentLength?: number;
+  strictParamNames?: boolean;
   optionalParamBehavior?: OptionalParamBehavior;
   regexSafety?: RegexSafetyOptions;
   regexAnchorPolicy?: 'warn' | 'error' | 'silent';
-  onWarn?: (warning: RouterWarning) => void;
-  /** 경로 최대 길이. 기본값 2048. 초과 시 match()에서 즉시 throw RouterError 반환. */
-  maxPathLength?: number;
+  failFastOnBadEncoding?: boolean;
 }
+
+export type EncodedSlashBehavior = 'decode' | 'preserve' | 'reject';
 
 export type OptionalParamBehavior = 'omit' | 'setUndefined' | 'setEmptyString';
 
@@ -28,6 +32,23 @@ export interface RegexSafetyOptions {
 
 
 export type PatternTesterFn = (value: string) => boolean;
+
+export interface MatcherConfig {
+  patternTesters: ReadonlyArray<PatternTesterFn | undefined>;
+  encodedSlashBehavior: EncodedSlashBehavior;
+  failFastOnBadEncoding: boolean;
+  methodCodes?: ReadonlyMap<string, number>;
+}
+
+export interface NormalizedPathSegments {
+  normalized: string;
+  segments: string[];
+  segmentOffsets?: Uint32Array;
+  segmentDecodeHints?: Uint8Array;
+  suffixSource?: string;
+  hadTrailingSlash?: boolean;
+}
+
 
 export type RouteParams = Record<string, string | undefined>;
 
@@ -46,14 +67,15 @@ export type RouterErrKind =
   | 'route-conflict'     // wildcard/param/static 구조적 충돌
   | 'route-parse'        // 패턴 문법 오류
   | 'param-duplicate'    // 같은 경로 내 동일 이름 파라미터
+  | 'param-strict'       // strictParamNames 시 전역 이름 중복
   | 'regex-unsafe'       // regex safety 검사 실패
   | 'regex-anchor'       // anchor policy=error 시 ^/$ 포함
   | 'method-limit'       // 32개 메서드 초과 (MethodRegistry)
   // 매치타임
   | 'segment-limit'      // maxSegmentLength 초과
-  | 'regex-timeout'      // 패턴 매칭 시간 초과
-  | 'path-too-long'      // maxPathLength 초과
-  | 'method-not-found';  // 한 번도 등록되지 않은 메서드로 match() 시도
+  | 'encoding'           // percent-encoding 디코딩 실패
+  | 'encoded-slash'      // encodedSlashBehavior=reject 시 %2F
+  | 'regex-timeout';     // 패턴 매칭 시간 초과
 
 /**
  * Result 에러에 첨부되는 데이터.
@@ -76,16 +98,6 @@ export interface RouterErrData {
   suggestion?: string;
   /** addAll() fail-fast 시 에러 전까지 성공한 등록 수 */
   registeredCount?: number;
-}
-
-/**
- * 라이브러리가 발행하는 경고 정보.
- * RouterOptions.onWarn 콜백으로 수신한다.
- */
-export interface RouterWarning {
-  kind: 'regex-unsafe' | 'regex-anchor';
-  message: string;
-  segment?: string;
 }
 
 // ── Match output types ──
@@ -111,3 +123,10 @@ export interface MatchOutput<T> {
   meta: MatchMeta;
 }
 
+// ── Internal types ──
+
+export interface DynamicMatchResult {
+  handlerIndex: number;
+  params: RouteParams;
+  snapshot?: Array<[string, string | undefined]>;
+}

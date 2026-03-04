@@ -1,72 +1,55 @@
 import type { HttpMethod } from '@zipbul/shared';
 import type { Result } from '@zipbul/result';
 import type {
+  DynamicMatchResult,
   MatchMeta,
   MatchOutput,
   RegexSafetyOptions,
-  RouteParams,
   RouterErrData,
   RouterOptions,
 } from './types';
-import type { RadixMatchFn } from './matcher/radix-matcher';
-import type { MatchState } from './matcher/match-state';
-import type { BuilderConfig } from './builder/types';
 
 import { err, isErr } from '@zipbul/result';
-import { RouterError } from './error';
-import { PathParser } from './builder/path-parser';
-import { RadixBuilder } from './builder/radix-builder';
-import { OptionalParamDefaults } from './builder/optional-param-defaults';
+import { Builder, OptionalParamDefaults, type BuilderConfig } from './builder';
 import { RouterCache } from './cache';
+import { Matcher } from './matcher';
+import { buildPatternTester } from './matcher/pattern-tester';
 import { MethodRegistry } from './method-registry';
-import { buildDecoder } from './processor/decoder';
-import { createRadixWalker } from './matcher/radix-walk';
-import { createMatchState, resetMatchState } from './matcher/match-state';
-
-const ALL_METHODS: readonly HttpMethod[] = ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS', 'HEAD'];
-
-const EMPTY_PARAMS: RouteParams = Object.freeze({});
-const STATIC_META: MatchMeta = Object.freeze({ source: 'static' } as const);
-const CACHE_META: MatchMeta = Object.freeze({ source: 'cache' } as const);
-const DYNAMIC_META: MatchMeta = Object.freeze({ source: 'dynamic' } as const);
-
-interface CachedMatchEntry<T> {
-  value: T;
-  params: RouteParams;
-}
+import { Processor, type ProcessorConfig } from './processor';
+import { METHOD_OFFSET } from './schema';
 
 export class Router<T = unknown> {
   private readonly options: RouterOptions;
-  private pathParser: PathParser | null;
-  private radixBuilder: RadixBuilder | null;
+  private readonly processor: Processor;
+  private builder: Builder<T> | null;
   private readonly methodRegistry = new MethodRegistry();
-
-  private _ignoreTrailingSlash = true;
-  private _caseSensitive = true;
-  private _decodeParams = true;
-  private _maxPathLength = 2048;
-  private _maxSegmentLength = 256;
-  private hitCacheByMethod: Map<number, RouterCache<CachedMatchEntry<T>>> | undefined;
-  private missCacheByMethod: Map<number, Set<string>> | undefined;
+  private matcher: Matcher | null = null;
+  private cacheByMethod: Map<number, RouterCache<DynamicMatchResult>> | undefined;
   private cacheMaxSize: number = 1000;
   private sealed = false;
-
+  /** build() 후 builder에서 추출. trie는 GC 수거된다. */
   private handlers: T[] = [];
   private optionalParamDefaults: OptionalParamDefaults | undefined;
-  private trees: Array<RadixMatchFn | null> = [];
-  private matchState!: MatchState;
 
-  private staticMap: Map<string, Array<T | undefined>> = new Map();
+  private staticMap: Map<string, T[]> = new Map();
   private methodCodes: ReadonlyMap<string, number> = new Map();
-  /** Track wildcard names per normalized prefix for cross-method conflict detection */
-  private wildcardNames: Map<string, string> = new Map();
 
   constructor(options: RouterOptions = {}) {
     this.options = options;
 
+    const procConfig: ProcessorConfig = {
+      collapseSlashes: options.collapseSlashes ?? options.ignoreTrailingSlash ?? true,
+      ignoreTrailingSlash: options.ignoreTrailingSlash ?? true,
+      blockTraversal: options.blockTraversal ?? true,
+      caseSensitive: options.caseSensitive ?? true,
+      maxSegmentLength: options.maxSegmentLength ?? 256,
+      failFastOnBadEncoding: options.failFastOnBadEncoding ?? false,
+    };
+
+    this.processor = new Processor(procConfig);
+
     if (options.enableCache === true) {
-      this.hitCacheByMethod = new Map();
-      this.missCacheByMethod = new Map();
+      this.cacheByMethod = new Map();
       this.cacheMaxSize = options.cacheSize ?? 1000;
     }
 
@@ -94,25 +77,16 @@ export class Router<T = unknown> {
       buildConfig.regexAnchorPolicy = options.regexAnchorPolicy;
     }
 
-    if (options.onWarn !== undefined) {
-      buildConfig.onWarn = options.onWarn;
+    if (options.strictParamNames !== undefined) {
+      buildConfig.strictParamNames = options.strictParamNames;
     }
 
-    this.pathParser = new PathParser({
-      caseSensitive: options.caseSensitive ?? true,
-      ignoreTrailingSlash: options.ignoreTrailingSlash ?? true,
-      maxSegmentLength: options.maxSegmentLength ?? 256,
-      regexSafety,
-      regexAnchorPolicy: options.regexAnchorPolicy,
-      onWarn: options.onWarn,
-    });
-
-    this.radixBuilder = new RadixBuilder(buildConfig);
+    this.builder = new Builder<T>(buildConfig);
   }
 
-  add(method: HttpMethod | HttpMethod[] | '*', path: string, value: T): void {
+  add(method: HttpMethod | HttpMethod[] | '*', path: string, value: T): Result<void, RouterErrData> {
     if (this.sealed) {
-      throw new RouterError({
+      return err<RouterErrData>({
         kind: 'router-sealed',
         message: 'Cannot add routes after build(). The router is sealed.',
         path,
@@ -126,7 +100,7 @@ export class Router<T = unknown> {
         const result = this.addOne(m, path, value);
 
         if (isErr(result)) {
-          throw new RouterError(result.data);
+          return result;
         }
       }
 
@@ -134,27 +108,25 @@ export class Router<T = unknown> {
     }
 
     if (method === '*') {
-      for (const m of ALL_METHODS) {
+      const allMethods: HttpMethod[] = ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS', 'HEAD'];
+
+      for (const m of allMethods) {
         const result = this.addOne(m, path, value);
 
         if (isErr(result)) {
-          throw new RouterError(result.data);
+          return result;
         }
       }
 
       return;
     }
 
-    const result = this.addOne(method, path, value);
-
-    if (isErr(result)) {
-      throw new RouterError(result.data);
-    }
+    return this.addOne(method, path, value);
   }
 
-  addAll(entries: Array<[HttpMethod, string, T]>): void {
+  addAll(entries: Array<[HttpMethod, string, T]>): Result<void, RouterErrData> {
     if (this.sealed) {
-      throw new RouterError({
+      return err<RouterErrData>({
         kind: 'router-sealed',
         message: 'Cannot add routes after build(). The router is sealed.',
         registeredCount: 0,
@@ -168,7 +140,7 @@ export class Router<T = unknown> {
       const result = this.addOne(method, path, value);
 
       if (isErr(result)) {
-        throw new RouterError({
+        return err<RouterErrData>({
           ...result.data,
           registeredCount,
         });
@@ -185,57 +157,40 @@ export class Router<T = unknown> {
 
     this.sealed = true;
 
+    const b = this.builder!;
+    this.handlers = b.handlers;
+    this.optionalParamDefaults = b.config.optionalParamDefaults;
+
     const allCodes = this.methodRegistry.getAllCodes();
     this.methodCodes = allCodes;
 
-    this.optionalParamDefaults = this.radixBuilder!.optionalParamDefaults;
-
-    const decoder = buildDecoder();
-    const decodeParams = this.options.decodeParams ?? true;
-
-    for (const [, code] of allCodes) {
-      const root = this.radixBuilder!.getRoot(code);
-
-      if (!root) {
-        this.trees[code] = null;
-        continue;
+    const layout = b.build(allCodes);
+    const testers = layout.patterns.map(p => {
+      if (!p.source) {
+        return undefined;
       }
 
-      const testers = this.radixBuilder!.getTesters(code);
-      this.trees[code] = createRadixWalker(root, testers, decoder, decodeParams);
-    }
+      const regex = new RegExp(`^(?:${p.source})$`, p.flags);
 
-    this.matchState = createMatchState();
+      return buildPatternTester(p.source, regex, undefined);
+    });
 
-    this._ignoreTrailingSlash = this.options.ignoreTrailingSlash ?? true;
-    this._caseSensitive = this.options.caseSensitive ?? true;
-    this._decodeParams = this.options.decodeParams ?? true;
-    this._maxPathLength = this.options.maxPathLength ?? 2048;
-    this._maxSegmentLength = this.options.maxSegmentLength ?? 256;
+    this.matcher = new Matcher(layout, {
+      patternTesters: testers,
+      encodedSlashBehavior: this.options.encodedSlashBehavior ?? 'decode',
+      failFastOnBadEncoding: this.options.failFastOnBadEncoding ?? false,
+      methodCodes: allCodes,
+    });
 
-    this.pathParser = null;
-    this.radixBuilder = null;
+    // trie 해제 — Matcher가 layout(binary)을 소유하므로 builder 참조 불필요
+    this.builder = null;
 
     return this;
   }
 
-  clearCache(): void {
-    if (this.hitCacheByMethod) {
-      for (const cache of this.hitCacheByMethod.values()) {
-        cache.clear();
-      }
-    }
-
-    if (this.missCacheByMethod) {
-      for (const set of this.missCacheByMethod.values()) {
-        set.clear();
-      }
-    }
-  }
-
-  match(method: HttpMethod, path: string): MatchOutput<T> | null {
+  match(method: HttpMethod, path: string): Result<MatchOutput<T> | null, RouterErrData> {
     if (!this.sealed) {
-      throw new RouterError({
+      return err<RouterErrData>({
         kind: 'not-built',
         message: 'Router must be built before matching. Call build() first.',
         path,
@@ -244,246 +199,169 @@ export class Router<T = unknown> {
       });
     }
 
-    if (path.length > this._maxPathLength) {
-      throw new RouterError({
-        kind: 'path-too-long',
-        message: `Path length (${path.length}) exceeds maxPathLength (${this._maxPathLength}).`,
+    let searchPath = path;
+
+    if (this.options.ignoreTrailingSlash === true && searchPath.length > 1 && searchPath.endsWith('/')) {
+      searchPath = searchPath.slice(0, -1);
+    }
+
+    if (this.options.caseSensitive === false) {
+      searchPath = searchPath.toLowerCase();
+    }
+
+    // Static fast-path: clean path starting with '/'
+    if (searchPath.charCodeAt(0) === 47 /* '/' */) {
+      const staticValues = this.staticMap.get(searchPath);
+
+      if (staticValues) {
+        const offset = this.methodCodes.get(method) ?? METHOD_OFFSET[method];
+
+        if (offset !== undefined) {
+          const value = staticValues[offset];
+
+          if (value !== undefined) {
+            return { value, params: {}, meta: { source: 'static' } };
+          }
+        }
+      }
+    }
+
+    // Cache lookup
+    if (this.cacheByMethod) {
+      const methodCode = this.methodCodes.get(method) ?? METHOD_OFFSET[method];
+
+      if (methodCode !== undefined) {
+        const methodCache = this.cacheByMethod.get(methodCode);
+
+        if (methodCache) {
+          const cached = methodCache.get(searchPath);
+
+          if (cached !== undefined) {
+            if (cached === null) {
+              return null;
+            }
+
+            const value = this.handlers[cached.handlerIndex];
+
+            if (value === undefined) {
+              return null;
+            }
+
+            return { value, params: { ...cached.params }, meta: { source: 'cache' } };
+          }
+        }
+      }
+    }
+
+    const matcher = this.matcher;
+
+    if (!matcher) {
+      return null;
+    }
+
+    // Normalize path
+    const normalizeResult = this.processor.normalize(searchPath);
+
+    if (isErr(normalizeResult)) {
+      return err<RouterErrData>({
+        ...normalizeResult.data,
         path,
         method,
-        suggestion: `Shorten the path or increase maxPathLength in RouterOptions (current: ${this._maxPathLength}).`,
       });
     }
 
-    // Inline resolveMethodCode — avoid function call + Result wrapping
-    const methodCode = this.methodCodes.get(method);
+    const { segments, segmentDecodeHints, normalized } = normalizeResult;
 
-    if (methodCode === undefined) {
-      throw new RouterError({
-        kind: 'method-not-found',
-        message: `No routes registered for method '${method}'.`,
+    // Static fallback for normalized paths
+    if (normalized !== searchPath) {
+      const staticValues = this.staticMap.get(normalized);
+
+      if (staticValues) {
+        const offset = this.methodCodes.get(method) ?? METHOD_OFFSET[method];
+
+        if (offset !== undefined) {
+          const value = staticValues[offset];
+
+          if (value !== undefined) {
+            return { value, params: {}, meta: { source: 'static' } };
+          }
+        }
+      }
+    }
+
+    // Dynamic match
+    const matchResult = matcher.match(
+      method,
+      segments,
+      normalized,
+      segmentDecodeHints,
+      this.options.decodeParams ?? true,
+      false,
+    );
+
+    if (isErr(matchResult)) {
+      return err<RouterErrData>({
+        ...matchResult.data,
+        path,
         method,
       });
     }
 
-    const searchPath = this.preNormalize(path);
+    if (matchResult) {
+      const handlerIndex = matcher.getHandlerIndex();
+      const params = matcher.getParams();
+      const defaults = this.optionalParamDefaults;
 
-    // 1. Static match O(1)
-    const staticHit = this.staticMap.get(searchPath)?.[methodCode];
+      if (defaults) {
+        defaults.apply(handlerIndex, params);
+      }
 
-    if (staticHit !== undefined) {
-      return { value: staticHit, params: EMPTY_PARAMS, meta: STATIC_META };
-    }
+      const value = this.handlers[handlerIndex];
 
-    // 2. Cache lookup
-    const cached = this.lookupCache(searchPath, methodCode);
-
-    if (cached !== undefined) {
-      if (cached === null) {
+      if (value === undefined) {
         return null;
       }
 
-      return { value: cached.value, params: cached.params, meta: CACHE_META };
-    }
+      const meta: MatchMeta = { source: 'dynamic' };
 
-    // 3. Segment length validation
-    if (!this.checkSegmentLengths(searchPath)) {
-      throw new RouterError({
-        kind: 'segment-limit',
-        message: 'Segment length exceeds limit',
-        path,
-        method,
-        suggestion: `Shorten the path segment to ${this._maxSegmentLength} characters or fewer.`,
-      });
-    }
+      if (this.cacheByMethod) {
+        const methodCode = this.methodCodes.get(method) ?? METHOD_OFFSET[method];
 
-    // 4. Radix trie match
-    const tree = this.trees[methodCode];
+        if (methodCode !== undefined) {
+          let mc = this.cacheByMethod.get(methodCode);
 
-    if (!tree) {
-      this.writeCacheEntry(searchPath, methodCode, null);
-      return null;
-    }
+          if (!mc) {
+            mc = new RouterCache(this.cacheMaxSize);
+            this.cacheByMethod.set(methodCode, mc);
+          }
 
-    resetMatchState(this.matchState);
-    const matched = tree(searchPath, 0, this.matchState);
-
-    if (!matched) {
-      if (this.matchState.errorKind) {
-        throw new RouterError({
-          kind: this.matchState.errorKind as any,
-          message: this.matchState.errorMessage!,
-          path,
-          method,
-        });
-      }
-
-      this.writeCacheEntry(searchPath, methodCode, null);
-      return null;
-    }
-
-    // 5. Build result from match state
-    const state = this.matchState;
-    const params = this.buildParamsObject(state);
-
-    this.optionalParamDefaults?.apply(state.handlerIndex, params);
-
-    const value = this.handlers[state.handlerIndex];
-
-    if (value === undefined) {
-      return null;
-    }
-
-    this.writeCacheEntry(searchPath, methodCode, { value, params });
-
-    return { value, params, meta: DYNAMIC_META };
-  }
-
-  private buildParamsObject(state: MatchState): RouteParams {
-    const params: RouteParams = {};
-
-    for (let i = 0; i < state.paramCount; i++) {
-      params[state.paramNames[i]!] = state.paramValues[i]!;
-    }
-
-    return params;
-  }
-
-  /**
-   * Validates that no path segment exceeds maxSegmentLength.
-   * Returns true if valid, false if any segment is too long.
-   */
-  private checkSegmentLengths(path: string): boolean {
-    const maxLen = this._maxSegmentLength;
-    let segLen = 0;
-
-    for (let i = 1; i < path.length; i++) {
-      if (path.charCodeAt(i) === 47) { // '/'
-        segLen = 0;
-      } else {
-        segLen++;
-
-        if (segLen > maxLen) return false;
-      }
-    }
-
-    return true;
-  }
-
-  // resolveMethodCode removed — inlined into match() for performance
-
-  private preNormalize(path: string): string {
-    let p = path;
-
-    // Query string strip
-    const qIdx = p.indexOf('?');
-
-    if (qIdx !== -1) {
-      p = p.substring(0, qIdx);
-    }
-
-    if (this._ignoreTrailingSlash && p.length > 1 && p.charCodeAt(p.length - 1) === 47) {
-      p = p.substring(0, p.length - 1);
-    }
-
-    if (!this._caseSensitive) {
-      p = p.toLowerCase();
-    }
-
-    return p;
-  }
-
-  private lookupCache(searchPath: string, methodCode: number): CachedMatchEntry<T> | null | undefined {
-    if (!this.hitCacheByMethod) {
-      return undefined;
-    }
-
-    // Check miss cache first (Set lookup is cheaper)
-    const missSet = this.missCacheByMethod!.get(methodCode);
-
-    if (missSet?.has(searchPath)) {
-      return null;
-    }
-
-    // Check hit cache
-    return this.hitCacheByMethod.get(methodCode)?.get(searchPath);
-  }
-
-  private writeCacheEntry(searchPath: string, methodCode: number, entry: CachedMatchEntry<T> | null): void {
-    if (!this.hitCacheByMethod) {
-      return;
-    }
-
-    if (entry) {
-      let mc = this.hitCacheByMethod.get(methodCode);
-
-      if (!mc) {
-        mc = new RouterCache(this.cacheMaxSize);
-        this.hitCacheByMethod.set(methodCode, mc);
-      }
-
-      mc.set(searchPath, {
-        value: entry.value,
-        params: { ...entry.params },
-      });
-    } else {
-      let missSet = this.missCacheByMethod!.get(methodCode);
-
-      if (!missSet) {
-        missSet = new Set();
-        this.missCacheByMethod!.set(methodCode, missSet);
-      }
-
-      // Bounded miss set: clear when full to prevent unbounded growth
-      if (missSet.size >= this.cacheMaxSize) {
-        missSet.clear();
-      }
-
-      missSet.add(searchPath);
-    }
-  }
-
-  private checkWildcardNameConflict(
-    parts: import('./builder/path-parser').PathPart[],
-    normalized: string,
-    method: string,
-  ): Result<void, RouterErrData> {
-    for (const part of parts) {
-      if (part.type === 'wildcard') {
-        // Build prefix key (path without wildcard)
-        const prefix = normalized.replace(/\/[*:].*$/, '');
-        const existing = this.wildcardNames.get(prefix);
-
-        if (existing !== undefined && existing !== part.name) {
-          return err<RouterErrData>({
-            kind: 'route-conflict',
-            message: `Wildcard '*${part.name}' conflicts with existing wildcard '*${existing}' at path prefix '${prefix}'`,
-            segment: part.name,
-            conflictsWith: existing,
-            method,
+          mc.set(searchPath, {
+            handlerIndex,
+            params: { ...params },
           });
         }
+      }
 
-        this.wildcardNames.set(prefix, part.name);
-        break;
+      return { value, params, meta };
+    }
+
+    // Cache miss
+    if (this.cacheByMethod) {
+      const methodCode = this.methodCodes.get(method) ?? METHOD_OFFSET[method];
+
+      if (methodCode !== undefined) {
+        let mc = this.cacheByMethod.get(methodCode);
+
+        if (!mc) {
+          mc = new RouterCache(this.cacheMaxSize);
+          this.cacheByMethod.set(methodCode, mc);
+        }
+
+        mc.set(searchPath, null);
       }
     }
-  }
 
-  private checkStaticWildcardConflict(
-    normalized: string,
-    method: string,
-  ): Result<void, RouterErrData> {
-    // Check if any wildcard prefix is a parent of this static route
-    for (const [prefix] of this.wildcardNames) {
-      if (normalized.startsWith(prefix + '/') || normalized === prefix) {
-        return err<RouterErrData>({
-          kind: 'route-conflict',
-          message: `Static route '${normalized}' conflicts with existing wildcard at '${prefix}/*'`,
-          segment: normalized,
-          method,
-        });
-      }
-    }
+    return null;
   }
 
   private addOne(method: HttpMethod, path: string, value: T): Result<void, RouterErrData> {
@@ -496,62 +374,47 @@ export class Router<T = unknown> {
       });
     }
 
-    const parseResult = this.pathParser!.parse(path);
+    const normalizeResult = this.processor.normalize(path, false);
 
-    if (isErr(parseResult)) {
+    if (isErr(normalizeResult)) {
       return err<RouterErrData>({
-        ...parseResult.data,
+        ...normalizeResult.data,
         path,
         method,
       });
     }
 
-    const { parts, normalized, isDynamic } = parseResult;
+    const { segments, normalized } = normalizeResult;
 
-    // Check for wildcard name conflicts across methods
-    const wcConflict = this.checkWildcardNameConflict(parts, normalized, method);
+    let isDynamic = false;
 
-    if (isErr(wcConflict)) {
-      return wcConflict;
+    for (const segment of segments) {
+      const firstChar = segment.charCodeAt(0);
+
+      if (firstChar === 42 || firstChar === 58) {
+        isDynamic = true;
+
+        break;
+      }
     }
 
-    // Check for static route conflicting with existing wildcard
     if (!isDynamic) {
-      const wcBlockConflict = this.checkStaticWildcardConflict(normalized, method);
+      let values = this.staticMap.get(normalized);
 
-      if (isErr(wcBlockConflict)) {
-        return wcBlockConflict;
+      if (!values) {
+        values = [];
+
+        this.staticMap.set(normalized, values);
       }
 
-      let arr = this.staticMap.get(normalized);
-
-      if (!arr) {
-        arr = [];
-        this.staticMap.set(normalized, arr);
-      }
-
-      if (arr[offsetResult] !== undefined) {
-        return err<RouterErrData>({
-          kind: 'route-duplicate',
-          message: `Route already exists for ${method} ${normalized}`,
-          path,
-          method,
-          suggestion: 'Use a different path or HTTP method',
-        });
-      }
-
-      arr[offsetResult] = value;
-      return;
+      values[offsetResult] = value;
     }
 
-    const handlerIndex = this.handlers.length;
-    this.handlers.push(value);
+    const addResult = this.builder!.add(method, segments, value);
 
-    const insertResult = this.radixBuilder!.insert(offsetResult, parts, handlerIndex);
-
-    if (isErr(insertResult)) {
+    if (isErr(addResult)) {
       return err<RouterErrData>({
-        ...insertResult.data,
+        ...addResult.data,
         path,
         method,
       });

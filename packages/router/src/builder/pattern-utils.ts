@@ -66,7 +66,7 @@ export class PatternUtils {
       }
 
       if (policy === 'warn') {
-        this.config.onWarn?.({ kind: 'regex-anchor', message: msg, segment: patternSrc });
+        console.warn(msg);
       }
     }
 
