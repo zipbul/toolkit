@@ -1,0 +1,52 @@
+{
+  "name": "@zipbul/multipart",
+  "version": "0.0.0",
+  "description": "Streaming multipart/form-data parser built on Bun-native APIs",
+  "license": "MIT",
+  "author": "Junhyung Park (https://github.com/parkrevil)",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/zipbul/toolkit",
+    "directory": "packages/multipart"
+  },
+  "bugs": "https://github.com/zipbul/toolkit/issues",
+  "homepage": "https://github.com/zipbul/toolkit/tree/main/packages/multipart#readme",
+  "keywords": [
+    "multipart",
+    "form-data",
+    "file-upload",
+    "streaming",
+    "bun",
+    "typescript",
+    "zipbul"
+  ],
+  "engines": {
+    "bun": ">=1.0.0"
+  },
+  "type": "module",
+  "module": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "bun build index.ts --outdir dist --target bun --format esm --packages external --production && tsc -p tsconfig.build.json",
+    "test": "bun test",
+    "coverage": "bun test --coverage",
+    "bench": "bun run bench/multipart.bench.ts"
+  },
+  "sideEffects": false,
+  "dependencies": {
+    "@zipbul/result": "workspace:*",
+    "@zipbul/shared": "workspace:*"
+  },
+  "devDependencies": {
+    "mitata": "^1.0.34"
+  }
+}
