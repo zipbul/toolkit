@@ -117,11 +117,34 @@ export class CookieParser {
       });
     }
 
+    // CHIPS: Partitioned requires Secure
+    if (target.partitioned && !target.secure) {
+      throw new CookieError({
+        reason: CookieErrorReason.PartitionedRequiresSecure,
+        message: 'Partitioned cookies must have the Secure attribute',
+      });
+    }
+
     // RFC 6265bis §5.4: max lifetime SHOULD NOT exceed 400 days
     if (target.maxAge != null && target.maxAge > MAX_LIFETIME_SECONDS) {
       throw new CookieError({
         reason: CookieErrorReason.MaxLifetimeExceeded,
         message: `Max-Age exceeds 400-day limit (${MAX_LIFETIME_SECONDS}s)`,
+      });
+    }
+
+    // Header injection prevention: domain/path must not contain semicolons or newlines
+    if (target.domain && /[;\r\n]/.test(target.domain)) {
+      throw new CookieError({
+        reason: CookieErrorReason.InvalidDomain,
+        message: 'domain must not contain semicolons or newlines',
+      });
+    }
+
+    if (target.path && /[;\r\n]/.test(target.path)) {
+      throw new CookieError({
+        reason: CookieErrorReason.InvalidPath,
+        message: 'path must not contain semicolons or newlines',
       });
     }
 

@@ -967,5 +967,51 @@ describe('CookieParser', () => {
         CookieErrorReason.SameSiteNoneRequiresSecure,
       );
     });
+    it('should throw PartitionedRequiresSecure when Partitioned without Secure', () => {
+      const cp = CookieParser.create();
+      const cookie = new Cookie('session', 'v', { partitioned: true });
+      let caught: unknown;
+      try {
+        cp.serialize(cookie);
+      } catch (e) {
+        caught = e;
+      }
+      expect(caught).toBeInstanceOf(CookieError);
+      expect((caught as CookieError).reason).toBe(
+        CookieErrorReason.PartitionedRequiresSecure,
+      );
+    });
+
+    it('should allow Partitioned with Secure', () => {
+      const cp = CookieParser.create();
+      const cookie = new Cookie('session', 'v', { partitioned: true, secure: true });
+      expect(() => cp.serialize(cookie)).not.toThrow();
+    });
+
+    it('should reject domain with semicolon at Cookie construction (Bun validates)', () => {
+      expect(() => new Cookie('session', 'v', { domain: 'evil.com; Path=/' })).toThrow();
+    });
+
+    it('should reject domain with newline at Cookie construction (Bun validates)', () => {
+      expect(() => new Cookie('session', 'v', { domain: "evil.com\r\nSet-Cookie: bad=1" })).toThrow();
+    });
+
+    it('should reject path with semicolon at Cookie construction (Bun validates)', () => {
+      expect(() => new Cookie('session', 'v', { path: '/; Domain=evil.com' })).toThrow();
+    });
+
+    it('should reject path with newline at Cookie construction (Bun validates)', () => {
+      expect(() => new Cookie('session', 'v', { path: "/\r\nSet-Cookie: bad=1" })).toThrow();
+    });
+
+    it('should allow valid domain and path', () => {
+      const cp = CookieParser.create();
+      const cookie = new Cookie('session', 'v', {
+        domain: 'example.com',
+        path: '/app/dashboard',
+        secure: true,
+      });
+      expect(() => cp.serialize(cookie)).not.toThrow();
+    });
   });
 });

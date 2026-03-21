@@ -17,4 +17,7 @@ export enum CookieErrorReason {
   CookieTooLarge = 'cookie_too_large',
   SameSiteNoneRequiresSecure = 'samesite_none_requires_secure',
   MaxLifetimeExceeded = 'max_lifetime_exceeded',
+  PartitionedRequiresSecure = 'partitioned_requires_secure',
+  InvalidDomain = 'invalid_domain',
+  InvalidPath = 'invalid_path',
 }
