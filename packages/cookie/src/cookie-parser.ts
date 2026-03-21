@@ -43,18 +43,12 @@ export class CookieParser {
     return new CookieParser(resolved);
   }
 
-  public parse(header: string): Cookie[] {
-    if (header === '') return [];
-    const map = new Bun.CookieMap(header);
-    const result: Cookie[] = [];
-    for (const [name, value] of map) {
-      result.push(new Cookie(name, value));
-    }
-    return result;
+  public get isSigningConfigured(): boolean {
+    return this.options.secrets !== null;
   }
 
-  public parseOne(header: string): Cookie {
-    return Cookie.parse(header);
+  public get isEncryptionConfigured(): boolean {
+    return this.encryptionKey !== null;
   }
 
   public createCookie(name: string, value: string, options?: CookieAttributes): Cookie {

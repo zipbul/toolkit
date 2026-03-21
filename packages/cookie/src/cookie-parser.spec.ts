@@ -81,50 +81,6 @@ describe('CookieParser', () => {
     });
   });
 
-  describe('parse', () => {
-    it('should return Cookie array when parsing valid Cookie header', () => {
-      const cp = CookieParser.create();
-      const cookies = cp.parse('a=1; b=2');
-      expect(cookies).toHaveLength(2);
-      expect(cookies[0]!.name).toBe('a');
-      expect(cookies[0]!.value).toBe('1');
-      expect(cookies[1]!.name).toBe('b');
-      expect(cookies[1]!.value).toBe('2');
-    });
-
-    it('should return empty array when parsing empty string', () => {
-      const cp = CookieParser.create();
-      const cookies = cp.parse('');
-      expect(cookies).toHaveLength(0);
-    });
-
-    it('should return single Cookie when parsing single cookie string', () => {
-      const cp = CookieParser.create();
-      const cookies = cp.parse('session=abc');
-      expect(cookies).toHaveLength(1);
-      expect(cookies[0]!.name).toBe('session');
-    });
-  });
-
-  describe('parseOne', () => {
-    it('should return Cookie with attributes when parsing Set-Cookie header', () => {
-      const cp = CookieParser.create();
-      const cookie = cp.parseOne('session=abc; Path=/; HttpOnly; Secure');
-      expect(cookie.name).toBe('session');
-      expect(cookie.value).toBe('abc');
-      expect(cookie.path).toBe('/');
-      expect(cookie.httpOnly).toBe(true);
-      expect(cookie.secure).toBe(true);
-    });
-
-    it('should return Cookie when parsing minimal name=value', () => {
-      const cp = CookieParser.create();
-      const cookie = cp.parseOne('token=xyz');
-      expect(cookie.name).toBe('token');
-      expect(cookie.value).toBe('xyz');
-    });
-  });
-
   describe('serialize', () => {
     it('should return Set-Cookie header string when serializing Cookie', () => {
       const cp = CookieParser.create();
@@ -134,11 +90,11 @@ describe('CookieParser', () => {
       expect(header).toContain('Secure');
     });
 
-    it('should produce consistent result when serialize then parseOne roundtrip', () => {
+    it('should produce consistent result when serialize then parse roundtrip', () => {
       const cp = CookieParser.create();
       const original = new Cookie('token', 'xyz', { path: '/', httpOnly: true });
       const header = cp.serialize(original);
-      const parsed = cp.parseOne(header);
+      const parsed = Cookie.parse(header);
       expect(parsed.name).toBe('token');
       expect(parsed.value).toBe('xyz');
       expect(parsed.path).toBe('/');
@@ -522,13 +478,13 @@ describe('CookieParser', () => {
       expect(header).toContain('__Secure-session=');
     });
 
-    it('should complete inbound pipeline parseOne then decrypt then unsign', async () => {
+    it('should complete inbound pipeline parse then decrypt then unsign', async () => {
       const cp = CookieParser.create({ secrets: ['s'], encryptionSecret: 'e' });
       const original = new Cookie('session', 'secret-data');
       const signed = cp.sign(original);
       const encrypted = await cp.encrypt(signed);
       const header = cp.serialize(encrypted);
-      const parsed = cp.parseOne(header);
+      const parsed = Cookie.parse(header);
       const decrypted = await cp.decrypt(parsed);
       const unsigned = await cp.unsign(decrypted);
       expect(unsigned.value).toBe('secret-data');
