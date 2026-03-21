@@ -13,9 +13,16 @@
         "typescript": "^5",
       },
     },
+    "packages/cookie": {
+      "name": "@zipbul/cookie",
+      "version": "0.1.0",
+      "dependencies": {
+        "@zipbul/result": "workspace:*",
+      },
+    },
     "packages/cors": {
       "name": "@zipbul/cors",
-      "version": "0.1.0",
+      "version": "0.1.3",
       "dependencies": {
         "@zipbul/result": "workspace:*",
         "@zipbul/shared": "workspace:*",
@@ -24,7 +31,7 @@
     },
     "packages/query-parser": {
       "name": "@zipbul/query-parser",
-      "version": "0.2.0",
+      "version": "0.2.3",
       "dependencies": {
         "@zipbul/result": "workspace:*",
       },
@@ -36,7 +43,7 @@
     },
     "packages/rate-limiter": {
       "name": "@zipbul/rate-limiter",
-      "version": "0.0.1",
+      "version": "0.2.3",
       "dependencies": {
         "@zipbul/result": "workspace:*",
       },
@@ -46,11 +53,11 @@
     },
     "packages/result": {
       "name": "@zipbul/result",
-      "version": "0.1.4",
+      "version": "0.1.7",
     },
     "packages/router": {
       "name": "@zipbul/router",
-      "version": "0.1.0",
+      "version": "0.2.2",
       "dependencies": {
         "@zipbul/result": "workspace:*",
         "@zipbul/shared": "workspace:*",
@@ -68,7 +75,7 @@
     },
     "packages/shared": {
       "name": "@zipbul/shared",
-      "version": "0.0.8",
+      "version": "0.0.11",
     },
   },
   "packages": {
@@ -157,6 +164,8 @@
     "@types/send": ["@types/send@1.2.1", "", { "dependencies": { "@types/node": "*" } }, "sha512-arsCikDvlU99zl1g69TcAB3mzZPpxgw0UQnaHeC1Nwb015xp8bknZv5rIfri9xTOcMuaVgvabfIRA7PSZVuZIQ=="],
 
     "@types/serve-static": ["@types/serve-static@2.2.0", "", { "dependencies": { "@types/http-errors": "*", "@types/node": "*" } }, "sha512-8mam4H1NHLtu7nmtalF7eyBH14QyOASmcxHhSfEoRyr0nP/YdoesEtU+uSRvMe96TW/HPTtkoKqQLl53N7UXMQ=="],
+
+    "@zipbul/cookie": ["@zipbul/cookie@workspace:packages/cookie"],
 
     "@zipbul/cors": ["@zipbul/cors@workspace:packages/cors"],
 
