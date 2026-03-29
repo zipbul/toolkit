@@ -112,12 +112,10 @@ import { err } from '@zipbul/result';
 // No data — simple signal
 const e1 = err();
 // e1.data → never (cannot access)
-// e1.stack → captured stack trace
 
 // With data — carry error details
 const e2 = err('not found');
 // e2.data → 'not found'
-// e2.stack → captured stack trace
 
 // Rich error objects
 const e3 = err({ code: 'TIMEOUT', retryAfter: 3000 });
@@ -129,7 +127,6 @@ Properties of the returned `Err`:
 | Property | Type | Description |
 |:---------|:-----|:------------|
 | `data` | `E` | The attached error data |
-| `stack` | `string` | Stack trace captured at `err()` call site |
 
 > **Immutability** — every `Err` is `Object.freeze()`d. Attempting to modify properties in strict mode throws a `TypeError`.
 
@@ -198,7 +195,6 @@ The error type returned by `err()`.
 
 ```typescript
 type Err<E = never> = {
-  stack: string;
   data: E;
 };
 ```
@@ -373,21 +369,6 @@ async function fetchUser(id: number): Promise<Result<User, ApiError>> {
   }
 }
 ```
-
-### Stack traces
-
-Every `Err` captures a stack trace at creation time, enabling debugging without `throw`:
-
-```typescript
-const e = err('something went wrong');
-console.log(e.stack);
-// Error
-//     at err (/.../err.ts:22:18)
-//     at validate (/.../validate.ts:15:12)
-//     at handleRequest (/.../server.ts:8:20)
-```
-
-<br>
 
 ## 🔌 Framework Integration Examples
 

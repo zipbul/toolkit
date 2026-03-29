@@ -26,21 +26,21 @@ describe('isErr', () => {
 
     it('should return true for manually created object with marker true', () => {
       // Arrange
-      const value = { [DEFAULT_MARKER_KEY]: true, stack: '', data: {} };
+      const value = { [DEFAULT_MARKER_KEY]: true, data: {} };
       // Act / Assert
       expect(isErr(value)).toBe(true);
     });
 
     it('should return true for frozen object with marker true', () => {
       // Arrange
-      const value = Object.freeze({ [DEFAULT_MARKER_KEY]: true, stack: '', data: {} });
+      const value = Object.freeze({ [DEFAULT_MARKER_KEY]: true, data: {} });
       // Act / Assert
       expect(isErr(value)).toBe(true);
     });
 
     it('should return true for object with extra properties', () => {
       // Arrange
-      const value = { [DEFAULT_MARKER_KEY]: true, stack: '', data: {}, extra: 1 };
+      const value = { [DEFAULT_MARKER_KEY]: true, data: {}, extra: 1 };
       // Act / Assert
       expect(isErr(value)).toBe(true);
     });
@@ -165,7 +165,7 @@ describe('isErr', () => {
     it('should detect object with updated marker key', () => {
       // Arrange
       setMarkerKey('__custom__');
-      const value = { __custom__: true, stack: '', data: {} };
+      const value = { __custom__: true, data: {} };
       // Act / Assert
       expect(isErr(value)).toBe(true);
     });
@@ -173,7 +173,7 @@ describe('isErr', () => {
     it('should not detect object with old marker key', () => {
       // Arrange
       setMarkerKey('__custom__');
-      const value = { [DEFAULT_MARKER_KEY]: true, stack: '', data: {} };
+      const value = { [DEFAULT_MARKER_KEY]: true, data: {} };
       // Act / Assert
       expect(isErr(value)).toBe(false);
     });
