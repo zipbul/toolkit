@@ -1,6 +1,6 @@
 {
   "name": "@zipbul/rate-limiter",
-  "version": "0.2.3",
+  "version": "0.2.4",
   "description": "Framework-agnostic rate limiter engine with multiple algorithms and pluggable stores",
   "license": "MIT",
   "author": "Junhyung Park (https://github.com/parkrevil)",

@@ -1,6 +1,6 @@
 {
   "name": "@zipbul/multipart",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Streaming multipart/form-data parser built on Bun-native APIs",
   "license": "MIT",
   "author": "Junhyung Park (https://github.com/parkrevil)",
