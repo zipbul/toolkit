@@ -16,4 +16,10 @@ export enum HttpHeader {
   AccessControlRequestHeaders = 'access-control-request-headers',
   ContentType = 'content-type',
   ContentDisposition = 'content-disposition',
+  ContentEncoding = 'content-encoding',
+  ContentLength = 'content-length',
+  AcceptEncoding = 'accept-encoding',
+  TransferEncoding = 'transfer-encoding',
+  CacheControl = 'cache-control',
+  ETag = 'etag',
 }
