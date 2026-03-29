@@ -1,10 +1,10 @@
 /**
  * The error type returned by {@link err}.
  *
- * Every `Err` carries a `stack` trace captured at creation and an optional
- * `data` payload describing what went wrong. The hidden marker property used
- * for detection is intentionally excluded from the type — it is managed
- * internally by `err()` and checked only through `isErr()`.
+ * Every `Err` carries an optional `data` payload describing what went wrong.
+ * The hidden marker property used for detection is intentionally excluded
+ * from the type — it is managed internally by `err()` and checked only
+ * through `isErr()`.
  *
  * @template E - The type of the attached error data. Defaults to `never`.
  *
@@ -12,11 +12,9 @@
  * ```ts
  * const e: Err<string> = err('not found');
  * console.log(e.data);  // 'not found'
- * console.log(e.stack); // stack trace string
  * ```
  */
 export type Err<E = never> = {
-  stack: string;
   data: E;
 };
 

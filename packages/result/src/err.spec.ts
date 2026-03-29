@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it, spyOn } from 'bun:test';
+import { afterEach, describe, expect, it } from 'bun:test';
 
 import { DEFAULT_MARKER_KEY, getMarkerKey, setMarkerKey } from './constants';
 import { err } from './err';
@@ -37,19 +37,6 @@ describe('err', () => {
       expect(result.data).toBe(42);
     });
 
-    it('should have stack property as string', () => {
-      // Arrange / Act
-      const result = err();
-      // Assert
-      expect(typeof result.stack).toBe('string');
-    });
-
-    it('should have non-empty stack in normal environment', () => {
-      // Arrange / Act
-      const result = err();
-      // Assert
-      expect(result.stack.length).toBeGreaterThan(0);
-    });
   });
 
   describe('no-throw guarantee', () => {
@@ -71,37 +58,6 @@ describe('err', () => {
       obj.self = obj;
       // Act / Assert
       expect(() => err(obj)).not.toThrow();
-    });
-  });
-
-  describe('stack extraction fallback', () => {
-    let errorSpy: ReturnType<typeof spyOn>;
-
-    afterEach(() => {
-      errorSpy?.mockRestore();
-    });
-
-    it('should return Err with empty stack when Error constructor throws', () => {
-      // Arrange
-      errorSpy = spyOn(globalThis as unknown as { Error: () => Error }, 'Error').mockImplementation(() => {
-        throw 'mocked';
-      });
-      // Act
-      const result = err();
-      // Assert
-      expect(result.stack).toBe('');
-      expect((result as Record<string, unknown>)[getMarkerKey()]).toBe(true);
-    });
-
-    it('should return Err with empty stack when Error().stack is undefined', () => {
-      // Arrange
-      errorSpy = spyOn(globalThis as unknown as { Error: () => Error }, 'Error').mockImplementation(
-        () => ({ stack: undefined }) as unknown as Error,
-      );
-      // Act
-      const result = err();
-      // Assert
-      expect(result.stack).toBe('');
     });
   });
 
@@ -134,14 +90,13 @@ describe('err', () => {
       expect(result.data).toBe(false);
     });
 
-    it('should have exactly 3 own properties: marker, stack, data', () => {
+    it('should have exactly 2 own properties: marker, data', () => {
       // Arrange / Act
       const result = err();
       const keys = Object.keys(result as object);
       // Assert
-      expect(keys.length).toBe(3);
+      expect(keys.length).toBe(2);
       expect(keys).toContain(getMarkerKey());
-      expect(keys).toContain('stack');
       expect(keys).toContain('data');
     });
 
@@ -189,15 +144,6 @@ describe('err', () => {
       }).toThrow(TypeError);
     });
 
-    it('should throw TypeError when assigning to stack property', () => {
-      // Arrange
-      const result = err();
-      // Act / Assert
-      expect(() => {
-        (result as Record<string, unknown>)['stack'] = '';
-      }).toThrow(TypeError);
-    });
-
     it('should throw TypeError when adding new property', () => {
       // Arrange
       const result = err();
@@ -233,7 +179,6 @@ describe('err', () => {
       const r2 = err({ code: 'A' });
       // Assert
       expect(r1.data).toEqual(r2.data);
-      expect(typeof r1.stack).toBe(typeof r2.stack);
       expect((r1 as Record<string, unknown>)[getMarkerKey()]).toBe(
         (r2 as Record<string, unknown>)[getMarkerKey()],
       );
