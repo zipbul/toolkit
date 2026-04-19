@@ -21,7 +21,7 @@ import { RouterCache } from './cache';
 import { MethodRegistry } from './method-registry';
 import { buildDecoder } from './processor/decoder';
 import { createRadixWalker } from './matcher/radix-walk';
-import { createMatchState, resetMatchState } from './matcher/match-state';
+import { createMatchState } from './matcher/match-state';
 
 const ALL_METHODS: readonly HttpMethod[] = ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS', 'HEAD'];
 
@@ -62,6 +62,8 @@ export class Router<T = unknown> {
   private handlers: T[] = [];
   private optionalParamDefaults: OptionalParamDefaults | undefined;
   private trees: Array<RadixMatchFn | null> = [];
+  /** Specialized match closure assembled by compileMatchFn() at build time. */
+  private matchImpl!: (method: string, path: string) => MatchOutput<T> | null;
   private matchState!: MatchState;
 
   /** Path → per-methodCode handler array. NullProtoObj for proto-free O(1) lookup. */
@@ -228,7 +230,191 @@ export class Router<T = unknown> {
     this.pathParser = null;
     this.radixBuilder = null;
 
+    this.matchImpl = this.compileMatchFn();
+
     return this;
+  }
+
+  /**
+   * Compile a specialized match closure via `new Function()` based on the
+   * router's actual config and registered routes. Dead code paths (disabled
+   * cache, default case sensitivity, empty tree, no optional defaults, etc.)
+   * are omitted entirely so the hot path only runs guards that can fire.
+   *
+   * Cache read/write is inlined (no bound-method call overhead). All helpers
+   * used by the hot path are closure-captured, not `this.*`-dispatched.
+   */
+  private compileMatchFn(): (method: string, path: string) => MatchOutput<T> | null {
+    const useCache = this.hitCacheByMethod !== undefined;
+    const trimSlash = this._ignoreTrailingSlash;
+    const lowerCase = !this._caseSensitive;
+    const maxPathLen = this._maxPathLength;
+    const maxSegLen = this._maxSegmentLength;
+    const checkPathLen = Number.isFinite(maxPathLen);
+    const checkSegLen = Number.isFinite(maxSegLen);
+
+    const hasAnyTree = this.trees.some(t => t != null);
+    const hasOptDefaults = this.optionalParamDefaults !== undefined;
+
+    // Closure captures (all read-only at match time)
+    const staticMap = this.staticMap;
+    const methodCodes = this.methodCodes;
+    const trees = this.trees;
+    const matchState = this.matchState;
+    const handlers = this.handlers;
+    const optDefaults = this.optionalParamDefaults;
+    const hitCacheByMethod = this.hitCacheByMethod;
+    const missCacheByMethod = this.missCacheByMethod;
+    const cacheMaxSize = this.cacheMaxSize;
+    const RouterCacheCtor = RouterCache;
+
+    const src: string[] = [];
+
+    if (checkPathLen) src.push(`if (path.length > ${maxPathLen}) return null;`);
+
+    src.push(`var mc = methodCodes[method]; if (mc === undefined) return null;`);
+    src.push(`var sp = path;`);
+    src.push(`var qi = sp.indexOf('?'); if (qi !== -1) sp = sp.substring(0, qi);`);
+
+    if (trimSlash) {
+      src.push(`if (sp.length > 1 && sp.charCodeAt(sp.length - 1) === 47) sp = sp.substring(0, sp.length - 1);`);
+    }
+
+    if (lowerCase) src.push(`sp = sp.toLowerCase();`);
+
+    // Static lookup — always first, always inlined
+    src.push(`
+      var sa = staticMap[sp];
+      if (sa !== undefined) {
+        var sh = sa[mc];
+        if (sh !== undefined) return { value: sh, params: EMPTY_PARAMS, meta: STATIC_META };
+      }
+    `);
+
+    // Cache lookup — fully inlined (no bound-method indirection)
+    if (useCache) {
+      src.push(`
+        var missSet = missCacheByMethod.get(mc);
+        if (missSet !== undefined && missSet.has(sp)) return null;
+        var hitCache = hitCacheByMethod.get(mc);
+        if (hitCache !== undefined) {
+          var cached = hitCache.get(sp);
+          if (cached !== undefined) {
+            if (cached === null) return null;
+            return { value: cached.value, params: cached.params, meta: CACHE_META };
+          }
+        }
+      `);
+    }
+
+    if (!hasAnyTree) {
+      if (useCache) {
+        src.push(emitMissCacheWrite());
+      }
+
+      src.push(`return null;`);
+    } else {
+      if (checkSegLen) {
+        src.push(`
+          for (var i = 1, sl = 0, ml = ${maxSegLen}; i < sp.length; i++) {
+            if (sp.charCodeAt(i) === 47) { sl = 0; }
+            else { sl++; if (sl > ml) return null; }
+          }
+        `);
+      }
+
+      src.push(`
+        var tr = trees[mc];
+        if (!tr) {
+          ${useCache ? emitMissCacheWrite() : ''}
+          return null;
+        }
+        matchState.handlerIndex = -1;
+        matchState.paramCount = 0;
+        matchState.errorKind = null;
+        matchState.errorMessage = null;
+        var ok = tr(sp, 0, matchState);
+        if (!ok) {
+          ${useCache ? `if (matchState.errorKind === null) { ${emitMissCacheWrite()} }` : ''}
+          return null;
+        }
+      `);
+
+      if (hasOptDefaults) {
+        src.push(`
+          var nd = optDefaults !== undefined && optDefaults.has(matchState.handlerIndex);
+          var params;
+          if (matchState.paramCount === 0 && !nd) { params = EMPTY_PARAMS; }
+          else {
+            params = Object.create(null);
+            for (var pi = 0; pi < matchState.paramCount; pi++) {
+              params[matchState.paramNames[pi]] = matchState.paramValues[pi];
+            }
+            if (nd) optDefaults.apply(matchState.handlerIndex, params);
+          }
+        `);
+      } else {
+        src.push(`
+          var params;
+          if (matchState.paramCount === 0) { params = EMPTY_PARAMS; }
+          else {
+            params = Object.create(null);
+            for (var pi = 0; pi < matchState.paramCount; pi++) {
+              params[matchState.paramNames[pi]] = matchState.paramValues[pi];
+            }
+          }
+        `);
+      }
+
+      src.push(`
+        var val = handlers[matchState.handlerIndex];
+      `);
+
+      if (useCache) {
+        src.push(`
+          var hc = hitCacheByMethod.get(mc);
+          if (hc === undefined) {
+            hc = new RouterCacheCtor(${cacheMaxSize});
+            hitCacheByMethod.set(mc, hc);
+          }
+          var cachedParams;
+          if (params === EMPTY_PARAMS) { cachedParams = EMPTY_PARAMS; }
+          else {
+            cachedParams = Object.create(null);
+            for (var cpk in params) cachedParams[cpk] = params[cpk];
+          }
+          hc.set(sp, { value: val, params: cachedParams });
+        `);
+      }
+
+      src.push(`return { value: val, params: params, meta: DYNAMIC_META };`);
+    }
+
+    const body = src.join('\n');
+    const factory = new Function(
+      'staticMap', 'methodCodes', 'trees', 'matchState', 'handlers',
+      'optDefaults', 'hitCacheByMethod', 'missCacheByMethod', 'RouterCacheCtor',
+      'EMPTY_PARAMS', 'STATIC_META', 'CACHE_META', 'DYNAMIC_META',
+      `return function match(method, path) {\n${body}\n};`,
+    );
+
+    return factory(
+      staticMap, methodCodes, trees, matchState, handlers,
+      optDefaults, hitCacheByMethod, missCacheByMethod, RouterCacheCtor,
+      EMPTY_PARAMS, STATIC_META, CACHE_META, DYNAMIC_META,
+    ) as (method: string, path: string) => MatchOutput<T> | null;
+
+    function emitMissCacheWrite(): string {
+      return `
+        var ms = missCacheByMethod.get(mc);
+        if (ms === undefined) { ms = new Set(); missCacheByMethod.set(mc, ms); }
+        if (ms.size >= ${cacheMaxSize}) {
+          var oldest = ms.values().next().value;
+          if (oldest !== undefined) ms.delete(oldest);
+        }
+        ms.add(sp);
+      `;
+    }
   }
 
   clearCache(): void {
@@ -247,176 +433,8 @@ export class Router<T = unknown> {
 
   match(method: HttpMethod, path: string): MatchOutput<T> | null {
     if (!this.sealed) return null;
-    if (path.length > this._maxPathLength) return null;
 
-    const methodCode = this.methodCodes[method];
-
-    if (methodCode === undefined) return null;
-
-    // ── Inlined preNormalize (strip query, optional trailing slash, optional lowercase) ──
-    let searchPath = path;
-    const qIdx = searchPath.indexOf('?');
-
-    if (qIdx !== -1) searchPath = searchPath.substring(0, qIdx);
-
-    if (
-      this._ignoreTrailingSlash &&
-      searchPath.length > 1 &&
-      searchPath.charCodeAt(searchPath.length - 1) === 47
-    ) {
-      searchPath = searchPath.substring(0, searchPath.length - 1);
-    }
-
-    if (!this._caseSensitive) searchPath = searchPath.toLowerCase();
-
-    // 1. Static match — direct null-proto lookup (measured faster than compiled switch).
-    const staticArr = this.staticMap[searchPath];
-
-    if (staticArr !== undefined) {
-      const staticHit = staticArr[methodCode];
-
-      if (staticHit !== undefined) {
-        return { value: staticHit, params: EMPTY_PARAMS, meta: STATIC_META };
-      }
-    }
-
-    const cacheEnabled = this.hitCacheByMethod !== undefined;
-
-    // 2. Cache lookup (only if enabled)
-    if (cacheEnabled) {
-      const cached = this.lookupCache(searchPath, methodCode);
-
-      if (cached !== undefined) {
-        if (cached === null) return null;
-
-        return { value: cached.value, params: cached.params, meta: CACHE_META };
-      }
-    }
-
-    // 3. Segment length validation (inlined for hot path)
-    {
-      const maxLen = this._maxSegmentLength;
-      let segLen = 0;
-
-      for (let i = 1; i < searchPath.length; i++) {
-        if (searchPath.charCodeAt(i) === 47) {
-          segLen = 0;
-        } else {
-          segLen++;
-
-          if (segLen > maxLen) return null;
-        }
-      }
-    }
-
-    // 4. Radix trie match
-    const tree = this.trees[methodCode];
-
-    if (!tree) {
-      if (cacheEnabled) this.writeCacheEntry(searchPath, methodCode, null);
-      return null;
-    }
-
-    resetMatchState(this.matchState);
-    const matched = tree(searchPath, 0, this.matchState);
-
-    if (!matched) {
-      // Skip negative caching on transient runtime signals (e.g. regex-timeout).
-      if (cacheEnabled && this.matchState.errorKind === null) {
-        this.writeCacheEntry(searchPath, methodCode, null);
-      }
-      return null;
-    }
-
-    // 5. Build result from match state
-    const state = this.matchState;
-    const optDefaults = this.optionalParamDefaults;
-    const needsDefaults = optDefaults !== undefined && optDefaults.has(state.handlerIndex);
-
-    let params: RouteParams;
-
-    if (state.paramCount === 0 && !needsDefaults) {
-      params = EMPTY_PARAMS;
-    } else {
-      params = this.buildParamsObject(state);
-
-      if (needsDefaults) optDefaults!.apply(state.handlerIndex, params);
-    }
-
-    const value = this.handlers[state.handlerIndex]!;
-
-    if (cacheEnabled) this.writeCacheEntry(searchPath, methodCode, { value, params });
-
-    return { value, params, meta: DYNAMIC_META };
-  }
-
-  private buildParamsObject(state: MatchState): RouteParams {
-    const params: RouteParams = Object.create(null) as RouteParams;
-    const count = state.paramCount;
-    const names = state.paramNames;
-    const values = state.paramValues;
-
-    for (let i = 0; i < count; i++) {
-      params[names[i]!] = values[i]!;
-    }
-
-    return params;
-  }
-
-  private lookupCache(searchPath: string, methodCode: number): CachedMatchEntry<T> | null | undefined {
-    if (!this.hitCacheByMethod) {
-      return undefined;
-    }
-
-    // Check miss cache first (Set lookup is cheaper)
-    const missSet = this.missCacheByMethod!.get(methodCode);
-
-    if (missSet?.has(searchPath)) {
-      return null;
-    }
-
-    // Check hit cache
-    return this.hitCacheByMethod.get(methodCode)?.get(searchPath);
-  }
-
-  private writeCacheEntry(searchPath: string, methodCode: number, entry: CachedMatchEntry<T> | null): void {
-    if (!this.hitCacheByMethod) {
-      return;
-    }
-
-    if (entry) {
-      let mc = this.hitCacheByMethod.get(methodCode);
-
-      if (!mc) {
-        mc = new RouterCache(this.cacheMaxSize);
-        this.hitCacheByMethod.set(methodCode, mc);
-      }
-
-      // Defensive clone for isolation: user may mutate returned params and we must
-      // not leak that into subsequent cache hits. Skip when params is the shared
-      // frozen EMPTY_PARAMS (mutation would throw, no pollution possible).
-      const cachedParams: RouteParams = entry.params === EMPTY_PARAMS
-        ? EMPTY_PARAMS
-        : Object.assign(Object.create(null) as RouteParams, entry.params);
-
-      mc.set(searchPath, { value: entry.value, params: cachedParams });
-    } else {
-      let missSet = this.missCacheByMethod!.get(methodCode);
-
-      if (!missSet) {
-        missSet = new Set();
-        this.missCacheByMethod!.set(methodCode, missSet);
-      }
-
-      // Bounded miss set: FIFO eviction (insertion-order) to avoid catastrophic clear
-      if (missSet.size >= this.cacheMaxSize) {
-        const oldest = missSet.values().next().value;
-
-        if (oldest !== undefined) missSet.delete(oldest);
-      }
-
-      missSet.add(searchPath);
-    }
+    return this.matchImpl(method, path);
   }
 
   private checkWildcardNameConflict(
