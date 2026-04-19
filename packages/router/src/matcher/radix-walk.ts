@@ -17,7 +17,23 @@ export function createRadixWalker(
     ? raw => (raw.indexOf('%') !== -1 ? decoder(raw) : raw)
     : raw => raw;
 
+  // When no route uses a regex pattern, dispatch to the simple walker that omits
+  // the tester branch, errorKind propagation, and related overhead.
+  if (testers.length === 0) {
+    return createSimpleWalker(root, decode);
+  }
 
+  return createFullWalker(root, testers, decode);
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Simple walker — no regex testers, no errorKind channel
+// ─────────────────────────────────────────────────────────────────────────────
+
+function createSimpleWalker(
+  root: RadixNode,
+  decode: (raw: string) => string,
+): RadixMatchFn {
   function matchNode(
     initialNode: RadixNode,
     url: string,
@@ -32,14 +48,10 @@ export function createRadixWalker(
       const label = node.part;
       const labelLen = label.length;
 
-      // ── Match edge label ──
       if (labelLen > 0) {
         const end = pos + labelLen;
 
         if (end > url.length) {
-          // Trailing-slash + star-wildcard edge case:
-          // Label "/files/", URL "/files" (trailing slash stripped by preNormalize).
-          // Match all chars except trailing '/', then yield empty wildcard.
           if (
             end === url.length + 1 &&
             label.charCodeAt(labelLen - 1) === 47 &&
@@ -71,7 +83,6 @@ export function createRadixWalker(
         pos = end;
       }
 
-      // ── Terminal check ──
       if (pos === url.length) {
         if (node.store !== null) {
           state.handlerIndex = node.store;
@@ -89,32 +100,208 @@ export function createRadixWalker(
         return false;
       }
 
-      // ── Static children ──
       if (node.inert !== null) {
         const ch = url.charCodeAt(pos);
         const child = node.inert[ch];
 
         if (child !== undefined) {
-          // Fast path: no params/wildcard → iterate (no backtracking needed)
           if (node.params === null && node.wildcardStore === null) {
             node = child;
             skipCount = 1;
             continue;
           }
 
-          // Slow path: has alternatives → must recurse for backtracking
+          if (matchNode(child, url, pos, state)) return true;
+        }
+      }
+
+      if (node.params !== null) {
+        if (matchParamsSimple(node.params, url, pos, state)) return true;
+      }
+
+      if (node.wildcardStore !== null) {
+        const suffix = url.substring(pos);
+
+        if (node.wildcardOrigin === 'multi' && suffix.length === 0) return false;
+
+        state.paramNames[state.paramCount] = node.wildcardName!;
+        state.paramValues[state.paramCount] = suffix;
+        state.paramCount++;
+        state.handlerIndex = node.wildcardStore;
+        return true;
+      }
+
+      return false;
+    }
+  }
+
+  function matchParamsSimple(
+    paramHead: ParamNode,
+    url: string,
+    pos: number,
+    state: MatchState,
+  ): boolean {
+    const slashIdx = url.indexOf('/', pos);
+    const endIdx = slashIdx === -1 ? url.length : slashIdx;
+
+    if (endIdx === pos) return false;
+
+    // In simple mode, each ParamNode.next chain has at most one element (no
+    // regex-differentiated alternatives). We still iterate defensively but
+    // value computation is unconditional.
+    let param: ParamNode | null = paramHead;
+
+    while (param !== null) {
+      const savedParamCount = state.paramCount;
+
+      if (endIdx === url.length) {
+        if (param.store !== null) {
+          const value = decode(url.substring(pos, endIdx));
+
+          state.paramNames[state.paramCount] = param.name;
+          state.paramValues[state.paramCount] = value;
+          state.paramCount++;
+          state.handlerIndex = param.store;
+          return true;
+        }
+
+        if (param.inert !== null) {
+          if (matchNode(param.inert, url, endIdx, state)) {
+            const value = decode(url.substring(pos, endIdx));
+
+            state.paramNames[savedParamCount] = param.name;
+            state.paramValues[savedParamCount] = value;
+            state.paramCount++;
+            return true;
+          }
+
+          state.paramCount = savedParamCount;
+        }
+      } else if (param.inert !== null) {
+        if (matchNode(param.inert, url, endIdx, state)) {
+          const value = decode(url.substring(pos, endIdx));
+
+          for (let j = state.paramCount; j > savedParamCount; j--) {
+            state.paramNames[j] = state.paramNames[j - 1]!;
+            state.paramValues[j] = state.paramValues[j - 1]!;
+          }
+
+          state.paramNames[savedParamCount] = param.name;
+          state.paramValues[savedParamCount] = value;
+          state.paramCount++;
+          return true;
+        }
+
+        state.paramCount = savedParamCount;
+      }
+
+      param = param.next;
+    }
+
+    return false;
+  }
+
+  return function walk(url: string, startIndex: number, state: MatchState): boolean {
+    return matchNode(root, url, startIndex, state);
+  };
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Full walker — regex testers + errorKind channel for timeout propagation
+// ─────────────────────────────────────────────────────────────────────────────
+
+function createFullWalker(
+  root: RadixNode,
+  testers: Array<PatternTesterFn | undefined>,
+  decode: (raw: string) => string,
+): RadixMatchFn {
+  function matchNode(
+    initialNode: RadixNode,
+    url: string,
+    initialPos: number,
+    state: MatchState,
+  ): boolean {
+    let node = initialNode;
+    let pos = initialPos;
+    let skipCount = 0;
+
+    for (;;) {
+      const label = node.part;
+      const labelLen = label.length;
+
+      if (labelLen > 0) {
+        const end = pos + labelLen;
+
+        if (end > url.length) {
+          if (
+            end === url.length + 1 &&
+            label.charCodeAt(labelLen - 1) === 47 &&
+            node.wildcardStore !== null &&
+            node.wildcardOrigin === 'star'
+          ) {
+            for (let i = skipCount; i < labelLen - 1; i++) {
+              if (url.charCodeAt(pos + i) !== label.charCodeAt(i)) return false;
+            }
+
+            state.paramNames[state.paramCount] = node.wildcardName!;
+            state.paramValues[state.paramCount] = '';
+            state.paramCount++;
+            state.handlerIndex = node.wildcardStore;
+            return true;
+          }
+
+          return false;
+        }
+
+        if (labelLen < 15) {
+          for (let i = skipCount; i < labelLen; i++) {
+            if (url.charCodeAt(pos + i) !== label.charCodeAt(i)) return false;
+          }
+        } else {
+          if (url.substring(pos, end) !== label) return false;
+        }
+
+        pos = end;
+      }
+
+      if (pos === url.length) {
+        if (node.store !== null) {
+          state.handlerIndex = node.store;
+          return true;
+        }
+
+        if (node.wildcardStore !== null && node.wildcardOrigin === 'star') {
+          state.paramNames[state.paramCount] = node.wildcardName!;
+          state.paramValues[state.paramCount] = '';
+          state.paramCount++;
+          state.handlerIndex = node.wildcardStore;
+          return true;
+        }
+
+        return false;
+      }
+
+      if (node.inert !== null) {
+        const ch = url.charCodeAt(pos);
+        const child = node.inert[ch];
+
+        if (child !== undefined) {
+          if (node.params === null && node.wildcardStore === null) {
+            node = child;
+            skipCount = 1;
+            continue;
+          }
+
           if (matchNode(child, url, pos, state)) return true;
           if (state.errorKind) return false;
         }
       }
 
-      // ── Param children ──
       if (node.params !== null) {
         if (matchParams(node.params, url, pos, state)) return true;
         if (state.errorKind) return false;
       }
 
-      // ── Wildcard ──
       if (node.wildcardStore !== null) {
         const suffix = url.substring(pos);
 
@@ -168,7 +355,6 @@ export function createRadixWalker(
       const savedParamCount = state.paramCount;
 
       if (endIdx === url.length) {
-        // Terminal param
         if (param.store !== null) {
           if (value === undefined) value = decode(url.substring(pos, endIdx));
 
@@ -179,7 +365,6 @@ export function createRadixWalker(
           return true;
         }
 
-        // Try continuation (e.g., wildcard child)
         if (param.inert !== null) {
           if (matchNode(param.inert, url, endIdx, state)) {
             if (value === undefined) value = decode(url.substring(pos, endIdx));
@@ -194,11 +379,9 @@ export function createRadixWalker(
           state.paramCount = savedParamCount;
         }
       } else if (param.inert !== null) {
-        // More URL to match — recurse into continuation
         if (matchNode(param.inert, url, endIdx, state)) {
           if (value === undefined) value = decode(url.substring(pos, endIdx));
 
-          // Insert at saved position (before child params)
           for (let j = state.paramCount; j > savedParamCount; j--) {
             state.paramNames[j] = state.paramNames[j - 1]!;
             state.paramValues[j] = state.paramValues[j - 1]!;
@@ -220,7 +403,6 @@ export function createRadixWalker(
     return false;
   }
 
-  // Entry point — returned as the RadixMatchFn
   return function walk(url: string, startIndex: number, state: MatchState): boolean {
     return matchNode(root, url, startIndex, state);
   };
