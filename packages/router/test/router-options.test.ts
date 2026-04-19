@@ -3,8 +3,6 @@ import { describe, it, expect } from 'bun:test';
 import { Router } from '../src/router';
 import { RouterError } from '../src/error';
 
-// ── Helpers ──
-
 function catchRouterError(fn: () => void): RouterError {
   try {
     fn();
@@ -60,11 +58,8 @@ describe('Router<T> options', () => {
     router.add('GET', '/ok', 'ok');
     router.build();
 
-    const ok = router.match('GET', '/ok');
-    expect(ok).not.toBeNull();
-
-    const err = catchRouterError(() => router.match('GET', '/this-is-too-long-segment'));
-    expect(err.data.kind).toBe('segment-limit');
+    expect(router.match('GET', '/ok')).not.toBeNull();
+    expect(router.match('GET', '/this-is-too-long-segment')).toBeNull();
   });
 
   it('should decode params when decodeParams=true (default)', () => {

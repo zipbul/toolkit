@@ -33,12 +33,11 @@ describe('Router<T> errors', () => {
     expect(err.data.method).toBe('GET');
   });
 
-  it('should throw RouterError kind=\'not-built\' when match called before build', () => {
+  it('should return null when match called before build', () => {
     const router = new Router<string>();
     router.add('GET', '/x', 'x');
 
-    const err = catchRouterError(() => router.match('GET', '/x'));
-    expect(err.data.kind).toBe('not-built');
+    expect(router.match('GET', '/x')).toBeNull();
   });
 
   it('should throw for duplicate method+path (route-duplicate)', () => {
@@ -118,15 +117,14 @@ describe('Router<T> errors', () => {
     expect(err.data.kind).toBe('route-parse');
   });
 
-  it('should throw segment-limit error during match', () => {
+  it('should return null for oversized segment during match', () => {
     const router = new Router<string>({
       maxSegmentLength: 5,
     });
     router.add('GET', '/ok', 'ok');
     router.build();
 
-    const err = catchRouterError(() => router.match('GET', '/very-long-segment-name'));
-    expect(err.data.kind).toBe('segment-limit');
+    expect(router.match('GET', '/very-long-segment-name')).toBeNull();
   });
 
   it('should include kind, message, path, method in error data', () => {
@@ -162,18 +160,12 @@ describe('Router<T> errors', () => {
     expect(err.data.kind).toBe('route-parse');
   });
 
-  it('should include suggestion field for error kinds', () => {
+  it('should include suggestion field for mutation error kinds', () => {
     // router-sealed
     const r1 = new Router<string>();
     r1.build();
     const sealed = catchRouterError(() => r1.add('GET', '/x', 'x'));
     expect(typeof sealed.data.suggestion).toBe('string');
-
-    // not-built
-    const r2 = new Router<string>();
-    r2.add('GET', '/x', 'x');
-    const notBuilt = catchRouterError(() => r2.match('GET', '/x'));
-    expect(typeof notBuilt.data.suggestion).toBe('string');
 
     // route-duplicate
     const r3 = new Router<string>();

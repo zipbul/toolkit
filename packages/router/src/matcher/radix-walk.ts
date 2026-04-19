@@ -4,6 +4,8 @@ import type { MatchState } from './match-state';
 import type { DecoderFn } from '../processor/decoder';
 import type { RadixMatchFn } from './radix-matcher';
 
+import { TESTER_PASS, TESTER_TIMEOUT } from './pattern-tester';
+
 export function createRadixWalker(
   root: RadixNode,
   testers: Array<PatternTesterFn | undefined>,
@@ -149,15 +151,17 @@ export function createRadixWalker(
       if (tester !== undefined) {
         value = decode(url.substring(pos, endIdx));
 
-        try {
-          if (!tester(value)) {
-            param = param.next;
-            continue;
-          }
-        } catch (e) {
+        const r = tester(value);
+
+        if (r === TESTER_TIMEOUT) {
           state.errorKind = 'regex-timeout';
-          state.errorMessage = e instanceof Error ? e.message : String(e);
+          state.errorMessage = `Route parameter regex exceeded time limit`;
           return false;
+        }
+
+        if (r !== TESTER_PASS) {
+          param = param.next;
+          continue;
         }
       }
 

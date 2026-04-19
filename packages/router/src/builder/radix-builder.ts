@@ -86,7 +86,6 @@ export class RadixBuilder {
     // Process from right to left to handle nested optionals correctly
     for (let bit = 1; bit < (1 << optionalIndices.length); bit++) {
       const filtered: PathPart[] = [];
-      let prevStatic: PathPart | null = null;
 
       for (let i = 0; i < parts.length; i++) {
         // Check if this index should be skipped
@@ -315,15 +314,13 @@ export class RadixBuilder {
 
       normalizedSource = normResult;
 
-      try {
-        compiledPattern = this.patternUtils.acquireCompiledPattern(normalizedSource, '');
-      } catch (e) {
-        return err({
-          kind: 'route-parse',
-          message: `Invalid regex pattern '${part.pattern}': ${e instanceof Error ? e.message : String(e)}`,
-          segment: part.pattern,
-        });
+      const compileResult = this.patternUtils.acquireCompiledPattern(normalizedSource, '');
+
+      if (isErr(compileResult)) {
+        return compileResult;
       }
+
+      compiledPattern = compileResult;
     }
 
     // Find existing param child with same name and pattern

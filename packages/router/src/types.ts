@@ -1,4 +1,3 @@
-import type { HttpMethod } from '@zipbul/shared';
 
 export interface RouterOptions {
   ignoreTrailingSlash?: boolean;
@@ -11,7 +10,7 @@ export interface RouterOptions {
   regexSafety?: RegexSafetyOptions;
   regexAnchorPolicy?: 'warn' | 'error' | 'silent';
   onWarn?: (warning: RouterWarning) => void;
-  /** 경로 최대 길이. 기본값 2048. 초과 시 match()에서 즉시 throw RouterError 반환. */
+  /** 경로 최대 길이. 기본값 2048. 초과 시 match() 는 null 을 반환한다. */
   maxPathLength?: number;
 }
 
@@ -27,7 +26,9 @@ export interface RegexSafetyOptions {
 }
 
 
-export type PatternTesterFn = (value: string) => boolean;
+import type { TesterResult } from './matcher/pattern-tester';
+
+export type PatternTesterFn = (value: string) => TesterResult;
 
 export type RouteParams = Record<string, string | undefined>;
 
@@ -35,12 +36,11 @@ export type RouteParams = Record<string, string | undefined>;
 
 /**
  * 라우터 에러 종류 (discriminant).
- * 총 14개 — 상태 전이 2, 빌드타임 8, 매치타임 4.
+ * 총 9개 — 상태 전이 1, 빌드타임 8. match() 는 throw 하지 않으므로 매치타임 kind 는 없다.
  */
 export type RouterErrKind =
   // 상태 전이
   | 'router-sealed'      // build() 후 add() 시도
-  | 'not-built'          // build() 전 match() 시도
   // 빌드타임 — 등록
   | 'route-duplicate'    // 동일 method+path 이미 존재
   | 'route-conflict'     // wildcard/param/static 구조적 충돌
@@ -49,11 +49,7 @@ export type RouterErrKind =
   | 'regex-unsafe'       // regex safety 검사 실패
   | 'regex-anchor'       // anchor policy=error 시 ^/$ 포함
   | 'method-limit'       // 32개 메서드 초과 (MethodRegistry)
-  // 매치타임
-  | 'segment-limit'      // maxSegmentLength 초과
-  | 'regex-timeout'      // 패턴 매칭 시간 초과
-  | 'path-too-long'      // maxPathLength 초과
-  | 'method-not-found';  // 한 번도 등록되지 않은 메서드로 match() 시도
+  | 'segment-limit';     // 빌드 시 세그먼트 길이/수/파라미터 수 상한 초과
 
 /**
  * Result 에러에 첨부되는 데이터.

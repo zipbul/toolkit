@@ -13,7 +13,7 @@ export class PatternUtils {
     this.config = config;
   }
 
-  acquireCompiledPattern(source: string, flags: string): RegExp {
+  acquireCompiledPattern(source: string, flags: string): Result<RegExp, RouterErrData> {
     const key = `${flags}|${source}`;
     const cached = this.compiledPatternCache.get(key);
 
@@ -21,7 +21,17 @@ export class PatternUtils {
       return cached;
     }
 
-    const compiled = new RegExp(`^(?:${source})$`, flags);
+    let compiled: RegExp;
+
+    try {
+      compiled = new RegExp(`^(?:${source})$`, flags);
+    } catch (e) {
+      return err<RouterErrData>({
+        kind: 'route-parse',
+        message: `Invalid regex pattern '${source}': ${e instanceof Error ? e.message : String(e)}`,
+        segment: source,
+      });
+    }
 
     this.compiledPatternCache.set(key, compiled);
 

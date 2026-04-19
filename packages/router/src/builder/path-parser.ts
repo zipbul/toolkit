@@ -416,9 +416,17 @@ export class PathParser {
       }
     }
 
-    // Custom validator — exception propagates to caller
+    // Custom validator — throws are converted to Err to honor the Result contract
     if (safety.validator) {
-      safety.validator(pattern);
+      try {
+        safety.validator(pattern);
+      } catch (e) {
+        return err({
+          kind: 'regex-unsafe',
+          message: e instanceof Error ? e.message : String(e),
+          segment: pattern,
+        });
+      }
     }
   }
 }

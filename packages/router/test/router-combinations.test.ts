@@ -1,19 +1,6 @@
 import { describe, it, expect } from 'bun:test';
 
 import { Router } from '../src/router';
-import { RouterError } from '../src/error';
-
-// ── Helpers ──
-
-function catchRouterError(fn: () => void): RouterError {
-  try {
-    fn();
-  } catch (e) {
-    expect(e).toBeInstanceOf(RouterError);
-    return e as RouterError;
-  }
-  throw new Error('Expected RouterError to be thrown');
-}
 
 describe('Router<T> combinations', () => {
   // ── Option × Cache (4 tests) ──
@@ -298,8 +285,7 @@ describe('Router<T> combinations', () => {
 
       const longSeg = 'a'.repeat(20);
 
-      const err = catchRouterError(() => router.match('GET', `/api/${longSeg}`));
-      expect(err.data.kind).toBe('segment-limit');
+      expect(router.match('GET', `/api/${longSeg}`)).toBeNull();
     });
   });
 });

@@ -43,7 +43,6 @@ export class Router<T = unknown> {
 
   private _ignoreTrailingSlash = true;
   private _caseSensitive = true;
-  private _decodeParams = true;
   private _maxPathLength = 2048;
   private _maxSegmentLength = 256;
   private hitCacheByMethod: Map<number, RouterCache<CachedMatchEntry<T>>> | undefined;
@@ -209,7 +208,6 @@ export class Router<T = unknown> {
 
     this._ignoreTrailingSlash = this.options.ignoreTrailingSlash ?? true;
     this._caseSensitive = this.options.caseSensitive ?? true;
-    this._decodeParams = this.options.decodeParams ?? true;
     this._maxPathLength = this.options.maxPathLength ?? 2048;
     this._maxSegmentLength = this.options.maxSegmentLength ?? 256;
 
@@ -235,34 +233,17 @@ export class Router<T = unknown> {
 
   match(method: HttpMethod, path: string): MatchOutput<T> | null {
     if (!this.sealed) {
-      throw new RouterError({
-        kind: 'not-built',
-        message: 'Router must be built before matching. Call build() first.',
-        path,
-        method,
-        suggestion: 'Call router.build() after adding all routes',
-      });
+      return null;
     }
 
     if (path.length > this._maxPathLength) {
-      throw new RouterError({
-        kind: 'path-too-long',
-        message: `Path length (${path.length}) exceeds maxPathLength (${this._maxPathLength}).`,
-        path,
-        method,
-        suggestion: `Shorten the path or increase maxPathLength in RouterOptions (current: ${this._maxPathLength}).`,
-      });
+      return null;
     }
 
-    // Inline resolveMethodCode — avoid function call + Result wrapping
     const methodCode = this.methodCodes.get(method);
 
     if (methodCode === undefined) {
-      throw new RouterError({
-        kind: 'method-not-found',
-        message: `No routes registered for method '${method}'.`,
-        method,
-      });
+      return null;
     }
 
     const searchPath = this.preNormalize(path);
@@ -287,13 +268,7 @@ export class Router<T = unknown> {
 
     // 3. Segment length validation
     if (!this.checkSegmentLengths(searchPath)) {
-      throw new RouterError({
-        kind: 'segment-limit',
-        message: 'Segment length exceeds limit',
-        path,
-        method,
-        suggestion: `Shorten the path segment to ${this._maxSegmentLength} characters or fewer.`,
-      });
+      return null;
     }
 
     // 4. Radix trie match
@@ -308,16 +283,11 @@ export class Router<T = unknown> {
     const matched = tree(searchPath, 0, this.matchState);
 
     if (!matched) {
-      if (this.matchState.errorKind) {
-        throw new RouterError({
-          kind: this.matchState.errorKind as any,
-          message: this.matchState.errorMessage!,
-          path,
-          method,
-        });
+      // Skip negative caching on transient runtime signals (e.g. regex-timeout).
+      // Caching them would blackhole a potentially valid path until miss eviction.
+      if (this.matchState.errorKind === null) {
+        this.writeCacheEntry(searchPath, methodCode, null);
       }
-
-      this.writeCacheEntry(searchPath, methodCode, null);
       return null;
     }
 
@@ -327,11 +297,7 @@ export class Router<T = unknown> {
 
     this.optionalParamDefaults?.apply(state.handlerIndex, params);
 
-    const value = this.handlers[state.handlerIndex];
-
-    if (value === undefined) {
-      return null;
-    }
+    const value = this.handlers[state.handlerIndex]!;
 
     this.writeCacheEntry(searchPath, methodCode, { value, params });
 
@@ -433,9 +399,11 @@ export class Router<T = unknown> {
         this.missCacheByMethod!.set(methodCode, missSet);
       }
 
-      // Bounded miss set: clear when full to prevent unbounded growth
+      // Bounded miss set: FIFO eviction (insertion-order) to avoid catastrophic clear
       if (missSet.size >= this.cacheMaxSize) {
-        missSet.clear();
+        const oldest = missSet.values().next().value;
+
+        if (oldest !== undefined) missSet.delete(oldest);
       }
 
       missSet.add(searchPath);
@@ -550,6 +518,9 @@ export class Router<T = unknown> {
     const insertResult = this.radixBuilder!.insert(offsetResult, parts, handlerIndex);
 
     if (isErr(insertResult)) {
+      // Roll back the handler slot so failed inserts do not leak storage.
+      this.handlers.pop();
+
       return err<RouterErrData>({
         ...insertResult.data,
         path,

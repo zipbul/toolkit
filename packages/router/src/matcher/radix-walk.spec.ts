@@ -4,6 +4,7 @@ import { createRadixWalker } from './radix-walk';
 import { createMatchState } from './match-state';
 import { createRadixNode, createParamNode } from '../builder/radix-node';
 import { buildDecoder } from '../processor/decoder';
+import { TESTER_FAIL, TESTER_PASS, TESTER_TIMEOUT } from './pattern-tester';
 
 const decoder = buildDecoder();
 
@@ -218,7 +219,7 @@ describe('createRadixWalker', () => {
 
       root.inert = { [47]: usersNode };
 
-      const digitTester = (v: string) => /^\d+$/.test(v);
+      const digitTester = (v: string) => (/^\d+$/.test(v) ? TESTER_PASS : TESTER_FAIL);
       const fn = createRadixWalker(root, [digitTester], decoder, true);
       const result = walk(fn, '/users/42');
 
@@ -235,14 +236,14 @@ describe('createRadixWalker', () => {
 
       root.inert = { [47]: usersNode };
 
-      const digitTester = (v: string) => /^\d+$/.test(v);
+      const digitTester = (v: string) => (/^\d+$/.test(v) ? TESTER_PASS : TESTER_FAIL);
       const fn = createRadixWalker(root, [digitTester], decoder, true);
       const result = walk(fn, '/users/abc');
 
       expect(result).toBeNull();
     });
 
-    it('should set errorKind when tester throws', () => {
+    it('should set errorKind when tester returns TIMEOUT', () => {
       const root = createRadixNode('');
       const usersNode = createRadixNode('/users/');
       usersNode.params = createParamNode('id');
@@ -251,56 +252,34 @@ describe('createRadixWalker', () => {
 
       root.inert = { [47]: usersNode };
 
-      const throwingTester = () => { throw new Error('regex timeout!'); };
-      const fn = createRadixWalker(root, [throwingTester], decoder, true);
+      const timeoutTester = (): typeof TESTER_TIMEOUT => TESTER_TIMEOUT;
+      const fn = createRadixWalker(root, [timeoutTester], decoder, true);
 
       const state = createMatchState();
       const result = fn('/users/123', 0, state);
 
       expect(result).toBe(false);
       expect(state.errorKind).toBe('regex-timeout');
-      expect(state.errorMessage).toBe('regex timeout!');
+      expect(state.errorMessage).toContain('exceeded');
     });
 
-    it('should set errorMessage from non-Error throw', () => {
-      const root = createRadixNode('');
-      const usersNode = createRadixNode('/users/');
-      usersNode.params = createParamNode('id');
-      usersNode.params.pattern = /^\d+$/;
-      usersNode.params.store = 0;
-
-      root.inert = { [47]: usersNode };
-
-      const throwingTester = () => { throw 'string error'; };
-      const fn = createRadixWalker(root, [throwingTester], decoder, true);
-
-      const state = createMatchState();
-      const result = fn('/users/123', 0, state);
-
-      expect(result).toBe(false);
-      expect(state.errorKind).toBe('regex-timeout');
-      expect(state.errorMessage).toBe('string error');
-    });
-
-    it('should propagate error from static child when node has alternatives', () => {
+    it('should propagate timeout from static child when node has alternatives', () => {
       const root = createRadixNode('');
       const prefixNode = createRadixNode('/items/');
 
-      // Static child that leads to a param with throwing tester
       const staticChild = createRadixNode('special/');
       staticChild.params = createParamNode('id');
       staticChild.params.pattern = /^\d+$/;
       staticChild.params.store = 0;
       prefixNode.inert = { ['s'.charCodeAt(0)]: staticChild };
 
-      // Also has a param fallback → triggers slow path (backtracking)
       prefixNode.params = createParamNode('name');
       prefixNode.params.store = 1;
 
       root.inert = { [47]: prefixNode };
 
-      const throwingTester = () => { throw new Error('timeout!'); };
-      const fn = createRadixWalker(root, [throwingTester], decoder, true);
+      const timeoutTester = (): typeof TESTER_TIMEOUT => TESTER_TIMEOUT;
+      const fn = createRadixWalker(root, [timeoutTester], decoder, true);
 
       const state = createMatchState();
       const result = fn('/items/special/abc', 0, state);

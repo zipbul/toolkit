@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'bun:test';
 import * as fc from 'fast-check';
-import { Router } from '../index';
-import { RouterError } from '../index';
+
+import { Router, RouterError } from '../index';
 import type { MatchOutput } from '../index';
 
 // ── Arbitraries ──

@@ -207,22 +207,18 @@ describe('Router', () => {
       expect(e.data.kind).toBe('router-sealed');
     });
 
-    it('should throw RouterError(not-built) when match() before build', () => {
+    it('should return null when match() called before build', () => {
       const r = makeRouter<number>();
       r.add('GET', '/x', 1);
 
-      const e = catchRouterError(() => r.match('GET', '/x'));
-
-      expect(e.data.kind).toBe('not-built');
+      expect(r.match('GET', '/x')).toBeNull();
     });
 
-    it('should throw RouterError(path-too-long) when path exceeds maxPathLength', () => {
+    it('should return null when path exceeds maxPathLength', () => {
       const r = buildWith([['GET', '/x', 1]], { maxPathLength: 10 });
       const longPath = '/' + 'a'.repeat(20);
 
-      const e = catchRouterError(() => r.match('GET', longPath));
-
-      expect(e.data.kind).toBe('path-too-long');
+      expect(r.match('GET', longPath)).toBeNull();
     });
 
     it('should return null for unregistered method', () => {
@@ -293,14 +289,12 @@ describe('Router', () => {
       expect(result).not.toBeNull();
     });
 
-    it('should throw at maxPathLength+1', () => {
+    it('should return null at maxPathLength+1', () => {
       const maxLen = 30;
       const path = '/' + 'a'.repeat(maxLen); // 31 chars > maxLen
       const r = buildWith([['GET', '/x', 1]], { maxPathLength: maxLen });
 
-      const e = catchRouterError(() => r.match('GET', path));
-
-      expect(e.data.kind).toBe('path-too-long');
+      expect(r.match('GET', path)).toBeNull();
     });
   });
 

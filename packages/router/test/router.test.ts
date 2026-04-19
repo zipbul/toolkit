@@ -1,10 +1,7 @@
 import { describe, it, expect } from 'bun:test';
-import type { MatchOutput } from '../src/types';
 
 import { Router } from '../src/router';
 import { RouterError } from '../src/error';
-
-// ── Helpers ──
 
 function catchRouterError(fn: () => void): RouterError {
   try {
@@ -360,8 +357,8 @@ describe('Router<T>', () => {
     it('should complete standard lifecycle: construct → add → build → match', () => {
       const router = new Router<string>();
 
-      // Phase 1: not built yet → match throws
-      expect(() => router.match('GET', '/x')).toThrow(RouterError);
+      // Phase 1: not built yet → match returns null
+      expect(router.match('GET', '/x')).toBeNull();
 
       // Phase 2: add
       router.add('GET', '/x', 'x');
@@ -409,11 +406,11 @@ describe('Router<T>', () => {
       expect(router.match('GET', '/c')).not.toBeNull();
     });
 
-    it('should succeed match after recovering from not-built error', () => {
+    it('should succeed match after calling match before build (returns null, not error)', () => {
       const router = new Router<string>();
       router.add('GET', '/x', 'x');
 
-      expect(() => router.match('GET', '/x')).toThrow(RouterError);
+      expect(router.match('GET', '/x')).toBeNull();
 
       router.build();
 
@@ -425,7 +422,7 @@ describe('Router<T>', () => {
       const router = new Router<string>();
       router.add('GET', '/x', 'x');
 
-      expect(() => router.match('GET', '/x')).toThrow(RouterError);
+      expect(router.match('GET', '/x')).toBeNull();
 
       router.build();
 

@@ -9,8 +9,9 @@ describe('PatternUtils', () => {
       const utils = new PatternUtils({});
       const regex = utils.acquireCompiledPattern('\\d+', '');
 
-      expect(regex.test('123')).toBe(true);
-      expect(regex.test('abc')).toBe(false);
+      expect(isErr(regex)).toBe(false);
+      expect((regex as RegExp).test('123')).toBe(true);
+      expect((regex as RegExp).test('abc')).toBe(false);
     });
 
     it('should return the same RegExp instance for identical source and flags (cache hit)', () => {
@@ -35,6 +36,14 @@ describe('PatternUtils', () => {
       const r2 = utils.acquireCompiledPattern('abc', 'i');
 
       expect(r1).not.toBe(r2);
+    });
+
+    it('should return Err(route-parse) for invalid regex source', () => {
+      const utils = new PatternUtils({});
+      const result = utils.acquireCompiledPattern('[abc', '');
+
+      expect(isErr(result)).toBe(true);
+      expect((result as any).data.kind).toBe('route-parse');
     });
   });
 

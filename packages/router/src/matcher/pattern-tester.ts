@@ -1,15 +1,12 @@
-export const ROUTE_REGEX_TIMEOUT = Symbol('zipbul.route-regex-timeout');
+export const TESTER_FAIL = 0 as const;
+export const TESTER_PASS = 1 as const;
+export const TESTER_TIMEOUT = 2 as const;
+
+export type TesterResult = typeof TESTER_FAIL | typeof TESTER_PASS | typeof TESTER_TIMEOUT;
 
 export interface PatternTesterOptions {
   readonly maxExecutionMs?: number;
-  readonly onTimeout?: (pattern: string, durationMs: number) => boolean | void;
 }
-
-interface RouteRegexTimeoutMarker {
-  readonly [ROUTE_REGEX_TIMEOUT]?: true;
-}
-
-type RouteRegexTimeoutError = Error & RouteRegexTimeoutMarker;
 
 const DIGIT_PATTERNS = new Set(['\\d+', '\\d{1,}', '[0-9]+', '[0-9]{1,}']);
 const ALPHA_PATTERNS = new Set(['[a-zA-Z]+', '[A-Za-z]+']);
@@ -21,14 +18,12 @@ function buildPatternTester(
   source: string | undefined,
   compiled: RegExp,
   options?: PatternTesterOptions,
-): (value: string) => boolean {
-  const raw = source ?? '<anonymous>';
-
-  const wrap = (tester: (value: string) => boolean): ((value: string) => boolean) => {
+): (value: string) => TesterResult {
+  const wrap = (tester: (value: string) => boolean): ((value: string) => TesterResult) => {
     const maxExecutionMs = options?.maxExecutionMs;
 
     if (maxExecutionMs === undefined || maxExecutionMs <= 0) {
-      return tester;
+      return value => (tester(value) ? TESTER_PASS : TESTER_FAIL);
     }
 
     const limit = maxExecutionMs;
@@ -38,26 +33,9 @@ function buildPatternTester(
       const result = tester(value);
       const duration = now() - start;
 
-      if (duration > limit) {
-        const shouldThrow = options?.onTimeout?.(raw, duration);
+      if (duration > limit) return TESTER_TIMEOUT;
 
-        if (shouldThrow === false) {
-          return false;
-        }
-
-        const timeoutError = new Error(
-          `Route parameter regex '${raw}' exceeded ${limit} ms(took ${duration.toFixed(3)}ms)`,
-        ) as RouteRegexTimeoutError;
-
-        Object.defineProperty(timeoutError, ROUTE_REGEX_TIMEOUT, {
-          value: true,
-          configurable: true,
-        });
-
-        throw timeoutError;
-      }
-
-      return result;
+      return result ? TESTER_PASS : TESTER_FAIL;
     };
   };
 
@@ -66,19 +44,19 @@ function buildPatternTester(
   }
 
   if (DIGIT_PATTERNS.has(source)) {
-    return isAllDigits;
+    return wrap(isAllDigits);
   }
 
   if (ALPHA_PATTERNS.has(source)) {
-    return isAlpha;
+    return wrap(isAlpha);
   }
 
   if (ALPHANUM_PATTERNS.has(source)) {
-    return isAlphaNumericDash;
+    return wrap(isAlphaNumericDash);
   }
 
   if (source === '[^/]+') {
-    return value => value.length > 0 && !value.includes('/');
+    return wrap(value => value.length > 0 && !value.includes('/'));
   }
 
   return wrap(value => compiled.test(value));
@@ -138,4 +116,3 @@ function isAlphaNumericDash(value: string): boolean {
 }
 
 export { buildPatternTester };
-export type { RouteRegexTimeoutError };
