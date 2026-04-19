@@ -272,7 +272,23 @@ export class Router<T = unknown> {
 
     if (checkPathLen) src.push(`if (path.length > ${maxPathLen}) return null;`);
 
-    src.push(`var mc = methodCodes[method]; if (mc === undefined) return null;`);
+    // Method → methodCode dispatch. Switch on standard HTTP methods gives the
+    // JIT a jump table; unknown methods fall through to the NullProtoObj lookup.
+    // Case values come from the actual registered codes so reordering in
+    // MethodRegistry doesn't silently break dispatch.
+    const stdMethods = ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS', 'HEAD'];
+    const switchCases = stdMethods
+      .filter(m => this.methodCodes[m] !== undefined)
+      .map(m => `case ${JSON.stringify(m)}: mc = ${this.methodCodes[m]}; break;`)
+      .join('\n        ');
+
+    src.push(`
+      var mc;
+      switch (method) {
+        ${switchCases}
+        default: mc = methodCodes[method]; if (mc === undefined) return null;
+      }
+    `);
     src.push(`var sp = path;`);
     src.push(`var qi = sp.indexOf('?'); if (qi !== -1) sp = sp.substring(0, qi);`);
 
