@@ -18,6 +18,12 @@ export class OptionalParamDefaults {
     this.defaults.set(key, names);
   }
 
+  has(key: number): boolean {
+    if (this.behavior === 'omit') return false;
+
+    return this.defaults.has(key);
+  }
+
   apply(key: number, params: RouteParams): void {
     if (this.behavior === 'omit') {
       return;

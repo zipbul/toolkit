@@ -25,7 +25,16 @@ import { createMatchState, resetMatchState } from './matcher/match-state';
 
 const ALL_METHODS: readonly HttpMethod[] = ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS', 'HEAD'];
 
-const EMPTY_PARAMS: RouteParams = Object.freeze({});
+// Prototype-less object constructor — `new NullProtoObj()` produces an object
+// without Object.prototype lookups (~10-20% faster property access than {}).
+// Pattern borrowed from rou3/unjs.
+const NullProtoObj: { new (): Record<string, unknown> } = (() => {
+  const F = function () {} as unknown as { new (): Record<string, unknown> };
+  (F as unknown as { prototype: object }).prototype = Object.freeze(Object.create(null));
+  return F;
+})();
+
+const EMPTY_PARAMS: RouteParams = Object.freeze(Object.create(null));
 const STATIC_META: MatchMeta = Object.freeze({ source: 'static' } as const);
 const CACHE_META: MatchMeta = Object.freeze({ source: 'cache' } as const);
 const DYNAMIC_META: MatchMeta = Object.freeze({ source: 'dynamic' } as const);
@@ -55,8 +64,10 @@ export class Router<T = unknown> {
   private trees: Array<RadixMatchFn | null> = [];
   private matchState!: MatchState;
 
-  private staticMap: Map<string, Array<T | undefined>> = new Map();
-  private methodCodes: ReadonlyMap<string, number> = new Map();
+  /** Path → per-methodCode handler array. NullProtoObj for proto-free O(1) lookup. */
+  private staticMap: Record<string, Array<T | undefined>> = new NullProtoObj() as Record<string, Array<T | undefined>>;
+  /** Method name → numeric code. NullProtoObj for proto-free O(1) lookup. */
+  private methodCodes: Record<string, number> = new NullProtoObj() as Record<string, number>;
   /** Track wildcard names per normalized prefix for cross-method conflict detection */
   private wildcardNames: Map<string, string> = new Map();
 
@@ -185,7 +196,10 @@ export class Router<T = unknown> {
     this.sealed = true;
 
     const allCodes = this.methodRegistry.getAllCodes();
-    this.methodCodes = allCodes;
+    const codes = new NullProtoObj() as Record<string, number>;
+
+    for (const [m, c] of allCodes) codes[m] = c;
+    this.methodCodes = codes;
 
     this.optionalParamDefaults = this.radixBuilder!.optionalParamDefaults;
 
@@ -232,50 +246,61 @@ export class Router<T = unknown> {
   }
 
   match(method: HttpMethod, path: string): MatchOutput<T> | null {
-    if (!this.sealed) {
-      return null;
+    if (!this.sealed) return null;
+    if (path.length > this._maxPathLength) return null;
+
+    const methodCode = this.methodCodes[method];
+
+    if (methodCode === undefined) return null;
+
+    // ── Inlined preNormalize (strip query, optional trailing slash, optional lowercase) ──
+    let searchPath = path;
+    const qIdx = searchPath.indexOf('?');
+
+    if (qIdx !== -1) searchPath = searchPath.substring(0, qIdx);
+
+    if (
+      this._ignoreTrailingSlash &&
+      searchPath.length > 1 &&
+      searchPath.charCodeAt(searchPath.length - 1) === 47
+    ) {
+      searchPath = searchPath.substring(0, searchPath.length - 1);
     }
 
-    if (path.length > this._maxPathLength) {
-      return null;
-    }
+    if (!this._caseSensitive) searchPath = searchPath.toLowerCase();
 
-    const methodCode = this.methodCodes.get(method);
+    // 1. Static match O(1) via null-proto object (no Map.get call overhead)
+    const staticArr = this.staticMap[searchPath];
 
-    if (methodCode === undefined) {
-      return null;
-    }
+    if (staticArr !== undefined) {
+      const staticHit = staticArr[methodCode];
 
-    const searchPath = this.preNormalize(path);
-
-    // 1. Static match O(1)
-    const staticHit = this.staticMap.get(searchPath)?.[methodCode];
-
-    if (staticHit !== undefined) {
-      return { value: staticHit, params: EMPTY_PARAMS, meta: STATIC_META };
-    }
-
-    // 2. Cache lookup
-    const cached = this.lookupCache(searchPath, methodCode);
-
-    if (cached !== undefined) {
-      if (cached === null) {
-        return null;
+      if (staticHit !== undefined) {
+        return { value: staticHit, params: EMPTY_PARAMS, meta: STATIC_META };
       }
+    }
 
-      return { value: cached.value, params: cached.params, meta: CACHE_META };
+    const cacheEnabled = this.hitCacheByMethod !== undefined;
+
+    // 2. Cache lookup (only if enabled)
+    if (cacheEnabled) {
+      const cached = this.lookupCache(searchPath, methodCode);
+
+      if (cached !== undefined) {
+        if (cached === null) return null;
+
+        return { value: cached.value, params: cached.params, meta: CACHE_META };
+      }
     }
 
     // 3. Segment length validation
-    if (!this.checkSegmentLengths(searchPath)) {
-      return null;
-    }
+    if (!this.checkSegmentLengths(searchPath)) return null;
 
     // 4. Radix trie match
     const tree = this.trees[methodCode];
 
     if (!tree) {
-      this.writeCacheEntry(searchPath, methodCode, null);
+      if (cacheEnabled) this.writeCacheEntry(searchPath, methodCode, null);
       return null;
     }
 
@@ -284,8 +309,7 @@ export class Router<T = unknown> {
 
     if (!matched) {
       // Skip negative caching on transient runtime signals (e.g. regex-timeout).
-      // Caching them would blackhole a potentially valid path until miss eviction.
-      if (this.matchState.errorKind === null) {
+      if (cacheEnabled && this.matchState.errorKind === null) {
         this.writeCacheEntry(searchPath, methodCode, null);
       }
       return null;
@@ -293,22 +317,34 @@ export class Router<T = unknown> {
 
     // 5. Build result from match state
     const state = this.matchState;
-    const params = this.buildParamsObject(state);
+    const optDefaults = this.optionalParamDefaults;
+    const needsDefaults = optDefaults !== undefined && optDefaults.has(state.handlerIndex);
 
-    this.optionalParamDefaults?.apply(state.handlerIndex, params);
+    let params: RouteParams;
+
+    if (state.paramCount === 0 && !needsDefaults) {
+      params = EMPTY_PARAMS;
+    } else {
+      params = this.buildParamsObject(state);
+
+      if (needsDefaults) optDefaults!.apply(state.handlerIndex, params);
+    }
 
     const value = this.handlers[state.handlerIndex]!;
 
-    this.writeCacheEntry(searchPath, methodCode, { value, params });
+    if (cacheEnabled) this.writeCacheEntry(searchPath, methodCode, { value, params });
 
     return { value, params, meta: DYNAMIC_META };
   }
 
   private buildParamsObject(state: MatchState): RouteParams {
-    const params: RouteParams = {};
+    const params: RouteParams = Object.create(null) as RouteParams;
+    const count = state.paramCount;
+    const names = state.paramNames;
+    const values = state.paramValues;
 
-    for (let i = 0; i < state.paramCount; i++) {
-      params[state.paramNames[i]!] = state.paramValues[i]!;
+    for (let i = 0; i < count; i++) {
+      params[names[i]!] = values[i]!;
     }
 
     return params;
@@ -333,29 +369,6 @@ export class Router<T = unknown> {
     }
 
     return true;
-  }
-
-  // resolveMethodCode removed — inlined into match() for performance
-
-  private preNormalize(path: string): string {
-    let p = path;
-
-    // Query string strip
-    const qIdx = p.indexOf('?');
-
-    if (qIdx !== -1) {
-      p = p.substring(0, qIdx);
-    }
-
-    if (this._ignoreTrailingSlash && p.length > 1 && p.charCodeAt(p.length - 1) === 47) {
-      p = p.substring(0, p.length - 1);
-    }
-
-    if (!this._caseSensitive) {
-      p = p.toLowerCase();
-    }
-
-    return p;
   }
 
   private lookupCache(searchPath: string, methodCode: number): CachedMatchEntry<T> | null | undefined {
@@ -387,10 +400,14 @@ export class Router<T = unknown> {
         this.hitCacheByMethod.set(methodCode, mc);
       }
 
-      mc.set(searchPath, {
-        value: entry.value,
-        params: { ...entry.params },
-      });
+      // Defensive clone for isolation: user may mutate returned params and we must
+      // not leak that into subsequent cache hits. Skip when params is the shared
+      // frozen EMPTY_PARAMS (mutation would throw, no pollution possible).
+      const cachedParams: RouteParams = entry.params === EMPTY_PARAMS
+        ? EMPTY_PARAMS
+        : Object.assign(Object.create(null) as RouteParams, entry.params);
+
+      mc.set(searchPath, { value: entry.value, params: cachedParams });
     } else {
       let missSet = this.missCacheByMethod!.get(methodCode);
 
@@ -491,11 +508,11 @@ export class Router<T = unknown> {
         return wcBlockConflict;
       }
 
-      let arr = this.staticMap.get(normalized);
+      let arr = this.staticMap[normalized];
 
       if (!arr) {
         arr = [];
-        this.staticMap.set(normalized, arr);
+        this.staticMap[normalized] = arr;
       }
 
       if (arr[offsetResult] !== undefined) {

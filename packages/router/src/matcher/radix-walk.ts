@@ -12,9 +12,10 @@ export function createRadixWalker(
   decoder: DecoderFn,
   decodeParams: boolean,
 ): RadixMatchFn {
-  function decode(raw: string): string {
-    return decodeParams && raw.indexOf('%') !== -1 ? decoder(raw) : raw;
-  }
+  // Specialize decode strategy at build time to eliminate branches in the hot loop.
+  const decode: (raw: string) => string = decodeParams
+    ? raw => (raw.indexOf('%') !== -1 ? decoder(raw) : raw)
+    : raw => raw;
 
   function matchNode(
     initialNode: RadixNode,
