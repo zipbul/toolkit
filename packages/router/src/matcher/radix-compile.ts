@@ -34,6 +34,7 @@ export function compileRadixTree(
     counter: 0,
     testerIdx: 0,
     bail: false,
+    decodeParams,
   };
 
   const body = emitNode(ctx, root, 'pos0');
@@ -42,11 +43,16 @@ export function compileRadixTree(
 
   // TESTER codes are inlined as numeric literals (1 = PASS, 2 = TIMEOUT) to
   // avoid an import from pattern-tester in the generated scope.
+  // State arrays are hoisted to locals to skip per-access property reads in the
+  // hot path; paramCount is tracked as a local and only written back to state
+  // at terminal commits.
   const source = `
 'use strict';
 return function compiledWalk(url, startIndex, state) {
   var len = url.length;
   var pos0 = startIndex;
+  var pn = state.paramNames;
+  var pv = state.paramValues;
 ${body}
   return false;
 };
@@ -81,6 +87,18 @@ interface CompileCtx {
   counter: number;
   testerIdx: number;
   bail: boolean;
+  decodeParams: boolean;
+}
+
+/**
+ * Inline the decode operation on a raw value expression. Avoids a closure
+ * function-call per param when decoding is enabled; reduces to identity when
+ * decoding is disabled.
+ */
+function inlineDecode(ctx: CompileCtx, rawExpr: string, rawVar: string): string {
+  if (!ctx.decodeParams) return rawExpr;
+
+  return `(${rawVar}.indexOf('%') === -1 ? ${rawVar} : decode(${rawVar}))`;
 }
 
 function fresh(ctx: CompileCtx, name: string): string {
@@ -121,8 +139,8 @@ function emitNode(ctx: CompileCtx, node: RadixNode, posVar: string): string {
   if (node.wildcardStore !== null && node.wildcardOrigin === 'star') {
     code += `
   if (${posVar} === len) {
-    state.paramNames[state.paramCount] = ${JSON.stringify(node.wildcardName!)};
-    state.paramValues[state.paramCount] = '';
+    pn[state.paramCount] = ${JSON.stringify(node.wildcardName!)};
+    pv[state.paramCount] = '';
     state.paramCount++;
     state.handlerIndex = ${node.wildcardStore};
     return true;
@@ -183,8 +201,8 @@ ${childBody}
 
     code += `
   if (${guard}) {
-    state.paramNames[state.paramCount] = ${JSON.stringify(node.wildcardName!)};
-    state.paramValues[state.paramCount] = url.substring(${posVar});
+    pn[state.paramCount] = ${JSON.stringify(node.wildcardName!)};
+    pv[state.paramCount] = url.substring(${posVar});
     state.paramCount++;
     state.handlerIndex = ${node.wildcardStore};
     return true;
@@ -217,8 +235,8 @@ function emitLabelMatch(node: RadixNode, posVar: string): string {
     starEdge = `
   if (${posVar} + ${labelLen} === len + 1) {
     if (!(${partial})) {
-      state.paramNames[state.paramCount] = ${JSON.stringify(node.wildcardName!)};
-      state.paramValues[state.paramCount] = '';
+      pn[state.paramCount] = ${JSON.stringify(node.wildcardName!)};
+      pv[state.paramCount] = '';
       state.paramCount++;
       state.handlerIndex = ${node.wildcardStore};
       return true;
@@ -250,31 +268,32 @@ function emitParam(ctx: CompileCtx, param: ParamNode, posVar: string): string {
   const valVar = param.pattern !== null ? fresh(ctx, 'val') : null;
   const rVar = param.pattern !== null ? fresh(ctx, 'r') : null;
 
+  const rawVar = fresh(ctx, 'raw');
+
   let code = `
   do {
     var ${slashVar} = url.indexOf('/', ${posVar});
     var ${endVar} = ${slashVar} === -1 ? len : ${slashVar};
-    if (${endVar} === ${posVar}) break;`;
+    if (${endVar} === ${posVar}) break;
+    var ${rawVar} = url.substring(${posVar}, ${endVar});`;
 
   // Regex tester check (eager value extraction when pattern present)
   if (param.pattern !== null && valVar !== null && rVar !== null) {
     code += `
-    var ${valVar} = decode(url.substring(${posVar}, ${endVar}));
+    var ${valVar} = ${inlineDecode(ctx, rawVar, rawVar)};
     var ${rVar} = testers[${testerIdx}](${valVar});
     if (${rVar} === 2) { state.errorKind = 'regex-timeout'; state.errorMessage = 'Route parameter regex exceeded time limit'; return false; }
     if (${rVar} !== 1) break;`;
   }
 
-  // Commit param optimistically — reuse pre-computed value when tester ran,
-  // else materialize now.
   const valueExpr = valVar !== null
     ? valVar
-    : `decode(url.substring(${posVar}, ${endVar}))`;
+    : inlineDecode(ctx, rawVar, rawVar);
 
   code += `
     var ${savedPC} = state.paramCount;
-    state.paramNames[${savedPC}] = ${JSON.stringify(param.name)};
-    state.paramValues[${savedPC}] = ${valueExpr};
+    pn[${savedPC}] = ${JSON.stringify(param.name)};
+    pv[${savedPC}] = ${valueExpr};
     state.paramCount = ${savedPC} + 1;`;
 
   // Terminal — commit handler, return
