@@ -17,6 +17,7 @@ export function createRadixWalker(
     ? raw => (raw.indexOf('%') !== -1 ? decoder(raw) : raw)
     : raw => raw;
 
+
   function matchNode(
     initialNode: RadixNode,
     url: string,
@@ -145,14 +146,12 @@ export function createRadixWalker(
     let testerIdx = 0;
 
     while (param !== null) {
-      const tester = param.pattern !== null ? testers[testerIdx++] : undefined;
       let value: string | undefined;
 
-      // Eager decode only when tester needs the value
-      if (tester !== undefined) {
+      if (param.pattern !== null) {
         value = decode(url.substring(pos, endIdx));
 
-        const r = tester(value);
+        const r = testers[testerIdx++]!(value);
 
         if (r === TESTER_TIMEOUT) {
           state.errorKind = 'regex-timeout';

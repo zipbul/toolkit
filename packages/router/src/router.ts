@@ -269,7 +269,7 @@ export class Router<T = unknown> {
 
     if (!this._caseSensitive) searchPath = searchPath.toLowerCase();
 
-    // 1. Static match O(1) via null-proto object (no Map.get call overhead)
+    // 1. Static match — direct null-proto lookup (measured faster than compiled switch).
     const staticArr = this.staticMap[searchPath];
 
     if (staticArr !== undefined) {
