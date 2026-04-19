@@ -5,6 +5,7 @@ import type { DecoderFn } from '../processor/decoder';
 import type { RadixMatchFn } from './radix-matcher';
 
 import { TESTER_PASS, TESTER_TIMEOUT } from './pattern-tester';
+import { compileRadixTree } from './radix-compile';
 
 export function createRadixWalker(
   root: RadixNode,
@@ -12,6 +13,12 @@ export function createRadixWalker(
   decoder: DecoderFn,
   decodeParams: boolean,
 ): RadixMatchFn {
+  // Attempt JIT-compiled walker first — falls through to the interpreter on
+  // unsupported tree shapes or `new Function()` failures (e.g. strict CSP).
+  const compiled = compileRadixTree(root, testers, decoder, decodeParams);
+
+  if (compiled !== null) return compiled;
+
   // Specialize decode strategy at build time to eliminate branches in the hot loop.
   const decode: (raw: string) => string = decodeParams
     ? raw => (raw.indexOf('%') !== -1 ? decoder(raw) : raw)
