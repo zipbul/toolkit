@@ -48,6 +48,14 @@ export class RadixBuilder {
     }
   }
 
+  /** Exposed for segment-tree construction — same expansion logic as insert(). */
+  expandOptionalPublic(
+    parts: PathPart[],
+    handlerIndex: number,
+  ): Array<{ parts: PathPart[]; handlerIndex: number }> {
+    return this.expandOptional(parts, handlerIndex);
+  }
+
   private expandOptional(
     parts: PathPart[],
     handlerIndex: number,
@@ -362,7 +370,11 @@ export class RadixBuilder {
       const tester = buildPatternTester(normalizedSource, compiledPattern, {
         maxExecutionMs: this.config.regexSafety?.maxExecutionMs,
       });
-      // Store tester — the index matches the param's position in the linked list
+
+      // Bind tester directly to the param node so walkers don't need an indexed
+      // sidecar array. Keep `testerList` populated for the codegen path which
+      // still indexes by testerIdx into a closure-captured array.
+      newParam.tester = tester;
       testerList.push(tester);
     }
 

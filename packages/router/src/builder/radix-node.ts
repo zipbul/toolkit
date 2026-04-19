@@ -15,6 +15,8 @@ export interface RadixNode {
   wildcardOrigin: 'star' | 'multi' | null;
 }
 
+import type { PatternTesterFn } from '../types';
+
 export interface ParamNode {
   /** Parameter name */
   name: string;
@@ -26,6 +28,8 @@ export interface ParamNode {
   pattern: RegExp | null;
   /** Original regex source string */
   patternSource: string | null;
+  /** Compiled tester bound directly to this param — replaces the shared testers array. */
+  tester: PatternTesterFn | null;
   /** Next param with different pattern at same level */
   next: ParamNode | null;
 }
@@ -49,6 +53,7 @@ export function createParamNode(name: string): ParamNode {
     inert: null,
     pattern: null,
     patternSource: null,
+    tester: null,
     next: null,
   };
 }

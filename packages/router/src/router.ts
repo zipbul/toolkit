@@ -22,6 +22,11 @@ import { MethodRegistry } from './method-registry';
 import { buildDecoder } from './processor/decoder';
 import { createRadixWalker } from './matcher/radix-walk';
 import { createMatchState } from './matcher/match-state';
+import { createSegmentNode, insertIntoSegmentTree } from './matcher/segment-tree';
+import type { SegmentNode } from './matcher/segment-tree';
+import { createSegmentWalker } from './matcher/segment-walk';
+import type { PathPart } from './builder/path-parser';
+import type { PatternTesterFn } from './types';
 
 const ALL_METHODS: readonly HttpMethod[] = ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS', 'HEAD'];
 
@@ -62,6 +67,8 @@ export class Router<T = unknown> {
   private handlers: T[] = [];
   private optionalParamDefaults: OptionalParamDefaults | undefined;
   private trees: Array<RadixMatchFn | null> = [];
+  /** Per-method registered routes — used to build the segment tree at seal. */
+  private readonly routeRecords: Array<{ methodCode: number; parts: PathPart[]; handlerIndex: number }> = [];
   /** Specialized match closure assembled by compileMatchFn() at build time. */
   private matchImpl!: (method: string, path: string) => MatchOutput<T> | null;
   private matchState!: MatchState;
@@ -208,7 +215,49 @@ export class Router<T = unknown> {
     const decoder = buildDecoder();
     const decodeParams = this.options.decodeParams ?? true;
 
+    // Build one segment tree per method, seeded from the raw registered parts
+    // (not the LCP-compressed radix tree — walking that would conflate
+    // partial-segment splits with real segment boundaries).
+    const segmentTrees: Array<SegmentNode | null> = [];
+    const segmentBuildOk: boolean[] = [];
+    const testerCache = new Map<string, PatternTesterFn>();
+
+    for (const rec of this.routeRecords) {
+      if (segmentTrees[rec.methodCode] === undefined) {
+        segmentTrees[rec.methodCode] = createSegmentNode();
+        segmentBuildOk[rec.methodCode] = true;
+      }
+
+      if (!segmentBuildOk[rec.methodCode]) continue;
+
+      // Re-expand optional params the same way the radix insert did. We use
+      // the radixBuilder's expansion helper to stay consistent.
+      const expansions = this.radixBuilder!.expandOptionalPublic(rec.parts, rec.handlerIndex);
+
+      for (const { parts: expParts, handlerIndex: hIdx } of expansions) {
+        const ok = insertIntoSegmentTree(
+          segmentTrees[rec.methodCode]!,
+          expParts,
+          hIdx,
+          this.options.regexSafety,
+          testerCache,
+        );
+
+        if (!ok) {
+          segmentBuildOk[rec.methodCode] = false;
+          break;
+        }
+      }
+    }
+
     for (const [, code] of allCodes) {
+      const segRoot = segmentTrees[code];
+
+      if (segRoot !== undefined && segRoot !== null && segmentBuildOk[code]) {
+        this.trees[code] = createSegmentWalker(segRoot, decoder, decodeParams);
+        continue;
+      }
+
       const root = this.radixBuilder!.getRoot(code);
 
       if (!root) {
@@ -570,5 +619,9 @@ export class Router<T = unknown> {
         method,
       });
     }
+
+    // Record parts so seal() can build a segment tree from the original
+    // (pre-LCP-split) route shape.
+    this.routeRecords.push({ methodCode: offsetResult, parts, handlerIndex });
   }
 }
