@@ -293,8 +293,21 @@ export class Router<T = unknown> {
       }
     }
 
-    // 3. Segment length validation
-    if (!this.checkSegmentLengths(searchPath)) return null;
+    // 3. Segment length validation (inlined for hot path)
+    {
+      const maxLen = this._maxSegmentLength;
+      let segLen = 0;
+
+      for (let i = 1; i < searchPath.length; i++) {
+        if (searchPath.charCodeAt(i) === 47) {
+          segLen = 0;
+        } else {
+          segLen++;
+
+          if (segLen > maxLen) return null;
+        }
+      }
+    }
 
     // 4. Radix trie match
     const tree = this.trees[methodCode];
@@ -348,27 +361,6 @@ export class Router<T = unknown> {
     }
 
     return params;
-  }
-
-  /**
-   * Validates that no path segment exceeds maxSegmentLength.
-   * Returns true if valid, false if any segment is too long.
-   */
-  private checkSegmentLengths(path: string): boolean {
-    const maxLen = this._maxSegmentLength;
-    let segLen = 0;
-
-    for (let i = 1; i < path.length; i++) {
-      if (path.charCodeAt(i) === 47) { // '/'
-        segLen = 0;
-      } else {
-        segLen++;
-
-        if (segLen > maxLen) return false;
-      }
-    }
-
-    return true;
   }
 
   private lookupCache(searchPath: string, methodCode: number): CachedMatchEntry<T> | null | undefined {

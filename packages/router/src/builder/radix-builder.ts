@@ -268,7 +268,8 @@ export class RadixBuilder {
           const oldChild = child;
           oldChild.part = childPart.substring(commonLen);
 
-          splitNode.inert = { [oldChild.part.charCodeAt(0)]: oldChild };
+          splitNode.inert = Object.create(null) as Record<number, RadixNode>;
+          splitNode.inert[oldChild.part.charCodeAt(0)] = oldChild;
 
           // Replace child in parent
           current.inert[firstChar] = splitNode;
@@ -285,7 +286,7 @@ export class RadixBuilder {
       const newNode = createRadixNode(remaining);
 
       if (current.inert === null) {
-        current.inert = {};
+        current.inert = Object.create(null) as Record<number, RadixNode>;
       }
 
       current.inert[firstChar] = newNode;
