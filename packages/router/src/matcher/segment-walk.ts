@@ -4,6 +4,7 @@ import type { RadixMatchFn } from './radix-matcher';
 import type { SegmentNode } from './segment-tree';
 
 import { TESTER_PASS, TESTER_TIMEOUT } from './pattern-tester';
+import { hasAmbiguousNode } from './segment-tree';
 
 /**
  * Memoirist-style walker: writes params directly into the pre-allocated
@@ -19,6 +20,14 @@ export function createSegmentWalker(
   decoder: DecoderFn,
   decodeParams: boolean,
 ): RadixMatchFn {
+  // Trees without alternation between static and param/wildcard at the same
+  // level can be matched iteratively — no recursion, no backtracking. This
+  // saves a function call per segment for the common case (REST routes
+  // typically have unique winners at each tree level).
+  if (!hasAmbiguousNode(root)) {
+    return createIterativeWalker(root, decoder, decodeParams);
+  }
+
   function match(
     node: SegmentNode,
     path: string,
@@ -143,5 +152,108 @@ export function createSegmentWalker(
     const segs = path.split('/');
 
     return match(root, path, segs, 1, state);
+  };
+}
+
+/**
+ * Iterative walker for trees without static/param ambiguity. No recursion,
+ * no backtracking — every level has a single winner so a `while` loop suffices.
+ */
+function createIterativeWalker(
+  root: SegmentNode,
+  decoder: DecoderFn,
+  decodeParams: boolean,
+): RadixMatchFn {
+  return function walk(url: string, startIndex: number, state: MatchState): boolean {
+    const path = startIndex === 0 ? url : url.substring(startIndex);
+
+    if (path.length === 1 && path.charCodeAt(0) === 47) {
+      if (root.store !== null) {
+        state.handlerIndex = root.store;
+
+        return true;
+      }
+
+      return false;
+    }
+
+    const segs = path.split('/');
+    const params = state.params!;
+    let node = root;
+    let idx = 1;
+
+    while (idx < segs.length) {
+      const seg = segs[idx]!;
+
+      if (node.staticChildren !== null) {
+        const child = node.staticChildren[seg];
+
+        if (child !== undefined) {
+          node = child;
+          idx++;
+          continue;
+        }
+      }
+
+      if (node.paramChild !== null && seg.length > 0) {
+        const decoded = decodeParams && seg.indexOf('%') !== -1 ? decoder(seg) : seg;
+
+        if (node.paramChild.tester !== null) {
+          const r = node.paramChild.tester(decoded);
+
+          if (r === TESTER_TIMEOUT) {
+            state.errorKind = 'regex-timeout';
+            state.errorMessage = 'Route parameter regex exceeded time limit';
+
+            return false;
+          }
+
+          if (r !== TESTER_PASS) return false;
+        }
+
+        params[node.paramChild.name] = decoded;
+        node = node.paramChild.next;
+        idx++;
+        continue;
+      }
+
+      if (node.wildcardStore !== null) {
+        if (node.wildcardOrigin === 'multi') {
+          let any = false;
+
+          for (let j = idx; j < segs.length; j++) {
+            if (segs[j]!.length > 0) { any = true; break; }
+          }
+
+          if (!any) return false;
+        }
+
+        let startPos = 0;
+
+        for (let i = 0; i < idx; i++) startPos += segs[i]!.length + 1;
+
+        params[node.wildcardName!] = path.substring(startPos);
+        state.handlerIndex = node.wildcardStore;
+
+        return true;
+      }
+
+      return false;
+    }
+
+    if (node.store !== null) {
+      state.handlerIndex = node.store;
+
+      return true;
+    }
+
+    if (node.wildcardStore !== null && node.wildcardOrigin === 'star') {
+      params[node.wildcardName!] = '';
+      state.handlerIndex = node.wildcardStore;
+
+      return true;
+    }
+
+    return false;
   };
 }

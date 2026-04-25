@@ -47,6 +47,31 @@ export interface CompiledTesterProvider {
 }
 
 /**
+ * Detect whether the segment tree has any node where the same URL segment
+ * could simultaneously match a static child AND a param/wildcard alternative.
+ * When false, a non-recursive iterative walker can be used safely.
+ */
+export function hasAmbiguousNode(root: SegmentNode): boolean {
+  const stack: SegmentNode[] = [root];
+
+  while (stack.length > 0) {
+    const node = stack.pop()!;
+
+    if (node.staticChildren !== null && (node.paramChild !== null || node.wildcardStore !== null)) {
+      return true;
+    }
+
+    if (node.staticChildren !== null) {
+      for (const k in node.staticChildren) stack.push(node.staticChildren[k]!);
+    }
+
+    if (node.paramChild !== null) stack.push(node.paramChild.next);
+  }
+
+  return false;
+}
+
+/**
  * Insert one expanded route (no optional markers) into the segment tree.
  * Returns false if the parts contain shapes we can't represent here —
  * though by construction, expanded parts from path-parser + RadixBuilder
