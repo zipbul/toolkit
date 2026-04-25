@@ -1,30 +1,27 @@
 import type { MatchState } from './match-state';
 import type { DecoderFn } from '../processor/decoder';
 import type { RadixMatchFn } from './radix-matcher';
-import type { SegmentNode, ParamSegment } from './segment-tree';
+import type { SegmentNode } from './segment-tree';
 
 import { TESTER_PASS, TESTER_TIMEOUT } from './pattern-tester';
 
 /**
- * Walker for the purpose-built segment tree. Matches rou3/memoirist in spirit:
- * one `path.split('/')` at entry, then O(depth) descent via `Map.get(segment)`
- * per level.
+ * Memoirist-style walker: writes params directly into the pre-allocated
+ * `state.params` object on the SUCCESS return path only. Failed branches
+ * contribute zero work to the params object — there is no commit/rollback
+ * cycle, no state-array fan-out + buildParamsObject post-pass.
  *
- * Segment *positions* are also precomputed once so wildcards can
- * `url.substring(...)` (cheap) instead of `segs.slice(idx).join('/')` (N allocs).
+ * Caller (compileMatchFn output) MUST set `state.params` to a fresh
+ * Object.create(null) before invoking, then read from it after a true return.
  */
 export function createSegmentWalker(
   root: SegmentNode,
   decoder: DecoderFn,
   decodeParams: boolean,
 ): RadixMatchFn {
-  const decode: (raw: string) => string = decodeParams
-    ? raw => (raw.indexOf('%') !== -1 ? decoder(raw) : raw)
-    : raw => raw;
-
-  function matchNode(
+  function match(
     node: SegmentNode,
-    url: string,
+    path: string,
     segs: string[],
     idx: number,
     state: MatchState,
@@ -37,9 +34,7 @@ export function createSegmentWalker(
       }
 
       if (node.wildcardStore !== null && node.wildcardOrigin === 'star') {
-        state.paramNames[state.paramCount] = node.wildcardName!;
-        state.paramValues[state.paramCount] = '';
-        state.paramCount++;
+        state.params![node.wildcardName!] = '';
         state.handlerIndex = node.wildcardStore;
 
         return true;
@@ -54,72 +49,62 @@ export function createSegmentWalker(
       const child = node.staticChildren.get(seg);
 
       if (child !== undefined) {
-        if (matchNode(child, url, segs, idx + 1, state)) return true;
-        if (state.errorKind) return false;
+        if (match(child, path, segs, idx + 1, state)) return true;
+        if (state.errorKind !== null) return false;
       }
     }
 
-    if (node.paramChild !== null) {
-      if (matchParam(node.paramChild, url, segs, idx, state)) return true;
-      if (state.errorKind) return false;
+    const param = node.paramChild;
+
+    if (param !== null && seg.length > 0) {
+      const decoded = decodeParams && seg.indexOf('%') !== -1 ? decoder(seg) : seg;
+
+      let pass = true;
+
+      if (param.tester !== null) {
+        const r = param.tester(decoded);
+
+        if (r === TESTER_TIMEOUT) {
+          state.errorKind = 'regex-timeout';
+          state.errorMessage = 'Route parameter regex exceeded time limit';
+
+          return false;
+        }
+
+        pass = r === TESTER_PASS;
+      }
+
+      if (pass) {
+        if (match(param.next, path, segs, idx + 1, state)) {
+          state.params![param.name] = decoded;
+
+          return true;
+        }
+
+        if (state.errorKind !== null) return false;
+      }
     }
 
     if (node.wildcardStore !== null) {
-      // Compute suffix start from segs lengths (avoids parallel segStarts array).
+      if (node.wildcardOrigin === 'multi') {
+        let any = false;
+
+        for (let j = idx; j < segs.length; j++) {
+          if (segs[j]!.length > 0) { any = true; break; }
+        }
+
+        if (!any) return false;
+      }
+
       let startPos = 0;
 
       for (let i = 0; i < idx; i++) startPos += segs[i]!.length + 1;
 
-      const remaining = url.substring(startPos);
-
-      if (node.wildcardOrigin === 'multi' && remaining.length === 0) return false;
-
-      state.paramNames[state.paramCount] = node.wildcardName!;
-      state.paramValues[state.paramCount] = remaining;
-      state.paramCount++;
+      state.params![node.wildcardName!] = path.substring(startPos);
       state.handlerIndex = node.wildcardStore;
 
       return true;
     }
-
-    return false;
-  }
-
-  function matchParam(
-    param: ParamSegment,
-    url: string,
-    segs: string[],
-    idx: number,
-    state: MatchState,
-  ): boolean {
-    const seg = segs[idx]!;
-
-    if (seg.length === 0) return false;
-
-    const decoded = decode(seg);
-
-    if (param.tester !== null) {
-      const r = param.tester(decoded);
-
-      if (r === TESTER_TIMEOUT) {
-        state.errorKind = 'regex-timeout';
-        state.errorMessage = 'Route parameter regex exceeded time limit';
-
-        return false;
-      }
-
-      if (r !== TESTER_PASS) return false;
-    }
-
-    const savedPC = state.paramCount;
-
-    state.paramNames[savedPC] = param.name;
-    state.paramValues[savedPC] = decoded;
-    state.paramCount = savedPC + 1;
-
-    if (matchNode(param.next, url, segs, idx + 1, state)) return true;
-
-    state.paramCount = savedPC;
 
     return false;
   }
@@ -139,6 +124,6 @@ export function createSegmentWalker(
 
     const segs = path.split('/');
 
-    return matchNode(root, path, segs, 1, state);
+    return match(root, path, segs, 1, state);
   };
 }

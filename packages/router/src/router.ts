@@ -67,6 +67,10 @@ export class Router<T = unknown> {
   private handlers: T[] = [];
   private optionalParamDefaults: OptionalParamDefaults | undefined;
   private trees: Array<RadixMatchFn | null> = [];
+  /** True when every method's tree uses the segment walker (params written
+   *  directly into state.params). False when any method falls back to the
+   *  array-based radix walker. */
+  private allSegmentTrees = true;
   /** Per-method registered routes — used to build the segment tree at seal. */
   private readonly routeRecords: Array<{ methodCode: number; parts: PathPart[]; handlerIndex: number }> = [];
   /** Specialized match closure assembled by compileMatchFn() at build time. */
@@ -250,6 +254,8 @@ export class Router<T = unknown> {
       }
     }
 
+    let allSegment = true;
+
     for (const [, code] of allCodes) {
       const segRoot = segmentTrees[code];
 
@@ -265,9 +271,14 @@ export class Router<T = unknown> {
         continue;
       }
 
+      // At least one method falls back to radix walker; compileMatchFn must
+      // emit the array-based params build path that radix walkers expect.
+      allSegment = false;
       const testers = this.radixBuilder!.getTesters(code);
       this.trees[code] = createRadixWalker(root, testers, decoder, decodeParams);
     }
+
+    this.allSegmentTrees = allSegment;
 
     this.matchState = createMatchState();
 
@@ -304,6 +315,7 @@ export class Router<T = unknown> {
 
     const hasAnyTree = this.trees.some(t => t != null);
     const hasOptDefaults = this.optionalParamDefaults !== undefined;
+    const allSegment = this.allSegmentTrees;
 
     // Closure captures (all read-only at match time)
     const staticMap = this.staticMap;
@@ -388,47 +400,79 @@ export class Router<T = unknown> {
         `);
       }
 
-      src.push(`
-        var tr = trees[mc];
-        if (!tr) {
-          ${useCache ? emitMissCacheWrite() : ''}
-          return null;
-        }
-        matchState.handlerIndex = -1;
-        matchState.paramCount = 0;
-        matchState.errorKind = null;
-        matchState.errorMessage = null;
-        var ok = tr(sp, 0, matchState);
-        if (!ok) {
-          ${useCache ? `if (matchState.errorKind === null) { ${emitMissCacheWrite()} }` : ''}
-          return null;
-        }
-      `);
+      if (allSegment) {
+        // Segment walker writes params directly into matchState.params; we
+        // pre-allocate it here and the walker mutates on the success-return
+        // path only (no commit/rollback dance).
+        src.push(`
+          var tr = trees[mc];
+          if (!tr) {
+            ${useCache ? emitMissCacheWrite() : ''}
+            return null;
+          }
+          matchState.handlerIndex = -1;
+          matchState.errorKind = null;
+          matchState.errorMessage = null;
+          var params = Object.create(null);
+          matchState.params = params;
+          var ok = tr(sp, 0, matchState);
+          if (!ok) {
+            ${useCache ? `if (matchState.errorKind === null) { ${emitMissCacheWrite()} }` : ''}
+            return null;
+          }
+        `);
 
-      if (hasOptDefaults) {
-        src.push(`
-          var nd = optDefaults !== undefined && optDefaults.has(matchState.handlerIndex);
-          var params;
-          if (matchState.paramCount === 0 && !nd) { params = EMPTY_PARAMS; }
-          else {
-            params = Object.create(null);
-            for (var pi = 0; pi < matchState.paramCount; pi++) {
-              params[matchState.paramNames[pi]] = matchState.paramValues[pi];
+        if (hasOptDefaults) {
+          src.push(`
+            if (optDefaults !== undefined && optDefaults.has(matchState.handlerIndex)) {
+              optDefaults.apply(matchState.handlerIndex, params);
             }
-            if (nd) optDefaults.apply(matchState.handlerIndex, params);
-          }
-        `);
+          `);
+        }
       } else {
+        // Radix walker writes to paramNames/paramValues arrays; build params here.
         src.push(`
-          var params;
-          if (matchState.paramCount === 0) { params = EMPTY_PARAMS; }
-          else {
-            params = Object.create(null);
-            for (var pi = 0; pi < matchState.paramCount; pi++) {
-              params[matchState.paramNames[pi]] = matchState.paramValues[pi];
-            }
+          var tr = trees[mc];
+          if (!tr) {
+            ${useCache ? emitMissCacheWrite() : ''}
+            return null;
+          }
+          matchState.handlerIndex = -1;
+          matchState.paramCount = 0;
+          matchState.errorKind = null;
+          matchState.errorMessage = null;
+          var ok = tr(sp, 0, matchState);
+          if (!ok) {
+            ${useCache ? `if (matchState.errorKind === null) { ${emitMissCacheWrite()} }` : ''}
+            return null;
           }
         `);
+
+        if (hasOptDefaults) {
+          src.push(`
+            var nd = optDefaults !== undefined && optDefaults.has(matchState.handlerIndex);
+            var params;
+            if (matchState.paramCount === 0 && !nd) { params = EMPTY_PARAMS; }
+            else {
+              params = Object.create(null);
+              for (var pi = 0; pi < matchState.paramCount; pi++) {
+                params[matchState.paramNames[pi]] = matchState.paramValues[pi];
+              }
+              if (nd) optDefaults.apply(matchState.handlerIndex, params);
+            }
+          `);
+        } else {
+          src.push(`
+            var params;
+            if (matchState.paramCount === 0) { params = EMPTY_PARAMS; }
+            else {
+              params = Object.create(null);
+              for (var pi = 0; pi < matchState.paramCount; pi++) {
+                params[matchState.paramNames[pi]] = matchState.paramValues[pi];
+              }
+            }
+          `);
+        }
       }
 
       src.push(`
