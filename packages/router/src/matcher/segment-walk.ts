@@ -26,6 +26,24 @@ export function createSegmentWalker(
     idx: number,
     state: MatchState,
   ): boolean {
+    // Fast-iterate pure static descents — common for long prefix chains like
+    // /repos/:owner/:repo/issues/:number where multiple levels are static-only
+    // between params. Saves a recursive call per static-only level.
+    while (
+      idx < segs.length
+      && node.paramChild === null
+      && node.wildcardStore === null
+    ) {
+      if (node.staticChildren === null) return false;
+
+      const child = node.staticChildren[segs[idx]!];
+
+      if (child === undefined) return false;
+
+      node = child;
+      idx++;
+    }
+
     if (idx === segs.length) {
       if (node.store !== null) {
         state.handlerIndex = node.store;
