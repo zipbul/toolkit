@@ -39,7 +39,7 @@ const NullProtoObj: { new (): Record<string, unknown> } = (() => {
   return F;
 })();
 
-const EMPTY_PARAMS: RouteParams = Object.freeze(Object.create(null));
+const EMPTY_PARAMS: RouteParams = Object.freeze(new NullProtoObj()) as RouteParams;
 const STATIC_META: MatchMeta = Object.freeze({ source: 'static' } as const);
 const CACHE_META: MatchMeta = Object.freeze({ source: 'cache' } as const);
 const DYNAMIC_META: MatchMeta = Object.freeze({ source: 'dynamic' } as const);
@@ -362,6 +362,7 @@ export class Router<T = unknown> {
     const missCacheByMethod = this.missCacheByMethod;
     const cacheMaxSize = this.cacheMaxSize;
     const RouterCacheCtor = RouterCache;
+    const ParamsCtor = NullProtoObj;
 
     const src: string[] = [];
 
@@ -449,7 +450,7 @@ export class Router<T = unknown> {
             return null;
           }
           ${anyTester ? 'matchState.errorKind = null; matchState.errorMessage = null;' : ''}
-          var params = Object.create(null);
+          var params = new ParamsCtor();
           matchState.params = params;
           var ok = tr(sp, matchState);
           if (!ok) {
@@ -490,7 +491,7 @@ export class Router<T = unknown> {
             var params;
             if (matchState.paramCount === 0 && !nd) { params = EMPTY_PARAMS; }
             else {
-              params = Object.create(null);
+              params = new ParamsCtor();
               for (var pi = 0; pi < matchState.paramCount; pi++) {
                 params[matchState.paramNames[pi]] = matchState.paramValues[pi];
               }
@@ -502,7 +503,7 @@ export class Router<T = unknown> {
             var params;
             if (matchState.paramCount === 0) { params = EMPTY_PARAMS; }
             else {
-              params = Object.create(null);
+              params = new ParamsCtor();
               for (var pi = 0; pi < matchState.paramCount; pi++) {
                 params[matchState.paramNames[pi]] = matchState.paramValues[pi];
               }
@@ -525,7 +526,7 @@ export class Router<T = unknown> {
           var cachedParams;
           if (params === EMPTY_PARAMS) { cachedParams = EMPTY_PARAMS; }
           else {
-            cachedParams = Object.create(null);
+            cachedParams = new ParamsCtor();
             for (var cpk in params) cachedParams[cpk] = params[cpk];
           }
           hc.set(sp, { value: val, params: cachedParams });
@@ -539,14 +540,14 @@ export class Router<T = unknown> {
     const factory = new Function(
       'staticOutputs', 'staticMap', 'methodCodes', 'trees', 'matchState', 'handlers',
       'optDefaults', 'hitCacheByMethod', 'missCacheByMethod', 'RouterCacheCtor',
-      'EMPTY_PARAMS', 'STATIC_META', 'CACHE_META', 'DYNAMIC_META',
+      'EMPTY_PARAMS', 'STATIC_META', 'CACHE_META', 'DYNAMIC_META', 'ParamsCtor',
       `return function match(method, path) {\n${body}\n};`,
     );
 
     return factory(
       staticOutputs, staticMap, methodCodes, trees, matchState, handlers,
       optDefaults, hitCacheByMethod, missCacheByMethod, RouterCacheCtor,
-      EMPTY_PARAMS, STATIC_META, CACHE_META, DYNAMIC_META,
+      EMPTY_PARAMS, STATIC_META, CACHE_META, DYNAMIC_META, ParamsCtor,
     ) as (method: string, path: string) => MatchOutput<T> | null;
 
     function emitMissCacheWrite(): string {
