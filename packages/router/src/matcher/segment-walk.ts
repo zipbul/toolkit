@@ -186,6 +186,21 @@ function createIterativeWalker(
     let pos = segs[0]!.length + 1;
 
     while (idx < segs.length) {
+      // Wildcard-only fast path: when the current node has nothing but a
+      // wildcard, skip segment dereference entirely and capture the suffix.
+      if (
+        node.staticChildren === null
+        && node.paramChild === null
+        && node.wildcardStore !== null
+      ) {
+        if (node.wildcardOrigin === 'multi' && pos >= path.length) return false;
+
+        params[node.wildcardName!] = path.substring(pos);
+        state.handlerIndex = node.wildcardStore;
+
+        return true;
+      }
+
       const seg = segs[idx]!;
 
       if (node.staticChildren !== null) {
