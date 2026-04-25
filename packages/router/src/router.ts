@@ -363,7 +363,19 @@ export class Router<T = unknown> {
 
     if (checkPathLen) src.push(`if (path.length > ${maxPathLen}) return null;`);
 
-    src.push(`var mc = methodCodes[method]; if (mc === undefined) return null;`);
+    // Single-method optimization: skip the full lookup when the router was
+    // configured with exactly one HTTP method. We still verify the incoming
+    // method matches that one — anything else is null.
+    const allCodeEntries = Object.entries(this.methodCodes);
+
+    if (allCodeEntries.length === 1) {
+      const [theMethod, theCode] = allCodeEntries[0]!;
+
+      src.push(`if (method !== ${JSON.stringify(theMethod)}) return null;`);
+      src.push(`var mc = ${theCode};`);
+    } else {
+      src.push(`var mc = methodCodes[method]; if (mc === undefined) return null;`);
+    }
     src.push(`var sp = path;`);
     src.push(`var qi = sp.indexOf('?'); if (qi !== -1) sp = sp.substring(0, qi);`);
 
