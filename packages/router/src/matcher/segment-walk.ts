@@ -46,7 +46,7 @@ export function createSegmentWalker(
     const seg = segs[idx]!;
 
     if (node.staticChildren !== null) {
-      const child = node.staticChildren.get(seg);
+      const child = node.staticChildren[seg];
 
       if (child !== undefined) {
         if (match(child, path, segs, idx + 1, state)) return true;

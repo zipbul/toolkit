@@ -12,8 +12,9 @@ import { buildPatternTester } from './pattern-tester';
 export interface SegmentNode {
   /** Terminal handler index when the URL ends here exactly. */
   store: number | null;
-  /** Static children, keyed by segment literal. */
-  staticChildren: Map<string, SegmentNode> | null;
+  /** Static children keyed by segment literal. NullProtoObj for property-access
+   *  speed (no Map.get function-call dispatch, no prototype-chain lookup). */
+  staticChildren: Record<string, SegmentNode> | null;
   /** Single param child (param name and optional regex tester). */
   paramChild: ParamSegment | null;
   /** Wildcard at this position. */
@@ -64,17 +65,18 @@ export function insertIntoSegmentTree(
     const part = parts[i]!;
 
     if (part.type === 'static') {
-      // part.value is like '/users/' or '/posts' — split into real segments
       const segs = extractSegments(part.value);
 
       for (const seg of segs) {
-        if (node.staticChildren === null) node.staticChildren = new Map();
+        if (node.staticChildren === null) {
+          node.staticChildren = Object.create(null) as Record<string, SegmentNode>;
+        }
 
-        let child = node.staticChildren.get(seg);
+        let child = node.staticChildren[seg];
 
         if (child === undefined) {
           child = createSegmentNode();
-          node.staticChildren.set(seg, child);
+          node.staticChildren[seg] = child;
         }
 
         node = child;
