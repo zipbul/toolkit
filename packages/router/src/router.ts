@@ -419,10 +419,14 @@ export class Router<T = unknown> {
       src.push(`return null;`);
     } else {
       if (checkSegLen) {
+        // Fast path: a path shorter than maxSegLen cannot possibly contain a
+        // segment that exceeds it, so the per-char scan is skipped entirely.
         src.push(`
-          for (var i = 1, sl = 0, ml = ${maxSegLen}; i < sp.length; i++) {
-            if (sp.charCodeAt(i) === 47) { sl = 0; }
-            else { sl++; if (sl > ml) return null; }
+          if (sp.length > ${maxSegLen}) {
+            for (var i = 1, sl = 0, ml = ${maxSegLen}; i < sp.length; i++) {
+              if (sp.charCodeAt(i) === 47) { sl = 0; }
+              else { sl++; if (sl > ml) return null; }
+            }
           }
         `);
       }
