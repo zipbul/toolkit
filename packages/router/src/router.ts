@@ -349,6 +349,11 @@ export class Router<T = unknown> {
     const hasOptDefaults = this.optionalParamDefaults !== undefined;
     const allSegment = this.allSegmentTrees;
     const anyTester = this.anyTester;
+    // When no static routes are registered, the staticOutputs probe is dead
+    // weight on every dynamic call — skip emitting it entirely. Saves 1-2 ns
+    // on routers that are pure wildcard/param (e.g. file servers).
+    let hasAnyStatic = false;
+    for (const _ in this.staticOutputs) { hasAnyStatic = true; break; }
 
     // Closure captures (all read-only at match time)
     const staticOutputs = this.staticOutputs;
@@ -390,16 +395,20 @@ export class Router<T = unknown> {
 
     if (lowerCase) src.push(`sp = sp.toLowerCase();`);
 
-    // Static lookup — always first, always inlined
-    // Static lookup returns a pre-built (frozen) MatchOutput so we skip the
-    // per-call object literal allocation.
-    src.push(`
-      var so = staticOutputs[sp];
-      if (so !== undefined) {
-        var out = so[mc];
-        if (out !== undefined) return out;
-      }
-    `);
+    // Static lookup — always first, always inlined.
+    // Pre-built (frozen) MatchOutput is returned directly to skip the per-call
+    // `{ value, params, meta }` allocation.
+    // Skipped entirely when no static routes are registered (e.g. file-server
+    // routers that are pure wildcard) — every cycle counts on the dynamic path.
+    if (hasAnyStatic) {
+      src.push(`
+        var so = staticOutputs[sp];
+        if (so !== undefined) {
+          var out = so[mc];
+          if (out !== undefined) return out;
+        }
+      `);
+    }
 
     // Cache lookup — fully inlined (no bound-method indirection)
     if (useCache) {
