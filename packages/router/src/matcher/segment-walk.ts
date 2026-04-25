@@ -181,6 +181,9 @@ function createIterativeWalker(
     const params = state.params!;
     let node = root;
     let idx = 1;
+    // Track byte-position in `path` alongside segment index so wildcard capture
+    // can substring(pos) directly without re-summing segment lengths.
+    let pos = segs[0]!.length + 1;
 
     while (idx < segs.length) {
       const seg = segs[idx]!;
@@ -190,6 +193,7 @@ function createIterativeWalker(
 
         if (child !== undefined) {
           node = child;
+          pos += seg.length + 1;
           idx++;
           continue;
         }
@@ -213,26 +217,15 @@ function createIterativeWalker(
 
         params[node.paramChild.name] = decoded;
         node = node.paramChild.next;
+        pos += seg.length + 1;
         idx++;
         continue;
       }
 
       if (node.wildcardStore !== null) {
-        if (node.wildcardOrigin === 'multi') {
-          let any = false;
+        if (node.wildcardOrigin === 'multi' && pos >= path.length) return false;
 
-          for (let j = idx; j < segs.length; j++) {
-            if (segs[j]!.length > 0) { any = true; break; }
-          }
-
-          if (!any) return false;
-        }
-
-        let startPos = 0;
-
-        for (let i = 0; i < idx; i++) startPos += segs[i]!.length + 1;
-
-        params[node.wildcardName!] = path.substring(startPos);
+        params[node.wildcardName!] = path.substring(pos);
         state.handlerIndex = node.wildcardStore;
 
         return true;
