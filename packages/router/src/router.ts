@@ -293,14 +293,18 @@ export class Router<T = unknown> {
 
     for (const path in this.staticMap) {
       const arr = this.staticMap[path]!;
-      const outArr: Array<MatchOutput<T> | undefined> = new Array(arr.length);
+      // JSC degrades arrays with holes via prototype-chain walks on access.
+      // Build a packed array (no holes) by initializing all slots up-front.
+      const outArr: Array<MatchOutput<T> | undefined> = [];
 
       for (let i = 0; i < arr.length; i++) {
         const value = arr[i];
 
-        if (value !== undefined) {
-          outArr[i] = Object.freeze({ value, params: EMPTY_PARAMS, meta: STATIC_META }) as MatchOutput<T>;
-        }
+        outArr.push(
+          value === undefined
+            ? undefined
+            : Object.freeze({ value, params: EMPTY_PARAMS, meta: STATIC_META }) as MatchOutput<T>,
+        );
       }
 
       staticOutputs[path] = outArr;

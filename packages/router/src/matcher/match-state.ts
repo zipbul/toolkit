@@ -15,11 +15,23 @@ export interface MatchState {
 const MAX_PARAMS = 32;
 
 export function createMatchState(): MatchState {
+  // Pre-fill the param arrays with empty strings so they're packed (no holes).
+  // JSC otherwise treats `new Array(N)` as having `N` holes which trigger
+  // prototype-chain walks on every read — slow path for the segment walker's
+  // hot loop.
+  const paramNames = new Array<string>(MAX_PARAMS);
+  const paramValues = new Array<string>(MAX_PARAMS);
+
+  for (let i = 0; i < MAX_PARAMS; i++) {
+    paramNames[i] = '';
+    paramValues[i] = '';
+  }
+
   return {
     handlerIndex: -1,
     paramCount: 0,
-    paramNames: new Array<string>(MAX_PARAMS),
-    paramValues: new Array<string>(MAX_PARAMS),
+    paramNames,
+    paramValues,
     params: null,
     errorKind: null,
     errorMessage: null,
