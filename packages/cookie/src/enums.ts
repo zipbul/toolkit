@@ -20,4 +20,6 @@ export enum CookieErrorReason {
   PartitionedRequiresSecure = 'partitioned_requires_secure',
   InvalidDomain = 'invalid_domain',
   InvalidPath = 'invalid_path',
+  WeakSecret = 'weak_secret',
+  InvalidMaxAge = 'invalid_max_age',
 }

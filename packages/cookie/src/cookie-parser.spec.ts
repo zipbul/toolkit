@@ -13,17 +13,17 @@ describe('CookieParser', () => {
     });
 
     it('should create instance with signing when secrets provided', () => {
-      const cp = CookieParser.create({ secrets: ['my-secret'] });
+      const cp = CookieParser.create({ secrets: ['my-secret-with-enough-length-padding'] });
       expect(cp).toBeInstanceOf(CookieParser);
     });
 
     it('should create instance with encryption when encryptionSecret provided', () => {
-      const cp = CookieParser.create({ encryptionSecret: 'my-enc-key' });
+      const cp = CookieParser.create({ encryptionSecret: 'my-encryption-key-with-enough-pad__' });
       expect(cp).toBeInstanceOf(CookieParser);
     });
 
     it('should create instance with both when secrets and encryptionSecret provided', () => {
-      const cp = CookieParser.create({ secrets: ['s'], encryptionSecret: 'e' });
+      const cp = CookieParser.create({ secrets: ['signing-key-primary-aaaaaaaaaaaaaaa'], encryptionSecret: 'encryption-key-extra-cccccccccccccc' });
       expect(cp).toBeInstanceOf(CookieParser);
     });
 
@@ -41,7 +41,7 @@ describe('CookieParser', () => {
     it('should throw InvalidSecret when a secret is blank', () => {
       let caught: unknown;
       try {
-        CookieParser.create({ secrets: ['valid', '  '] });
+        CookieParser.create({ secrets: ['valid-key-with-thirty-two-chars__', '  '] });
       } catch (e) {
         caught = e;
       }
@@ -65,7 +65,7 @@ describe('CookieParser', () => {
     it('should throw InvalidEncryptionSecret when secrets valid but encryptionSecret blank', () => {
       let caught: unknown;
       try {
-        CookieParser.create({ secrets: ['ok'], encryptionSecret: '' });
+        CookieParser.create({ secrets: ['valid-key-with-thirty-two-chars__'], encryptionSecret: '' });
       } catch (e) {
         caught = e;
       }
@@ -104,7 +104,7 @@ describe('CookieParser', () => {
 
   describe('sign', () => {
     it('should return Cookie with signed value when signing', () => {
-      const cp = CookieParser.create({ secrets: ['test-secret'] });
+      const cp = CookieParser.create({ secrets: ['test-secret-with-required-length__'] });
       const cookie = new Cookie('session', 'hello');
       const signed = cp.sign(cookie);
       expect(signed.name).toBe('session');
@@ -113,7 +113,7 @@ describe('CookieParser', () => {
     });
 
     it('should preserve cookie name and attributes when signing', () => {
-      const cp = CookieParser.create({ secrets: ['s'] });
+      const cp = CookieParser.create({ secrets: ['signing-key-primary-aaaaaaaaaaaaaaa'] });
       const cookie = new Cookie('token', 'val', {
         path: '/api',
         secure: true,
@@ -141,13 +141,13 @@ describe('CookieParser', () => {
     });
 
     it('should return Cookie with .hmac format when signing empty value', () => {
-      const cp = CookieParser.create({ secrets: ['s'] });
+      const cp = CookieParser.create({ secrets: ['signing-key-primary-aaaaaaaaaaaaaaa'] });
       const signed = cp.sign(new Cookie('n', ''));
       expect(signed.value).toMatch(/^\..+/);
     });
 
     it('should return same result when signing same cookie twice', () => {
-      const cp = CookieParser.create({ secrets: ['s'] });
+      const cp = CookieParser.create({ secrets: ['signing-key-primary-aaaaaaaaaaaaaaa'] });
       const cookie = new Cookie('n', 'v');
       const a = cp.sign(cookie);
       const b = cp.sign(cookie);
@@ -157,7 +157,7 @@ describe('CookieParser', () => {
 
   describe('unsign', () => {
     it('should return Cookie with original value when unsigning', async () => {
-      const cp = CookieParser.create({ secrets: ['secret'] });
+      const cp = CookieParser.create({ secrets: ['unsign-test-secret-with-padding___'] });
       const signed = cp.sign(new Cookie('n', 'hello'));
       const unsigned = await cp.unsign(signed);
       expect(unsigned.name).toBe('n');
@@ -165,9 +165,9 @@ describe('CookieParser', () => {
     });
 
     it('should succeed with second secret when unsigning with key rotation', async () => {
-      const cpOld = CookieParser.create({ secrets: ['old-key'] });
+      const cpOld = CookieParser.create({ secrets: ['old-signing-key-rotation-v1__oldold'] });
       const signed = cpOld.sign(new Cookie('n', 'data'));
-      const cpNew = CookieParser.create({ secrets: ['new-key', 'old-key'] });
+      const cpNew = CookieParser.create({ secrets: ['new-signing-key-rotation-v2__newnew', 'old-signing-key-rotation-v1__oldold'] });
       const unsigned = await cpNew.unsign(signed);
       expect(unsigned.value).toBe('data');
     });
@@ -187,7 +187,7 @@ describe('CookieParser', () => {
     });
 
     it('should throw InvalidSignature when unsigning value without dot', async () => {
-      const cp = CookieParser.create({ secrets: ['s'] });
+      const cp = CookieParser.create({ secrets: ['signing-key-primary-aaaaaaaaaaaaaaa'] });
       let caught: unknown;
       try {
         await cp.unsign(new Cookie('n', 'nodot'));
@@ -201,7 +201,7 @@ describe('CookieParser', () => {
     });
 
     it('should throw SignatureVerificationFailed when unsigning with wrong hmac', async () => {
-      const cp = CookieParser.create({ secrets: ['s'] });
+      const cp = CookieParser.create({ secrets: ['signing-key-primary-aaaaaaaaaaaaaaa'] });
       let caught: unknown;
       try {
         await cp.unsign(new Cookie('n', 'value.wronghmac'));
@@ -215,7 +215,7 @@ describe('CookieParser', () => {
     });
 
     it('should throw SignatureVerificationFailed when value was tampered', async () => {
-      const cp = CookieParser.create({ secrets: ['s'] });
+      const cp = CookieParser.create({ secrets: ['signing-key-primary-aaaaaaaaaaaaaaa'] });
       const signed = cp.sign(new Cookie('n', 'original'));
       const tampered = new Cookie(
         'n',
@@ -234,7 +234,7 @@ describe('CookieParser', () => {
     });
 
     it('should split at last dot when unsigning value with multiple dots', async () => {
-      const cp = CookieParser.create({ secrets: ['s'] });
+      const cp = CookieParser.create({ secrets: ['signing-key-primary-aaaaaaaaaaaaaaa'] });
       const cookie = new Cookie('n', 'a.b.c');
       const signed = cp.sign(cookie);
       const unsigned = await cp.unsign(signed);
@@ -242,7 +242,7 @@ describe('CookieParser', () => {
     });
 
     it('should return original value when sign then unsign roundtrip', async () => {
-      const cp = CookieParser.create({ secrets: ['roundtrip-key'] });
+      const cp = CookieParser.create({ secrets: ['roundtrip-key-with-min-length____'] });
       const original = new Cookie('session', 'user:42', { path: '/', secure: true });
       const signed = cp.sign(original);
       const unsigned = await cp.unsign(signed);
@@ -253,7 +253,7 @@ describe('CookieParser', () => {
 
   describe('encrypt', () => {
     it('should return Cookie with encrypted value when encrypting', async () => {
-      const cp = CookieParser.create({ encryptionSecret: 'enc-key' });
+      const cp = CookieParser.create({ encryptionSecret: 'enc-key-with-required-min-length__' });
       const cookie = new Cookie('session', 'secret-data');
       const encrypted = await cp.encrypt(cookie);
       expect(encrypted.name).toBe('session');
@@ -262,7 +262,7 @@ describe('CookieParser', () => {
     });
 
     it('should preserve cookie name and attributes when encrypting', async () => {
-      const cp = CookieParser.create({ encryptionSecret: 'e' });
+      const cp = CookieParser.create({ encryptionSecret: 'encryption-key-extra-cccccccccccccc' });
       const cookie = new Cookie('token', 'val', {
         path: '/api',
         secure: true,
@@ -290,7 +290,7 @@ describe('CookieParser', () => {
     });
 
     it('should return different ciphertexts when encrypting same cookie twice', async () => {
-      const cp = CookieParser.create({ encryptionSecret: 'e' });
+      const cp = CookieParser.create({ encryptionSecret: 'encryption-key-extra-cccccccccccccc' });
       const cookie = new Cookie('n', 'same-value');
       const a = await cp.encrypt(cookie);
       const b = await cp.encrypt(cookie);
@@ -300,7 +300,7 @@ describe('CookieParser', () => {
 
   describe('decrypt', () => {
     it('should return Cookie with original value when decrypting', async () => {
-      const cp = CookieParser.create({ encryptionSecret: 'dec-key' });
+      const cp = CookieParser.create({ encryptionSecret: 'dec-key-with-required-min-length__' });
       const encrypted = await cp.encrypt(new Cookie('n', 'plaintext'));
       const decrypted = await cp.decrypt(encrypted);
       expect(decrypted.name).toBe('n');
@@ -322,7 +322,7 @@ describe('CookieParser', () => {
     });
 
     it('should throw InvalidCiphertext when decrypting too-short value', async () => {
-      const cp = CookieParser.create({ encryptionSecret: 'e' });
+      const cp = CookieParser.create({ encryptionSecret: 'encryption-key-extra-cccccccccccccc' });
       let caught: unknown;
       try {
         await cp.decrypt(new Cookie('n', 'short'));
@@ -336,7 +336,7 @@ describe('CookieParser', () => {
     });
 
     it('should throw DecryptionFailed when decrypting tampered ciphertext', async () => {
-      const cp = CookieParser.create({ encryptionSecret: 'e' });
+      const cp = CookieParser.create({ encryptionSecret: 'encryption-key-extra-cccccccccccccc' });
       const encrypted = await cp.encrypt(new Cookie('n', 'v'));
       const tampered = new Cookie(
         'n',
@@ -355,8 +355,8 @@ describe('CookieParser', () => {
     });
 
     it('should throw DecryptionFailed when decrypting with wrong key', async () => {
-      const cpA = CookieParser.create({ encryptionSecret: 'key-a' });
-      const cpB = CookieParser.create({ encryptionSecret: 'key-b' });
+      const cpA = CookieParser.create({ encryptionSecret: 'key-a-with-minimum-required-length' });
+      const cpB = CookieParser.create({ encryptionSecret: 'key-b-with-minimum-required-length' });
       const encrypted = await cpA.encrypt(new Cookie('n', 'v'));
       let caught: unknown;
       try {
@@ -371,7 +371,7 @@ describe('CookieParser', () => {
     });
 
     it('should return original value when encrypt then decrypt roundtrip', async () => {
-      const cp = CookieParser.create({ encryptionSecret: 'roundtrip' });
+      const cp = CookieParser.create({ encryptionSecret: 'roundtrip-key-with-min-length____' });
       const original = new Cookie('session', 'user:42', { path: '/', secure: true });
       const encrypted = await cp.encrypt(original);
       const decrypted = await cp.decrypt(encrypted);
@@ -466,7 +466,7 @@ describe('CookieParser', () => {
 
   describe('pipeline', () => {
     it('should complete outbound pipeline validatePrefix then sign then encrypt then serialize', async () => {
-      const cp = CookieParser.create({ secrets: ['s'], encryptionSecret: 'e' });
+      const cp = CookieParser.create({ secrets: ['signing-key-primary-aaaaaaaaaaaaaaa'], encryptionSecret: 'encryption-key-extra-cccccccccccccc' });
       const cookie = new Cookie('__Secure-session', 'data', {
         secure: true,
         path: '/',
@@ -479,7 +479,7 @@ describe('CookieParser', () => {
     });
 
     it('should complete inbound pipeline parse then decrypt then unsign', async () => {
-      const cp = CookieParser.create({ secrets: ['s'], encryptionSecret: 'e' });
+      const cp = CookieParser.create({ secrets: ['signing-key-primary-aaaaaaaaaaaaaaa'], encryptionSecret: 'encryption-key-extra-cccccccccccccc' });
       const original = new Cookie('session', 'secret-data');
       const signed = cp.sign(original);
       const encrypted = await cp.encrypt(signed);
@@ -491,7 +491,7 @@ describe('CookieParser', () => {
     });
 
     it('should produce different results when sign-then-encrypt vs encrypt-then-sign', async () => {
-      const cp = CookieParser.create({ secrets: ['s'], encryptionSecret: 'e' });
+      const cp = CookieParser.create({ secrets: ['signing-key-primary-aaaaaaaaaaaaaaa'], encryptionSecret: 'encryption-key-extra-cccccccccccccc' });
       const cookie = new Cookie('n', 'v');
       const signFirst = await cp.encrypt(cp.sign(cookie));
       const encryptFirst = cp.sign(await cp.encrypt(cookie));
@@ -499,7 +499,7 @@ describe('CookieParser', () => {
     });
 
     it('should throw EncryptionNotConfigured when created with secrets only and encrypt called', async () => {
-      const cp = CookieParser.create({ secrets: ['s'] });
+      const cp = CookieParser.create({ secrets: ['signing-key-primary-aaaaaaaaaaaaaaa'] });
       let caught: unknown;
       try {
         await cp.encrypt(new Cookie('n', 'v'));
@@ -513,7 +513,7 @@ describe('CookieParser', () => {
     });
 
     it('should throw SigningNotConfigured when created with encryptionSecret only and sign called', () => {
-      const cp = CookieParser.create({ encryptionSecret: 'e' });
+      const cp = CookieParser.create({ encryptionSecret: 'encryption-key-extra-cccccccccccccc' });
       let caught: unknown;
       try {
         cp.sign(new Cookie('n', 'v'));
@@ -527,16 +527,16 @@ describe('CookieParser', () => {
     });
 
     it('should always sign with first secret in array', () => {
-      const cpA = CookieParser.create({ secrets: ['first', 'second'] });
-      const cpB = CookieParser.create({ secrets: ['first'] });
+      const cpA = CookieParser.create({ secrets: ['first-signing-key__paddingpaddingpa', 'second-signing-key__paddingpaddingp'] });
+      const cpB = CookieParser.create({ secrets: ['first-signing-key__paddingpaddingpa'] });
       const cookie = new Cookie('n', 'v');
       expect(cpA.sign(cookie).value).toBe(cpB.sign(cookie).value);
     });
 
     it('should unsign with old secret when key rotation array includes it', async () => {
-      const cpOld = CookieParser.create({ secrets: ['old-secret'] });
+      const cpOld = CookieParser.create({ secrets: ['old-signing-secret-2023__oldoldoldold'] });
       const signed = cpOld.sign(new Cookie('n', 'important'));
-      const cpRotated = CookieParser.create({ secrets: ['new-secret', 'old-secret'] });
+      const cpRotated = CookieParser.create({ secrets: ['new-signing-secret-2024__newnewnewnew', 'old-signing-secret-2023__oldoldoldold'] });
       const unsigned = await cpRotated.unsign(signed);
       expect(unsigned.value).toBe('important');
     });
@@ -544,7 +544,7 @@ describe('CookieParser', () => {
 
   describe('algorithm', () => {
     it('should sign with sha384 algorithm', async () => {
-      const cp = CookieParser.create({ secrets: ['s'], algorithm: 'sha384' });
+      const cp = CookieParser.create({ secrets: ['signing-key-primary-aaaaaaaaaaaaaaa'], algorithm: 'sha384' });
       const signed = cp.sign(new Cookie('n', 'v'));
       expect(signed.value).toContain('v.');
       const unsigned = await cp.unsign(signed);
@@ -552,7 +552,7 @@ describe('CookieParser', () => {
     });
 
     it('should sign with sha512 algorithm', async () => {
-      const cp = CookieParser.create({ secrets: ['s'], algorithm: 'sha512' });
+      const cp = CookieParser.create({ secrets: ['signing-key-primary-aaaaaaaaaaaaaaa'], algorithm: 'sha512' });
       const signed = cp.sign(new Cookie('n', 'v'));
       expect(signed.value).toContain('v.');
       const unsigned = await cp.unsign(signed);
@@ -560,15 +560,15 @@ describe('CookieParser', () => {
     });
 
     it('should produce different signatures for different algorithms', () => {
-      const cp256 = CookieParser.create({ secrets: ['s'], algorithm: 'sha256' });
-      const cp512 = CookieParser.create({ secrets: ['s'], algorithm: 'sha512' });
+      const cp256 = CookieParser.create({ secrets: ['signing-key-primary-aaaaaaaaaaaaaaa'], algorithm: 'sha256' });
+      const cp512 = CookieParser.create({ secrets: ['signing-key-primary-aaaaaaaaaaaaaaa'], algorithm: 'sha512' });
       const cookie = new Cookie('n', 'v');
       expect(cp256.sign(cookie).value).not.toBe(cp512.sign(cookie).value);
     });
 
     it('should fail to unsign with different algorithm', async () => {
-      const cp256 = CookieParser.create({ secrets: ['s'], algorithm: 'sha256' });
-      const cp512 = CookieParser.create({ secrets: ['s'], algorithm: 'sha512' });
+      const cp256 = CookieParser.create({ secrets: ['signing-key-primary-aaaaaaaaaaaaaaa'], algorithm: 'sha256' });
+      const cp512 = CookieParser.create({ secrets: ['signing-key-primary-aaaaaaaaaaaaaaa'], algorithm: 'sha512' });
       const signed = cp256.sign(new Cookie('n', 'v'));
       let caught: unknown;
       try {
@@ -758,7 +758,7 @@ describe('CookieParser', () => {
   describe('cloneCookieWithDefaults', () => {
     it('should apply nullable defaults when signing cookie with no domain', () => {
       const cp = CookieParser.create({
-        secrets: ['s'],
+        secrets: ['signing-key-primary-aaaaaaaaaaaaaaa'],
         domain: 'example.com',
         maxAge: 3600,
       });
@@ -770,7 +770,7 @@ describe('CookieParser', () => {
     });
 
     it('should preserve maxAge 0 through sign roundtrip', async () => {
-      const cp = CookieParser.create({ secrets: ['s'] });
+      const cp = CookieParser.create({ secrets: ['signing-key-primary-aaaaaaaaaaaaaaa'] });
       const cookie = new Cookie('session', 'data', { maxAge: 0 });
       const signed = cp.sign(cookie);
       expect(signed.maxAge).toBe(0);
@@ -849,14 +849,14 @@ describe('CookieParser', () => {
 
     it('should not throw when serialized cookie is within 4096 bytes', () => {
       const cp = CookieParser.create();
-      const cookie = new Cookie('s', 'v');
+      const cookie = new Cookie('signing-key-primary-aaaaaaaaaaaaaaa', 'v');
       expect(() => cp.serialize(cookie)).not.toThrow();
     });
   });
 
   describe('edge cases', () => {
     it('should encrypt and decrypt empty string value', async () => {
-      const cp = CookieParser.create({ encryptionSecret: 'e' });
+      const cp = CookieParser.create({ encryptionSecret: 'encryption-key-extra-cccccccccccccc' });
       const cookie = new Cookie('session', '');
       const encrypted = await cp.encrypt(cookie);
       const decrypted = await cp.decrypt(encrypted);
@@ -1012,6 +1012,156 @@ describe('CookieParser', () => {
         secure: true,
       });
       expect(() => cp.serialize(cookie)).not.toThrow();
+    });
+  });
+
+  describe('name binding (C1, C2 fixes)', () => {
+    const SIGN_SECRET = 'name-binding-test-signing-secret__';
+    const ENC_SECRET = 'name-binding-test-encryption-secret';
+
+    it('should reject HMAC-signed value when cookie name differs (C1)', async () => {
+      const cp = CookieParser.create({ secrets: [SIGN_SECRET] });
+      const signed = cp.sign(new Cookie('admin', 'true'));
+      // Replay signature under a different cookie name
+      const replayed = new Cookie('user', signed.value);
+      let caught: unknown;
+      try { await cp.unsign(replayed); } catch (e) { caught = e; }
+      expect(caught).toBeInstanceOf(CookieError);
+      expect((caught as CookieError).reason).toBe(CookieErrorReason.SignatureVerificationFailed);
+    });
+
+    it('should reject AES-GCM ciphertext when cookie name differs (C2)', async () => {
+      const cp = CookieParser.create({ encryptionSecret: ENC_SECRET });
+      const encrypted = await cp.encrypt(new Cookie('admin', 'true'));
+      const replayed = new Cookie('user', encrypted.value);
+      let caught: unknown;
+      try { await cp.decrypt(replayed); } catch (e) { caught = e; }
+      expect(caught).toBeInstanceOf(CookieError);
+      expect((caught as CookieError).reason).toBe(CookieErrorReason.DecryptionFailed);
+    });
+
+    it('should sign and unsign successfully when cookie name matches', async () => {
+      const cp = CookieParser.create({ secrets: [SIGN_SECRET] });
+      const signed = cp.sign(new Cookie('session', 'data'));
+      const unsigned = await cp.unsign(signed);
+      expect(unsigned.value).toBe('data');
+    });
+
+    it('should encrypt and decrypt successfully when cookie name matches', async () => {
+      const cp = CookieParser.create({ encryptionSecret: ENC_SECRET });
+      const encrypted = await cp.encrypt(new Cookie('session', 'data'));
+      const decrypted = await cp.decrypt(encrypted);
+      expect(decrypted.value).toBe('data');
+    });
+  });
+
+  describe('encryption key rotation (H2 fix)', () => {
+    const KEY_OLD = 'old-encryption-key-rotation-test_v1';
+    const KEY_NEW = 'new-encryption-key-rotation-test_v2';
+
+    it('should accept encryptionSecret as array', () => {
+      const cp = CookieParser.create({ encryptionSecret: [KEY_NEW, KEY_OLD] });
+      expect(cp).toBeInstanceOf(CookieParser);
+    });
+
+    it('should encrypt with first key and decrypt with any key in array', async () => {
+      const cpOld = CookieParser.create({ encryptionSecret: KEY_OLD });
+      const encryptedOld = await cpOld.encrypt(new Cookie('s', 'data'));
+      const cpRotated = CookieParser.create({ encryptionSecret: [KEY_NEW, KEY_OLD] });
+      const decrypted = await cpRotated.decrypt(encryptedOld);
+      expect(decrypted.value).toBe('data');
+    });
+
+    it('should fail to decrypt when no rotation key matches', async () => {
+      const cpA = CookieParser.create({ encryptionSecret: KEY_OLD });
+      const encrypted = await cpA.encrypt(new Cookie('s', 'data'));
+      const cpB = CookieParser.create({ encryptionSecret: 'unrelated-encryption-key-padding__' });
+      let caught: unknown;
+      try { await cpB.decrypt(encrypted); } catch (e) { caught = e; }
+      expect(caught).toBeInstanceOf(CookieError);
+      expect((caught as CookieError).reason).toBe(CookieErrorReason.DecryptionFailed);
+    });
+  });
+
+  describe('weak secret rejection (H1, N8 fixes)', () => {
+    it('should throw WeakSecret when signing secret is shorter than 32 chars', () => {
+      let caught: unknown;
+      try { CookieParser.create({ secrets: ['short'] }); } catch (e) { caught = e; }
+      expect(caught).toBeInstanceOf(CookieError);
+      expect((caught as CookieError).reason).toBe(CookieErrorReason.WeakSecret);
+    });
+
+    it('should throw WeakSecret when encryption secret is shorter than 32 chars', () => {
+      let caught: unknown;
+      try { CookieParser.create({ encryptionSecret: 'short' }); } catch (e) { caught = e; }
+      expect(caught).toBeInstanceOf(CookieError);
+      expect((caught as CookieError).reason).toBe(CookieErrorReason.WeakSecret);
+    });
+
+    it('should accept secret with exactly 32 chars', () => {
+      const exact32 = 'a'.repeat(32);
+      expect(() => CookieParser.create({ secrets: [exact32] })).not.toThrow();
+      expect(() => CookieParser.create({ encryptionSecret: exact32 })).not.toThrow();
+    });
+  });
+
+  describe('maxAge integer validation (N6, N7 fixes)', () => {
+    it('should throw InvalidMaxAge when maxAge is NaN via createCookie (N6)', () => {
+      const cp = CookieParser.create();
+      let caught: unknown;
+      try { cp.createCookie('n', 'v', { maxAge: NaN as any }); } catch (e) { caught = e; }
+      expect(caught).toBeInstanceOf(CookieError);
+      expect((caught as CookieError).reason).toBe(CookieErrorReason.InvalidMaxAge);
+    });
+
+    it('should throw InvalidMaxAge when maxAge is decimal 0.5 via createCookie (N7)', () => {
+      const cp = CookieParser.create();
+      let caught: unknown;
+      try { cp.createCookie('n', 'v', { maxAge: 0.5 as any }); } catch (e) { caught = e; }
+      expect(caught).toBeInstanceOf(CookieError);
+      expect((caught as CookieError).reason).toBe(CookieErrorReason.InvalidMaxAge);
+    });
+
+    it('should throw InvalidMaxAge when maxAge is Infinity via createCookie', () => {
+      const cp = CookieParser.create();
+      let caught: unknown;
+      try { cp.createCookie('n', 'v', { maxAge: Infinity as any }); } catch (e) { caught = e; }
+      expect(caught).toBeInstanceOf(CookieError);
+      expect((caught as CookieError).reason).toBe(CookieErrorReason.InvalidMaxAge);
+    });
+
+    it('should throw InvalidMaxAge in serialize when raw Cookie has decimal maxAge', () => {
+      const cp = CookieParser.create();
+      let caught: unknown;
+      try { cp.serialize(new Cookie('n', 'v', { maxAge: 0.5 as any })); } catch (e) { caught = e; }
+      expect(caught).toBeInstanceOf(CookieError);
+      expect((caught as CookieError).reason).toBe(CookieErrorReason.InvalidMaxAge);
+    });
+
+    it('should accept negative integer maxAge per RFC 6265bis §5.4', () => {
+      const cp = CookieParser.create();
+      const header = cp.serialize(cp.createCookie('n', 'v', { maxAge: -1 }));
+      expect(header).toContain('Max-Age=-1');
+    });
+
+    it('should accept zero maxAge', () => {
+      const cp = CookieParser.create();
+      const header = cp.serialize(cp.createCookie('n', 'v', { maxAge: 0 }));
+      expect(header).toContain('Max-Age=0');
+    });
+  });
+
+  describe('constant-time HMAC verify (H3 fix)', () => {
+    it('should verify correctly regardless of secret position in array', async () => {
+      const KEY1 = 'rotation-key-position-1-padding___';
+      const KEY5 = 'rotation-key-position-5-padding___';
+      const cp = CookieParser.create({ secrets: [KEY1, 'k2-padding-padding-padding-padding', 'k3-padding-padding-padding-padding', 'k4-padding-padding-padding-padding', KEY5] });
+      // Sign with last key
+      const cpLast = CookieParser.create({ secrets: [KEY5] });
+      const signed = cpLast.sign(new Cookie('s', 'data'));
+      // Verifies even though it's last in rotation array
+      const unsigned = await cp.unsign(signed);
+      expect(unsigned.value).toBe('data');
     });
   });
 });

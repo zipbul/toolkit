@@ -31,7 +31,7 @@ describe('CookieJar', () => {
 
   describe('getRaw', () => {
     it('should return raw value without processing', () => {
-      const parser = CookieParser.create({ secrets: ['s'], encryptionSecret: 'e' });
+      const parser = CookieParser.create({ secrets: ['signing-key-primary-aaaaaaaaaaaaaaa'], encryptionSecret: 'encryption-key-extra-cccccccccccccc' });
       const jar = new CookieJar(parser, 'session=raw-value; _ga=GA1.2.123');
       expect(jar.getRaw('session')).toBe('raw-value');
       expect(jar.getRaw('_ga')).toBe('GA1.2.123');
@@ -60,7 +60,7 @@ describe('CookieJar', () => {
     });
 
     it('should auto-unsign when signing configured', async () => {
-      const parser = CookieParser.create({ secrets: ['s'] });
+      const parser = CookieParser.create({ secrets: ['signing-key-primary-aaaaaaaaaaaaaaa'] });
       const signed = parser.sign(new (await import('bun')).Cookie('session', 'data'));
       const jar = new CookieJar(parser, `session=${signed.value}`);
       const result = await jar.get('session');
@@ -68,7 +68,7 @@ describe('CookieJar', () => {
     });
 
     it('should auto-decrypt when encryption configured', async () => {
-      const parser = CookieParser.create({ encryptionSecret: 'e' });
+      const parser = CookieParser.create({ encryptionSecret: 'encryption-key-extra-cccccccccccccc' });
       const { Cookie } = await import('bun');
       const encrypted = await parser.encrypt(new Cookie('session', 'secret'));
       const jar = new CookieJar(parser, `session=${encrypted.value}`);
@@ -77,7 +77,7 @@ describe('CookieJar', () => {
     });
 
     it('should auto-decrypt then auto-unsign when both configured', async () => {
-      const parser = CookieParser.create({ secrets: ['s'], encryptionSecret: 'e' });
+      const parser = CookieParser.create({ secrets: ['signing-key-primary-aaaaaaaaaaaaaaa'], encryptionSecret: 'encryption-key-extra-cccccccccccccc' });
       const { Cookie } = await import('bun');
       const cookie = new Cookie('session', 'user:42');
       const signed = parser.sign(cookie);
@@ -88,7 +88,7 @@ describe('CookieJar', () => {
     });
 
     it('should return Err when signature verification fails', async () => {
-      const parser = CookieParser.create({ secrets: ['s'] });
+      const parser = CookieParser.create({ secrets: ['signing-key-primary-aaaaaaaaaaaaaaa'] });
       const jar = new CookieJar(parser, 'session=tampered.invalidsig');
       const result = await jar.get('session');
       expect(isErr(result)).toBe(true);
@@ -98,21 +98,21 @@ describe('CookieJar', () => {
     });
 
     it('should return Err when decryption fails', async () => {
-      const parser = CookieParser.create({ encryptionSecret: 'e' });
+      const parser = CookieParser.create({ encryptionSecret: 'encryption-key-extra-cccccccccccccc' });
       const jar = new CookieJar(parser, 'session=notvalidciphertext_padded_enough_xxxxxxxx');
       const result = await jar.get('session');
       expect(isErr(result)).toBe(true);
     });
 
     it('should return null for empty cookie header', async () => {
-      const parser = CookieParser.create({ secrets: ['s'] });
+      const parser = CookieParser.create({ secrets: ['signing-key-primary-aaaaaaaaaaaaaaa'] });
       const jar = new CookieJar(parser, '');
       const result = await jar.get('session');
       expect(result).toBeNull();
     });
 
     it('should handle multiple cookies and return correct one', async () => {
-      const parser = CookieParser.create({ secrets: ['s'] });
+      const parser = CookieParser.create({ secrets: ['signing-key-primary-aaaaaaaaaaaaaaa'] });
       const { Cookie } = await import('bun');
       const signedA = parser.sign(new Cookie('a', 'val-a'));
       const signedB = parser.sign(new Cookie('b', 'val-b'));
@@ -125,7 +125,7 @@ describe('CookieJar', () => {
 
   describe('set', () => {
     it('should queue cookie for outbound', async () => {
-      const parser = CookieParser.create({ secrets: ['s'] });
+      const parser = CookieParser.create({ secrets: ['signing-key-primary-aaaaaaaaaaaaaaa'] });
       const jar = new CookieJar(parser, '');
       jar.set('session', 'user:42');
       const headers = await jar.getSetCookieHeaders();
@@ -135,7 +135,7 @@ describe('CookieJar', () => {
 
     it('should apply parser defaults to set cookie', async () => {
       const parser = CookieParser.create({
-        secrets: ['s'],
+        secrets: ['signing-key-primary-aaaaaaaaaaaaaaa'],
         httpOnly: true,
         secure: true,
         path: '/',
@@ -149,7 +149,7 @@ describe('CookieJar', () => {
     });
 
     it('should allow per-cookie attribute overrides', async () => {
-      const parser = CookieParser.create({ secrets: ['s'], path: '/' });
+      const parser = CookieParser.create({ secrets: ['signing-key-primary-aaaaaaaaaaaaaaa'], path: '/' });
       const jar = new CookieJar(parser, '');
       jar.set('token', 'jwt', { path: '/api' });
       const headers = await jar.getSetCookieHeaders();
@@ -172,8 +172,8 @@ describe('CookieJar', () => {
     it('should overwrite previously set cookie with same name', async () => {
       const parser = CookieParser.create();
       const jar = new CookieJar(parser, '');
-      jar.set('session', 'first');
-      jar.set('session', 'second');
+      jar.set('session', 'first-signing-key__paddingpaddingpa');
+      jar.set('session', 'second-signing-key__paddingpaddingp');
       const headers = await jar.getSetCookieHeaders();
       expect(headers).toHaveLength(1);
       expect(headers[0]).toContain('session=second');
@@ -192,7 +192,7 @@ describe('CookieJar', () => {
     });
 
     it('should not sign or encrypt deletion cookies', async () => {
-      const parser = CookieParser.create({ secrets: ['s'], encryptionSecret: 'e' });
+      const parser = CookieParser.create({ secrets: ['signing-key-primary-aaaaaaaaaaaaaaa'], encryptionSecret: 'encryption-key-extra-cccccccccccccc' });
       const jar = new CookieJar(parser, '');
       jar.delete('session');
       const headers = await jar.getSetCookieHeaders();
@@ -220,7 +220,7 @@ describe('CookieJar', () => {
     });
 
     it('should auto-sign outbound cookies when signing configured', async () => {
-      const parser = CookieParser.create({ secrets: ['s'] });
+      const parser = CookieParser.create({ secrets: ['signing-key-primary-aaaaaaaaaaaaaaa'] });
       const jar = new CookieJar(parser, '');
       jar.set('session', 'data');
       const headers = await jar.getSetCookieHeaders();
@@ -228,7 +228,7 @@ describe('CookieJar', () => {
     });
 
     it('should auto-encrypt outbound cookies when encryption configured', async () => {
-      const parser = CookieParser.create({ encryptionSecret: 'e' });
+      const parser = CookieParser.create({ encryptionSecret: 'encryption-key-extra-cccccccccccccc' });
       const jar = new CookieJar(parser, '');
       jar.set('session', 'secret');
       const headers = await jar.getSetCookieHeaders();
@@ -236,7 +236,7 @@ describe('CookieJar', () => {
     });
 
     it('should auto-sign then auto-encrypt when both configured', async () => {
-      const parser = CookieParser.create({ secrets: ['s'], encryptionSecret: 'e' });
+      const parser = CookieParser.create({ secrets: ['signing-key-primary-aaaaaaaaaaaaaaa'], encryptionSecret: 'encryption-key-extra-cccccccccccccc' });
       const jar = new CookieJar(parser, '');
       jar.set('session', 'data');
       const headers = await jar.getSetCookieHeaders();

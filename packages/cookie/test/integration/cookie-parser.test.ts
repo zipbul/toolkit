@@ -5,7 +5,7 @@ import { isErr } from '@zipbul/result';
 import { CookieParser, CookieJar, CookieError, CookieErrorReason } from '../../index';
 
 describe('CookieParser Integration', () => {
-  const SECRETS = ['primary-key-2024', 'legacy-key-2023'];
+  const SECRETS = ['primary-key-2024-with-min-length__', 'legacy-key-2023-with-min-length___'];
   const ENCRYPTION_SECRET = 'aes-256-gcm-secret-for-integration';
 
   describe('CookieJar full roundtrip', () => {
@@ -55,25 +55,25 @@ describe('CookieParser Integration', () => {
 
   describe('key rotation via jar', () => {
     it('should read cookie signed with old key after rotation', async () => {
-      const parserOld = CookieParser.create({ secrets: ['old-secret-2023'] });
+      const parserOld = CookieParser.create({ secrets: ['old-signing-secret-2023__rotation_x'] });
       const outJar = new CookieJar(parserOld, '');
       outJar.set('token', 'jwt-payload');
       const headers = await outJar.getSetCookieHeaders();
       const cookieValue = headers[0]!.split('=').slice(1).join('=').split(';')[0]!;
 
-      const parserNew = CookieParser.create({ secrets: ['new-secret-2024', 'old-secret-2023'] });
+      const parserNew = CookieParser.create({ secrets: ['new-signing-secret-2024__rotation_x', 'old-signing-secret-2023__rotation_x'] });
       const inJar = new CookieJar(parserNew, `token=${cookieValue}`);
       expect(await inJar.get('token')).toBe('jwt-payload');
     });
 
     it('should fail to read cookie signed with old key when old key removed', async () => {
-      const parserOld = CookieParser.create({ secrets: ['old-secret-2023'] });
+      const parserOld = CookieParser.create({ secrets: ['old-signing-secret-2023__rotation_x'] });
       const outJar = new CookieJar(parserOld, '');
       outJar.set('token', 'data');
       const headers = await outJar.getSetCookieHeaders();
       const cookieValue = headers[0]!.split('=').slice(1).join('=').split(';')[0]!;
 
-      const parserNew = CookieParser.create({ secrets: ['new-secret-2024'] });
+      const parserNew = CookieParser.create({ secrets: ['new-signing-secret-2024__rotation_x'] });
       const inJar = new CookieJar(parserNew, `token=${cookieValue}`);
       const result = await inJar.get('token');
       expect(isErr(result)).toBe(true);
@@ -82,13 +82,13 @@ describe('CookieParser Integration', () => {
 
   describe('cross-instance isolation via jar', () => {
     it('should fail to read cookie encrypted by different instance', async () => {
-      const parserA = CookieParser.create({ encryptionSecret: 'key-a' });
+      const parserA = CookieParser.create({ encryptionSecret: 'key-a-with-minimum-required-length' });
       const outJar = new CookieJar(parserA, '');
       outJar.set('session', 'secret');
       const headers = await outJar.getSetCookieHeaders();
       const cookieValue = headers[0]!.split('=').slice(1).join('=').split(';')[0]!;
 
-      const parserB = CookieParser.create({ encryptionSecret: 'key-b' });
+      const parserB = CookieParser.create({ encryptionSecret: 'key-b-with-minimum-required-length' });
       const inJar = new CookieJar(parserB, `session=${cookieValue}`);
       const result = await inJar.get('session');
       expect(isErr(result)).toBe(true);
@@ -144,8 +144,8 @@ describe('CookieParser Integration', () => {
   describe('jar with algorithm', () => {
     it('should sign with sha512 and complete jar roundtrip', async () => {
       const parser = CookieParser.create({
-        secrets: ['s'],
-        encryptionSecret: 'e',
+        secrets: ['signing-key-primary-aaaaaaaaaaaaaaa'],
+        encryptionSecret: 'encryption-key-extra-cccccccccccccc',
         algorithm: 'sha512',
       });
 

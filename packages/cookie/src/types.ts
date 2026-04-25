@@ -3,7 +3,7 @@ export type SigningAlgorithm = 'sha256' | 'sha384' | 'sha512';
 export type ResolvedCookieParserOptions = {
   secrets: string[] | null;
   algorithm: SigningAlgorithm;
-  encryptionSecret: string | null;
+  encryptionSecrets: string[] | null;
   prefixValidation: boolean;
   defaults: ResolvedCookieDefaults;
 };

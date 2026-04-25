@@ -19,7 +19,7 @@ export class CookieError extends Error {
 export interface CookieParserOptions {
   secrets?: string[];
   algorithm?: 'sha256' | 'sha384' | 'sha512';
-  encryptionSecret?: string;
+  encryptionSecret?: string | string[];
   prefixValidation?: boolean;
   httpOnly?: boolean;
   secure?: boolean | 'auto';

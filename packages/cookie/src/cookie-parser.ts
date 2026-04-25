@@ -12,11 +12,9 @@ const AUTH_TAG_BYTES = AUTH_TAG_BITS / 8;
 const MIN_CIPHERTEXT_LENGTH = IV_LENGTH + AUTH_TAG_BYTES;
 const MAX_COOKIE_SIZE = 4096;
 const MAX_LIFETIME_SECONDS = 34560000; // RFC 6265bis §5.4: 400 days
+const NAME_VALUE_SEPARATOR = '\x00'; // RFC 6265 token forbids 0x00, safe as binding separator
 
 // RFC 6265 §4.1.1 / RFC 9110 §5.6.2: cookie-name = token
-// token = 1*tchar
-// tchar = "!" / "#" / "$" / "%" / "&" / "'" / "*" / "+" / "-" / "." /
-//         "^" / "_" / "`" / "|" / "~" / DIGIT / ALPHA
 const INVALID_TOKEN_CHARS = /[^\x21\x23-\x27\x2A\x2B\x2D\x2E\x30-\x39\x41-\x5A\x5E-\x7A\x7C\x7E]/;
 
 function deriveKey(secret: string): Uint8Array {
@@ -26,13 +24,13 @@ function deriveKey(secret: string): Uint8Array {
 }
 
 export class CookieParser {
-  private readonly encryptionKey: Uint8Array | null;
-  private encryptionKeyPromise: Promise<CryptoKey> | null = null;
+  private readonly encryptionKeys: Uint8Array[] | null;
+  private readonly encryptionKeyPromises = new Map<number, Promise<CryptoKey>>();
   private readonly hmacKeyPromises = new Map<string, Promise<CryptoKey>>();
 
   private constructor(private readonly options: ResolvedCookieParserOptions) {
-    this.encryptionKey = options.encryptionSecret !== null
-      ? deriveKey(options.encryptionSecret)
+    this.encryptionKeys = options.encryptionSecrets !== null
+      ? options.encryptionSecrets.map(deriveKey)
       : null;
   }
 
@@ -48,7 +46,7 @@ export class CookieParser {
   }
 
   public get isEncryptionConfigured(): boolean {
-    return this.encryptionKey !== null;
+    return this.encryptionKeys !== null;
   }
 
   public createCookie(name: string, value: string, options?: CookieAttributes): Cookie {
@@ -56,6 +54,13 @@ export class CookieParser {
       throw new CookieError({
         reason: CookieErrorReason.InvalidCookieName,
         message: 'cookie name must be a valid RFC 6265 token',
+      });
+    }
+
+    if (options?.maxAge != null && !Number.isInteger(options.maxAge)) {
+      throw new CookieError({
+        reason: CookieErrorReason.InvalidMaxAge,
+        message: 'Max-Age must be a finite integer (RFC 6265 §5.2.2)',
       });
     }
 
@@ -125,6 +130,14 @@ export class CookieParser {
       });
     }
 
+    // RFC 6265 §5.2.2: Max-Age must be an integer (positive or non-positive per §5.5)
+    if (target.maxAge != null && !Number.isInteger(target.maxAge)) {
+      throw new CookieError({
+        reason: CookieErrorReason.InvalidMaxAge,
+        message: 'Max-Age must be a finite integer (RFC 6265 §5.2.2)',
+      });
+    }
+
     // RFC 6265bis §5.4: max lifetime SHOULD NOT exceed 400 days
     if (target.maxAge != null && target.maxAge > MAX_LIFETIME_SECONDS) {
       throw new CookieError({
@@ -133,7 +146,6 @@ export class CookieParser {
       });
     }
 
-    // Header injection prevention: domain/path must not contain semicolons or newlines
     if (target.domain && /[;\r\n]/.test(target.domain)) {
       throw new CookieError({
         reason: CookieErrorReason.InvalidDomain,
@@ -172,7 +184,8 @@ export class CookieParser {
       });
     }
     const hasher = new Bun.CryptoHasher(this.options.algorithm, this.options.secrets[0]!);
-    hasher.update(cookie.value);
+    // C1 fix: bind cookie name to prevent cross-name signature replay
+    hasher.update(cookie.name + NAME_VALUE_SEPARATOR + cookie.value);
     const hmac = hasher.digest('base64url');
     return this.cloneCookieWithDefaults(cookie, `${cookie.value}.${hmac}`);
   }
@@ -196,14 +209,19 @@ export class CookieParser {
     const value = cookie.value.slice(0, dotIndex);
     const signature = cookie.value.slice(dotIndex + 1);
     const sigBytes = Buffer.from(signature, 'base64url');
-    const dataBytes = new TextEncoder().encode(value);
+    // C1 fix: verify against (name + separator + value)
+    const dataBytes = new TextEncoder().encode(cookie.name + NAME_VALUE_SEPARATOR + value);
 
+    // H3 fix: constant-time iteration — verify all secrets, no early-exit
+    let valid = false;
     for (const secret of this.options.secrets) {
       const key = await this.getHmacKey(secret);
-      const isValid = await crypto.subtle.verify('HMAC', key, sigBytes, dataBytes);
-      if (isValid) {
-        return this.cloneCookieWithDefaults(cookie, value);
-      }
+      const isThisValid = await crypto.subtle.verify('HMAC', key, sigBytes, dataBytes);
+      valid = valid || isThisValid;
+    }
+
+    if (valid) {
+      return this.cloneCookieWithDefaults(cookie, value);
     }
 
     throw new CookieError({
@@ -213,18 +231,21 @@ export class CookieParser {
   }
 
   public async encrypt(cookie: Cookie): Promise<Cookie> {
-    if (this.encryptionKey === null) {
+    if (this.encryptionKeys === null) {
       throw new CookieError({
         reason: CookieErrorReason.EncryptionNotConfigured,
         message: 'encryption requires encryptionSecret to be configured',
       });
     }
 
-    const key = await this.getEncryptionKey();
+    // H2 fix: encrypt with first (current) key for rotation support
+    const key = await this.getEncryptionKey(0);
     const iv = crypto.getRandomValues(new Uint8Array(IV_LENGTH));
+    // C2 fix: bind cookie name as AAD
+    const aad = new TextEncoder().encode(cookie.name);
 
     const ciphertext = await crypto.subtle.encrypt(
-      { name: 'AES-GCM', iv, tagLength: AUTH_TAG_BITS },
+      { name: 'AES-GCM', iv, additionalData: aad, tagLength: AUTH_TAG_BITS },
       key,
       new TextEncoder().encode(cookie.value),
     );
@@ -240,7 +261,7 @@ export class CookieParser {
   }
 
   public async decrypt(cookie: Cookie): Promise<Cookie> {
-    if (this.encryptionKey === null) {
+    if (this.encryptionKeys === null) {
       throw new CookieError({
         reason: CookieErrorReason.EncryptionNotConfigured,
         message: 'decryption requires encryptionSecret to be configured',
@@ -255,29 +276,29 @@ export class CookieParser {
       });
     }
 
-    const key = await this.getEncryptionKey();
+    const iv = combined.subarray(0, IV_LENGTH);
+    const ct = combined.subarray(IV_LENGTH);
+    const aad = new TextEncoder().encode(cookie.name);
 
-    try {
-      const plaintext = await crypto.subtle.decrypt(
-        {
-          name: 'AES-GCM',
-          iv: combined.subarray(0, IV_LENGTH),
-          tagLength: AUTH_TAG_BITS,
-        },
-        key,
-        combined.subarray(IV_LENGTH),
-      );
-
-      return this.cloneCookieWithDefaults(
-        cookie,
-        new TextDecoder().decode(plaintext),
-      );
-    } catch {
-      throw new CookieError({
-        reason: CookieErrorReason.DecryptionFailed,
-        message: 'cookie decryption failed',
-      });
+    // H2 fix: try each encryption key for rotation support
+    for (let i = 0; i < this.encryptionKeys.length; i++) {
+      const key = await this.getEncryptionKey(i);
+      try {
+        const plaintext = await crypto.subtle.decrypt(
+          { name: 'AES-GCM', iv, additionalData: aad, tagLength: AUTH_TAG_BITS },
+          key,
+          ct,
+        );
+        return this.cloneCookieWithDefaults(cookie, new TextDecoder().decode(plaintext));
+      } catch {
+        // try next key
+      }
     }
+
+    throw new CookieError({
+      reason: CookieErrorReason.DecryptionFailed,
+      message: 'cookie decryption failed',
+    });
   }
 
   public validatePrefix(cookie: Cookie): void {
@@ -315,17 +336,19 @@ export class CookieParser {
     }
   }
 
-  private getEncryptionKey(): Promise<CryptoKey> {
-    if (this.encryptionKeyPromise === null) {
-      this.encryptionKeyPromise = crypto.subtle.importKey(
+  private getEncryptionKey(index: number): Promise<CryptoKey> {
+    let promise = this.encryptionKeyPromises.get(index);
+    if (promise === undefined) {
+      promise = crypto.subtle.importKey(
         'raw',
-        this.encryptionKey!.buffer as ArrayBuffer,
+        this.encryptionKeys![index]!.buffer as ArrayBuffer,
         'AES-GCM',
         false,
         ['encrypt', 'decrypt'],
       );
+      this.encryptionKeyPromises.set(index, promise);
     }
-    return this.encryptionKeyPromise;
+    return promise;
   }
 
   private getHmacKey(secret: string): Promise<CryptoKey> {

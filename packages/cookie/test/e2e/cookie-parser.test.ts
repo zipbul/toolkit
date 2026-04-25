@@ -7,8 +7,8 @@ describe('CookieParser E2E', () => {
   describe('simulated HTTP request/response cycle via jar', () => {
     it('should handle server setting signed+encrypted cookies and reading them back', async () => {
       const parser = CookieParser.create({
-        secrets: ['prod-secret-2024', 'prod-secret-2023'],
-        encryptionSecret: 'aes-256-gcm-production-key',
+        secrets: ['prod-secret-2024-with-min-length__', 'prod-secret-2023-with-min-length__'],
+        encryptionSecret: 'aes-256-gcm-production-key-padding',
         httpOnly: true,
         secure: true,
         sameSite: 'strict',
@@ -38,8 +38,8 @@ describe('CookieParser E2E', () => {
 
     it('should handle mixed signed and encrypted cookies', async () => {
       const parser = CookieParser.create({
-        secrets: ['prod-secret-2024'],
-        encryptionSecret: 'aes-256-gcm-production-key',
+        secrets: ['prod-secret-2024-with-min-length__'],
+        encryptionSecret: 'aes-256-gcm-production-key-padding',
       });
 
       const outJar = new CookieJar(parser, '');
@@ -62,8 +62,8 @@ describe('CookieParser E2E', () => {
   describe('simulated Bun.serve handler via jar', () => {
     it('should work within a Bun.serve-like request handler flow', async () => {
       const parser = CookieParser.create({
-        secrets: ['server-key'],
-        encryptionSecret: 'server-enc',
+        secrets: ['server-key-with-minimum-length____'],
+        encryptionSecret: 'server-enc-with-minimum-length____',
         httpOnly: true,
         secure: true,
         path: '/',
@@ -103,8 +103,8 @@ describe('CookieParser E2E', () => {
   describe('simulated key rotation scenario via jar', () => {
     it('should migrate cookies from old key to new key', async () => {
       const parserOld = CookieParser.create({
-        secrets: ['2023-key'],
-        encryptionSecret: 'enc-2023',
+        secrets: ['rotation-key-year-2023__abcdefghijklmnop'],
+        encryptionSecret: 'encryption-key-2023__paddingpadding',
       });
 
       const outJar = new CookieJar(parserOld, '');
@@ -114,8 +114,8 @@ describe('CookieParser E2E', () => {
 
       // Migration parser accepts both keys
       const parserMigrate = CookieParser.create({
-        secrets: ['2024-key', '2023-key'],
-        encryptionSecret: 'enc-2023',
+        secrets: ['rotation-key-year-2024__abcdefghijklmnop', 'rotation-key-year-2023__abcdefghijklmnop'],
+        encryptionSecret: 'encryption-key-2023__paddingpadding',
       });
       const migrateJar = new CookieJar(parserMigrate, `session=${oldValue}`);
       expect(await migrateJar.get('session')).toBe('user-data');
@@ -127,8 +127,8 @@ describe('CookieParser E2E', () => {
 
       // New-only parser can read
       const parserNew = CookieParser.create({
-        secrets: ['2024-key'],
-        encryptionSecret: 'enc-2023',
+        secrets: ['rotation-key-year-2024__abcdefghijklmnop'],
+        encryptionSecret: 'encryption-key-2023__paddingpadding',
       });
       const newJar = new CookieJar(parserNew, `session=${newValue}`);
       expect(await newJar.get('session')).toBe('user-data');
@@ -138,8 +138,8 @@ describe('CookieParser E2E', () => {
   describe('simulated middleware pattern via jar', () => {
     it('should handle complete middleware lifecycle', async () => {
       const parser = CookieParser.create({
-        secrets: ['s'],
-        encryptionSecret: 'e',
+        secrets: ['signing-key-primary-aaaaaaaaaaaaaaa'],
+        encryptionSecret: 'encryption-key-extra-cccccccccccccc',
         httpOnly: true,
         secure: 'auto',
         sameSite: 'lax',

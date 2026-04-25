@@ -12,6 +12,8 @@ interface OutboundEntry {
   readonly deleted: boolean;
 }
 
+type Step = 'decrypt' | 'unsign';
+
 export class CookieJar {
   private readonly inbound: ReadonlyMap<string, string>;
   private readonly outbound = new Map<string, OutboundEntry>();
@@ -48,7 +50,7 @@ export class CookieJar {
       try {
         cookie = await this.parser.decrypt(cookie);
       } catch (thrown) {
-        return this.toErr(thrown);
+        return this.toErr(thrown, 'decrypt');
       }
     }
 
@@ -56,7 +58,7 @@ export class CookieJar {
       try {
         cookie = await this.parser.unsign(cookie);
       } catch (thrown) {
-        return this.toErr(thrown);
+        return this.toErr(thrown, 'unsign');
       }
     }
 
@@ -102,15 +104,18 @@ export class CookieJar {
     return headers;
   }
 
-  private toErr(thrown: unknown): ReturnType<typeof err<CookieErrorData>> {
+  private toErr(thrown: unknown, step: Step): ReturnType<typeof err<CookieErrorData>> {
     if (thrown instanceof CookieError) {
       return err<CookieErrorData>({
         reason: thrown.reason,
         message: thrown.message,
       });
     }
+    // M1 fix: fallback reason reflects the step that actually failed
     return err<CookieErrorData>({
-      reason: CookieErrorReason.DecryptionFailed,
+      reason: step === 'decrypt'
+        ? CookieErrorReason.DecryptionFailed
+        : CookieErrorReason.SignatureVerificationFailed,
       message: thrown instanceof Error ? thrown.message : 'unknown cookie error',
     });
   }

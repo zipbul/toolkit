@@ -6,12 +6,15 @@ import { CookieErrorReason } from './enums';
 import type { CookieErrorData } from './interfaces';
 import { resolveCookieParserOptions, validateCookieParserOptions } from './options';
 
+const VALID_SECRET = 'valid-secret-padded-to-thirty-two_';
+const VALID_ENC_SECRET = 'valid-encryption-secret-padded__';
+
 describe('resolveCookieParserOptions', () => {
   it('should return all defaults when no options provided', () => {
     const resolved = resolveCookieParserOptions();
     expect(resolved.secrets).toBeNull();
     expect(resolved.algorithm).toBe('sha256');
-    expect(resolved.encryptionSecret).toBeNull();
+    expect(resolved.encryptionSecrets).toBeNull();
     expect(resolved.prefixValidation).toBe(false);
     expect(resolved.defaults.httpOnly).toBeNull();
     expect(resolved.defaults.secure).toBeNull();
@@ -31,8 +34,8 @@ describe('resolveCookieParserOptions', () => {
   });
 
   it('should resolve secrets when provided', () => {
-    const resolved = resolveCookieParserOptions({ secrets: ['key1', 'key2'] });
-    expect(resolved.secrets).toEqual(['key1', 'key2']);
+    const resolved = resolveCookieParserOptions({ secrets: [VALID_SECRET, VALID_SECRET + '_alt'] });
+    expect(resolved.secrets).toEqual([VALID_SECRET, VALID_SECRET + '_alt']);
   });
 
   it('should resolve algorithm when provided', () => {
@@ -40,9 +43,14 @@ describe('resolveCookieParserOptions', () => {
     expect(resolved.algorithm).toBe('sha512');
   });
 
-  it('should resolve encryptionSecret when provided', () => {
-    const resolved = resolveCookieParserOptions({ encryptionSecret: 'my-key' });
-    expect(resolved.encryptionSecret).toBe('my-key');
+  it('should normalize encryptionSecret single string into array', () => {
+    const resolved = resolveCookieParserOptions({ encryptionSecret: VALID_ENC_SECRET });
+    expect(resolved.encryptionSecrets).toEqual([VALID_ENC_SECRET]);
+  });
+
+  it('should pass encryptionSecret array through unchanged', () => {
+    const resolved = resolveCookieParserOptions({ encryptionSecret: [VALID_ENC_SECRET, VALID_ENC_SECRET + '_alt'] });
+    expect(resolved.encryptionSecrets).toEqual([VALID_ENC_SECRET, VALID_ENC_SECRET + '_alt']);
   });
 
   it('should resolve prefixValidation when provided', () => {
@@ -79,7 +87,7 @@ describe('resolveCookieParserOptions', () => {
 
 describe('validateCookieParserOptions', () => {
   it('should return undefined when options are valid', () => {
-    const resolved = resolveCookieParserOptions({ secrets: ['key'], encryptionSecret: 'enc' });
+    const resolved = resolveCookieParserOptions({ secrets: [VALID_SECRET], encryptionSecret: VALID_ENC_SECRET });
     expect(validateCookieParserOptions(resolved)).toBeUndefined();
   });
 
@@ -98,18 +106,42 @@ describe('validateCookieParserOptions', () => {
 
   it('should return InvalidSecret when a secret is blank', () => {
     const resolved = resolveCookieParserOptions();
-    resolved.secrets = ['valid', '  '];
+    resolved.secrets = [VALID_SECRET, '  '];
     const result = validateCookieParserOptions(resolved);
     expect(isErr(result)).toBe(true);
     expect((result as Err<CookieErrorData>).data.reason).toBe(CookieErrorReason.InvalidSecret);
   });
 
+  it('should return WeakSecret when a signing secret is shorter than 32 chars', () => {
+    const resolved = resolveCookieParserOptions();
+    resolved.secrets = ['short-secret'];
+    const result = validateCookieParserOptions(resolved);
+    expect(isErr(result)).toBe(true);
+    expect((result as Err<CookieErrorData>).data.reason).toBe(CookieErrorReason.WeakSecret);
+  });
+
   it('should return InvalidEncryptionSecret when encryptionSecret is blank', () => {
     const resolved = resolveCookieParserOptions();
-    resolved.encryptionSecret = '  ';
+    resolved.encryptionSecrets = ['  '];
     const result = validateCookieParserOptions(resolved);
     expect(isErr(result)).toBe(true);
     expect((result as Err<CookieErrorData>).data.reason).toBe(CookieErrorReason.InvalidEncryptionSecret);
+  });
+
+  it('should return InvalidEncryptionSecret when encryptionSecrets array is empty', () => {
+    const resolved = resolveCookieParserOptions();
+    resolved.encryptionSecrets = [];
+    const result = validateCookieParserOptions(resolved);
+    expect(isErr(result)).toBe(true);
+    expect((result as Err<CookieErrorData>).data.reason).toBe(CookieErrorReason.InvalidEncryptionSecret);
+  });
+
+  it('should return WeakSecret when an encryptionSecret is shorter than 32 chars', () => {
+    const resolved = resolveCookieParserOptions();
+    resolved.encryptionSecrets = ['short-enc'];
+    const result = validateCookieParserOptions(resolved);
+    expect(isErr(result)).toBe(true);
+    expect((result as Err<CookieErrorData>).data.reason).toBe(CookieErrorReason.WeakSecret);
   });
 
   it('should return InvalidAlgorithm when algorithm is unsupported', () => {
