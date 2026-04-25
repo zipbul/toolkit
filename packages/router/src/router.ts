@@ -71,6 +71,9 @@ export class Router<T = unknown> {
    *  directly into state.params). False when any method falls back to the
    *  array-based radix walker. */
   private allSegmentTrees = true;
+  /** True when at least one route has a regex pattern. When false, the
+   *  TIMEOUT signalling path is dead — match() can skip errorKind reset. */
+  private anyTester = false;
   /** Per-method registered routes — used to build the segment tree at seal. */
   private readonly routeRecords: Array<{ methodCode: number; parts: PathPart[]; handlerIndex: number }> = [];
   /** Specialized match closure assembled by compileMatchFn() at build time. */
@@ -282,6 +285,7 @@ export class Router<T = unknown> {
     }
 
     this.allSegmentTrees = allSegment;
+    this.anyTester = testerCache.size > 0;
 
     // Pre-build the static MatchOutput objects so the match() hot path can
     // return them directly without allocating { value, params, meta } per hit.
@@ -340,6 +344,7 @@ export class Router<T = unknown> {
     const hasAnyTree = this.trees.some(t => t != null);
     const hasOptDefaults = this.optionalParamDefaults !== undefined;
     const allSegment = this.allSegmentTrees;
+    const anyTester = this.anyTester;
 
     // Closure captures (all read-only at match time)
     const staticOutputs = this.staticOutputs;
@@ -435,20 +440,20 @@ export class Router<T = unknown> {
         // Segment walker writes params directly into matchState.params; we
         // pre-allocate it here and the walker mutates on the success-return
         // path only (no commit/rollback dance).
+        // errorKind/errorMessage reset is skipped when no route has a regex
+        // pattern — TIMEOUT path is dead so the channel never gets dirty.
         src.push(`
           var tr = trees[mc];
           if (!tr) {
             ${useCache ? emitMissCacheWrite() : ''}
             return null;
           }
-          matchState.handlerIndex = -1;
-          matchState.errorKind = null;
-          matchState.errorMessage = null;
+          ${anyTester ? 'matchState.errorKind = null; matchState.errorMessage = null;' : ''}
           var params = Object.create(null);
           matchState.params = params;
           var ok = tr(sp, 0, matchState);
           if (!ok) {
-            ${useCache ? `if (matchState.errorKind === null) { ${emitMissCacheWrite()} }` : ''}
+            ${useCache ? (anyTester ? `if (matchState.errorKind === null) { ${emitMissCacheWrite()} }` : emitMissCacheWrite()) : ''}
             return null;
           }
         `);
