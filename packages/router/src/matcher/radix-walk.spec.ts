@@ -10,7 +10,7 @@ const decoder = buildDecoder();
 
 function walk(fn: ReturnType<typeof createRadixWalker>, url: string) {
   const state = createMatchState();
-  const result = fn(url, 0, state);
+  const result = fn(url, state);
 
   if (state.errorKind) throw new Error(`Walk error: ${state.errorKind}: ${state.errorMessage}`);
   if (!result) return null;
@@ -256,7 +256,7 @@ describe('createRadixWalker', () => {
       const fn = createRadixWalker(root, [timeoutTester], decoder, true);
 
       const state = createMatchState();
-      const result = fn('/users/123', 0, state);
+      const result = fn('/users/123', state);
 
       expect(result).toBe(false);
       expect(state.errorKind).toBe('regex-timeout');
@@ -282,7 +282,7 @@ describe('createRadixWalker', () => {
       const fn = createRadixWalker(root, [timeoutTester], decoder, true);
 
       const state = createMatchState();
-      const result = fn('/items/special/abc', 0, state);
+      const result = fn('/items/special/abc', state);
 
       expect(result).toBe(false);
       expect(state.errorKind).toBe('regex-timeout');

@@ -451,7 +451,7 @@ export class Router<T = unknown> {
           ${anyTester ? 'matchState.errorKind = null; matchState.errorMessage = null;' : ''}
           var params = Object.create(null);
           matchState.params = params;
-          var ok = tr(sp, 0, matchState);
+          var ok = tr(sp, matchState);
           if (!ok) {
             ${useCache ? (anyTester ? `if (matchState.errorKind === null) { ${emitMissCacheWrite()} }` : emitMissCacheWrite()) : ''}
             return null;
@@ -477,7 +477,7 @@ export class Router<T = unknown> {
           matchState.paramCount = 0;
           matchState.errorKind = null;
           matchState.errorMessage = null;
-          var ok = tr(sp, 0, matchState);
+          var ok = tr(sp, matchState);
           if (!ok) {
             ${useCache ? `if (matchState.errorKind === null) { ${emitMissCacheWrite()} }` : ''}
             return null;

@@ -136,8 +136,8 @@ export function createSegmentWalker(
     return false;
   }
 
-  return function walk(url: string, startIndex: number, state: MatchState): boolean {
-    const path = startIndex === 0 ? url : url.substring(startIndex);
+  return function walk(url: string, state: MatchState): boolean {
+    const path = url;
 
     if (path.length === 1 && path.charCodeAt(0) === 47) {
       if (root.store !== null) {
@@ -164,8 +164,8 @@ function createIterativeWalker(
   decoder: DecoderFn,
   decodeParams: boolean,
 ): RadixMatchFn {
-  return function walk(url: string, startIndex: number, state: MatchState): boolean {
-    const path = startIndex === 0 ? url : url.substring(startIndex);
+  return function walk(url: string, state: MatchState): boolean {
+    const path = url;
 
     if (path.length === 1 && path.charCodeAt(0) === 47) {
       if (root.store !== null) {

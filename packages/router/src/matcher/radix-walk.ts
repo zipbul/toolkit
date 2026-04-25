@@ -208,8 +208,8 @@ function createSimpleWalker(
     return false;
   }
 
-  return function walk(url: string, startIndex: number, state: MatchState): boolean {
-    return matchNode(root, url, startIndex, state);
+  return function walk(url: string, state: MatchState): boolean {
+    return matchNode(root, url, 0, state);
   };
 }
 
@@ -410,7 +410,7 @@ function createFullWalker(
     return false;
   }
 
-  return function walk(url: string, startIndex: number, state: MatchState): boolean {
-    return matchNode(root, url, startIndex, state);
+  return function walk(url: string, state: MatchState): boolean {
+    return matchNode(root, url, 0, state);
   };
 }

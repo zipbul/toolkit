@@ -3,7 +3,6 @@ import type { MatchState } from './match-state';
 
 export type RadixMatchFn = (
   url: string,
-  startIndex: number,
   state: MatchState,
 ) => boolean;
 

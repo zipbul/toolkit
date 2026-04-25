@@ -48,9 +48,9 @@ export function compileRadixTree(
   // at terminal commits.
   const source = `
 'use strict';
-return function compiledWalk(url, startIndex, state) {
+return function compiledWalk(url, state) {
   var len = url.length;
-  var pos0 = startIndex;
+  var pos0 = 0;
   var pn = state.paramNames;
   var pv = state.paramValues;
 ${body}
