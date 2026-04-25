@@ -1,0 +1,62 @@
+{
+  "name": "@zipbul/helmet",
+  "version": "0.0.1",
+  "description": "Standards-compliant security headers engine for Web Fetch APIs (CSP, HSTS, COOP/COEP, Permissions-Policy, etc.)",
+  "license": "MIT",
+  "author": "Junhyung Park (https://github.com/parkrevil)",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/zipbul/toolkit",
+    "directory": "packages/helmet"
+  },
+  "bugs": "https://github.com/zipbul/toolkit/issues",
+  "homepage": "https://github.com/zipbul/toolkit/tree/main/packages/helmet#readme",
+  "keywords": [
+    "helmet",
+    "security",
+    "security-headers",
+    "csp",
+    "content-security-policy",
+    "hsts",
+    "permissions-policy",
+    "coop",
+    "coep",
+    "cors",
+    "owasp",
+    "http",
+    "fetch",
+    "web-api",
+    "bun",
+    "typescript",
+    "zipbul"
+  ],
+  "engines": {
+    "bun": ">=1.0.0"
+  },
+  "type": "module",
+  "module": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "sideEffects": false,
+  "publishConfig": {
+    "provenance": true
+  },
+  "scripts": {
+    "build": "bun build index.ts --outdir dist --target bun --format esm --packages external --production && tsc -p tsconfig.build.json",
+    "test": "bun test",
+    "coverage": "bun test --coverage"
+  },
+  "dependencies": {
+    "@zipbul/result": "workspace:*",
+    "@zipbul/shared": "workspace:*",
+    "safe-regex2": "^5.0.0"
+  }
+}
