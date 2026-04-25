@@ -79,6 +79,9 @@ export class Router<T = unknown> {
 
   /** Path → per-methodCode handler array. NullProtoObj for proto-free O(1) lookup. */
   private staticMap: Record<string, Array<T | undefined>> = new NullProtoObj() as Record<string, Array<T | undefined>>;
+  /** Pre-built MatchOutput per static (path, methodCode). Returned directly
+   *  from match() — eliminates one object-literal allocation per static hit. */
+  private staticOutputs: Record<string, Array<MatchOutput<T> | undefined>> = new NullProtoObj() as Record<string, Array<MatchOutput<T> | undefined>>;
   /** Method name → numeric code. NullProtoObj for proto-free O(1) lookup. */
   private methodCodes: Record<string, number> = new NullProtoObj() as Record<string, number>;
   /** Track wildcard names per normalized prefix for cross-method conflict detection */
@@ -280,6 +283,27 @@ export class Router<T = unknown> {
 
     this.allSegmentTrees = allSegment;
 
+    // Pre-build the static MatchOutput objects so the match() hot path can
+    // return them directly without allocating { value, params, meta } per hit.
+    const staticOutputs = new NullProtoObj() as Record<string, Array<MatchOutput<T> | undefined>>;
+
+    for (const path in this.staticMap) {
+      const arr = this.staticMap[path]!;
+      const outArr: Array<MatchOutput<T> | undefined> = new Array(arr.length);
+
+      for (let i = 0; i < arr.length; i++) {
+        const value = arr[i];
+
+        if (value !== undefined) {
+          outArr[i] = Object.freeze({ value, params: EMPTY_PARAMS, meta: STATIC_META }) as MatchOutput<T>;
+        }
+      }
+
+      staticOutputs[path] = outArr;
+    }
+
+    this.staticOutputs = staticOutputs;
+
     this.matchState = createMatchState();
 
     this._ignoreTrailingSlash = this.options.ignoreTrailingSlash ?? true;
@@ -318,6 +342,7 @@ export class Router<T = unknown> {
     const allSegment = this.allSegmentTrees;
 
     // Closure captures (all read-only at match time)
+    const staticOutputs = this.staticOutputs;
     const staticMap = this.staticMap;
     const methodCodes = this.methodCodes;
     const trees = this.trees;
@@ -360,11 +385,13 @@ export class Router<T = unknown> {
     if (lowerCase) src.push(`sp = sp.toLowerCase();`);
 
     // Static lookup — always first, always inlined
+    // Static lookup returns a pre-built (frozen) MatchOutput so we skip the
+    // per-call object literal allocation.
     src.push(`
-      var sa = staticMap[sp];
-      if (sa !== undefined) {
-        var sh = sa[mc];
-        if (sh !== undefined) return { value: sh, params: EMPTY_PARAMS, meta: STATIC_META };
+      var so = staticOutputs[sp];
+      if (so !== undefined) {
+        var out = so[mc];
+        if (out !== undefined) return out;
       }
     `);
 
@@ -501,14 +528,14 @@ export class Router<T = unknown> {
 
     const body = src.join('\n');
     const factory = new Function(
-      'staticMap', 'methodCodes', 'trees', 'matchState', 'handlers',
+      'staticOutputs', 'staticMap', 'methodCodes', 'trees', 'matchState', 'handlers',
       'optDefaults', 'hitCacheByMethod', 'missCacheByMethod', 'RouterCacheCtor',
       'EMPTY_PARAMS', 'STATIC_META', 'CACHE_META', 'DYNAMIC_META',
       `return function match(method, path) {\n${body}\n};`,
     );
 
     return factory(
-      staticMap, methodCodes, trees, matchState, handlers,
+      staticOutputs, staticMap, methodCodes, trees, matchState, handlers,
       optDefaults, hitCacheByMethod, missCacheByMethod, RouterCacheCtor,
       EMPTY_PARAMS, STATIC_META, CACHE_META, DYNAMIC_META,
     ) as (method: string, path: string) => MatchOutput<T> | null;
