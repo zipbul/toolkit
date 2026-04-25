@@ -5,6 +5,7 @@ import type { SegmentNode } from './segment-tree';
 
 import { TESTER_PASS, TESTER_TIMEOUT } from './pattern-tester';
 import { hasAmbiguousNode } from './segment-tree';
+import { compileSegmentTree } from './segment-compile';
 
 /**
  * Detect & build a codegen walker for the static-prefix wildcard pattern:
@@ -110,6 +111,14 @@ export function createSegmentWalker(
   const compiledWild = tryCodegenStaticPrefixWildcard(root);
 
   if (compiledWild !== null) return compiledWild;
+
+  // General segment-tree codegen — emits flat function with startsWith probes
+  // for static segments and inline indexOf+substring for params. Bails when
+  // tree shape needs backtracking we don't generate (returns null) — caller
+  // then falls through to the iterative or recursive walker below.
+  const compiledFull = compileSegmentTree(root, decodeParams);
+
+  if (compiledFull !== null) return compiledFull;
 
   // Trees without alternation between static and param/wildcard at the same
   // level can be matched iteratively — no recursion, no backtracking. This
