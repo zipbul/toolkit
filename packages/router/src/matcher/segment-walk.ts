@@ -7,6 +7,91 @@ import { TESTER_PASS, TESTER_TIMEOUT } from './pattern-tester';
 import { hasAmbiguousNode } from './segment-tree';
 
 /**
+ * Detect & build a codegen walker for the static-prefix wildcard pattern:
+ *   root -> staticChildren[name] -> wildcardStore (no further descent)
+ *
+ * Generates a flat function that uses url.startsWith(prefix, 1) per known
+ * prefix — no path.split, no Map.get, no substring for the prefix lookup.
+ * Substring is only invoked once for the captured wildcard suffix.
+ *
+ * Returns null when the tree shape doesn't match.
+ */
+function tryCodegenStaticPrefixWildcard(root: SegmentNode): RadixMatchFn | null {
+  if (root.paramChild !== null || root.wildcardStore !== null || root.store !== null) return null;
+  if (root.staticChildren === null) return null;
+
+  type Entry = {
+    prefix: string;
+    wildcardOrigin: 'star' | 'multi';
+    wildcardName: string;
+    wildcardStore: number;
+  };
+  const entries: Entry[] = [];
+
+  for (const key in root.staticChildren) {
+    const child = root.staticChildren[key]!;
+
+    if (child.staticChildren !== null) return null;
+    if (child.paramChild !== null) return null;
+    if (child.store !== null) return null;
+    if (child.wildcardStore === null) return null;
+
+    entries.push({
+      prefix: key,
+      wildcardOrigin: child.wildcardOrigin!,
+      wildcardName: child.wildcardName!,
+      wildcardStore: child.wildcardStore,
+    });
+  }
+
+  if (entries.length === 0) return null;
+
+  // Generate the walker source. Each prefix gets a `startsWith(prefix + '/', 1)`
+  // fast check — JSC heavily optimizes startsWith and avoids allocation.
+  let body = `
+    'use strict';
+    return function compiledWildWalk(url, state) {
+      var len = url.length;
+      if (len < 2 || url.charCodeAt(0) !== 47) return false;
+  `;
+
+  for (const e of entries) {
+    const prefixWithSlash = e.prefix + '/';
+    const prefixLen = prefixWithSlash.length;
+    const minLen = e.wildcardOrigin === 'multi' ? prefixLen + 1 : prefixLen;
+    const sliceStart = prefixLen + 1; // after '/' + prefix + '/'
+
+    body += `
+      if (len >= ${minLen + 1} && url.startsWith(${JSON.stringify(prefixWithSlash)}, 1)) {
+        state.params[${JSON.stringify(e.wildcardName)}] = url.substring(${sliceStart});
+        state.handlerIndex = ${e.wildcardStore};
+        return true;
+      }`;
+
+    if (e.wildcardOrigin === 'star') {
+      // Allow URL to be exactly '/prefix' (no trailing slash) — empty capture
+      body += `
+      if (len === ${e.prefix.length + 1} && url.startsWith(${JSON.stringify(e.prefix)}, 1)) {
+        state.params[${JSON.stringify(e.wildcardName)}] = '';
+        state.handlerIndex = ${e.wildcardStore};
+        return true;
+      }`;
+    }
+  }
+
+  body += `
+      return false;
+    };
+  `;
+
+  try {
+    return new Function(body)() as RadixMatchFn;
+  } catch {
+    return null;
+  }
+}
+
+/**
  * Memoirist-style walker: writes params directly into the pre-allocated
  * `state.params` object on the SUCCESS return path only. Failed branches
  * contribute zero work to the params object — there is no commit/rollback
@@ -20,6 +105,12 @@ export function createSegmentWalker(
   decoder: DecoderFn,
   decodeParams: boolean,
 ): RadixMatchFn {
+  // Codegen specialist for static-prefix wildcard trees (file servers).
+  // Skips path.split + Map lookup — uses url.startsWith for prefix dispatch.
+  const compiledWild = tryCodegenStaticPrefixWildcard(root);
+
+  if (compiledWild !== null) return compiledWild;
+
   // Trees without alternation between static and param/wildcard at the same
   // level can be matched iteratively — no recursion, no backtracking. This
   // saves a function call per segment for the common case (REST routes
