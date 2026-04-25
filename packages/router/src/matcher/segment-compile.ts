@@ -26,9 +26,10 @@ export function compileSegmentTree(
   root: SegmentNode,
   decodeParams: boolean,
 ): RadixMatchFn | null {
-  // Bail when any node has > 2 static children — sequential startsWith probes
-  // become slower than the iterative walker's O(1) Map.get dispatch beyond
-  // that threshold.
+  // Empirically (this host, JSC), wide fanout regresses even with the
+  // charCode-switch dispatch path because the iterative walker's O(1)
+  // Map.get on `staticChildren[seg]` outperforms a switch+startsWith chain.
+  // Cap at 2 — small static-only branches still benefit from codegen.
   if (hasWideFanout(root, 2)) return null;
 
   const ctx: Ctx = {
@@ -141,33 +142,86 @@ function emitNode(ctx: Ctx, node: SegmentNode, posVar: string, depth: number): s
   }`;
   }
 
-  // Static descents — startsWith probes (no allocation).
+  // Static descents — group by first char, dispatch via switch when >2.
+  // JSC compiles a numeric switch with consecutive-ish cases into a jump
+  // table; sequential startsWith probes scale O(N) past 2 children.
   if (node.staticChildren !== null) {
-    for (const key in node.staticChildren) {
-      const child = node.staticChildren[key]!;
-      const prefixWithSlash = key + '/';
-      const childPos = fresh(ctx, 'pos');
+    const keys = Object.keys(node.staticChildren);
 
-      // Continuation: prefix + '/' followed by more URL
-      const inner = emitNode(ctx, child, childPos, depth + 1);
+    if (keys.length > 2) {
+      // Group keys by their first charCode for switch dispatch.
+      const groups = new Map<number, string[]>();
 
-      if (ctx.bail) return '';
+      for (const key of keys) {
+        const ch = key.charCodeAt(0);
+        const list = groups.get(ch);
+
+        if (list === undefined) groups.set(ch, [key]);
+        else list.push(key);
+      }
 
       code += `
+  if (${posVar} < len) switch (url.charCodeAt(${posVar})) {`;
+
+      for (const [ch, group] of groups) {
+        code += `
+    case ${ch}: {`;
+
+        for (const key of group) {
+          const child = node.staticChildren[key]!;
+          const prefixWithSlash = key + '/';
+          const childPos = fresh(ctx, 'pos');
+          const inner = emitNode(ctx, child, childPos, depth + 1);
+
+          if (ctx.bail) return '';
+
+          code += `
+      if (url.startsWith(${JSON.stringify(prefixWithSlash)}, ${posVar})) {
+        var ${childPos} = ${posVar} + ${prefixWithSlash.length};
+${inner}
+      }`;
+
+          const exactBody = emitTerminalAt(child);
+
+          if (exactBody !== '') {
+            code += `
+      if (len === ${posVar} + ${key.length} && url.startsWith(${JSON.stringify(key)}, ${posVar})) {
+${exactBody}
+      }`;
+          }
+        }
+
+        code += `
+      break;
+    }`;
+      }
+
+      code += `
+  }`;
+    } else {
+      // Few children — direct startsWith probes are fine.
+      for (const key of keys) {
+        const child = node.staticChildren[key]!;
+        const prefixWithSlash = key + '/';
+        const childPos = fresh(ctx, 'pos');
+        const inner = emitNode(ctx, child, childPos, depth + 1);
+
+        if (ctx.bail) return '';
+
+        code += `
   if (url.startsWith(${JSON.stringify(prefixWithSlash)}, ${posVar})) {
     var ${childPos} = ${posVar} + ${prefixWithSlash.length};
 ${inner}
   }`;
 
-      // Static at exact end (no trailing /): only valid if child has its
-      // own terminal store or star-wildcard.
-      const exactBody = emitTerminalAt(child);
+        const exactBody = emitTerminalAt(child);
 
-      if (exactBody !== '') {
-        code += `
+        if (exactBody !== '') {
+          code += `
   if (len === ${posVar} + ${key.length} && url.startsWith(${JSON.stringify(key)}, ${posVar})) {
 ${exactBody}
   }`;
+        }
       }
     }
   }
