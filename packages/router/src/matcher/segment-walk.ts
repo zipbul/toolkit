@@ -7,27 +7,26 @@ import { TESTER_PASS, TESTER_TIMEOUT } from './pattern-tester';
 import { hasAmbiguousNode } from './segment-tree';
 import { compileSegmentTree } from './segment-compile';
 
+export interface WildCodegenEntry {
+  prefix: string;
+  wildcardOrigin: 'star' | 'multi';
+  wildcardName: string;
+  wildcardStore: number;
+}
+
 /**
- * Detect & build a codegen walker for the static-prefix wildcard pattern:
- *   root -> staticChildren[name] -> wildcardStore (no further descent)
+ * Detect whether `root` matches the static-prefix wildcard shape:
+ *   root -> staticChildren[name] -> wildcardStore (no deeper structure)
  *
- * Generates a flat function that uses url.startsWith(prefix, 1) per known
- * prefix — no path.split, no Map.get, no substring for the prefix lookup.
- * Substring is only invoked once for the captured wildcard suffix.
- *
- * Returns null when the tree shape doesn't match.
+ * Returns the entry list when the shape matches, null otherwise. Used both
+ * to build the in-walker codegen path (this file) and by router.ts to emit
+ * a fully specialized matchImpl that skips the walker call entirely.
  */
-function tryCodegenStaticPrefixWildcard(root: SegmentNode): RadixMatchFn | null {
+export function detectWildCodegenSpec(root: SegmentNode): WildCodegenEntry[] | null {
   if (root.paramChild !== null || root.wildcardStore !== null || root.store !== null) return null;
   if (root.staticChildren === null) return null;
 
-  type Entry = {
-    prefix: string;
-    wildcardOrigin: 'star' | 'multi';
-    wildcardName: string;
-    wildcardStore: number;
-  };
-  const entries: Entry[] = [];
+  const entries: WildCodegenEntry[] = [];
 
   for (const key in root.staticChildren) {
     const child = root.staticChildren[key]!;
@@ -46,6 +45,22 @@ function tryCodegenStaticPrefixWildcard(root: SegmentNode): RadixMatchFn | null 
   }
 
   if (entries.length === 0) return null;
+
+  return entries;
+}
+
+/**
+ * Generate a walker function via `new Function()` for the static-prefix
+ * wildcard pattern. Each prefix gets a `startsWith(prefix + '/', 1)` probe —
+ * no path.split, no Map lookup, substring only for the captured suffix.
+ *
+ * Returns null when the tree shape doesn't match (delegates to
+ * detectWildCodegenSpec for shape detection).
+ */
+function tryCodegenStaticPrefixWildcard(root: SegmentNode): RadixMatchFn | null {
+  const entries = detectWildCodegenSpec(root);
+
+  if (entries === null) return null;
 
   // Generate the walker source. Each prefix gets a `startsWith(prefix + '/', 1)`
   // fast check — JSC heavily optimizes startsWith and avoids allocation.

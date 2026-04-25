@@ -24,7 +24,8 @@ import { createRadixWalker } from './matcher/radix-walk';
 import { createMatchState } from './matcher/match-state';
 import { createSegmentNode, insertIntoSegmentTree } from './matcher/segment-tree';
 import type { SegmentNode } from './matcher/segment-tree';
-import { createSegmentWalker } from './matcher/segment-walk';
+import { createSegmentWalker, detectWildCodegenSpec } from './matcher/segment-walk';
+import type { WildCodegenEntry } from './matcher/segment-walk';
 import type { PathPart } from './builder/path-parser';
 import type { PatternTesterFn } from './types';
 
@@ -67,6 +68,12 @@ export class Router<T = unknown> {
   private handlers: T[] = [];
   private optionalParamDefaults: OptionalParamDefaults | undefined;
   private trees: Array<RadixMatchFn | null> = [];
+  /** Per-method wildcard codegen entries when the segment tree is a pure
+   *  static-prefix wildcard pattern (e.g. file-server style). When all
+   *  per-router conditions allow it, compileMatchFn emits a fully specialized
+   *  matchImpl that inlines these probes and skips the generic pipeline —
+   *  shape-tailored codegen lets JSC FTL the entire match path. */
+  private wildSpecs: Array<WildCodegenEntry[] | null> = [];
   /** True when every method's tree uses the segment walker (params written
    *  directly into state.params). False when any method falls back to the
    *  array-based radix walker. */
@@ -266,9 +273,15 @@ export class Router<T = unknown> {
       const segRoot = segmentTrees[code];
 
       if (segRoot !== undefined && segRoot !== null && segmentBuildOk[code]) {
+        // Detect static-prefix wildcard shape — when the entire router shape
+        // satisfies certain conditions (single method, no statics, etc.),
+        // compileMatchFn will inline these probes directly into matchImpl.
+        this.wildSpecs[code] = detectWildCodegenSpec(segRoot);
         this.trees[code] = createSegmentWalker(segRoot, decoder, decodeParams);
         continue;
       }
+
+      this.wildSpecs[code] = null;
 
       const root = this.radixBuilder!.getRoot(code);
 
@@ -346,7 +359,11 @@ export class Router<T = unknown> {
     const checkSegLen = Number.isFinite(maxSegLen);
 
     const hasAnyTree = this.trees.some(t => t != null);
-    const hasOptDefaults = this.optionalParamDefaults !== undefined;
+    // True only when at least one route registered `:name?` optional params.
+    // The OptionalParamDefaults instance is always constructed, so a defined
+    // check would always be true and force the dead-branch into hot codegen.
+    const hasOptDefaults = this.optionalParamDefaults !== undefined
+      && !this.optionalParamDefaults.isEmpty();
     const allSegment = this.allSegmentTrees;
     const anyTester = this.anyTester;
     // When no static routes are registered, the staticOutputs probe is dead
@@ -369,6 +386,122 @@ export class Router<T = unknown> {
     const RouterCacheCtor = RouterCache;
     const ParamsCtor = NullProtoObj;
 
+    const allCodeEntries = Object.entries(this.methodCodes);
+
+    // ───────────────────────────────────────────────────────────────────
+    // Shape-specialized fast path: pure static-prefix wildcard router.
+    //
+    // When the router is single-method, has zero static routes, no cache, no
+    // opt-defaults, no regex testers, no case folding, and the only tree is a
+    // static-prefix wildcard pattern (file server / asset CDN style), emit a
+    // tiny matchImpl that directly returns MatchOutput. This skips:
+    //   - method-code translation (replaced with literal === check)
+    //   - staticOutputs probe (no statics → dead branch)
+    //   - tree dispatch + tr() function call
+    //   - new ParamsCtor() + matchState.params write
+    //   - matchState.handlerIndex round-trip + handlers[] indirection
+    //
+    // Result: a function small enough for JSC FTL to compile aggressively,
+    // matching memoirist's tight `find()` cost profile.
+    // ───────────────────────────────────────────────────────────────────
+    const singleMethodWild = (() => {
+      if (hasAnyStatic) return null;
+      if (useCache) return null;
+      if (hasOptDefaults) return null;
+      if (anyTester) return null;
+      if (lowerCase) return null;
+      if (!allSegment) return null;
+
+      // MethodRegistry pre-registers all 7 HTTP verbs at construction, so
+      // allCodeEntries always carries 7 entries regardless of what was
+      // actually `add()`ed. The signal we want is "how many methods received
+      // routes" — i.e. how many trees are non-null.
+      let activeMethod: string | null = null;
+      let activeCode = -1;
+      let activeCount = 0;
+
+      for (const [name, code] of allCodeEntries) {
+        if (this.trees[code] != null) {
+          activeMethod = name;
+          activeCode = code;
+          activeCount++;
+
+          if (activeCount > 1) return null;
+        }
+      }
+
+      if (activeCount !== 1 || activeMethod === null) return null;
+
+      const wild = this.wildSpecs[activeCode];
+
+      if (wild === null || wild === undefined) return null;
+
+      return { method: activeMethod, entries: wild };
+    })();
+
+    if (singleMethodWild !== null) {
+      const { method: theMethod, entries: wildEntries } = singleMethodWild;
+      const lines: string[] = [];
+
+      if (checkPathLen) lines.push(`if (path.length > ${maxPathLen}) return null;`);
+      lines.push(`if (method !== ${JSON.stringify(theMethod)}) return null;`);
+      lines.push(`var sp = path;`);
+      lines.push(`var qi = sp.indexOf('?'); if (qi !== -1) sp = sp.substring(0, qi);`);
+
+      if (trimSlash) {
+        lines.push(`if (sp.length > 1 && sp.charCodeAt(sp.length - 1) === 47) sp = sp.substring(0, sp.length - 1);`);
+      }
+
+      if (checkSegLen) {
+        lines.push(`
+          if (sp.length > ${maxSegLen}) {
+            for (var i = 1, sl = 0, ml = ${maxSegLen}; i < sp.length; i++) {
+              if (sp.charCodeAt(i) === 47) { sl = 0; }
+              else { sl++; if (sl > ml) return null; }
+            }
+          }`);
+      }
+
+      // Per-prefix probes. Use full-prefix `startsWith('/X/', 0)` to fold the
+      // leading-slash check into the same call (one fewer charCodeAt branch).
+      // Object literal `{ "name": ... }` (JSON-quoted key) lets JSC pin a
+      // stable hidden class while remaining safe for any wildcard name —
+      // path-parser permits names that aren't strict JS identifiers, so we
+      // can't emit a bare-key literal.
+      for (const e of wildEntries) {
+        const fullPrefixSlash = '/' + e.prefix + '/';
+        const fullPrefixSlashLen = fullPrefixSlash.length;
+        const minLen = e.wildcardOrigin === 'multi' ? fullPrefixSlashLen + 1 : fullPrefixSlashLen;
+        const sliceStart = fullPrefixSlashLen;
+        const nameKey = JSON.stringify(e.wildcardName);
+
+        lines.push(`
+          if (sp.length >= ${minLen} && sp.startsWith(${JSON.stringify(fullPrefixSlash)}, 0)) {
+            return { value: handlers[${e.wildcardStore}], params: { ${nameKey}: sp.substring(${sliceStart}) }, meta: DYNAMIC_META };
+          }`);
+
+        if (e.wildcardOrigin === 'star') {
+          // /prefix (no trailing slash) → empty capture
+          const fullPrefix = '/' + e.prefix;
+
+          lines.push(`
+          if (sp.length === ${fullPrefix.length} && sp === ${JSON.stringify(fullPrefix)}) {
+            return { value: handlers[${e.wildcardStore}], params: { ${nameKey}: '' }, meta: DYNAMIC_META };
+          }`);
+        }
+      }
+
+      lines.push(`return null;`);
+
+      const tinyBody = lines.join('\n');
+      const tinyFactory = new Function(
+        'handlers', 'DYNAMIC_META',
+        `return function match(method, path) {\n${tinyBody}\n};`,
+      );
+
+      return tinyFactory(handlers, DYNAMIC_META) as (method: string, path: string) => MatchOutput<T> | null;
+    }
+
     const src: string[] = [];
 
     if (checkPathLen) src.push(`if (path.length > ${maxPathLen}) return null;`);
@@ -376,7 +509,6 @@ export class Router<T = unknown> {
     // Single-method optimization: skip the full lookup when the router was
     // configured with exactly one HTTP method. We still verify the incoming
     // method matches that one — anything else is null.
-    const allCodeEntries = Object.entries(this.methodCodes);
 
     if (allCodeEntries.length === 1) {
       const [theMethod, theCode] = allCodeEntries[0]!;
