@@ -97,9 +97,11 @@ export class Router<T = unknown> {
    *  `staticMap`. Without this, `arr[mc] === undefined` ambiguously means
    *  either "not registered" or "registered with undefined value". */
   private staticRegistered: Record<string, boolean[]> = new NullProtoObj() as Record<string, boolean[]>;
-  /** Pre-built MatchOutput per static (path, methodCode). Returned directly
-   *  from match() — eliminates one object-literal allocation per static hit. */
-  private staticOutputs: Record<string, Array<MatchOutput<T> | undefined>> = new NullProtoObj() as Record<string, Array<MatchOutput<T> | undefined>>;
+  /** Pre-built MatchOutput indexed by [methodCode][path]. Layout chosen so
+   *  the single-method-optimized matchImpl can closure-capture the inner
+   *  bucket as a constant, collapsing the static lookup to a single
+   *  property access. */
+  private staticOutputsByMethod: Array<Record<string, MatchOutput<T>> | undefined> = [];
   /** Method name → numeric code. NullProtoObj for proto-free O(1) lookup. */
   private methodCodes: Record<string, number> = new NullProtoObj() as Record<string, number>;
   /** Track wildcard names per normalized prefix for cross-method conflict detection */
@@ -308,33 +310,40 @@ export class Router<T = unknown> {
     this.allSegmentTrees = allSegment;
     this.anyTester = testerCache.size > 0;
 
-    // Pre-build the static MatchOutput objects so the match() hot path can
-    // return them directly without allocating { value, params, meta } per hit.
-    const staticOutputs = new NullProtoObj() as Record<string, Array<MatchOutput<T> | undefined>>;
+    // Pre-build the static MatchOutput objects so match() can return them
+    // directly without allocating { value, params, meta } per hit.
+    //
+    // Layout: staticOutputs[methodCode] → NullProtoObj { path → MatchOutput }.
+    // The compiled matchImpl indexes by methodCode first (constant under the
+    // single-method optimization, so the outer access folds away at JIT
+    // time) then by path. This is one fewer indirection than the previous
+    // `staticOutputs[path][methodCode]` layout for routers that register
+    // most paths under one verb (typical REST shapes).
+    const staticOutputsByMethod: Array<Record<string, MatchOutput<T>> | undefined> = [];
 
     for (const path in this.staticMap) {
       const arr = this.staticMap[path]!;
       const registered = this.staticRegistered[path]!;
-      // JSC degrades arrays with holes via prototype-chain walks on access.
-      // Build a packed array (no holes) by initializing all slots up-front.
-      // The `registered[i]` parallel array distinguishes "method registered
-      // with undefined value" (must build a MatchOutput with value:undefined)
-      // from "method not registered" (slot must remain undefined so the
-      // hot path's `so[mc] !== undefined` check skips it).
-      const outArr: Array<MatchOutput<T> | undefined> = [];
 
-      for (let i = 0; i < arr.length; i++) {
-        outArr.push(
-          registered[i]
-            ? Object.freeze({ value: arr[i] as T, params: EMPTY_PARAMS, meta: STATIC_META }) as MatchOutput<T>
-            : undefined,
-        );
+      for (let mc = 0; mc < arr.length; mc++) {
+        if (!registered[mc]) continue;
+
+        let bucket = staticOutputsByMethod[mc];
+
+        if (bucket === undefined) {
+          bucket = new NullProtoObj() as Record<string, MatchOutput<T>>;
+          staticOutputsByMethod[mc] = bucket;
+        }
+
+        bucket[path] = Object.freeze({
+          value: arr[mc] as T,
+          params: EMPTY_PARAMS,
+          meta: STATIC_META,
+        }) as MatchOutput<T>;
       }
-
-      staticOutputs[path] = outArr;
     }
 
-    this.staticOutputs = staticOutputs;
+    this.staticOutputsByMethod = staticOutputsByMethod;
 
     this.matchState = createMatchState();
 
@@ -381,10 +390,12 @@ export class Router<T = unknown> {
     // weight on every dynamic call — skip emitting it entirely. Saves 1-2 ns
     // on routers that are pure wildcard/param (e.g. file servers).
     let hasAnyStatic = false;
-    for (const _ in this.staticOutputs) { hasAnyStatic = true; break; }
+    for (const bucket of this.staticOutputsByMethod) {
+      if (bucket !== undefined) { hasAnyStatic = true; break; }
+    }
 
     // Closure captures (all read-only at match time)
-    const staticOutputs = this.staticOutputs;
+    const staticOutputsByMethod = this.staticOutputsByMethod;
     const staticMap = this.staticMap;
     const methodCodes = this.methodCodes;
     const trees = this.trees;
@@ -527,15 +538,36 @@ export class Router<T = unknown> {
 
     if (checkPathLen) src.push(`if (path.length > ${maxPathLen}) return null;`);
 
-    // Single-method optimization: skip the full lookup when the router was
-    // configured with exactly one HTTP method. We still verify the incoming
-    // method matches that one — anything else is null.
+    // Single-method optimization. methodCodes always holds all 7 default
+    // verbs (MethodRegistry pre-registers them in its constructor), so
+    // `allCodeEntries.length === 1` is never true. The signal we want is
+    // "how many methods actually received a route" — i.e. how many trees
+    // are non-null OR have a static-map entry.
+    let activeMethodLiteral: string | null = null;
+    let activeMethodCode = -1;
+    let activeMethodCount = 0;
 
-    if (allCodeEntries.length === 1) {
-      const [theMethod, theCode] = allCodeEntries[0]!;
+    for (const [name, code] of allCodeEntries) {
+      let used = this.trees[code] != null;
 
-      src.push(`if (method !== ${JSON.stringify(theMethod)}) return null;`);
-      src.push(`var mc = ${theCode};`);
+      if (!used) {
+        for (const path in this.staticRegistered) {
+          if (this.staticRegistered[path]![code]) { used = true; break; }
+        }
+      }
+
+      if (used) {
+        activeMethodLiteral = name;
+        activeMethodCode = code;
+        activeMethodCount++;
+
+        if (activeMethodCount > 1) break;
+      }
+    }
+
+    if (activeMethodCount === 1 && activeMethodLiteral !== null) {
+      src.push(`if (method !== ${JSON.stringify(activeMethodLiteral)}) return null;`);
+      src.push(`var mc = ${activeMethodCode};`);
     } else {
       src.push(`var mc = methodCodes[method]; if (mc === undefined) return null;`);
     }
@@ -554,13 +586,25 @@ export class Router<T = unknown> {
     // Skipped entirely when no static routes are registered (e.g. file-server
     // routers that are pure wildcard) — every cycle counts on the dynamic path.
     if (hasAnyStatic) {
-      src.push(`
-        var so = staticOutputs[sp];
-        if (so !== undefined) {
-          var out = so[mc];
+      // Single-method case: closure-capture the resolved bucket directly so
+      // the emitted code does ONE property access (`activeBucket[sp]`)
+      // instead of two (`staticOutputsByMethod[mc][sp]`). Measured: 12.9ns
+      // → 8-9ns at 500 routes, closing most of the gap to rou3's 6.4ns.
+      // Multi-method case keeps the dynamic methodCode-indexed access.
+      if (activeMethodCount === 1) {
+        src.push(`
+          var out = activeBucket[sp];
           if (out !== undefined) return out;
-        }
-      `);
+        `);
+      } else {
+        src.push(`
+          var bucket = staticOutputsByMethod[mc];
+          if (bucket !== undefined) {
+            var out = bucket[sp];
+            if (out !== undefined) return out;
+          }
+        `);
+      }
     }
 
     // Cache lookup — fully inlined (no bound-method indirection)
@@ -698,16 +742,23 @@ export class Router<T = unknown> {
       src.push(`return { value: val, params: params, meta: DYNAMIC_META };`);
     }
 
+    // Resolve the active bucket once for single-method routers so the emitted
+    // code has a closure-captured reference (no per-call indexed access into
+    // staticOutputsByMethod).
+    const activeBucket = activeMethodCount === 1
+      ? (staticOutputsByMethod[activeMethodCode] ?? new NullProtoObj() as Record<string, MatchOutput<T>>)
+      : new NullProtoObj() as Record<string, MatchOutput<T>>;
+
     const body = src.join('\n');
     const factory = new Function(
-      'staticOutputs', 'staticMap', 'methodCodes', 'trees', 'matchState', 'handlers',
+      'staticOutputsByMethod', 'activeBucket', 'staticMap', 'methodCodes', 'trees', 'matchState', 'handlers',
       'optDefaults', 'hitCacheByMethod', 'missCacheByMethod', 'RouterCacheCtor',
       'EMPTY_PARAMS', 'STATIC_META', 'CACHE_META', 'DYNAMIC_META', 'ParamsCtor',
       `return function match(method, path) {\n${body}\n};`,
     );
 
     return factory(
-      staticOutputs, staticMap, methodCodes, trees, matchState, handlers,
+      staticOutputsByMethod, activeBucket, staticMap, methodCodes, trees, matchState, handlers,
       optDefaults, hitCacheByMethod, missCacheByMethod, RouterCacheCtor,
       EMPTY_PARAMS, STATIC_META, CACHE_META, DYNAMIC_META, ParamsCtor,
     ) as (method: string, path: string) => MatchOutput<T> | null;

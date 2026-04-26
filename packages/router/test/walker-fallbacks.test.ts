@@ -459,6 +459,6 @@ describe('shape specialization gating', () => {
 
     const impl = (r as unknown as { matchImpl: { toString: () => string } }).matchImpl;
 
-    expect(impl.toString()).toContain('staticOutputs[sp]');
+    expect(impl.toString()).toContain('activeBucket');
   });
 });
