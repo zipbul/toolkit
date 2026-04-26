@@ -62,6 +62,13 @@ function tryCodegenStaticPrefixWildcard(root: SegmentNode): RadixMatchFn | null 
 
   if (entries === null) return null;
 
+  // Sequential `startsWith` probes lose to NullProtoObj keyed dispatch past
+  // ~8 prefixes (measured at 50 prefixes: codegen ~170 ns vs iterative
+  // walker's `staticChildren[seg]` ~30 ns). Bail so the iterative walker
+  // takes over for many-prefix routers (file servers with N distinct
+  // top-level dirs).
+  if (entries.length > 8) return null;
+
   // Generate the walker source. Each prefix gets a `startsWith(prefix + '/', 1)`
   // fast check — JSC heavily optimizes startsWith and avoids allocation.
   let body = `

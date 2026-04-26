@@ -447,6 +447,16 @@ export class Router<T = unknown> {
 
       if (wild === null || wild === undefined) return null;
 
+      // Specialization emits one or two `startsWith` probes per prefix.
+      // Past ~8 prefixes the sequential dispatch loses to the segment-tree
+      // walker's O(1) NullProtoObj lookup — measured at 50 prefixes the
+      // inline path is ~5× slower than the walker. Cap so file-server style
+      // routers (≤8 prefixes) still get the inline win, but large prefix
+      // sets fall back to the walker (which the segment-tree codegen will
+      // turn into a `compiledWildWalk` with the same NullProtoObj keying
+      // memoirist uses).
+      if (wild.length > 8) return null;
+
       return { method: activeMethod, entries: wild };
     })();
 
