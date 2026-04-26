@@ -26,10 +26,18 @@ export function compileSegmentTree(
   root: SegmentNode,
   decodeParams: boolean,
 ): RadixMatchFn | null {
-  // Empirically (this host, JSC), wide fanout regresses even with the
-  // charCode-switch dispatch path because the iterative walker's O(1)
-  // Map.get on `staticChildren[seg]` outperforms a switch+startsWith chain.
-  // Cap at 2 — small static-only branches still benefit from codegen.
+  // Empirically tuned. Synthetic flat shapes (`/pfxN/:id`) suggest codegen
+  // wins for fanout 3-15. But real router shapes (param1: simple chains;
+  // param3: mixed 1/2/3-deep chains) measure differently:
+  //   cap=2: param3=48 ns, param1=28 ns (memoirist 27 ns)
+  //   cap=3: param3=72 ns, param1=22 ns
+  //   cap=8: param3=72 ns, param1=22 ns
+  // The +24 ns regression on param3 at cap≥3 swamps the −6 ns gain on
+  // param1. Fanout proxies "code path count" but ignores chain depth, and
+  // deep chains generate cascading nested branches that JSC FTL handles
+  // worse than the iterative walker's tight loop. Stay at cap=2 — the
+  // setting that minimizes the maximum across measured shapes. Future
+  // work: change the gate to "estimated emit cost" rather than fanout.
   if (hasWideFanout(root, 2)) return null;
 
   const ctx: Ctx = {

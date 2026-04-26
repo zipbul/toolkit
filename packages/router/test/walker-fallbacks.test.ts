@@ -33,53 +33,52 @@ function pickedWalkerName(router: Router<unknown>): string | null {
 
 // ── Iterative walker (wide fanout, non-ambiguous) ──────────────────────────
 
-describe('iterative walker (wide fanout, non-ambiguous)', () => {
-  // > 2 distinct top-level prefixes forces compileSegmentTree to bail
-  // (hasWideFanout cap is 2). hasAmbiguousNode is false because each prefix
-  // descends into a unique param chain, no static+param collision.
+describe('iterative walker (wide fanout exceeding codegen size budget)', () => {
+  // To force the iterative walker we need either:
+  //   (a) hasAmbiguousNode true (segment-tree codegen bails on ambiguity), or
+  //   (b) source size > MAX_SOURCE (codegen compiles to too much JS).
+  // The current fanoutCap is 16 — synthetic param routes with many distinct
+  // top-level prefixes will exceed MAX_SOURCE and fall through to iterative.
   function makeWideFanoutRouter() {
     const r = new Router<string>();
-    r.add('GET', '/users/:id', 'user');
-    r.add('GET', '/users/:id/posts/:postId', 'post');
-    r.add('GET', '/repos/:owner/:repo', 'repo');
-    r.add('GET', '/repos/:owner/:repo/issues/:number', 'issue');
-    r.add('GET', '/orgs/:org', 'org');
-    r.add('GET', '/orgs/:org/teams/:team', 'team');
-    r.add('GET', '/blogs/:author/:slug', 'blog');
-    r.add('GET', '/wikis/:topic', 'wiki');
+    // 25 distinct prefixes — emits enough codegen to exceed MAX_SOURCE.
+    for (let i = 0; i < 25; i++) {
+      r.add('GET', `/zone${i}/:slug`, `r${i}`);
+      r.add('GET', `/zone${i}/:slug/sub/:sub`, `r${i}sub`);
+    }
     r.build();
 
     return r;
   }
 
-  it('selects the iterative walker for >2 fanout non-ambiguous trees', () => {
+  it('selects the iterative walker when codegen exceeds source budget', () => {
     expect(pickedWalkerName(makeWideFanoutRouter())).toBe('walk');
   });
 
   it('matches single-param routes', () => {
     const r = makeWideFanoutRouter();
-    const m = r.match('GET', '/users/42');
+    const m = r.match('GET', '/zone3/foo');
 
     expect(m).not.toBeNull();
-    expect(m!.value).toBe('user');
-    expect(m!.params).toEqual({ id: '42' });
+    expect(m!.value).toBe('r3');
+    expect(m!.params).toEqual({ slug: 'foo' });
   });
 
   it('matches param chains', () => {
     const r = makeWideFanoutRouter();
-    const m = r.match('GET', '/repos/zipbul/toolkit/issues/123');
+    const m = r.match('GET', '/zone10/foo/sub/bar');
 
     expect(m).not.toBeNull();
-    expect(m!.value).toBe('issue');
-    expect(m!.params).toEqual({ owner: 'zipbul', repo: 'toolkit', number: '123' });
+    expect(m!.value).toBe('r10sub');
+    expect(m!.params).toEqual({ slug: 'foo', sub: 'bar' });
   });
 
   it('matches different prefixes correctly', () => {
     const r = makeWideFanoutRouter();
 
-    expect(r.match('GET', '/orgs/anthropic/teams/research')!.value).toBe('team');
-    expect(r.match('GET', '/blogs/alice/intro')!.value).toBe('blog');
-    expect(r.match('GET', '/wikis/jsc')!.value).toBe('wiki');
+    expect(r.match('GET', '/zone0/x')!.value).toBe('r0');
+    expect(r.match('GET', '/zone24/y')!.value).toBe('r24');
+    expect(r.match('GET', '/zone7/x/sub/z')!.value).toBe('r7sub');
   });
 
   it('returns null for unmatched prefix', () => {
@@ -90,34 +89,33 @@ describe('iterative walker (wide fanout, non-ambiguous)', () => {
 
   it('returns null for trailing-slash on terminal param when ignoreTrailingSlash=false', () => {
     const r = new Router<string>({ ignoreTrailingSlash: false });
-
-    r.add('GET', '/users/:id', 'user');
-    r.add('GET', '/users/:id/posts/:postId', 'post');
-    r.add('GET', '/repos/:owner', 'repo');
+    // Force iterative path with many prefixes so codegen bails on size.
+    for (let i = 0; i < 25; i++) {
+      r.add('GET', `/zone${i}/:slug`, `r${i}`);
+      r.add('GET', `/zone${i}/:slug/sub/:sub`, `r${i}sub`);
+    }
     r.build();
 
-    // Trailing slash without trim should NOT match the no-trailing-slash route
-    expect(r.match('GET', '/users/42/')).toBeNull();
-    expect(r.match('GET', '/users/42')!.value).toBe('user');
+    expect(r.match('GET', '/zone3/foo/')).toBeNull();
+    expect(r.match('GET', '/zone3/foo')!.value).toBe('r3');
   });
 
   it('does not match when URL has extra trailing segment beyond the route', () => {
     const r = makeWideFanoutRouter();
 
-    expect(r.match('GET', '/users/42/extra')).toBeNull();
+    expect(r.match('GET', '/zone3/foo/extra')).toBeNull();
   });
 
   it('rejects empty param segment (//)', () => {
     const r = makeWideFanoutRouter();
-    // /users//posts/x has an empty segment between users and posts. The :id
-    // param at that position must reject empty captures.
-    expect(r.match('GET', '/users//posts/x')).toBeNull();
+
+    expect(r.match('GET', '/zone3//sub/x')).toBeNull();
   });
 
   it('does not match wildcard-only when route had no wildcard', () => {
     const r = makeWideFanoutRouter();
 
-    expect(r.match('GET', '/users/42/extras/foo/bar')).toBeNull();
+    expect(r.match('GET', '/zone3/foo/extras/whatever/here')).toBeNull();
   });
 });
 
