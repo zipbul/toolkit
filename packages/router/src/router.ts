@@ -796,6 +796,90 @@ export class Router<T = unknown> {
     return this.matchImpl(method, path);
   }
 
+  /**
+   * Returns the HTTP methods registered for `path`. Cold-path companion to
+   * `match()` — HTTP adapters call this only after `match()` returns null
+   * to disambiguate "no route at all" from "wrong method on existing path".
+   *
+   *   const out = router.match(method, path);
+   *   if (out !== null) return respond(out);
+   *   const allowed = router.allowedMethods(path);
+   *   if (allowed.length === 0) return respond404();
+   *   return respond405(allowed);   // adapter shapes the 405/Allow header
+   *
+   * Implementation shares preprocessing with the same option-driven
+   * normalization matchImpl uses (query strip, trailing-slash trim, case
+   * fold, length/segment limits) and probes each registered method
+   * directly: O(1) static-map lookup plus, only when needed, a single
+   * tree-walker call per method that has dynamic routes. matchImpl is
+   * NOT invoked — preprocessing happens once, never per method.
+   */
+  allowedMethods(path: string): HttpMethod[] {
+    if (!this.sealed) return [];
+
+    if (Number.isFinite(this._maxPathLength) && path.length > this._maxPathLength) {
+      return [];
+    }
+
+    let sp = path;
+    const qi = sp.indexOf('?');
+
+    if (qi !== -1) sp = sp.substring(0, qi);
+
+    if (
+      this._ignoreTrailingSlash
+      && sp.length > 1
+      && sp.charCodeAt(sp.length - 1) === 47
+    ) {
+      sp = sp.substring(0, sp.length - 1);
+    }
+
+    if (!this._caseSensitive) sp = sp.toLowerCase();
+
+    if (Number.isFinite(this._maxSegmentLength) && sp.length > this._maxSegmentLength) {
+      const ml = this._maxSegmentLength;
+      let sl = 0;
+
+      for (let i = 1; i < sp.length; i++) {
+        if (sp.charCodeAt(i) === 47) {
+          sl = 0;
+        } else {
+          sl++;
+
+          if (sl > ml) return [];
+        }
+      }
+    }
+
+    const out: HttpMethod[] = [];
+    const state = this.matchState;
+
+    for (const [methodName, methodCode] of Object.entries(this.methodCodes)) {
+      const bucket = this.staticOutputsByMethod[methodCode];
+
+      if (bucket !== undefined && bucket[sp] !== undefined) {
+        out.push(methodName as HttpMethod);
+        continue;
+      }
+
+      const tr = this.trees[methodCode];
+
+      if (tr === null || tr === undefined) continue;
+
+      // tr writes into state.params on success — give it a fresh container.
+      // Returned MatchOutput shape isn't read here; we only consume the
+      // boolean result. State pollution is bounded to this loop and reset
+      // on the next match() call (which always reassigns state.params).
+      state.params = new NullProtoObj() as Record<string, string | undefined>;
+
+      if (tr(sp, state)) {
+        out.push(methodName as HttpMethod);
+      }
+    }
+
+    return out;
+  }
+
   private checkWildcardNameConflict(
     parts: import('./builder/path-parser').PathPart[],
     normalized: string,
