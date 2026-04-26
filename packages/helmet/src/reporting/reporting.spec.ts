@@ -113,4 +113,65 @@ describe('reporting/nel', () => {
     );
     expect((violations as never[]).some((v: never) => (v as { reason: string }).reason === 'nel_invalid_fraction')).toBe(true);
   });
+
+  it('rejects negative max_age', () => {
+    const violations: never[] = [];
+    resolveNel(
+      { reportTo: 'group', maxAge: -1 },
+      'nel',
+      violations as never,
+      new Set(['group']),
+    );
+    expect((violations as never[]).some((v: never) => (v as { reason: string }).reason === 'nel_invalid_max_age')).toBe(true);
+  });
+
+  it('rejects failureFraction outside [0,1]', () => {
+    const violations: never[] = [];
+    resolveNel(
+      { reportTo: 'group', maxAge: 1, failureFraction: -0.1 },
+      'nel',
+      violations as never,
+      new Set(['group']),
+    );
+    expect((violations as never[]).some((v: never) => (v as { reason: string }).reason === 'nel_invalid_fraction')).toBe(true);
+  });
+
+  it('returns undefined when input is undefined', () => {
+    expect(resolveNel(undefined, 'nel', [], new Set())).toBeUndefined();
+  });
+});
+
+describe('reporting/endpoints (additional coverage)', () => {
+  it('rejects too many endpoints (DoS guard)', () => {
+    const big: Record<string, string> = {};
+    for (let i = 0; i < 50; i++) big[`ep-${i}`] = 'https://r.example/' + i;
+    const violations: never[] = [];
+    resolveReportingEndpoints({ endpoints: big as never }, 'r', violations as never);
+    expect((violations as never[]).some((v: never) => (v as { reason: string }).reason === 'input_too_large')).toBe(true);
+  });
+
+  it('rejects RESERVED_KEYS as endpoint name (constructor / prototype)', () => {
+    const violations: never[] = [];
+    resolveReportingEndpoints(
+      { endpoints: { constructor: 'https://r.example/' as never } },
+      'r',
+      violations as never,
+    );
+    expect((violations as never[]).some((v: never) => (v as { reason: string }).reason === 'reserved_key_denied')).toBe(true);
+  });
+
+  it('returns undefined when input is undefined', () => {
+    expect(resolveReportingEndpoints(undefined, 'r', [])).toBeUndefined();
+  });
+
+  it('flags Object.create()-attacked endpoints (non-Object.prototype chain)', () => {
+    const malicious = Object.create({ polluted: 'https://attacker/' });
+    const violations: never[] = [];
+    resolveReportingEndpoints({ endpoints: malicious }, 'r', violations as never);
+    expect(
+      (violations as never[]).some(
+        (v: never) => (v as { reason: string }).reason === 'reserved_key_denied',
+      ),
+    ).toBe(true);
+  });
 });

@@ -2,6 +2,17 @@ import { describe, expect, it } from 'bun:test';
 
 import { Csp, Helmet } from '../index';
 
+describe('Csp builders', () => {
+  it('Csp.nonce wraps a value into the canonical nonce-source form', () => {
+    expect(Csp.nonce('AAAAAAAAAAAAAAAA')).toBe("'nonce-AAAAAAAAAAAAAAAA'");
+  });
+  it('Csp.hash wraps algo+value into the canonical hash-source form', () => {
+    expect(Csp.hash('sha256', 'abc=')).toBe("'sha256-abc='");
+    expect(Csp.hash('sha384', 'def=')).toBe("'sha384-def='");
+    expect(Csp.hash('sha512', 'ghi=')).toBe("'sha512-ghi='");
+  });
+});
+
 describe('Helmet static helpers (helmet 8 sub-middleware parity)', () => {
   it('Helmet.csp returns CSP tuple from default OWASP policy', () => {
     const [name, value] = Helmet.csp();

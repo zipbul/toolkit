@@ -1,7 +1,13 @@
 import { HelmetErrorReason } from '../enums';
 import type { ViolationDetail } from '../interfaces';
 
-const XPCDP_VALUES = new Set(['none', 'master-only', 'by-content-type', 'all']);
+const XPCDP_VALUES = new Set([
+  'none',
+  'master-only',
+  'by-content-type',
+  'by-ftp-filename',
+  'all',
+]);
 
 export function validateXPermittedCrossDomainPolicies(
   value: string,

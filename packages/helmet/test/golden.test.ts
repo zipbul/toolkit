@@ -2,8 +2,11 @@ import { describe, expect, it } from 'bun:test';
 
 import { Helmet } from '../index';
 
+// Default-deny set: W3C registry "Standardized Features" minus ch-ua-* (Client
+// Hints have a separate opt-in lifecycle). Order matches insertion into the
+// `STANDARDIZED` Set in src/permissions-policy/features.ts.
 const PERMISSIONS_DEFAULT =
-  'publickey-credentials-get=(), publickey-credentials-create=(), identity-credentials-get=(), digital-credentials-get=(), digital-credentials-create=(), otp-credentials=(), accelerometer=(), ambient-light-sensor=(), attribution-reporting=(), autoplay=(), battery=(), bluetooth=(), camera=(), compute-pressure=(), cross-origin-isolated=(), direct-sockets=(), display-capture=(), encrypted-media=(), execution-while-not-rendered=(), execution-while-out-of-viewport=(), fullscreen=(), geolocation=(), gyroscope=(), hid=(), idle-detection=(), keyboard-map=(), magnetometer=(), mediasession=(), microphone=(), midi=(), navigation-override=(), payment=(), picture-in-picture=(), screen-wake-lock=(), serial=(), storage-access=(), sync-xhr=(self), usb=(), web-share=(), window-management=(), xr-spatial-tracking=()';
+  'accelerometer=(), ambient-light-sensor=(), attribution-reporting=(), autoplay=(), battery=(), bluetooth=(), camera=(), compute-pressure=(), cross-origin-isolated=(), direct-sockets=(), display-capture=(), encrypted-media=(), execution-while-not-rendered=(), execution-while-out-of-viewport=(), fullscreen=(), geolocation=(), gyroscope=(), hid=(), identity-credentials-get=(), idle-detection=(), keyboard-map=(), magnetometer=(), mediasession=(), microphone=(), midi=(), navigation-override=(), otp-credentials=(), payment=(), picture-in-picture=(), publickey-credentials-get=(), screen-wake-lock=(), serial=(), storage-access=(), sync-xhr=(self), usb=(), web-share=(), window-management=(), xr-spatial-tracking=()';
 
 function snapshot(helmet: Helmet, opts?: { nonce?: string }): Record<string, string> {
   const record = helmet.headersRecord(opts);

@@ -21,7 +21,18 @@ export function resolveDocumentPolicy(
 ): ResolvedDocumentPolicyOptions | undefined {
   if (input === undefined) return undefined;
   const map = new Map<string, string | boolean | number | readonly (string | boolean | number)[]>();
-  const entries = Object.entries(input.policies ?? {});
+  const raw = input.policies ?? {};
+  // `{ __proto__: x }` literal sets the prototype rather than an own property,
+  // so Object.entries misses it. Inspect the prototype chain explicitly.
+  const proto = Object.getPrototypeOf(raw);
+  if (proto !== null && proto !== Object.prototype) {
+    violations.push({
+      reason: HelmetErrorReason.ReservedKeyDenied,
+      path: `${path}.policies.__proto__`,
+      message: 'reserved key denied (__proto__ override on input object)',
+    });
+  }
+  const entries = Object.entries(raw);
   if (entries.length > LIMITS.documentPolicyEntries) {
     violations.push({
       reason: HelmetErrorReason.InputTooLarge,

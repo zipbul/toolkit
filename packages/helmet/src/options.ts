@@ -27,6 +27,7 @@ import { validateTimingAllowOrigin } from './timing-allow-origin/validate';
 import { validateXDnsPrefetchControl } from './x-dns-prefetch-control/validate';
 import { validateXFrameOptions } from './x-frame-options/validate';
 import { validateXPermittedCrossDomainPolicies } from './x-permitted-cross-domain-policies/validate';
+import { validateXRobotsTag } from './x-robots-tag/validate';
 import { validateXXssProtection } from './x-xss-protection/validate';
 
 const VALID_COOP = new Set<CoopValue>([
@@ -78,20 +79,41 @@ export function resolveHelmetOptions(
           false | undefined
         >)
       : undefined,
-    crossOriginOpenerPolicy:
-      opts.crossOriginOpenerPolicy === false
-        ? false
-        : opts.crossOriginOpenerPolicy === undefined || opts.crossOriginOpenerPolicy === true
-          ? 'same-origin'
-          : opts.crossOriginOpenerPolicy,
-    crossOriginOpenerPolicyReportOnly: opts.crossOriginOpenerPolicyReportOnly,
-    crossOriginEmbedderPolicy:
-      opts.crossOriginEmbedderPolicy === undefined || opts.crossOriginEmbedderPolicy === false
-        ? false
-        : opts.crossOriginEmbedderPolicy === true
-          ? 'require-corp'
-          : opts.crossOriginEmbedderPolicy,
-    crossOriginEmbedderPolicyReportOnly: opts.crossOriginEmbedderPolicyReportOnly,
+    crossOriginOpenerPolicy: ((): ResolvedHelmetOptions['crossOriginOpenerPolicy'] => {
+      const v = opts.crossOriginOpenerPolicy;
+      if (v === false) return false;
+      if (v === undefined || v === true) return { value: 'same-origin' };
+      if (typeof v === 'string') return { value: v };
+      // Object form { value, reportTo }
+      return v.reportTo !== undefined
+        ? { value: v.value, reportTo: v.reportTo }
+        : { value: v.value };
+    })(),
+    crossOriginOpenerPolicyReportOnly: ((): ResolvedHelmetOptions['crossOriginOpenerPolicyReportOnly'] => {
+      const v = opts.crossOriginOpenerPolicyReportOnly;
+      if (v === undefined) return undefined;
+      if (typeof v === 'string') return { value: v };
+      return v.reportTo !== undefined
+        ? { value: v.value, reportTo: v.reportTo }
+        : { value: v.value };
+    })(),
+    crossOriginEmbedderPolicy: ((): ResolvedHelmetOptions['crossOriginEmbedderPolicy'] => {
+      const v = opts.crossOriginEmbedderPolicy;
+      if (v === undefined || v === false) return false;
+      if (v === true) return { value: 'require-corp' };
+      if (typeof v === 'string') return { value: v };
+      return v.reportTo !== undefined
+        ? { value: v.value, reportTo: v.reportTo }
+        : { value: v.value };
+    })(),
+    crossOriginEmbedderPolicyReportOnly: ((): ResolvedHelmetOptions['crossOriginEmbedderPolicyReportOnly'] => {
+      const v = opts.crossOriginEmbedderPolicyReportOnly;
+      if (v === undefined) return undefined;
+      if (typeof v === 'string') return { value: v };
+      return v.reportTo !== undefined
+        ? { value: v.value, reportTo: v.reportTo }
+        : { value: v.value };
+    })(),
     crossOriginResourcePolicy:
       opts.crossOriginResourcePolicy === false
         ? false
@@ -208,13 +230,20 @@ export function validateHelmetOptions(
     );
   }
 
-  if (resolved.crossOriginOpenerPolicy !== false && !VALID_COOP.has(resolved.crossOriginOpenerPolicy)) {
-    violations.push({
-      reason: HelmetErrorReason.InvalidCspKeyword,
-      path: 'crossOriginOpenerPolicy',
-      message: 'invalid Cross-Origin-Opener-Policy value',
-    });
-  }
+  validateCoopOrCoep(
+    resolved.crossOriginOpenerPolicy,
+    'crossOriginOpenerPolicy',
+    VALID_COOP,
+    knownEndpoints,
+    violations,
+  );
+  validateCoopOrCoep(
+    resolved.crossOriginOpenerPolicyReportOnly,
+    'crossOriginOpenerPolicyReportOnly',
+    VALID_COOP,
+    knownEndpoints,
+    violations,
+  );
   if (resolved.crossOriginResourcePolicy !== false && !VALID_CORP.has(resolved.crossOriginResourcePolicy)) {
     violations.push({
       reason: HelmetErrorReason.InvalidCspKeyword,
@@ -222,13 +251,20 @@ export function validateHelmetOptions(
       message: 'invalid Cross-Origin-Resource-Policy value',
     });
   }
-  if (resolved.crossOriginEmbedderPolicy !== false && !VALID_COEP.has(resolved.crossOriginEmbedderPolicy)) {
-    violations.push({
-      reason: HelmetErrorReason.InvalidCspKeyword,
-      path: 'crossOriginEmbedderPolicy',
-      message: 'invalid Cross-Origin-Embedder-Policy value',
-    });
-  }
+  validateCoopOrCoep(
+    resolved.crossOriginEmbedderPolicy,
+    'crossOriginEmbedderPolicy',
+    VALID_COEP,
+    knownEndpoints,
+    violations,
+  );
+  validateCoopOrCoep(
+    resolved.crossOriginEmbedderPolicyReportOnly,
+    'crossOriginEmbedderPolicyReportOnly',
+    VALID_COEP,
+    knownEndpoints,
+    violations,
+  );
 
   if (resolved.documentIsolationPolicy !== undefined && !VALID_DOC_ISO.has(resolved.documentIsolationPolicy)) {
     violations.push({
@@ -278,6 +314,11 @@ export function validateHelmetOptions(
   if (resolved.timingAllowOrigin !== undefined) {
     violations.push(...validateTimingAllowOrigin(resolved.timingAllowOrigin, 'timingAllowOrigin'));
   }
+  if (resolved.xRobotsTag !== false && resolved.xRobotsTag !== undefined) {
+    violations.push(
+      ...validateXRobotsTag(resolved.xRobotsTag.directives, 'xRobotsTag.directives'),
+    );
+  }
 
   if (resolved.integrityPolicy !== false && resolved.integrityPolicy !== undefined) {
     violations.push(
@@ -308,3 +349,46 @@ export function validateHelmetOptions(
     });
   }
 }
+
+/**
+ * Validate the resolved object form of `Cross-Origin-Opener-Policy` /
+ * `Cross-Origin-Embedder-Policy` (HTML §7.1.3.1 / §7.1.4.1).
+ *
+ * The HTML spec allows `report-to="<endpoint-name>"` as an attached parameter.
+ * The endpoint name MUST be declared via `Reporting-Endpoints`; an undefined
+ * name is silently dropped by browsers, which would mask reports — so we fail
+ * loudly at validation time (mirrors CSP `report-to` cross-reference).
+ */
+function validateCoopOrCoep<V extends string>(
+  policy: { value: V; reportTo?: string } | false | undefined,
+  path: string,
+  validValues: ReadonlySet<V>,
+  knownEndpoints: ReadonlySet<string>,
+  out: ViolationDetail[],
+): void {
+  if (policy === false || policy === undefined) return;
+  if (!validValues.has(policy.value)) {
+    out.push({
+      reason: HelmetErrorReason.InvalidCspKeyword,
+      path: `${path}.value`,
+      message: `invalid policy value "${policy.value}"`,
+    });
+  }
+  if (policy.reportTo !== undefined) {
+    if (!REPORTING_ENDPOINT_NAME_RE.test(policy.reportTo)) {
+      out.push({
+        reason: HelmetErrorReason.InvalidReportingEndpointName,
+        path: `${path}.reportTo`,
+        message: 'report-to value must match [A-Za-z0-9_-]{1,64}',
+      });
+    } else if (!knownEndpoints.has(policy.reportTo)) {
+      out.push({
+        reason: HelmetErrorReason.UnknownReportingEndpoint,
+        path: `${path}.reportTo`,
+        message: `${path}.reportTo references undefined Reporting-Endpoints name`,
+      });
+    }
+  }
+}
+
+const REPORTING_ENDPOINT_NAME_RE = /^[A-Za-z0-9_-]{1,64}$/;

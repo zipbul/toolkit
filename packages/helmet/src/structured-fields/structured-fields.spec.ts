@@ -30,10 +30,31 @@ describe('structured-fields/serialize', () => {
     expect(() => serializeString('bad\nctrl')).toThrow();
   });
 
+  it('rejects non-ASCII per RFC 9651 §3.3.3 (printable ASCII only)', () => {
+    // U+00E9 (é) — outside %x20-7E, must be rejected
+    expect(() => serializeString('café')).toThrow();
+    // DEL (0x7F) — also forbidden
+    expect(() => serializeString('a\x7fb')).toThrow();
+    // Boundary: 0x7E (~) is valid
+    expect(serializeString('~')).toBe('"~"');
+  });
+
   it('emits sf-integer / decimal', () => {
     expect(serializeInteger(42)).toBe('42');
     expect(serializeDecimal(0.5)).toBe('0.5');
     expect(serializeDecimal(1)).toBe('1.0');
+  });
+
+  it('rejects sf-decimal with > 12 integer digits per RFC 9651 §3.3.2', () => {
+    expect(() => serializeDecimal(1_000_000_000_000)).toThrow();
+    expect(() => serializeDecimal(-1_000_000_000_000)).toThrow();
+    expect(serializeDecimal(999_999_999_999.999)).toBe('999999999999.999');
+  });
+
+  it('rejects non-finite sf-decimal (Infinity / -Infinity / NaN)', () => {
+    expect(() => serializeDecimal(Number.POSITIVE_INFINITY)).toThrow(/finite/);
+    expect(() => serializeDecimal(Number.NEGATIVE_INFINITY)).toThrow(/finite/);
+    expect(() => serializeDecimal(Number.NaN)).toThrow(/finite/);
   });
 
   it('routes sf-item by type', () => {
@@ -62,6 +83,12 @@ describe('structured-fields/serialize', () => {
     dict.set('a', true as never);
     dict.set('b', false as never);
     expect(serializeDictionary(dict as never)).toBe('a, b=?0');
+  });
+
+  it('rejects dictionary key that violates RFC 9651 §3.2 grammar (lcalpha-only)', () => {
+    const dict = new Map<string, never>();
+    dict.set('BadUppercase', true as never);
+    expect(() => serializeDictionary(dict as never)).toThrow(/invalid dictionary key/);
   });
 
   it('emits dict inner list members', () => {

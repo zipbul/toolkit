@@ -1,7 +1,8 @@
 import { HttpHeader } from '@zipbul/shared';
 
 import type { HeaderEntry } from '../header-entry';
-import type { CoopValue } from '../types';
+import { serializeString } from '../structured-fields/serialize';
+import type { CoopResolved, CoopValue } from '../types';
 
 const COOP_VALUES = new Set<CoopValue>([
   'same-origin',
@@ -10,12 +11,18 @@ const COOP_VALUES = new Set<CoopValue>([
   'unsafe-none',
 ]);
 
-export function serializeCoop(value: CoopValue): HeaderEntry {
-  return [HttpHeader.CrossOriginOpenerPolicy, value];
+/** WHATWG HTML §7.1.3.1 — value plus optional `report-to="<endpoint>"` parameter. */
+function serializeCoopValue(policy: CoopResolved): string {
+  if (policy.reportTo === undefined) return policy.value;
+  return `${policy.value}; report-to=${serializeString(policy.reportTo)}`;
 }
 
-export function serializeCoopReportOnly(value: CoopValue): HeaderEntry {
-  return [HttpHeader.CrossOriginOpenerPolicyReportOnly, value];
+export function serializeCoop(policy: CoopResolved): HeaderEntry {
+  return [HttpHeader.CrossOriginOpenerPolicy, serializeCoopValue(policy)];
+}
+
+export function serializeCoopReportOnly(policy: CoopResolved): HeaderEntry {
+  return [HttpHeader.CrossOriginOpenerPolicyReportOnly, serializeCoopValue(policy)];
 }
 
 export function isValidCoop(value: string): value is CoopValue {

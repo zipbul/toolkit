@@ -73,6 +73,8 @@ export function resolveReportingEndpoints(
       });
       continue;
     }
+    // Strip fragment — endpoints are POSTed to and fragments are not sent on the wire.
+    parsed.hash = '';
     map.set(name, parsed.toString());
   }
   return Object.freeze({ endpoints: map });

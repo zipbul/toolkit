@@ -27,13 +27,15 @@ export function serializeToken(value: string): string {
   return value;
 }
 
-/** RFC 9651 §3.3.3 — double-quoted string with `\\"` and `\\\\` escapes. */
+/** RFC 9651 §3.3.3 — double-quoted string with `\\"` and `\\\\` escapes.
+ * Per spec, sf-string is restricted to printable ASCII (0x20-0x7E). Non-ASCII
+ * (≥ 0x80) and controls (< 0x20) and DEL (0x7F) are rejected. Use sf-display-string
+ * (RFC 9651 §3.3.11) for UTF-8 if added later. */
 export function serializeString(value: string): string {
-  // ASCII printable except for VCHAR exclusion of unsafe controls
   for (let i = 0; i < value.length; i++) {
     const code = value.charCodeAt(i);
-    if (code < 0x20 || code === 0x7f) {
-      throw new Error(`structured-fields: invalid sf-string char at index ${i}`);
+    if (code < 0x20 || code === 0x7f || code > 0x7f) {
+      throw new Error(`structured-fields: invalid sf-string char at index ${i} (only ASCII 0x20-0x7E allowed)`);
     }
   }
   return `"${value.replace(/\\/g, '\\\\').replace(/"/g, '\\"')}"`;
@@ -47,10 +49,14 @@ export function serializeInteger(value: number): string {
   return String(value);
 }
 
-/** RFC 9651 §3.3.8 — sf-decimal. */
+/** RFC 9651 §3.3.8 — sf-decimal. At most 12 digits before the decimal point
+ * and 3 after. */
 export function serializeDecimal(value: number): string {
   if (!Number.isFinite(value)) {
     throw new Error('structured-fields: sf-decimal must be finite');
+  }
+  if (Math.abs(value) >= 1_000_000_000_000) {
+    throw new Error('structured-fields: sf-decimal exceeds 12 integer digits');
   }
   // RFC 9651: at most 12 integer digits, 3 fractional digits
   const rounded = Math.round(value * 1000) / 1000;

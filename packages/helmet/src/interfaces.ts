@@ -128,6 +128,30 @@ export interface ReportingEndpointsOptions {
   endpoints: Record<string, string>;
 }
 
+/**
+ * Object form of `Cross-Origin-Opener-Policy` allowing the HTML spec's
+ * `report-to` parameter to be attached. The reporting endpoint name MUST
+ * also be declared via {@link HelmetOptions.reportingEndpoints}.
+ *
+ * Per WHATWG HTML §7.1.3.1 — "obtain an opener policy".
+ */
+export interface CrossOriginOpenerPolicyOptions {
+  value: CoopValue;
+  reportTo?: string;
+}
+
+/**
+ * Object form of `Cross-Origin-Embedder-Policy` allowing the HTML spec's
+ * `report-to` parameter to be attached. The reporting endpoint name MUST
+ * also be declared via {@link HelmetOptions.reportingEndpoints}.
+ *
+ * Per WHATWG HTML §7.1.4.1 — "obtain an embedder policy".
+ */
+export interface CrossOriginEmbedderPolicyOptions {
+  value: CoepValue;
+  reportTo?: string;
+}
+
 export interface IntegrityPolicyOptions {
   blockedDestinations?: ('script' | 'style')[];
   sources?: 'inline'[];
@@ -189,7 +213,7 @@ export interface RemoveHeadersOptions {
 export interface HelmetOptions {
   // ── Default-ON ──
   contentSecurityPolicy?: boolean | ContentSecurityPolicyOptions;
-  crossOriginOpenerPolicy?: boolean | CoopValue;
+  crossOriginOpenerPolicy?: boolean | CoopValue | CrossOriginOpenerPolicyOptions;
   crossOriginResourcePolicy?: boolean | CorpValue;
   /** sf-boolean (RFC 9651). `true` → `?1`, `false` → `?0` opt-out. */
   originAgentCluster?: boolean;
@@ -200,13 +224,19 @@ export interface HelmetOptions {
   xDnsPrefetchControl?: boolean | 'on' | 'off';
   /** Input case is preserved on emit (WAF compatibility). */
   xFrameOptions?: boolean | 'deny' | 'sameorigin' | 'DENY' | 'SAMEORIGIN';
-  xPermittedCrossDomainPolicies?: boolean | 'none' | 'master-only' | 'by-content-type' | 'all';
+  xPermittedCrossDomainPolicies?:
+    | boolean
+    | 'none'
+    | 'master-only'
+    | 'by-content-type'
+    | 'by-ftp-filename'
+    | 'all';
 
   // ── Default-OFF ──
-  crossOriginEmbedderPolicy?: boolean | CoepValue;
+  crossOriginEmbedderPolicy?: boolean | CoepValue | CrossOriginEmbedderPolicyOptions;
   contentSecurityPolicyReportOnly?: ContentSecurityPolicyOptions;
-  crossOriginOpenerPolicyReportOnly?: CoopValue;
-  crossOriginEmbedderPolicyReportOnly?: CoepValue;
+  crossOriginOpenerPolicyReportOnly?: CoopValue | CrossOriginOpenerPolicyOptions;
+  crossOriginEmbedderPolicyReportOnly?: CoepValue | CrossOriginEmbedderPolicyOptions;
   permissionsPolicyReportOnly?: PermissionsPolicyOptions;
   reportingEndpoints?: ReportingEndpointsOptions;
   integrityPolicy?: boolean | IntegrityPolicyOptions;

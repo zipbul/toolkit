@@ -18,6 +18,14 @@ export function validateReferrerPolicy(
   path: string,
 ): ViolationDetail[] {
   const out: ViolationDetail[] = [];
+  if (tokens.length === 0) {
+    out.push({
+      reason: HelmetErrorReason.InvalidReferrerPolicyToken,
+      path,
+      message: 'Referrer-Policy must contain at least one token',
+    });
+    return out;
+  }
   for (let i = 0; i < tokens.length; i++) {
     const t = tokens[i];
     if (t === undefined || !REFERRER_POLICY_TOKENS.has(t)) {

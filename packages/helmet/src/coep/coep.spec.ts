@@ -4,17 +4,27 @@ import { isValidCoep, serializeCoep, serializeCoepReportOnly } from './serialize
 
 describe('coep', () => {
   it('serializes require-corp / credentialless / unsafe-none', () => {
-    expect(serializeCoep('require-corp')).toEqual(['cross-origin-embedder-policy', 'require-corp']);
-    expect(serializeCoep('credentialless')).toEqual([
+    expect(serializeCoep({ value: 'require-corp' })).toEqual([
+      'cross-origin-embedder-policy',
+      'require-corp',
+    ]);
+    expect(serializeCoep({ value: 'credentialless' })).toEqual([
       'cross-origin-embedder-policy',
       'credentialless',
     ]);
   });
 
   it('serializes Report-Only variant', () => {
-    expect(serializeCoepReportOnly('credentialless')).toEqual([
+    expect(serializeCoepReportOnly({ value: 'credentialless' })).toEqual([
       'cross-origin-embedder-policy-report-only',
       'credentialless',
+    ]);
+  });
+
+  it('attaches report-to parameter (HTML §7.1.4.1)', () => {
+    expect(serializeCoep({ value: 'require-corp', reportTo: 'coep-ep' })).toEqual([
+      'cross-origin-embedder-policy',
+      'require-corp; report-to="coep-ep"',
     ]);
   });
 

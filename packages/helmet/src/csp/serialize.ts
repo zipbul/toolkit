@@ -18,9 +18,13 @@ import {
   NON_FETCH_LIST_DIRECTIVES,
   camelToKebab,
 } from './directives';
-import { FRAME_ANCESTORS_FORBIDDEN, validateCspSource } from './source-validate';
+import { FRAME_ANCESTORS_FORBIDDEN, isNonceOrHashSource, validateCspSource } from './source-validate';
 
 const REPORT_TO_NAME_RE = /^[A-Za-z0-9_-]+$/;
+// CRLF + C0/DEL + whitespace + structural delimiters that would corrupt header
+// serialization or violate URL grammar (RFC 3986). Defense-in-depth: Fetch
+// Headers also rejects CRLF, but we fail loudly at validate-time.
+const REPORT_URI_FORBIDDEN_RE = /[\x00-\x20\x7f"<>\\^`{|}\u00a0\u2028\u2029\ufeff]/;
 const SANDBOX_TOKENS = new Set<SandboxToken>([
   'allow-downloads',
   'allow-forms',
@@ -158,6 +162,18 @@ export function validateCsp(
           path: `${path}.directives.${name}`,
           message: 'report-uri must be a non-empty string',
         });
+      } else if (value.length > LIMITS.hostSourceLength) {
+        out.push({
+          reason: HelmetErrorReason.InputTooLarge,
+          path: `${path}.directives.${name}`,
+          message: `report-uri exceeds ${LIMITS.hostSourceLength} chars`,
+        });
+      } else if (REPORT_URI_FORBIDDEN_RE.test(value)) {
+        out.push({
+          reason: HelmetErrorReason.ControlCharRejected,
+          path: `${path}.directives.${name}`,
+          message: 'report-uri contains forbidden whitespace or control characters',
+        });
       }
       continue;
     }
@@ -197,12 +213,21 @@ export function validateCsp(
     for (let i = 0; i < value.length; i++) {
       const v = value[i] ?? '';
       validateCspSource(v, `${path}.directives.${name}[${i}]`, out);
-      if (name === 'frame-ancestors' && FRAME_ANCESTORS_FORBIDDEN.has(v)) {
-        out.push({
-          reason: HelmetErrorReason.InvalidFrameAncestorsKeyword,
-          path: `${path}.directives.${name}[${i}]`,
-          message: `frame-ancestors does not allow ${v} (CSP3 §6.4.2)`,
-        });
+      if (name === 'frame-ancestors') {
+        if (FRAME_ANCESTORS_FORBIDDEN.has(v)) {
+          out.push({
+            reason: HelmetErrorReason.InvalidFrameAncestorsKeyword,
+            path: `${path}.directives.${name}[${i}]`,
+            message: `frame-ancestors does not allow ${v} (CSP3 §6.4.2)`,
+          });
+        } else if (isNonceOrHashSource(v)) {
+          out.push({
+            reason: HelmetErrorReason.InvalidFrameAncestorsKeyword,
+            path: `${path}.directives.${name}[${i}]`,
+            message:
+              'frame-ancestors does not allow nonce or hash sources (CSP3 §6.4.2 — only host/scheme/self/none)',
+          });
+        }
       }
     }
     if (NON_FETCH_LIST_DIRECTIVES.has(toCamel(name) as keyof CspDirectives) && value.length === 0) {

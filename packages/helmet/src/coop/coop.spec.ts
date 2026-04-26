@@ -10,14 +10,21 @@ describe('coop', () => {
       'noopener-allow-popups',
       'unsafe-none',
     ] as const) {
-      expect(serializeCoop(v)).toEqual(['cross-origin-opener-policy', v]);
+      expect(serializeCoop({ value: v })).toEqual(['cross-origin-opener-policy', v]);
     }
   });
 
   it('serializes Report-Only variant', () => {
-    expect(serializeCoopReportOnly('same-origin')).toEqual([
+    expect(serializeCoopReportOnly({ value: 'same-origin' })).toEqual([
       'cross-origin-opener-policy-report-only',
       'same-origin',
+    ]);
+  });
+
+  it('attaches report-to parameter (HTML §7.1.3.1)', () => {
+    expect(serializeCoop({ value: 'same-origin', reportTo: 'coop-ep' })).toEqual([
+      'cross-origin-opener-policy',
+      'same-origin; report-to="coop-ep"',
     ]);
   });
 

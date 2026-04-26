@@ -1,7 +1,10 @@
 import { HelmetErrorReason } from '../enums';
 import type { ViolationDetail } from '../interfaces';
 
-const TAO_RE = /^(\*|null|https?:\/\/[^\s,]+)$/;
+// Resource Timing §10.3: Timing-Allow-Origin entries are an ASCII serialised
+// origin (scheme + "://" + host + optional ":port"), `*`, or `null`.
+// Path, query, fragment, whitespace, comma are not allowed.
+const TAO_RE = /^(?:\*|null|https?:\/\/[A-Za-z0-9.\-]+(?::\d{1,5})?)$/;
 
 export function validateTimingAllowOrigin(
   values: readonly string[],
@@ -15,7 +18,7 @@ export function validateTimingAllowOrigin(
         reason: HelmetErrorReason.InvalidTimingAllowOrigin,
         path: `${path}[${i}]`,
         message:
-          "Timing-Allow-Origin entries must be '*', 'null', or a fully-qualified http(s) origin",
+          "Timing-Allow-Origin entries must be '*', 'null', or a serialised origin (scheme://host[:port])",
       });
     }
   }

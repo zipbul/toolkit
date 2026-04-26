@@ -42,10 +42,6 @@ const HOST_SOURCE_RE =
 
 const HASH_LENGTHS: Record<string, number> = { sha256: 44, sha384: 64, sha512: 88 };
 
-// C0 (\x00-\x1f) + DEL (\x7f) + structural delimiters + whitespace +
-// Unicode special spaces NBSP (U+00A0), LSEP (U+2028), PSEP (U+2029), BOM (U+FEFF)
-const CONTROL_CHAR_RE = /[\x00-\x1f\x7f'"\\<>;\s\u00a0\u2028\u2029\ufeff]/;
-
 /**
  * Validate a single CSP source expression and push violations.
  * Returns true when the source is valid (or known to be skipped on purpose).
@@ -83,18 +79,9 @@ export function validateCspSource(
   }
   if (KEYWORD_SOURCES.has(source)) return true;
 
-  const nonceMatch = NONCE_RE.exec(source);
-  if (nonceMatch !== null) {
-    if (CONTROL_CHAR_RE.test(nonceMatch[1] ?? '')) {
-      out.push({
-        reason: HelmetErrorReason.ControlCharRejected,
-        path,
-        message: 'nonce value contains forbidden characters',
-      });
-      return false;
-    }
-    return true;
-  }
+  // NONCE_RE's capture group `[A-Za-z0-9+/_-]{16,256}={0,2}` cannot contain
+  // control characters by construction — no extra check needed.
+  if (NONCE_RE.test(source)) return true;
 
   const hashMatch = HASH_RE.exec(source);
   if (hashMatch !== null) {
@@ -142,11 +129,28 @@ function truncate(value: string): string {
   return value.length > 32 ? `${value.slice(0, 32)}…(${value.length} chars)` : value;
 }
 
+/**
+ * CSP3 §6.4.2: frame-ancestors source-list accepts only host-source,
+ * scheme-source, `'self'`, `'none'`. Every other keyword and all
+ * nonce-/hash-sources are forbidden.
+ */
 export const FRAME_ANCESTORS_FORBIDDEN = new Set<string>([
   "'unsafe-inline'",
   "'unsafe-eval'",
   "'strict-dynamic'",
   "'unsafe-hashes'",
+  "'report-sample'",
+  "'wasm-unsafe-eval'",
+  "'inline-speculation-rules'",
+  "'unsafe-webtransport-hashes'",
+  "'report-sha256'",
+  "'report-sha384'",
+  "'report-sha512'",
 ]);
+
+/** Returns true if the source is a nonce-source or hash-source (forbidden in frame-ancestors). */
+export function isNonceOrHashSource(source: string): boolean {
+  return NONCE_RE.test(source) || HASH_RE.test(source);
+}
 
 export { NONCE_RE, HASH_RE };

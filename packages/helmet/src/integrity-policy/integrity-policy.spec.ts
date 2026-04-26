@@ -55,4 +55,11 @@ describe('integrity-policy', () => {
     const out = validateIntegrityPolicy(r, 'integrityPolicy', new Set(['known']));
     expect(out.some(v => v.reason === 'unknown_reporting_endpoint')).toBe(true);
   });
+
+  it('rejects non-inline source token', () => {
+    const r = resolveIntegrityPolicy({ sources: ['external' as never] });
+    if (r === false || r === undefined) throw new Error('expected');
+    const out = validateIntegrityPolicy(r, 'integrityPolicy', new Set());
+    expect(out.some(v => v.reason === 'invalid_integrity_source')).toBe(true);
+  });
 });

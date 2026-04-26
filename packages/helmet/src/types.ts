@@ -86,6 +86,26 @@ export type CorpValue = 'same-origin' | 'same-site' | 'cross-origin';
 
 export type CoepValue = 'require-corp' | 'credentialless' | 'unsafe-none';
 
+/**
+ * COEP resolved form. The HTML spec (§7.1.4.1 "Cross-Origin-Embedder-Policy")
+ * allows attaching a `report-to` parameter naming a reporting endpoint:
+ *   `Cross-Origin-Embedder-Policy: require-corp; report-to="endpoint"`
+ */
+export interface CoepResolved {
+  value: CoepValue;
+  reportTo?: string;
+}
+
+/**
+ * COOP resolved form. The HTML spec (§7.1.3.1 "Cross-Origin-Opener-Policy")
+ * allows attaching a `report-to` parameter naming a reporting endpoint:
+ *   `Cross-Origin-Opener-Policy: same-origin; report-to="endpoint"`
+ */
+export interface CoopResolved {
+  value: CoopValue;
+  reportTo?: string;
+}
+
 export type ReferrerPolicyToken =
   | 'no-referrer'
   | 'no-referrer-when-downgrade'
@@ -98,17 +118,12 @@ export type ReferrerPolicyToken =
 
 export type XFrameOptionsValue = 'deny' | 'sameorigin' | 'DENY' | 'SAMEORIGIN';
 
-// ── Permissions-Policy feature catalogue (Tier A + B + C) ──
+// ── Permissions-Policy feature catalogue ──
+// Source: https://github.com/w3c/webappsec-permissions-policy/blob/main/features.md
+// Sections mirrored: Standardized, Proposed, Experimental, Retired.
 
 export type PermissionsPolicyFeature =
-  // Tier A (universal, 6)
-  | 'publickey-credentials-get'
-  | 'publickey-credentials-create'
-  | 'identity-credentials-get'
-  | 'digital-credentials-get'
-  | 'digital-credentials-create'
-  | 'otp-credentials'
-  // Tier B (Chromium + Firefox parsed, 35)
+  // ── Standardized (W3C registry "Standardized Features") ──
   | 'accelerometer'
   | 'ambient-light-sensor'
   | 'attribution-reporting'
@@ -116,6 +131,17 @@ export type PermissionsPolicyFeature =
   | 'battery'
   | 'bluetooth'
   | 'camera'
+  | 'ch-ua'
+  | 'ch-ua-arch'
+  | 'ch-ua-bitness'
+  | 'ch-ua-full-version'
+  | 'ch-ua-full-version-list'
+  | 'ch-ua-high-entropy-values'
+  | 'ch-ua-mobile'
+  | 'ch-ua-model'
+  | 'ch-ua-platform'
+  | 'ch-ua-platform-version'
+  | 'ch-ua-wow64'
   | 'compute-pressure'
   | 'cross-origin-isolated'
   | 'direct-sockets'
@@ -127,6 +153,7 @@ export type PermissionsPolicyFeature =
   | 'geolocation'
   | 'gyroscope'
   | 'hid'
+  | 'identity-credentials-get'
   | 'idle-detection'
   | 'keyboard-map'
   | 'magnetometer'
@@ -134,8 +161,10 @@ export type PermissionsPolicyFeature =
   | 'microphone'
   | 'midi'
   | 'navigation-override'
+  | 'otp-credentials'
   | 'payment'
   | 'picture-in-picture'
+  | 'publickey-credentials-get'
   | 'screen-wake-lock'
   | 'serial'
   | 'storage-access'
@@ -144,25 +173,40 @@ export type PermissionsPolicyFeature =
   | 'web-share'
   | 'window-management'
   | 'xr-spatial-tracking'
-  // Tier C (Chromium-only stable, 18)
-  | 'gamepad'
+  // ── Proposed (W3C registry "Proposed Features") ──
+  | 'autofill'
   | 'clipboard-read'
   | 'clipboard-write'
-  | 'local-fonts'
-  | 'unload'
-  | 'browsing-topics'
-  | 'captured-surface-control'
-  | 'smart-card'
-  | 'speaker-selection'
-  | 'all-screens-capture'
   | 'deferred-fetch'
-  | 'language-model'
+  | 'gamepad'
   | 'language-detector'
+  | 'language-model'
+  | 'manual-text'
+  | 'rewriter'
+  | 'speaker-selection'
   | 'summarizer'
   | 'translator'
   | 'writer'
-  | 'rewriter'
-  | 'autofill';
+  // ── Experimental (W3C registry "Experimental Features") ──
+  | 'all-screens-capture'
+  | 'browsing-topics'
+  | 'captured-surface-control'
+  | 'conversion-measurement'
+  | 'digital-credentials-create'
+  | 'digital-credentials-get'
+  | 'focus-without-user-activation'
+  | 'join-ad-interest-group'
+  | 'local-fonts'
+  | 'monetization'
+  | 'run-ad-auction'
+  | 'smart-card'
+  | 'sync-script'
+  | 'trust-token-redemption'
+  | 'unload'
+  | 'vertical-scroll'
+  // ── Retired (W3C registry "Retired Features") — kept for legacy configs ──
+  | 'document-domain'
+  | 'window-placement';
 
 // ── Resolved options (snapshot returned by Helmet.toJSON) ──
 
@@ -237,10 +281,10 @@ export interface ResolvedRemoveHeadersOptions {
 export interface ResolvedHelmetOptions {
   contentSecurityPolicy: ResolvedCspOptions | false;
   contentSecurityPolicyReportOnly: ResolvedCspOptions | undefined;
-  crossOriginOpenerPolicy: CoopValue | false;
-  crossOriginOpenerPolicyReportOnly: CoopValue | undefined;
-  crossOriginEmbedderPolicy: CoepValue | false;
-  crossOriginEmbedderPolicyReportOnly: CoepValue | undefined;
+  crossOriginOpenerPolicy: CoopResolved | false;
+  crossOriginOpenerPolicyReportOnly: CoopResolved | undefined;
+  crossOriginEmbedderPolicy: CoepResolved | false;
+  crossOriginEmbedderPolicyReportOnly: CoepResolved | undefined;
   crossOriginResourcePolicy: CorpValue | false;
   originAgentCluster: boolean;
   permissionsPolicy: ResolvedPermissionsPolicyOptions | false;
@@ -250,7 +294,13 @@ export interface ResolvedHelmetOptions {
   xContentTypeOptions: boolean;
   xDnsPrefetchControl: 'on' | 'off' | false;
   xFrameOptions: XFrameOptionsValue | false;
-  xPermittedCrossDomainPolicies: 'none' | 'master-only' | 'by-content-type' | 'all' | false;
+  xPermittedCrossDomainPolicies:
+    | 'none'
+    | 'master-only'
+    | 'by-content-type'
+    | 'by-ftp-filename'
+    | 'all'
+    | false;
   reportingEndpoints: ResolvedReportingEndpointsOptions | undefined;
   integrityPolicy: ResolvedIntegrityPolicyOptions | false | undefined;
   integrityPolicyReportOnly: ResolvedIntegrityPolicyOptions | undefined;
