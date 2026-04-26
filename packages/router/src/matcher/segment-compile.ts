@@ -120,8 +120,19 @@ function emitRootSlashTerminal(root: SegmentNode): string {
  * Emit code that matches `node` starting at byte position `posVar`. On success,
  * the emitted code commits state.handlerIndex and `return true`. On failure,
  * falls through to the caller (which may try another sibling).
+ *
+ * `justAfterSlash` indicates whether `posVar` is positioned immediately after
+ * a separator '/' that the caller just consumed. In that context, an "URL
+ * ends here" match against a bare-store node would actually be matching a
+ * trailing-slash URL onto a route that does NOT have a trailing slash — which
+ * is a semantic mismatch when `ignoreTrailingSlash=false` (when the option is
+ * true, the outer matchImpl trimmed the slash before invoking the walker, so
+ * `posVar === len` here genuinely means end-of-URL). To stay correct under
+ * BOTH option settings, we skip the bare-store check at slash-boundary
+ * positions; star-wildcard children at the same node still match (their emit
+ * handles the empty-capture case explicitly).
  */
-function emitNode(ctx: Ctx, node: SegmentNode, posVar: string, depth: number): string {
+function emitNode(ctx: Ctx, node: SegmentNode, posVar: string, depth: number, justAfterSlash = false): string {
   if (ctx.bail) return '';
 
   // Defensive bail for any ambiguity that can require backtracking.
@@ -133,8 +144,10 @@ function emitNode(ctx: Ctx, node: SegmentNode, posVar: string, depth: number): s
 
   let code = '';
 
-  // Terminal store reached at exact end of URL (strict).
-  if (node.store !== null) {
+  // Terminal store at exact end of URL. Suppressed when we just crossed a
+  // slash boundary — that "end" would be a trailing-slash position, which
+  // shouldn't match a route ending at a non-slash terminal.
+  if (node.store !== null && !justAfterSlash) {
     code += `
   if (${posVar} === len) {
     state.handlerIndex = ${node.store};
@@ -171,7 +184,9 @@ function emitNode(ctx: Ctx, node: SegmentNode, posVar: string, depth: number): s
           const child = node.staticChildren[key]!;
           const prefixWithSlash = key + '/';
           const childPos = fresh(ctx, 'pos');
-          const inner = emitNode(ctx, child, childPos, depth + 1);
+          // Just consumed `key + '/'` — recurse into child in slash-boundary
+          // context so a bare-store at child won't match trailing-slash URLs.
+          const inner = emitNode(ctx, child, childPos, depth + 1, true);
 
           if (ctx.bail) return '';
 
@@ -204,7 +219,8 @@ ${exactBody}
         const child = node.staticChildren[key]!;
         const prefixWithSlash = key + '/';
         const childPos = fresh(ctx, 'pos');
-        const inner = emitNode(ctx, child, childPos, depth + 1);
+        // Slash-boundary context after consuming `key + '/'` (see emitNode doc).
+        const inner = emitNode(ctx, child, childPos, depth + 1, true);
 
         if (ctx.bail) return '';
 
@@ -277,8 +293,11 @@ ${exactBody}
       return true;
     }`;
     } else {
-      // Generic continuation: capture value, recurse into next.
-      const inner = emitNode(ctx, next, innerPos, depth + 1);
+      // Generic continuation: capture value up to the slash, advance past it,
+      // recurse into next. innerPos sits at slash+1 — same slash-boundary
+      // context as a static descent — so bare-store at `next` must not fire
+      // for a trailing-slash URL (covered by the justAfterSlash flag).
+      const inner = emitNode(ctx, next, innerPos, depth + 1, true);
 
       if (ctx.bail) return '';
 
