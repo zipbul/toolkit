@@ -32,6 +32,13 @@ export interface ParamNode {
   tester: PatternTesterFn | null;
   /** Next param with different pattern at same level */
   next: ParamNode | null;
+  /** Handler index of the user-route that first created this param node.
+   *  When a later registration adds a sibling param at the same position,
+   *  if this param has no tester (matches everything) and a terminal store
+   *  is set under it, any sibling is unreachable. We surface this only
+   *  when the colliding handler differs — siblings sharing this handler
+   *  index originate from the same optional-param expansion (legitimate). */
+  ownerHandler: number;
 }
 
 export function createRadixNode(part: string): RadixNode {
@@ -46,7 +53,7 @@ export function createRadixNode(part: string): RadixNode {
   };
 }
 
-export function createParamNode(name: string): ParamNode {
+export function createParamNode(name: string, ownerHandler: number): ParamNode {
   return {
     name,
     store: null,
@@ -55,5 +62,6 @@ export function createParamNode(name: string): ParamNode {
     patternSource: null,
     tester: null,
     next: null,
+    ownerHandler,
   };
 }

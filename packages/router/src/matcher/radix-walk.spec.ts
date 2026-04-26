@@ -114,7 +114,7 @@ describe('createRadixWalker', () => {
     it('should match param and extract value', () => {
       const root = createRadixNode('');
       const usersNode = createRadixNode('/users/');
-      usersNode.params = createParamNode('id');
+      usersNode.params = createParamNode('id', 0);
       usersNode.params.store = 0;
 
       root.inert = { [47]: usersNode };
@@ -130,7 +130,7 @@ describe('createRadixWalker', () => {
     it('should decode percent-encoded param values', () => {
       const root = createRadixNode('');
       const usersNode = createRadixNode('/users/');
-      usersNode.params = createParamNode('name');
+      usersNode.params = createParamNode('name', 0);
       usersNode.params.store = 0;
 
       root.inert = { [47]: usersNode };
@@ -145,7 +145,7 @@ describe('createRadixWalker', () => {
     it('should not decode when decodeParams=false', () => {
       const root = createRadixNode('');
       const usersNode = createRadixNode('/users/');
-      usersNode.params = createParamNode('name');
+      usersNode.params = createParamNode('name', 0);
       usersNode.params.store = 0;
 
       root.inert = { [47]: usersNode };
@@ -160,9 +160,9 @@ describe('createRadixWalker', () => {
     it('should match nested params', () => {
       const root = createRadixNode('');
       const usersNode = createRadixNode('/users/');
-      usersNode.params = createParamNode('userId');
+      usersNode.params = createParamNode('userId', 0);
       usersNode.params.inert = createRadixNode('/posts/');
-      usersNode.params.inert.params = createParamNode('postId');
+      usersNode.params.inert.params = createParamNode('postId', 0);
       usersNode.params.inert.params.store = 0;
 
       root.inert = { [47]: usersNode };
@@ -179,7 +179,7 @@ describe('createRadixWalker', () => {
     it('should return null when terminal param has inert continuation but URL is exhausted', () => {
       const root = createRadixNode('');
       const usersNode = createRadixNode('/users/');
-      usersNode.params = createParamNode('id');
+      usersNode.params = createParamNode('id', 0);
       // param has no store, only inert continuation
       usersNode.params.inert = createRadixNode('/posts');
       usersNode.params.inert.store = 0;
@@ -196,7 +196,7 @@ describe('createRadixWalker', () => {
     it('should return null when param value is empty (slash at pos)', () => {
       const root = createRadixNode('');
       const usersNode = createRadixNode('/users/');
-      usersNode.params = createParamNode('id');
+      usersNode.params = createParamNode('id', 0);
       usersNode.params.store = 0;
 
       root.inert = { [47]: usersNode };
@@ -213,7 +213,7 @@ describe('createRadixWalker', () => {
     it('should match param with passing tester', () => {
       const root = createRadixNode('');
       const usersNode = createRadixNode('/users/');
-      usersNode.params = createParamNode('id');
+      usersNode.params = createParamNode('id', 0);
       usersNode.params.pattern = /^\d+$/;
       usersNode.params.store = 0;
 
@@ -230,7 +230,7 @@ describe('createRadixWalker', () => {
     it('should reject param when tester returns false', () => {
       const root = createRadixNode('');
       const usersNode = createRadixNode('/users/');
-      usersNode.params = createParamNode('id');
+      usersNode.params = createParamNode('id', 0);
       usersNode.params.pattern = /^\d+$/;
       usersNode.params.store = 0;
 
@@ -246,7 +246,7 @@ describe('createRadixWalker', () => {
     it('should set errorKind when tester returns TIMEOUT', () => {
       const root = createRadixNode('');
       const usersNode = createRadixNode('/users/');
-      usersNode.params = createParamNode('id');
+      usersNode.params = createParamNode('id', 0);
       usersNode.params.pattern = /^\d+$/;
       usersNode.params.store = 0;
 
@@ -268,12 +268,12 @@ describe('createRadixWalker', () => {
       const prefixNode = createRadixNode('/items/');
 
       const staticChild = createRadixNode('special/');
-      staticChild.params = createParamNode('id');
+      staticChild.params = createParamNode('id', 0);
       staticChild.params.pattern = /^\d+$/;
       staticChild.params.store = 0;
       prefixNode.inert = { ['s'.charCodeAt(0)]: staticChild };
 
-      prefixNode.params = createParamNode('name');
+      prefixNode.params = createParamNode('name', 0);
       prefixNode.params.store = 1;
 
       root.inert = { [47]: prefixNode };
@@ -381,7 +381,7 @@ describe('createRadixWalker', () => {
       prefixNode.inert = { ['a'.charCodeAt(0)]: adminNode };
 
       // Param child
-      prefixNode.params = createParamNode('id');
+      prefixNode.params = createParamNode('id', 0);
       prefixNode.params.store = 1;
 
       root.inert = { [47]: prefixNode };
@@ -402,7 +402,7 @@ describe('createRadixWalker', () => {
       const prefixNode = createRadixNode('/files/');
 
       // Param child
-      prefixNode.params = createParamNode('name');
+      prefixNode.params = createParamNode('name', 0);
       prefixNode.params.store = 0;
 
       // Wildcard
@@ -426,12 +426,12 @@ describe('createRadixWalker', () => {
 
       // Static child that requires a deeper continuation
       const staticChild = createRadixNode('admin/');
-      staticChild.params = createParamNode('section');
+      staticChild.params = createParamNode('section', 0);
       staticChild.params.store = 0;
       prefixNode.inert = { ['a'.charCodeAt(0)]: staticChild };
 
       // Param fallback
-      prefixNode.params = createParamNode('resource');
+      prefixNode.params = createParamNode('resource', 0);
       prefixNode.params.store = 1;
 
       root.inert = { [47]: prefixNode };

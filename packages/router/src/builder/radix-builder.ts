@@ -207,7 +207,7 @@ export class RadixBuilder {
           });
         }
 
-        const paramResult = this.insertParam(node, part, testerList);
+        const paramResult = this.insertParam(node, part, testerList, handlerIndex);
 
         if (isErr(paramResult)) {
           return paramResult;
@@ -309,6 +309,7 @@ export class RadixBuilder {
     node: RadixNode,
     part: { name: string; pattern: string | null },
     testerList: Array<PatternTesterFn | undefined>,
+    handlerIndex: number,
   ): Result<RadixNode, RouterErrData> {
     // Compile pattern if present
     let compiledPattern: RegExp | null = null;
@@ -356,12 +357,31 @@ export class RadixBuilder {
         });
       }
 
+      // Unreachable-sibling check. An earlier sibling without a regex tester
+      // matches every value at this position, so any later sibling never
+      // gets a chance to test. We only flag this when the colliding handler
+      // belongs to a DIFFERENT user-route — siblings sharing ownerHandler
+      // are products of one route's optional-param expansion (the four
+      // expansions of `/users/:a?/:b?` deliberately create :a and :b
+      // siblings under the same handler, all routing to the same store).
+      if (
+        paramNode.patternSource === null
+        && paramNode.ownerHandler !== handlerIndex
+      ) {
+        return err({
+          kind: 'route-conflict',
+          message: `Parameter ':${part.name}' is unreachable — earlier sibling ':${paramNode.name}' (registered by a different route) has no regex pattern and matches every value at this position. Add a regex pattern to disambiguate, or remove this route.`,
+          segment: part.name,
+          conflictsWith: paramNode.name,
+        });
+      }
+
       prevParam = paramNode;
       paramNode = paramNode.next;
     }
 
     // Create new param node
-    const newParam = createParamNode(part.name);
+    const newParam = createParamNode(part.name, handlerIndex);
     newParam.pattern = compiledPattern;
     newParam.patternSource = normalizedSource;
 

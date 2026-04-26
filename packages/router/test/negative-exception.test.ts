@@ -231,22 +231,45 @@ describe('state transition errors', () => {
 // ── Misuse of optional params and wildcards ───────────────────────────────
 
 describe('misuse rejection', () => {
-  it('accepts sibling param routes — first registered wins for ambiguous URLs', () => {
-    // The router permits sibling params with different names at the same
-    // position. They route through the radix-walker (segment-tree refuses
-    // such siblings; the radix tree handles them via insertion-order
-    // fallthrough). The second route is effectively unreachable when neither
-    // has a regex tester — but the router intentionally accepts this so the
-    // optional-param expansion path (which generates such siblings under the
-    // same handler) keeps working.
+  it('rejects sibling param routes from different handlers as unreachable', () => {
+    // Two routes registered separately landing at the same param position
+    // with different names — the second is unreachable because the first
+    // has no regex tester and matches every value. We surface this at
+    // registration time (route-conflict) instead of silently accepting
+    // a dead route.
     const r = new Router<string>();
     r.add('GET', '/users/:id', 'first');
 
-    expect(() => r.add('GET', '/users/:slug', 'second')).not.toThrow();
+    expect(() => r.add('GET', '/users/:slug', 'second')).toThrow(RouterError);
+  });
+
+  it('still allows siblings from the same route via optional-param expansion', () => {
+    // /users/:a?/:b? expands to four routes ALL sharing the same handler
+    // index. The radix-builder records the original handler on each ParamNode
+    // and skips the unreachability check when colliding siblings come from
+    // the same expansion family (they all converge on the same handler).
+    const r = new Router<string>();
+
+    expect(() => r.add('GET', '/users/:a?/:b?', 'opt')).not.toThrow();
     r.build();
 
-    // First route wins for ambiguous match.
-    expect(r.match('GET', '/users/42')!.value).toBe('first');
+    expect(r.match('GET', '/users')!.value).toBe('opt');
+    expect(r.match('GET', '/users/x')!.value).toBe('opt');
+    expect(r.match('GET', '/users/x/y')!.value).toBe('opt');
+  });
+
+  it('allows sibling params when one has a regex tester', () => {
+    // Tester-bearing siblings can legitimately distinguish at runtime.
+    // /a/:id{\\d+} matches digits only; /a/:slug catches the rest. Insertion
+    // order (numeric tester first) makes both reachable.
+    const r = new Router<string>();
+    r.add('GET', '/a/:id{\\d+}', 'numeric');
+
+    expect(() => r.add('GET', '/a/:slug', 'catchall')).not.toThrow();
+    r.build();
+
+    expect(r.match('GET', '/a/42')!.value).toBe('numeric');
+    expect(r.match('GET', '/a/hello')!.value).toBe('catchall');
   });
 
   it('rejects empty path (must start with "/")', () => {

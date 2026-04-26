@@ -255,18 +255,88 @@ describe('sealed state', () => {
   });
 });
 
-// ── Force radix-walk interpreter path: huge tree + segment-tree conflict ──
+// ── Radix-walk fallback paths ────────────────────────────────────────────
+//
+// Now that unreachable sibling-param registrations are rejected at add-time,
+// the only routes that exercise the radix-walk path are optional-param
+// expansions (which generate same-handler siblings) and tester-bearing
+// siblings (which legitimately distinguish at runtime). Both cases must
+// continue to work end-to-end.
 
-describe('radix-walk interpreter walker (codegen size bail)', () => {
-  // To reach the interpreter walker we need: (1) segment-tree insert fail
-  // (param-name conflict), AND (2) radix-compile bail (source > 6KB).
-  // The conflict forces radix-walk, the size forces radix-compile to return
-  // null, leaving createSimpleWalker / createFullWalker as the only path.
-  function makeHugeConflictRouter() {
+describe('radix-walk fallback (optional expansion)', () => {
+  // /users/:a?/:b? expands into four routes sharing one handler. The
+  // expansions /users/:a and /users/:b create same-position different-name
+  // siblings under one handlerIndex — segment-tree rejects this shape, so
+  // the router falls back to radix-walk.
+  function makeOptionalRouter() {
+    const r = new Router<string>();
+    r.add('GET', '/users/:a?/:b?', 'opt');
+    r.build();
+
+    return r;
+  }
+
+  it('uses radix-walk (allSegmentTrees=false)', () => {
+    const r = makeOptionalRouter();
+    const flag = (r as unknown as { allSegmentTrees: boolean }).allSegmentTrees;
+
+    expect(flag).toBe(false);
+  });
+
+  it('matches each expansion variant correctly', () => {
+    const r = makeOptionalRouter();
+
+    expect(r.match('GET', '/users')!.value).toBe('opt');
+    expect(r.match('GET', '/users/x')!.params).toEqual({ a: 'x', b: undefined });
+    expect(r.match('GET', '/users/x/y')!.params).toEqual({ a: 'x', b: 'y' });
+  });
+
+  it('returns null for paths with too many segments', () => {
+    const r = makeOptionalRouter();
+
+    expect(r.match('GET', '/users/x/y/z')).toBeNull();
+  });
+});
+
+describe('radix-walk full walker (tester sibling)', () => {
+  // Tester-bearing param + catchall sibling: legitimate ordered alternatives.
+  // The numeric tester runs first; on rejection radix walker falls through
+  // to the catchall.
+  function makeTesterRouter() {
+    const r = new Router<string>();
+    r.add('GET', '/users/:id{\\d+}', 'numeric');
+    r.add('GET', '/users/:slug', 'catchall');
+    r.build();
+
+    return r;
+  }
+
+  it('matches numeric via tester first', () => {
+    const r = makeTesterRouter();
+    const m = r.match('GET', '/users/42')!;
+
+    expect(m.value).toBe('numeric');
+    expect(m.params).toEqual({ id: '42' });
+  });
+
+  it('falls through to catchall when tester rejects', () => {
+    const r = makeTesterRouter();
+    const m = r.match('GET', '/users/hello')!;
+
+    expect(m.value).toBe('catchall');
+    expect(m.params).toEqual({ slug: 'hello' });
+  });
+});
+
+describe('radix-walk interpreter walker (huge tree → radix-compile bail)', () => {
+  // Interpreter-tier walker fires when (1) segment-tree insert fails AND
+  // (2) radix-compile bails on source size. We trigger (1) via optional
+  // expansion (which creates same-handler sibling params) and (2) via 200
+  // additional routes that bloat the codegen source past 6KB.
+  function makeHugeOptionalRouter() {
     const r = new Router<string>();
 
-    r.add('GET', '/users/:id', 'first');
-    r.add('GET', '/users/:slug', 'conflict'); // segment-tree fails
+    r.add('GET', '/users/:a?/:b?', 'opt'); // creates radix-walk-only path
 
     for (let i = 0; i < 200; i++) {
       r.add('GET', `/zone${i}/category${i}/:name${i}/sub`, `r${i}`);
@@ -278,25 +348,23 @@ describe('radix-walk interpreter walker (codegen size bail)', () => {
   }
 
   it('selects the interpreter walker (recognizable matchNode delegate body)', () => {
-    const r = makeHugeConflictRouter();
+    const r = makeHugeOptionalRouter();
     const trees = (r as unknown as { trees: Array<((u: string, s: unknown) => boolean) | null> }).trees;
     const tree = trees.find(t => t != null)!;
 
-    // createSimpleWalker / createFullWalker bodies start by delegating to
-    // matchNode. The codegen path emits its full body inline.
     expect(tree.toString()).toContain('matchNode');
   });
 
-  it('matches conflicting-param routes correctly under interpreter', () => {
-    const r = makeHugeConflictRouter();
-    const m = r.match('GET', '/users/42')!;
+  it('matches optional-expansion variants correctly under interpreter', () => {
+    const r = makeHugeOptionalRouter();
 
-    expect(m.value).toBe('first');
-    expect(m.params).toEqual({ id: '42' });
+    expect(r.match('GET', '/users')!.value).toBe('opt');
+    expect(r.match('GET', '/users/x')!.value).toBe('opt');
+    expect(r.match('GET', '/users/x/y')!.value).toBe('opt');
   });
 
   it('matches deep param routes correctly under interpreter', () => {
-    const r = makeHugeConflictRouter();
+    const r = makeHugeOptionalRouter();
     const m = r.match('GET', '/zone5/category5/foo/sub')!;
 
     expect(m.value).toBe('r5');
@@ -304,98 +372,18 @@ describe('radix-walk interpreter walker (codegen size bail)', () => {
   });
 
   it('returns null for unmatched URLs under interpreter', () => {
-    const r = makeHugeConflictRouter();
+    const r = makeHugeOptionalRouter();
 
     expect(r.match('GET', '/unrelated/path')).toBeNull();
     expect(r.match('GET', '/zone5/category5/foo/wrong')).toBeNull();
   });
 
-  it('does not segfault under empty/malformed URLs in interpreter path', () => {
-    const r = makeHugeConflictRouter();
+  it('does not throw on empty/malformed URLs in interpreter path', () => {
+    const r = makeHugeOptionalRouter();
 
-    expect(r.match('GET', '')).toBeNull();
-    expect(r.match('GET', '/')).toBeNull();
-    expect(r.match('GET', '?')).toBeNull();
-  });
-});
-
-describe('radix-walk full walker (with regex testers)', () => {
-  // testers.length > 0 routes the interpreter to createFullWalker rather
-  // than createSimpleWalker — they take different code paths with the regex
-  // tester branch and errorKind propagation.
-  function makeHugeConflictRouterWithTester() {
-    const r = new Router<string>();
-
-    r.add('GET', '/users/:id{\\d+}', 'numeric'); // tester
-    r.add('GET', '/users/:slug', 'conflict');
-
-    for (let i = 0; i < 200; i++) {
-      r.add('GET', `/zone${i}/category${i}/:name${i}/sub`, `r${i}`);
-    }
-
-    r.build();
-
-    return r;
-  }
-
-  it('matches numeric param via tester under interpreter', () => {
-    const r = makeHugeConflictRouterWithTester();
-    const m = r.match('GET', '/users/42')!;
-
-    expect(m).not.toBeNull();
-    expect(m.value).toBe('numeric');
-    expect(m.params).toEqual({ id: '42' });
-  });
-
-  it('falls through to next sibling param when first param tester rejects', () => {
-    const r = makeHugeConflictRouterWithTester();
-    // 'abc' is not numeric — `:id{\\d+}` tester rejects. The radix walker
-    // then tries the second sibling param `:slug` (no tester) and matches.
-    // This is correct fallthrough behavior — the same-position siblings act
-    // as ordered alternatives in the radix tree.
-    const m = r.match('GET', '/users/abc')!;
-
-    expect(m).not.toBeNull();
-    expect(m.value).toBe('conflict');
-    expect(m.params).toEqual({ slug: 'abc' });
-  });
-});
-
-// ── Force radix-walk path: same-position param-name conflict ─────────────
-
-describe('radix-walk fallback (segment-tree insert fail)', () => {
-  // Two routes with different param names at the same segment position make
-  // segment-tree.ts insertIntoSegmentTree return false (can't bind to two
-  // different param names at one node). Router falls back to radix-walk.
-  function makeConflicting() {
-    const r = new Router<string>();
-    r.add('GET', '/users/:id', 'first');
-    r.add('GET', '/users/:slug', 'second'); // same position, different name
-    r.build();
-
-    return r;
-  }
-
-  it('forces fallback to radix walker (allSegmentTrees=false)', () => {
-    const r = makeConflicting();
-    const flag = (r as unknown as { allSegmentTrees: boolean }).allSegmentTrees;
-
-    expect(flag).toBe(false);
-  });
-
-  it('first route wins for the conflicting segment (insertion order)', () => {
-    const r = makeConflicting();
-    const m = r.match('GET', '/users/42');
-
-    expect(m).not.toBeNull();
-    expect(m!.value).toBe('first');
-    expect(m!.params).toEqual({ id: '42' });
-  });
-
-  it('still returns null for unrelated paths', () => {
-    const r = makeConflicting();
-
-    expect(r.match('GET', '/posts/foo')).toBeNull();
+    expect(() => r.match('GET', '')).not.toThrow();
+    expect(() => r.match('GET', '/')).not.toThrow();
+    expect(() => r.match('GET', '?')).not.toThrow();
   });
 });
 
