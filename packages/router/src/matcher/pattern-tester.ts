@@ -10,7 +10,15 @@ export interface PatternTesterOptions {
 
 const DIGIT_PATTERNS = new Set(['\\d+', '\\d{1,}', '[0-9]+', '[0-9]{1,}']);
 const ALPHA_PATTERNS = new Set(['[a-zA-Z]+', '[A-Za-z]+']);
-const ALPHANUM_PATTERNS = new Set(['[A-Za-z0-9_\\-]+', '[A-Za-z0-9_-]+', '\\w+', '\\w{1,}']);
+// `\w` is `[A-Za-z0-9_]`. `[\w-]+` and `[A-Za-z0-9_-]+` describe the same
+// set — keep both source forms here so the user's chosen syntax doesn't
+// fall through to the slow `compiled.test` path. Same for the escaped
+// variants the path-parser may emit after normalization.
+const ALPHANUM_PATTERNS = new Set([
+  '[A-Za-z0-9_\\-]+', '[A-Za-z0-9_-]+',
+  '\\w+', '\\w{1,}',
+  '[\\w-]+', '[\\w\\-]+',
+]);
 
 const now = (): number => Number(Bun.nanoseconds()) / 1e6;
 

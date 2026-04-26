@@ -175,4 +175,73 @@ summary(() => {
   bench('50-prefix wild — memoirist', () => { do_not_optimize(wildM.find('GET', WILD_URL)); });
 });
 
+// ── Shape 6: 20-deep param chain (extreme depth) ──
+
+let DEEP20_ROUTE = '';
+let DEEP20_URL = '';
+for (let i = 0; i < 20; i++) {
+  DEEP20_ROUTE += `/s${i}/:p${i}`;
+  DEEP20_URL += `/s${i}/v${i}`;
+}
+
+const deep20Z = (() => { const r = new Router<number>(); r.add('GET', DEEP20_ROUTE, 1); r.build(); return r; })();
+const deep20M = (() => { const r = new Memoirist<number>(); r.add('GET', DEEP20_ROUTE, 1); return r; })();
+
+san('deep20-zipbul', deep20Z.match('GET', DEEP20_URL)?.value, 1);
+san('deep20-memoirist', deep20M.find('GET', DEEP20_URL)?.store, 1);
+
+summary(() => {
+  bench('deep20 — @zipbul', () => { do_not_optimize(deep20Z.match('GET', DEEP20_URL)); });
+  bench('deep20 — memoirist', () => { do_not_optimize(deep20M.find('GET', DEEP20_URL)); });
+});
+
+// ── Shape 7: Pathological — 1000-route mix with many shapes ──
+
+function setup1kZ() {
+  const r = new Router<number>();
+  let id = 0;
+  for (let i = 0; i < 200; i++) r.add('GET', `/static/page${i}`, id++);
+  for (let i = 0; i < 200; i++) r.add('GET', `/users${i}/:id`, id++);
+  for (let i = 0; i < 200; i++) r.add('GET', `/orgs${i}/:org/repos/:repo`, id++);
+  for (let i = 0; i < 100; i++) r.add('GET', `/search${i}/:q{[a-z]+}`, id++);  // regex
+  for (let i = 0; i < 100; i++) r.add('GET', `/files${i}/*path`, id++);          // wildcard
+  for (let i = 0; i < 200; i++) r.add('GET', `/api${i}/v1/users/:id/posts/:post/comments/:c`, id++);
+  r.build();
+  return r;
+}
+function setup1kM() {
+  const r = new Memoirist<number>();
+  let id = 0;
+  for (let i = 0; i < 200; i++) r.add('GET', `/static/page${i}`, id++);
+  for (let i = 0; i < 200; i++) r.add('GET', `/users${i}/:id`, id++);
+  for (let i = 0; i < 200; i++) r.add('GET', `/orgs${i}/:org/repos/:repo`, id++);
+  for (let i = 0; i < 100; i++) r.add('GET', `/search${i}/:q`, id++);  // memoirist no regex
+  for (let i = 0; i < 100; i++) r.add('GET', `/files${i}/*`, id++);
+  for (let i = 0; i < 200; i++) r.add('GET', `/api${i}/v1/users/:id/posts/:post/comments/:c`, id++);
+  return r;
+}
+
+const heavy1kZ = setup1kZ();
+const heavy1kM = setup1kM();
+
+summary(() => {
+  bench('1000-route static hit — @zipbul', () => { do_not_optimize(heavy1kZ.match('GET', '/static/page100')); });
+  bench('1000-route static hit — memoirist', () => { do_not_optimize(heavy1kM.find('GET', '/static/page100')); });
+});
+
+summary(() => {
+  bench('1000-route 3-param chain — @zipbul', () => { do_not_optimize(heavy1kZ.match('GET', '/api50/v1/users/42/posts/123/comments/9')); });
+  bench('1000-route 3-param chain — memoirist', () => { do_not_optimize(heavy1kM.find('GET', '/api50/v1/users/42/posts/123/comments/9')); });
+});
+
+summary(() => {
+  bench('1000-route wildcard — @zipbul', () => { do_not_optimize(heavy1kZ.match('GET', '/files50/some/deep/file.tgz')); });
+  bench('1000-route wildcard — memoirist', () => { do_not_optimize(heavy1kM.find('GET', '/files50/some/deep/file.tgz')); });
+});
+
+summary(() => {
+  bench('1000-route regex param — @zipbul', () => { do_not_optimize(heavy1kZ.match('GET', '/search50/abc')); });
+  bench('1000-route regex param — memoirist', () => { do_not_optimize(heavy1kM.find('GET', '/search50/abc')); });
+});
+
 await run();
