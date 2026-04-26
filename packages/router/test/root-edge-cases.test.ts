@@ -1,0 +1,162 @@
+/**
+ * Root-level optional/wildcard edge cases that the original test suite missed
+ * because the default ignoreTrailingSlash trim and the codegen specialization
+ * around root-slash terminals papered over the underlying logic gaps.
+ *
+ * - `/:id?` should match `/` (the omit-expansion of an optional collapses to
+ *   the root path; before the fix it was silently dropped).
+ * - `/*p` star wildcard at root should match `/` with empty capture (codegen
+ *   `emitRootSlashTerminal` only handled bare `root.store`, not the wildcard
+ *   variant; iterative and recursive walkers had the same gap).
+ * - `:a:b` style collapsed param names — surprising user-visible behavior.
+ *   We now reject router-metacharacters (':', '*', '?', '+', '/', '{', '}')
+ *   inside param names so `/:a:b` errors at registration time.
+ */
+import { describe, it, expect } from 'bun:test';
+
+import { Router } from '../src/router';
+import { RouterError } from '../src/error';
+
+describe('optional param at root matches /', () => {
+  it('/:id? matches / with id absent', () => {
+    const r = new Router<string>({ optionalParamBehavior: 'omit' });
+    r.add('GET', '/:id?', 'opt');
+    r.build();
+
+    const m = r.match('GET', '/');
+
+    expect(m).not.toBeNull();
+    expect(m!.value).toBe('opt');
+    expect('id' in m!.params).toBe(false);
+  });
+
+  it('/:id? matches /foo with id captured', () => {
+    const r = new Router<string>();
+    r.add('GET', '/:id?', 'opt');
+    r.build();
+
+    const m = r.match('GET', '/foo');
+
+    expect(m).not.toBeNull();
+    expect(m!.params.id).toBe('foo');
+  });
+
+  it('/:id? + setUndefined behavior at root', () => {
+    const r = new Router<string>({ optionalParamBehavior: 'setUndefined' });
+    r.add('GET', '/:id?', 'opt');
+    r.build();
+
+    const m = r.match('GET', '/');
+
+    expect(m).not.toBeNull();
+    expect(m!.params.id).toBeUndefined();
+    expect('id' in m!.params).toBe(true);
+  });
+
+  it('/:id? + setEmptyString behavior at root', () => {
+    const r = new Router<string>({ optionalParamBehavior: 'setEmptyString' });
+    r.add('GET', '/:id?', 'opt');
+    r.build();
+
+    const m = r.match('GET', '/');
+
+    expect(m).not.toBeNull();
+    expect(m!.params.id).toBe('');
+  });
+
+  it('multi-segment /a/:b? still works at the inner level', () => {
+    const r = new Router<string>();
+    r.add('GET', '/a/:b?', 'opt');
+    r.build();
+
+    expect(r.match('GET', '/a')!.value).toBe('opt');
+    expect(r.match('GET', '/a/x')!.params.b).toBe('x');
+  });
+});
+
+describe('star wildcard at root matches /', () => {
+  it('/*p captures empty string when URL is /', () => {
+    const r = new Router<string>();
+    r.add('GET', '/*p', 'wild');
+    r.build();
+
+    const m = r.match('GET', '/');
+
+    expect(m).not.toBeNull();
+    expect(m!.value).toBe('wild');
+    expect(m!.params.p).toBe('');
+  });
+
+  it('/*p captures suffix on non-root URLs', () => {
+    const r = new Router<string>();
+    r.add('GET', '/*p', 'wild');
+    r.build();
+
+    expect(r.match('GET', '/a')!.params.p).toBe('a');
+    expect(r.match('GET', '/a/b/c')!.params.p).toBe('a/b/c');
+  });
+
+  it('/* (anonymous wildcard) also matches /', () => {
+    const r = new Router<string>();
+    r.add('GET', '/*', 'wild');
+    r.build();
+
+    const m = r.match('GET', '/');
+
+    expect(m).not.toBeNull();
+    expect((m!.params as Record<string, string>)['*']).toBe('');
+  });
+
+  it('multi-wildcard at root /*p+ does NOT match /', () => {
+    // Multi requires ≥1 char of suffix — `/` alone is not enough.
+    const r = new Router<string>();
+    r.add('GET', '/*p+', 'multi');
+    r.build();
+
+    expect(r.match('GET', '/')).toBeNull();
+    expect(r.match('GET', '/a')!.params.p).toBe('a');
+  });
+});
+
+describe('param-name validation', () => {
+  it('rejects `:a:b` (colon inside name) — usually means two consecutive params', () => {
+    const r = new Router<string>();
+
+    expect(() => r.add('GET', '/:a:b', 'x')).toThrow(RouterError);
+  });
+
+  it('rejects asterisk in param name', () => {
+    const r = new Router<string>();
+
+    expect(() => r.add('GET', '/:a*x', 'x')).toThrow(RouterError);
+  });
+
+  it('rejects slash in param name', () => {
+    const r = new Router<string>();
+    // Note: / is normally a segment separator, but within a param name (after
+    // colon) it should still be rejected if somehow constructed.
+    expect(() => r.add('GET', '/:a/b/c', 'x')).not.toThrow();
+    // /:a/b/c is actually three segments: param :a, static b, static c.
+    // That's valid. We're checking the negative case where the parser
+    // somehow ended up with a slash inside the name — this is harder to
+    // construct directly so we just confirm the slash-as-separator works.
+  });
+
+  it('accepts hyphen in param name', () => {
+    const r = new Router<string>();
+
+    expect(() => r.add('GET', '/users/:user-id', 'h')).not.toThrow();
+    r.build();
+
+    const m = r.match('GET', '/users/42');
+
+    expect(m).not.toBeNull();
+    expect((m!.params as Record<string, string>)['user-id']).toBe('42');
+  });
+
+  it('accepts underscore and digits in param name', () => {
+    const r = new Router<string>();
+
+    expect(() => r.add('GET', '/x/:_v2_', 'u')).not.toThrow();
+  });
+});

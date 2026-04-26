@@ -113,6 +113,14 @@ function emitRootSlashTerminal(root: SegmentNode): string {
     return `      state.handlerIndex = ${root.store};\n      return true;`;
   }
 
+  // A star-wildcard at the root captures the empty suffix when URL is just
+  // `/`. Multi-wildcards explicitly require ≥1 char so they don't match.
+  // Use state.params directly — the `params` local var is declared further
+  // down, after this root-slash branch.
+  if (root.wildcardStore !== null && root.wildcardOrigin === 'star') {
+    return `      state.params[${JSON.stringify(root.wildcardName!)}] = '';\n      state.handlerIndex = ${root.wildcardStore};\n      return true;`;
+  }
+
   return '      return false;';
 }
 

@@ -139,6 +139,12 @@ export class RadixBuilder {
 
       if (merged.length > 0) {
         result.push({ parts: merged, handlerIndex });
+      } else {
+        // The expansion collapsed to nothing — every required segment was an
+        // optional that got dropped (e.g. `/:id?` with `:id` omitted). The
+        // intended URL for this expansion is the root `/`, not "no route at
+        // all"; registering nothing would silently fail-match `/`.
+        result.push({ parts: [{ type: 'static', value: '/' }], handlerIndex });
       }
     }
 

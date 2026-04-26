@@ -310,6 +310,24 @@ export class PathParser {
       });
     }
 
+    // Reject router-metacharacters inside param names. They are almost always
+    // a typo (`:a:b` meaning "two params" silently captured one named "a:b"),
+    // and accepting them yields surprising URLs that don't match user intent.
+    // Identifier-friendly names (letters, digits, underscore, hyphen) are
+    // permitted as before.
+    for (let i = 0; i < name.length; i++) {
+      const ch = name.charCodeAt(i);
+      // ':' 58, '*' 42, '?' 63, '+' 43, '/' 47, '{' 123, '}' 125
+      if (ch === 58 || ch === 42 || ch === 63 || ch === 43 || ch === 47 || ch === 123 || ch === 125) {
+        return err({
+          kind: 'route-parse',
+          message: `Invalid character '${name.charAt(i)}' in parameter name ':${name}'. Param names must not contain router metacharacters (':', '*', '?', '+', '/', '{', '}'). Use '/:a/:b' for two consecutive params.`,
+          path,
+          segment: name,
+        });
+      }
+    }
+
     // Check duplicate param names
     if (this.activeParams.has(name)) {
       return err({

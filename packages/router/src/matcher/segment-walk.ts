@@ -261,6 +261,14 @@ export function createSegmentWalker(
         return true;
       }
 
+      // Star-wildcard at root accepts the empty suffix on `/`; multi requires ≥1 char.
+      if (root.wildcardStore !== null && root.wildcardOrigin === 'star') {
+        state.params![root.wildcardName!] = '';
+        state.handlerIndex = root.wildcardStore;
+
+        return true;
+      }
+
       return false;
     }
 
@@ -285,6 +293,14 @@ function createIterativeWalker(
     if (path.length === 1 && path.charCodeAt(0) === 47) {
       if (root.store !== null) {
         state.handlerIndex = root.store;
+
+        return true;
+      }
+
+      // Star-wildcard at root accepts the empty suffix on `/`; multi requires ≥1 char.
+      if (root.wildcardStore !== null && root.wildcardOrigin === 'star') {
+        state.params![root.wildcardName!] = '';
+        state.handlerIndex = root.wildcardStore;
 
         return true;
       }
