@@ -864,7 +864,7 @@ describe('CookieParser', () => {
     });
 
     it('should apply expires default in serialize when cookie has none', () => {
-      const expires = new Date('2030-01-01');
+      const expires = new Date(Date.now() + 30 * 86400 * 1000);
       const cp = CookieParser.create({ expires });
       const cookie = new Cookie('session', 'v');
       const header = cp.serialize(cookie);
@@ -1098,10 +1098,17 @@ describe('CookieParser', () => {
       expect((caught as CookieError).reason).toBe(CookieErrorReason.WeakSecret);
     });
 
-    it('should accept secret with exactly 32 chars', () => {
-      const exact32 = 'a'.repeat(32);
+    it('should accept high-entropy secret with exactly 32 chars', () => {
+      const exact32 = 'qwerty1234567890asdfghjklzxcvbnm';
       expect(() => CookieParser.create({ secrets: [exact32] })).not.toThrow();
       expect(() => CookieParser.create({ encryptionSecret: exact32 })).not.toThrow();
+    });
+
+    it('should reject low-entropy secret (single repeated char)', () => {
+      let caught: unknown;
+      try { CookieParser.create({ secrets: ['a'.repeat(40)] }); } catch (e) { caught = e; }
+      expect(caught).toBeInstanceOf(CookieError);
+      expect((caught as CookieError).reason).toBe(CookieErrorReason.WeakSecret);
     });
   });
 
@@ -1162,6 +1169,142 @@ describe('CookieParser', () => {
       // Verifies even though it's last in rotation array
       const unsigned = await cp.unsign(signed);
       expect(unsigned.value).toBe('data');
+    });
+  });
+
+  describe('token validation across all entry points (H-1 fix)', () => {
+    const SIGN_SECRET = 'h1-fix-test-signing-secret-pad____';
+    const ENC_SECRET = 'h1-fix-test-encryption-secret-pad_';
+
+    function expectInvalidName(fn: () => unknown | Promise<unknown>): Promise<void> {
+      return Promise.resolve()
+        .then(fn)
+        .then(
+          () => { throw new Error('expected InvalidCookieName but no error thrown'); },
+          (e) => {
+            expect(e).toBeInstanceOf(CookieError);
+            expect((e as CookieError).reason).toBe(CookieErrorReason.InvalidCookieName);
+          },
+        );
+    }
+
+    it('should reject comma in name via serialize (RFC 9110 §5.6.2 token violation)', () => {
+      const cp = CookieParser.create();
+      return expectInvalidName(() => cp.serialize(new Cookie('bad,name', 'v')));
+    });
+
+    it('should reject paren in name via serialize', () => {
+      const cp = CookieParser.create();
+      return expectInvalidName(() => cp.serialize(new Cookie('bad(name', 'v')));
+    });
+
+    it('should reject quote in name via serialize', () => {
+      const cp = CookieParser.create();
+      return expectInvalidName(() => cp.serialize(new Cookie('bad"name', 'v')));
+    });
+
+    it('should reject @ in name via serialize', () => {
+      const cp = CookieParser.create();
+      return expectInvalidName(() => cp.serialize(new Cookie('bad@name', 'v')));
+    });
+
+    it('should reject invalid name via sign', () => {
+      const cp = CookieParser.create({ secrets: [SIGN_SECRET] });
+      return expectInvalidName(() => cp.sign(new Cookie('bad,name', 'v')));
+    });
+
+    it('should reject invalid name via encrypt', async () => {
+      const cp = CookieParser.create({ encryptionSecret: ENC_SECRET });
+      await expectInvalidName(() => cp.encrypt(new Cookie('bad,name', 'v')));
+    });
+
+    it('should reject invalid name via unsign', async () => {
+      const cp = CookieParser.create({ secrets: [SIGN_SECRET] });
+      await expectInvalidName(() => cp.unsign(new Cookie('bad,name', 'v.sig')));
+    });
+
+    it('should reject invalid name via decrypt', async () => {
+      const cp = CookieParser.create({ encryptionSecret: ENC_SECRET });
+      await expectInvalidName(() => cp.decrypt(new Cookie('bad,name', 'ciphertextpadded____________________')));
+    });
+
+    it('should reject invalid name via validatePrefix', () => {
+      const cp = CookieParser.create();
+      return expectInvalidName(() => cp.validatePrefix(new Cookie('bad,name', 'v')));
+    });
+  });
+
+  describe('expires normalization (H-2 fix)', () => {
+    it('should throw CookieError(InvalidExpires) for invalid date string via createCookie', () => {
+      const cp = CookieParser.create();
+      let caught: unknown;
+      try { cp.createCookie('n', 'v', { expires: 'not-a-date' as any }); } catch (e) { caught = e; }
+      expect(caught).toBeInstanceOf(CookieError);
+      expect((caught as CookieError).reason).toBe(CookieErrorReason.InvalidExpires);
+    });
+
+    it('should throw CookieError(InvalidExpires) for NaN expires', () => {
+      const cp = CookieParser.create();
+      let caught: unknown;
+      try { cp.createCookie('n', 'v', { expires: NaN as any }); } catch (e) { caught = e; }
+      expect(caught).toBeInstanceOf(CookieError);
+      expect((caught as CookieError).reason).toBe(CookieErrorReason.InvalidExpires);
+    });
+
+    it('should throw CookieError(InvalidExpires) for invalid Date object', () => {
+      const cp = CookieParser.create();
+      let caught: unknown;
+      try { cp.createCookie('n', 'v', { expires: new Date('invalid') }); } catch (e) { caught = e; }
+      expect(caught).toBeInstanceOf(CookieError);
+      expect((caught as CookieError).reason).toBe(CookieErrorReason.InvalidExpires);
+    });
+
+    it('should throw CookieError(InvalidExpires) for Infinity expires', () => {
+      const cp = CookieParser.create();
+      let caught: unknown;
+      try { cp.createCookie('n', 'v', { expires: Infinity as any }); } catch (e) { caught = e; }
+      expect(caught).toBeInstanceOf(CookieError);
+      expect((caught as CookieError).reason).toBe(CookieErrorReason.InvalidExpires);
+    });
+
+    it('should accept valid IMF-fixdate string', () => {
+      const cp = CookieParser.create();
+      expect(() => cp.createCookie('n', 'v', { expires: 'Wed, 21 Oct 2026 07:28:00 GMT' })).not.toThrow();
+    });
+
+    it('should accept valid Date object within 400-day cap', () => {
+      const cp = CookieParser.create();
+      const future = new Date(Date.now() + 30 * 86400 * 1000);
+      expect(() => cp.createCookie('n', 'v', { expires: future })).not.toThrow();
+    });
+
+    it('should accept valid number timestamp within 400-day cap', () => {
+      const cp = CookieParser.create();
+      expect(() => cp.createCookie('n', 'v', { expires: Date.now() + 30 * 86400 * 1000 })).not.toThrow();
+    });
+
+    it('should reject Date object beyond 400-day cap', () => {
+      const cp = CookieParser.create();
+      const farFuture = new Date(Date.now() + 401 * 86400 * 1000);
+      let caught: unknown;
+      try { cp.createCookie('n', 'v', { expires: farFuture }); } catch (e) { caught = e; }
+      expect((caught as CookieError).reason).toBe(CookieErrorReason.MaxLifetimeExceeded);
+    });
+
+    it('should wrap Bun ctor errors into CookieError (no TypeError leak)', () => {
+      const cp = CookieParser.create();
+      let caught: unknown;
+      try { cp.createCookie('n', 'v', { domain: 'evil; injected' as any }); } catch (e) { caught = e; }
+      expect(caught).toBeInstanceOf(CookieError);
+      expect((caught as CookieError).reason).toBe(CookieErrorReason.InvalidDomain);
+    });
+
+    it('should wrap Bun path errors into CookieError', () => {
+      const cp = CookieParser.create();
+      let caught: unknown;
+      try { cp.createCookie('n', 'v', { path: '/x;injected' as any }); } catch (e) { caught = e; }
+      expect(caught).toBeInstanceOf(CookieError);
+      expect((caught as CookieError).reason).toBe(CookieErrorReason.InvalidPath);
     });
   });
 });

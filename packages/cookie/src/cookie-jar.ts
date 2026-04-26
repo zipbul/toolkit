@@ -71,37 +71,47 @@ export class CookieJar {
   }
 
   public delete(name: string, options?: CookieAttributes): void {
-    const cookie = this.parser.createCookie(name, '', {
+    // For deletion, the parser may have defaults (e.g. sameSite='none' + secure='auto') that would
+    // throw at serialize time when the request is insecure. Override the relevant defaults locally
+    // so the delete instruction always serializes.
+    const overrides: CookieAttributes = {
       ...options,
       maxAge: 0,
       expires: new Date(0),
-    });
+    };
+    if (overrides.sameSite === 'none' || overrides.sameSite === undefined) {
+      overrides.sameSite = 'lax';
+    }
+    if (overrides.secure === undefined) {
+      overrides.secure = false;
+    }
+    const cookie = this.parser.createCookie(name, '', overrides);
     this.outbound.set(name, { cookie, deleted: true });
   }
 
   public async getSetCookieHeaders(context?: SerializeContext): Promise<string[]> {
-    const headers: string[] = [];
+    const tasks: Promise<string>[] = [];
 
     for (const [, entry] of this.outbound) {
       if (entry.deleted) {
-        headers.push(this.parser.serialize(entry.cookie, context));
+        tasks.push(Promise.resolve(this.parser.serialize(entry.cookie, context)));
         continue;
       }
-
-      let cookie = entry.cookie;
-
-      if (this.parser.isSigningConfigured) {
-        cookie = this.parser.sign(cookie);
-      }
-
-      if (this.parser.isEncryptionConfigured) {
-        cookie = await this.parser.encrypt(cookie);
-      }
-
-      headers.push(this.parser.serialize(cookie, context));
+      tasks.push(this.transformAndSerialize(entry.cookie, context));
     }
 
-    return headers;
+    return Promise.all(tasks);
+  }
+
+  private async transformAndSerialize(cookie: Cookie, context?: SerializeContext): Promise<string> {
+    let c = cookie;
+    if (this.parser.isSigningConfigured) {
+      c = this.parser.sign(c);
+    }
+    if (this.parser.isEncryptionConfigured) {
+      c = await this.parser.encrypt(c);
+    }
+    return this.parser.serialize(c, context);
   }
 
   private toErr(thrown: unknown, step: Step): ReturnType<typeof err<CookieErrorData>> {
@@ -111,7 +121,6 @@ export class CookieJar {
         message: thrown.message,
       });
     }
-    // M1 fix: fallback reason reflects the step that actually failed
     return err<CookieErrorData>({
       reason: step === 'decrypt'
         ? CookieErrorReason.DecryptionFailed

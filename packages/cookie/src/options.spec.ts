@@ -15,7 +15,7 @@ describe('resolveCookieParserOptions', () => {
     expect(resolved.secrets).toBeNull();
     expect(resolved.algorithm).toBe('sha256');
     expect(resolved.encryptionSecrets).toBeNull();
-    expect(resolved.prefixValidation).toBe(false);
+    expect(resolved.prefixValidation).toBe(true);
     expect(resolved.defaults.httpOnly).toBeNull();
     expect(resolved.defaults.secure).toBeNull();
     expect(resolved.defaults.sameSite).toBeNull();
@@ -30,7 +30,7 @@ describe('resolveCookieParserOptions', () => {
     const resolved = resolveCookieParserOptions({});
     expect(resolved.secrets).toBeNull();
     expect(resolved.algorithm).toBe('sha256');
-    expect(resolved.prefixValidation).toBe(false);
+    expect(resolved.prefixValidation).toBe(true);
   });
 
   it('should resolve secrets when provided', () => {

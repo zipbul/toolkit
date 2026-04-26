@@ -7,6 +7,18 @@ import type { ResolvedCookieDefaults, ResolvedCookieParserOptions } from './type
 
 const VALID_ALGORITHMS: ReadonlySet<string> = new Set(['sha256', 'sha384', 'sha512']);
 const MIN_SECRET_LENGTH = 32;
+const MIN_UNIQUE_CHARS = 8;
+
+// Default public-suffix check: rejects only single-label domains (which are TLDs by definition).
+// Comprehensive PSL detection requires the official Mozilla Public Suffix List (~10k entries, frequently updated)
+// and is intentionally NOT bundled here — bundling a snapshot would silently rot. Callers needing full PSL
+// coverage MUST supply `publicSuffixCheck` wired to a maintained source (e.g. `psl`, `tldts`,
+// or a network-fetched PSL). RFC 6265 §5.3 step 6 / RFC 6265bis §5.7 enforcement is the application's responsibility.
+export function defaultPublicSuffixCheck(domain: string): boolean {
+  const normalized = domain.toLowerCase().replace(/^\.+|\.+$/g, '');
+  if (normalized === '') return false;
+  return !normalized.includes('.');
+}
 
 export function resolveCookieParserOptions(options?: CookieParserOptions): ResolvedCookieParserOptions {
   const defaults: ResolvedCookieDefaults = {
@@ -18,6 +30,7 @@ export function resolveCookieParserOptions(options?: CookieParserOptions): Resol
     maxAge: options?.maxAge ?? null,
     expires: options?.expires ?? null,
     partitioned: options?.partitioned ?? null,
+    priority: options?.priority ?? null,
   };
 
   const encryptionSecrets = options?.encryptionSecret == null
@@ -30,9 +43,39 @@ export function resolveCookieParserOptions(options?: CookieParserOptions): Resol
     secrets: options?.secrets ?? null,
     algorithm: options?.algorithm ?? 'sha256',
     encryptionSecrets,
-    prefixValidation: options?.prefixValidation ?? false,
+    prefixValidation: options?.prefixValidation ?? true,
+    publicSuffixCheck: options?.publicSuffixCheck ?? defaultPublicSuffixCheck,
+    onEncrypt: options?.onEncrypt ?? null,
     defaults,
   };
+}
+
+function uniqueCharCount(s: string): number {
+  return new Set(s).size;
+}
+
+function validateSecretStrength(secret: string, label: string): Result<void, CookieErrorData> {
+  if (secret.trim().length === 0) {
+    return err<CookieErrorData>({
+      reason: label === 'encryptionSecret'
+        ? CookieErrorReason.InvalidEncryptionSecret
+        : CookieErrorReason.InvalidSecret,
+      message: `each ${label} must be a non-blank string`,
+    });
+  }
+  if (secret.length < MIN_SECRET_LENGTH) {
+    return err<CookieErrorData>({
+      reason: CookieErrorReason.WeakSecret,
+      message: `each ${label} must be at least ${MIN_SECRET_LENGTH} characters`,
+    });
+  }
+  if (uniqueCharCount(secret) < MIN_UNIQUE_CHARS) {
+    return err<CookieErrorData>({
+      reason: CookieErrorReason.WeakSecret,
+      message: `${label} entropy too low: needs at least ${MIN_UNIQUE_CHARS} distinct characters; supply high-entropy random data (NIST SP 800-132 §5.1 / NIST SP 800-38D §5.2.1.1)`,
+    });
+  }
+  return undefined;
 }
 
 export function validateCookieParserOptions(
@@ -46,18 +89,8 @@ export function validateCookieParserOptions(
       });
     }
     for (const secret of resolved.secrets) {
-      if (secret.trim().length === 0) {
-        return err<CookieErrorData>({
-          reason: CookieErrorReason.InvalidSecret,
-          message: 'each secret must be a non-blank string',
-        });
-      }
-      if (secret.length < MIN_SECRET_LENGTH) {
-        return err<CookieErrorData>({
-          reason: CookieErrorReason.WeakSecret,
-          message: `each signing secret must be at least ${MIN_SECRET_LENGTH} characters of high-entropy random data (NIST SP 800-132)`,
-        });
-      }
+      const r = validateSecretStrength(secret, 'signing secret');
+      if (r !== undefined) return r;
     }
   }
 
@@ -69,18 +102,8 @@ export function validateCookieParserOptions(
       });
     }
     for (const secret of resolved.encryptionSecrets) {
-      if (secret.trim().length === 0) {
-        return err<CookieErrorData>({
-          reason: CookieErrorReason.InvalidEncryptionSecret,
-          message: 'each encryptionSecret must be a non-blank string',
-        });
-      }
-      if (secret.length < MIN_SECRET_LENGTH) {
-        return err<CookieErrorData>({
-          reason: CookieErrorReason.WeakSecret,
-          message: `each encryptionSecret must be at least ${MIN_SECRET_LENGTH} characters of high-entropy random data (NIST SP 800-38D §5.2.1.1)`,
-        });
-      }
+      const r = validateSecretStrength(secret, 'encryptionSecret');
+      if (r !== undefined) return r;
     }
   }
 
