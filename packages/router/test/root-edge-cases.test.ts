@@ -159,4 +159,25 @@ describe('param-name validation', () => {
 
     expect(() => r.add('GET', '/x/:_v2_', 'u')).not.toThrow();
   });
+
+  it('rejects metacharacters in wildcard name', () => {
+    // /*p{\w+} silently used to register a wildcard whose name was the
+    // literal string `p{\w+}` (parser doesn't support wildcard regex). Now
+    // surfaced as a parse error.
+    const r = new Router<string>();
+
+    expect(() => r.add('GET', '/files/*p{\\w+}', 'wreg')).toThrow(RouterError);
+  });
+
+  it('rejects metacharacters in :name+ multi-wildcard form', () => {
+    const r = new Router<string>();
+
+    expect(() => r.add('GET', '/files/:p{*+', 'invalid')).toThrow(RouterError);
+  });
+
+  it('rejects metacharacters in :name* star-wildcard form', () => {
+    const r = new Router<string>();
+
+    expect(() => r.add('GET', '/files/:p:other*', 'invalid')).toThrow(RouterError);
+  });
 });
