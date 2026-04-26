@@ -104,6 +104,12 @@ export class Router<T = unknown> {
   private staticOutputsByMethod: Array<Record<string, MatchOutput<T>> | undefined> = [];
   /** Method name → numeric code. NullProtoObj for proto-free O(1) lookup. */
   private methodCodes: Record<string, number> = new NullProtoObj() as Record<string, number>;
+  /** Methods that actually received at least one route registration (in
+   *  declaration order). Cached at build() so `allowedMethods()` skips the
+   *  six pre-registered-but-unused HTTP verbs without an Object.entries
+   *  call per invocation. Tuple form keeps name+code together for the
+   *  tight loop in allowedMethods. */
+  private activeMethodCodes: ReadonlyArray<readonly [string, number]> = [];
   /** Track wildcard names per normalized prefix for cross-method conflict detection */
   private wildcardNames: Map<string, string> = new Map();
 
@@ -344,6 +350,19 @@ export class Router<T = unknown> {
     }
 
     this.staticOutputsByMethod = staticOutputsByMethod;
+
+    // Cache the methods that actually received routes — `allowedMethods()`
+    // iterates this instead of Object.entries(methodCodes) to skip the
+    // six unused default HTTP verbs without per-call allocation.
+    const active: Array<readonly [string, number]> = [];
+
+    for (const [name, code] of allCodes) {
+      if (this.trees[code] != null || staticOutputsByMethod[code] !== undefined) {
+        active.push([name, code]);
+      }
+    }
+
+    this.activeMethodCodes = active;
 
     this.matchState = createMatchState();
 
@@ -807,18 +826,68 @@ export class Router<T = unknown> {
    *   if (allowed.length === 0) return respond404();
    *   return respond405(allowed);   // adapter shapes the 405/Allow header
    *
-   * Implementation shares preprocessing with the same option-driven
-   * normalization matchImpl uses (query strip, trailing-slash trim, case
-   * fold, length/segment limits) and probes each registered method
-   * directly: O(1) static-map lookup plus, only when needed, a single
-   * tree-walker call per method that has dynamic routes. matchImpl is
-   * NOT invoked — preprocessing happens once, never per method.
+   * Cost profile:
+   *   - Preprocessing (path-length / query strip / slash trim / case fold /
+   *     seg-length scan) runs once via `normalizePathForLookup`.
+   *   - Iteration is over `activeMethodCodes` only — the six pre-registered
+   *     but unused default HTTP verbs are excluded at build time.
+   *   - Per active method: O(1) static-map lookup; only when no static hit
+   *     does the method's tree walker run (one call), reusing a single
+   *     pre-allocated `state.params` across iterations.
+   *   - matchImpl is never invoked — no duplicated preprocessing.
    */
   allowedMethods(path: string): HttpMethod[] {
     if (!this.sealed) return [];
 
+    const sp = this.normalizePathForLookup(path);
+
+    if (sp === null) return [];
+
+    const out: HttpMethod[] = [];
+    const state = this.matchState;
+    // Tree walkers write into `state.params` on success. We never read the
+    // params here — only the boolean return — so a single shared container
+    // is enough. The next match() call reassigns state.params anyway.
+    const sharedParams = new NullProtoObj() as Record<string, string | undefined>;
+
+    state.params = sharedParams;
+
+    const active = this.activeMethodCodes;
+
+    for (let i = 0; i < active.length; i++) {
+      const entry = active[i]!;
+      const methodCode = entry[1];
+      const bucket = this.staticOutputsByMethod[methodCode];
+
+      if (bucket !== undefined && bucket[sp] !== undefined) {
+        out.push(entry[0] as HttpMethod);
+        continue;
+      }
+
+      const tr = this.trees[methodCode];
+
+      if (tr === null || tr === undefined) continue;
+
+      if (tr(sp, state)) {
+        out.push(entry[0] as HttpMethod);
+      }
+    }
+
+    return out;
+  }
+
+  /**
+   * Path normalization shared with the codegen-emitted matchImpl logic.
+   * Returns the normalized `sp` string for downstream lookup, or `null`
+   * when the path violates `maxPathLength` or any segment exceeds
+   * `maxSegmentLength`. **MUST stay semantically in sync with the inline
+   * code emitted by `compileMatchFn`.** Tests in `allowed-methods.test.ts`
+   * cover the option matrix and pin both implementations to the same
+   * behavior — change one, change the other.
+   */
+  private normalizePathForLookup(path: string): string | null {
     if (Number.isFinite(this._maxPathLength) && path.length > this._maxPathLength) {
-      return [];
+      return null;
     }
 
     let sp = path;
@@ -846,38 +915,12 @@ export class Router<T = unknown> {
         } else {
           sl++;
 
-          if (sl > ml) return [];
+          if (sl > ml) return null;
         }
       }
     }
 
-    const out: HttpMethod[] = [];
-    const state = this.matchState;
-
-    for (const [methodName, methodCode] of Object.entries(this.methodCodes)) {
-      const bucket = this.staticOutputsByMethod[methodCode];
-
-      if (bucket !== undefined && bucket[sp] !== undefined) {
-        out.push(methodName as HttpMethod);
-        continue;
-      }
-
-      const tr = this.trees[methodCode];
-
-      if (tr === null || tr === undefined) continue;
-
-      // tr writes into state.params on success — give it a fresh container.
-      // Returned MatchOutput shape isn't read here; we only consume the
-      // boolean result. State pollution is bounded to this loop and reset
-      // on the next match() call (which always reassigns state.params).
-      state.params = new NullProtoObj() as Record<string, string | undefined>;
-
-      if (tr(sp, state)) {
-        out.push(methodName as HttpMethod);
-      }
-    }
-
-    return out;
+    return sp;
   }
 
   private checkWildcardNameConflict(
