@@ -2,7 +2,7 @@ import { HttpHeader } from '@zipbul/shared';
 
 import type { ResolvedCacheControlOptions } from '../types';
 
-import type { HeaderEntry } from '../simple-headers/serialize';
+import type { HeaderEntry } from '../header-entry';
 
 export function serializeCacheControl(opts: ResolvedCacheControlOptions): HeaderEntry[] {
   const out: HeaderEntry[] = [[HttpHeader.CacheControl, opts.value]];

@@ -56,7 +56,7 @@ export class HelmetError extends Error {
 }
 
 /**
- * Non-fatal validation or migration warning.
+ * Non-fatal validation warning.
  * Available on {@link Helmet.warnings}.
  */
 export interface HelmetWarning {

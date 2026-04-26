@@ -5,7 +5,7 @@ import { HelmetErrorReason } from '../enums';
 import type { StrictTransportSecurityOptions, ViolationDetail } from '../interfaces';
 import type { ResolvedHstsOptions } from '../types';
 
-import type { HeaderEntry } from '../simple-headers/serialize';
+import type { HeaderEntry } from '../header-entry';
 
 export function resolveHsts(
   input: boolean | StrictTransportSecurityOptions | undefined,

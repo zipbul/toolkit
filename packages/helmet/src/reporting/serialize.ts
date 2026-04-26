@@ -6,7 +6,7 @@ import type { NelOptions, ReportingEndpointsOptions, ViolationDetail } from '../
 import { serializeString } from '../structured-fields/serialize';
 import type { ResolvedNelOptions, ResolvedReportingEndpointsOptions } from '../types';
 
-import type { HeaderEntry } from '../simple-headers/serialize';
+import type { HeaderEntry } from '../header-entry';
 
 const ENDPOINT_NAME_RE = /^[A-Za-z0-9_-]{1,64}$/;
 

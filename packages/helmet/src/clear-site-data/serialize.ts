@@ -6,7 +6,7 @@ import type { HelmetWarning, ViolationDetail } from '../interfaces';
 import { serializeString } from '../structured-fields/serialize';
 import type { ResolvedClearSiteDataOptions } from '../types';
 
-import type { HeaderEntry } from '../simple-headers/serialize';
+import type { HeaderEntry } from '../header-entry';
 
 const STANDARD_TOKENS = new Set<string>([
   'cache',

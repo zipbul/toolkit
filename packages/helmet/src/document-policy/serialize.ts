@@ -12,7 +12,7 @@ import {
 } from '../structured-fields/serialize';
 import type { ResolvedDocumentPolicyOptions } from '../types';
 
-import type { HeaderEntry } from '../simple-headers/serialize';
+import type { HeaderEntry } from '../header-entry';
 
 export function resolveDocumentPolicy(
   input: DocumentPolicyOptions | undefined,

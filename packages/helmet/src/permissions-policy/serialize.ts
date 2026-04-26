@@ -6,7 +6,7 @@ import type { HelmetWarning, PermissionsPolicyOptions, ViolationDetail } from '.
 import { serializeDictionary, serializeString, token } from '../structured-fields/serialize';
 import type { ResolvedPermissionsPolicyOptions } from '../types';
 
-import type { HeaderEntry } from '../simple-headers/serialize';
+import type { HeaderEntry } from '../header-entry';
 import { KNOWN_FEATURES, buildDefaultFeatureMap } from './features';
 
 const FEATURE_NAME_RE = /^[a-z][a-z0-9-]{0,63}$/;

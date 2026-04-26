@@ -10,7 +10,7 @@ import type {
 } from '../interfaces';
 import type { ResolvedCspOptions, SandboxToken } from '../types';
 
-import type { HeaderEntry } from '../simple-headers/serialize';
+import type { HeaderEntry } from '../header-entry';
 import {
   DEPRECATED_DIRECTIVES,
   EMIT_ORDER,

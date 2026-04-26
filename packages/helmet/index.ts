@@ -1,7 +1,5 @@
 export { Helmet } from './src/helmet';
 export { Csp } from './src/constants';
-export { presets } from './src/presets';
-export { fromHelmetOptions } from './src/migration';
 export { lintCsp } from './src/lint';
 export type { CspLintFinding, CspLintOptions } from './src/lint';
 export { parseCspReport } from './src/reports';

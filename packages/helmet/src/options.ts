@@ -22,14 +22,12 @@ import {
 } from './permissions-policy/serialize';
 import { resolveRemoveHeaders } from './remove-headers/resolve';
 import { resolveNel, resolveReportingEndpoints } from './reporting/serialize';
-import {
-  validateReferrerPolicy,
-  validateTimingAllowOrigin,
-  validateXDnsPrefetchControl,
-  validateXFrameOptions,
-  validateXPermittedCrossDomainPolicies,
-  validateXXssProtection,
-} from './simple-headers/validate';
+import { validateReferrerPolicy } from './referrer-policy/validate';
+import { validateTimingAllowOrigin } from './timing-allow-origin/validate';
+import { validateXDnsPrefetchControl } from './x-dns-prefetch-control/validate';
+import { validateXFrameOptions } from './x-frame-options/validate';
+import { validateXPermittedCrossDomainPolicies } from './x-permitted-cross-domain-policies/validate';
+import { validateXXssProtection } from './x-xss-protection/validate';
 
 const VALID_COOP = new Set<CoopValue>([
   'same-origin',

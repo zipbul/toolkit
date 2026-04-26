@@ -5,7 +5,7 @@ import type { IntegrityPolicyOptions, ViolationDetail } from '../interfaces';
 import { serializeDictionary, token } from '../structured-fields/serialize';
 import type { ResolvedIntegrityPolicyOptions } from '../types';
 
-import type { HeaderEntry } from '../simple-headers/serialize';
+import type { HeaderEntry } from '../header-entry';
 
 const VALID_DESTINATIONS = new Set<'script' | 'style'>(['script', 'style']);
 

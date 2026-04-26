@@ -6,14 +6,10 @@ import type { Nonce, ResolvedHelmetOptions } from './types';
 
 import { resolveCacheControl, serializeCacheControl } from './cache-control/serialize';
 import { serializeClearSiteData } from './clear-site-data/serialize';
-import {
-  serializeCoep,
-  serializeCoepReportOnly,
-  serializeCoop,
-  serializeCoopReportOnly,
-  serializeCorp,
-} from './cross-origin/serialize';
-import { buildNonceTemplate, serializeCspBody } from './csp/serialize';
+import { serializeCoep, serializeCoepReportOnly } from './coep/serialize';
+import { serializeCoop, serializeCoopReportOnly } from './coop/serialize';
+import { serializeCorp } from './corp/serialize';
+import { buildNonceTemplate } from './csp/serialize';
 import { serializeDocumentPolicy } from './document-policy/serialize';
 import { serializeHsts } from './hsts/serialize';
 import {
@@ -30,22 +26,20 @@ import {
   serializeReportingEndpoints,
   serializeReportToFromEndpoints,
 } from './reporting/serialize';
-import {
-  serializeOriginAgentCluster,
-  serializeReferrerPolicy,
-  serializeTimingAllowOrigin,
-  serializeXContentTypeOptions,
-  serializeXDnsPrefetchControl,
-  serializeXDownloadOptions,
-  serializeXFrameOptions,
-  serializeXPermittedCrossDomainPolicies,
-  serializeXRobotsTag,
-  serializeXXssProtection,
-} from './simple-headers/serialize';
+import { serializeOriginAgentCluster } from './origin-agent-cluster/serialize';
+import { serializeReferrerPolicy } from './referrer-policy/serialize';
+import { serializeTimingAllowOrigin } from './timing-allow-origin/serialize';
+import { serializeXContentTypeOptions } from './x-content-type-options/serialize';
+import { serializeXDnsPrefetchControl } from './x-dns-prefetch-control/serialize';
+import { serializeXDownloadOptions } from './x-download-options/serialize';
+import { serializeXFrameOptions } from './x-frame-options/serialize';
+import { serializeXPermittedCrossDomainPolicies } from './x-permitted-cross-domain-policies/serialize';
+import { serializeXRobotsTag } from './x-robots-tag/serialize';
+import { serializeXXssProtection } from './x-xss-protection/serialize';
 
 import { HttpHeader } from '@zipbul/shared';
 
-import type { HeaderEntry } from './simple-headers/serialize';
+import type { HeaderEntry } from './header-entry';
 
 const NONCE_VALIDATE_RE = /^[A-Za-z0-9+/=_-]{16,256}$/;
 
@@ -188,6 +182,20 @@ export class Helmet {
     return Helmet.create({ originAgentCluster: input as never })
       .__entriesByName(HttpHeader.OriginAgentCluster)!;
   }
+
+  /**
+   * Reporting-Endpoints shorthand. Validates URLs (HTTPS only) and
+   * returns the `[name, value]` tuple ready to apply.
+   *
+   * @example
+   *   Helmet.endpoints({ default: 'https://r.example/csp', main: 'https://r.example/main' });
+   *   // → ['reporting-endpoints', 'default="https://r.example/csp", main="https://r.example/main"']
+   */
+  public static endpoints(map: Record<string, string>): HeaderEntry {
+    return Helmet.create({ reportingEndpoints: { endpoints: map } })
+      .__entriesByName(HttpHeader.ReportingEndpoints)!;
+  }
+
 
   /** Internal lookup used by static helpers. Not part of the public API. */
   private __entriesByName(name: string): HeaderEntry | undefined {
@@ -437,7 +445,11 @@ function injectNonce(template: string, nonce: string | undefined): string {
   if (nonce === undefined) {
     // Strip any nonce placeholders if no nonce is supplied — leaving the
     // placeholder in the live header would be a security failure.
-    return template.replaceAll(`'nonce-${NONCE_PLACEHOLDER}'`, '').replaceAll(/  +/g, ' ').trim();
+    return template
+      .replaceAll(`'nonce-${NONCE_PLACEHOLDER}'`, '')
+      .replaceAll(/ +;/g, ';')
+      .replaceAll(/  +/g, ' ')
+      .trim();
   }
   if (!NONCE_VALIDATE_RE.test(nonce) || nonce.length > LIMITS.nonceMax) {
     throw new HelmetError([

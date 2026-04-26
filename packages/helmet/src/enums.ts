@@ -105,17 +105,8 @@ export enum HelmetWarningReason {
   SelfDoesNotMatchWebSocketScheme = 'self_does_not_match_websocket_scheme',
   ApplyOnSwitchingProtocols = 'apply_on_switching_protocols',
 
-  // ── Migration from helmet.js ──
-  HelmetUseDefaultsIgnored = 'helmet_use_defaults_ignored',
-  HelmetXFrameOptionsDefaultTightened = 'helmet_x_frame_options_default_tightened',
-  HelmetXssFilterHarmful = 'helmet_xss_filter_harmful',
-  HelmetAliasRedundant = 'helmet_alias_redundant',
-  HelmetReportOnlyLifted = 'helmet_report_only_lifted',
-  HelmetNonceCallbackUnsupported = 'helmet_nonce_callback_unsupported',
-
   // ── i18n / user callback fallback ──
   MessageFormatterFailed = 'message_formatter_failed',
-  RemoveHeadersForcedByLegacy = 'remove_headers_forced_by_legacy',
 
   // ── Input limit sentinel ──
   TooManyWarnings = 'too_many_warnings',

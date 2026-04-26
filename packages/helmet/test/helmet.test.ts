@@ -5,11 +5,9 @@ import {
   Helmet,
   HelmetError,
   HelmetErrorReason,
-  fromHelmetOptions,
-  hashFromString,
+    hashFromString,
   lintCsp,
   parseCspReport,
-  presets,
 } from '../index';
 
 describe('Helmet.create — defaults', () => {
@@ -193,26 +191,6 @@ describe('headersRecord / applyHeadersTo', () => {
   });
 });
 
-describe('presets', () => {
-  it('strict preset has trusted-types', () => {
-    const csp = presets.strict().headers().get('content-security-policy') ?? '';
-    expect(csp).toContain('require-trusted-types-for');
-  });
-
-  it('api preset emits no-store', () => {
-    const headers = presets.api().headers();
-    expect(headers.get('cache-control')).toContain('no-store');
-  });
-
-  it('observatoryAPlus preset includes integrity-policy', () => {
-    expect(presets.observatoryAPlus().headers().get('integrity-policy')).toContain('blocked-destinations');
-  });
-
-  it('ipa preset emits uppercase DENY', () => {
-    expect(presets.ipa().headers().get('x-frame-options')).toBe('DENY');
-  });
-});
-
 describe('hashFromString', () => {
   it('matches a known SHA-384 fixture', async () => {
     const hash = await hashFromString('hello', 'sha384');
@@ -260,21 +238,3 @@ describe('parseCspReport', () => {
   });
 });
 
-describe('fromHelmetOptions migration', () => {
-  it('lifts reportOnly into top-level CSP-RO with warning', () => {
-    const h = fromHelmetOptions({
-      contentSecurityPolicy: {
-        reportOnly: true,
-        directives: { 'default-src': [Csp.Self] } as never,
-      },
-    });
-    expect(h.headerNames()).toContain('content-security-policy-report-only');
-    expect(h.warnings.some(w => w.reason === 'helmet_report_only_lifted')).toBe(true);
-  });
-
-  it('overrides removeHeaders:false on legacy xPoweredBy:false intent', () => {
-    const h = fromHelmetOptions({ xPoweredBy: false, removeHeaders: false });
-    expect(h.headersToRemove()).toContain('x-powered-by');
-    expect(h.warnings.some(w => w.reason === 'remove_headers_forced_by_legacy')).toBe(true);
-  });
-});
