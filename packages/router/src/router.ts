@@ -87,8 +87,16 @@ export class Router<T = unknown> {
   private matchImpl!: (method: string, path: string) => MatchOutput<T> | null;
   private matchState!: MatchState;
 
-  /** Path → per-methodCode handler array. NullProtoObj for proto-free O(1) lookup. */
+  /** Path → per-methodCode handler array. NullProtoObj for proto-free O(1) lookup.
+   *  Slot value alone cannot distinguish "registered with undefined" from
+   *  "not registered" — `staticRegistered` tracks the latter explicitly so
+   *  callers can register `undefined` (or any value where T includes it)
+   *  without it being silently treated as an empty slot. */
   private staticMap: Record<string, Array<T | undefined>> = new NullProtoObj() as Record<string, Array<T | undefined>>;
+  /** Path → method codes that have actually been registered. Parallel to
+   *  `staticMap`. Without this, `arr[mc] === undefined` ambiguously means
+   *  either "not registered" or "registered with undefined value". */
+  private staticRegistered: Record<string, boolean[]> = new NullProtoObj() as Record<string, boolean[]>;
   /** Pre-built MatchOutput per static (path, methodCode). Returned directly
    *  from match() — eliminates one object-literal allocation per static hit. */
   private staticOutputs: Record<string, Array<MatchOutput<T> | undefined>> = new NullProtoObj() as Record<string, Array<MatchOutput<T> | undefined>>;
@@ -306,17 +314,20 @@ export class Router<T = unknown> {
 
     for (const path in this.staticMap) {
       const arr = this.staticMap[path]!;
+      const registered = this.staticRegistered[path]!;
       // JSC degrades arrays with holes via prototype-chain walks on access.
       // Build a packed array (no holes) by initializing all slots up-front.
+      // The `registered[i]` parallel array distinguishes "method registered
+      // with undefined value" (must build a MatchOutput with value:undefined)
+      // from "method not registered" (slot must remain undefined so the
+      // hot path's `so[mc] !== undefined` check skips it).
       const outArr: Array<MatchOutput<T> | undefined> = [];
 
       for (let i = 0; i < arr.length; i++) {
-        const value = arr[i];
-
         outArr.push(
-          value === undefined
-            ? undefined
-            : Object.freeze({ value, params: EMPTY_PARAMS, meta: STATIC_META }) as MatchOutput<T>,
+          registered[i]
+            ? Object.freeze({ value: arr[i] as T, params: EMPTY_PARAMS, meta: STATIC_META }) as MatchOutput<T>
+            : undefined,
         );
       }
 
@@ -806,13 +817,16 @@ export class Router<T = unknown> {
       }
 
       let arr = this.staticMap[normalized];
+      let registered = this.staticRegistered[normalized];
 
       if (!arr) {
         arr = [];
+        registered = [];
         this.staticMap[normalized] = arr;
+        this.staticRegistered[normalized] = registered;
       }
 
-      if (arr[offsetResult] !== undefined) {
+      if (registered![offsetResult]) {
         return err<RouterErrData>({
           kind: 'route-duplicate',
           message: `Route already exists for ${method} ${normalized}`,
@@ -823,6 +837,7 @@ export class Router<T = unknown> {
       }
 
       arr[offsetResult] = value;
+      registered![offsetResult] = true;
       return;
     }
 

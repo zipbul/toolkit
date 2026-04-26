@@ -181,3 +181,53 @@ describe('param-name validation', () => {
     expect(() => r.add('GET', '/files/:p:other*', 'invalid')).toThrow(RouterError);
   });
 });
+
+describe('handler value with falsy/undefined values', () => {
+  it('static route with handler value === undefined returns MatchOutput, not null', () => {
+    // Distinguishing "registered with undefined" from "not registered" requires
+    // a parallel boolean array — slot value alone is ambiguous.
+    const r = new Router<undefined>();
+    r.add('GET', '/x', undefined);
+    r.build();
+
+    const m = r.match('GET', '/x');
+
+    expect(m).not.toBeNull();
+    expect(m!.value).toBeUndefined();
+    expect(m!.meta.source).toBe('static');
+  });
+
+  it('static route with handler value === null returns MatchOutput', () => {
+    const r = new Router<null>();
+    r.add('GET', '/x', null);
+    r.build();
+
+    const m = r.match('GET', '/x');
+
+    expect(m).not.toBeNull();
+    expect(m!.value).toBeNull();
+  });
+
+  it('re-registering a static path with undefined still throws route-duplicate', () => {
+    // Without the staticRegistered tracking, the duplicate check
+    // (`arr[mc] !== undefined`) would fail to fire when the first value was
+    // undefined — silently allowing re-registration.
+    const r = new Router<string | undefined>();
+    r.add('GET', '/x', undefined);
+
+    expect(() => r.add('GET', '/x', 'something')).toThrow(RouterError);
+  });
+
+  it('handler value === false / 0 / "" all preserved via static MatchOutput', () => {
+    type Falsy = false | 0 | '';
+    const r = new Router<Falsy>();
+    r.add('GET', '/false', false as Falsy);
+    r.add('GET', '/zero', 0 as Falsy);
+    r.add('GET', '/empty', '' as Falsy);
+    r.build();
+
+    expect(r.match('GET', '/false')!.value).toBe(false);
+    expect(r.match('GET', '/zero')!.value).toBe(0);
+    expect(r.match('GET', '/empty')!.value).toBe('');
+  });
+});
