@@ -1,6 +1,5 @@
-import type { MatchState, MatchStateWithParams } from './match-state';
+import type { MatchFn, MatchState, MatchStateWithParams } from './match-state';
 import type { DecoderFn } from '../processor/decoder';
-import type { RadixMatchFn } from './radix-matcher';
 import type { ParamSegment, SegmentNode } from './segment-tree';
 
 import { TESTER_PASS, TESTER_TIMEOUT } from './pattern-tester';
@@ -57,7 +56,7 @@ export function detectWildCodegenSpec(root: SegmentNode): WildCodegenEntry[] | n
  * Returns null when the tree shape doesn't match (delegates to
  * detectWildCodegenSpec for shape detection).
  */
-function tryCodegenStaticPrefixWildcard(root: SegmentNode): RadixMatchFn | null {
+function tryCodegenStaticPrefixWildcard(root: SegmentNode): MatchFn | null {
   const entries = detectWildCodegenSpec(root);
 
   if (entries === null) return null;
@@ -108,7 +107,7 @@ function tryCodegenStaticPrefixWildcard(root: SegmentNode): RadixMatchFn | null 
   `;
 
   try {
-    return new Function(body)() as RadixMatchFn;
+    return new Function(body)() as MatchFn;
   } catch {
     return null;
   }
@@ -127,7 +126,7 @@ export function createSegmentWalker(
   root: SegmentNode,
   decoder: DecoderFn,
   decodeParams: boolean,
-): RadixMatchFn {
+): MatchFn {
   // Codegen specialist for static-prefix wildcard trees (file servers).
   // Skips path.split + Map lookup — uses url.startsWith for prefix dispatch.
   const compiledWild = tryCodegenStaticPrefixWildcard(root);
@@ -305,7 +304,7 @@ function createIterativeWalker(
   root: SegmentNode,
   decoder: DecoderFn,
   decodeParams: boolean,
-): RadixMatchFn {
+): MatchFn {
   return function walk(url: string, state: MatchState): boolean {
     // See createSegmentWalker for the params-non-null invariant.
     const stateP = state as MatchStateWithParams;

@@ -8,7 +8,7 @@ import type {
   RouterErrData,
   RouterOptions,
 } from './types';
-import type { RadixMatchFn } from './matcher/radix-matcher';
+import type { MatchFn } from './matcher/match-state';
 import type { MatchState } from './matcher/match-state';
 import type { BuilderConfig } from './builder/types';
 
@@ -80,7 +80,7 @@ interface MatchConfig<T> {
   readonly staticOutputsByMethod: Array<Record<string, MatchOutput<T>> | undefined>;
   readonly staticMap: Record<string, Array<T | undefined>>;
   readonly methodCodes: Record<string, number>;
-  readonly trees: Array<RadixMatchFn | null>;
+  readonly trees: Array<MatchFn | null>;
   readonly matchState: MatchState;
   readonly handlers: T[];
   readonly optDefaults: OptionalParamDefaults | undefined;
@@ -110,7 +110,7 @@ export class Router<T = unknown> {
 
   private handlers: T[] = [];
   private optionalParamDefaults: OptionalParamDefaults | undefined;
-  private trees: Array<RadixMatchFn | null> = [];
+  private trees: Array<MatchFn | null> = [];
   /** Per-method wildcard codegen entries when the segment tree is a pure
    *  static-prefix wildcard pattern (e.g. file-server style). When all
    *  per-router conditions allow it, compileMatchFn emits a fully specialized

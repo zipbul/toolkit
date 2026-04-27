@@ -1,3 +1,11 @@
+/**
+ * Function shape produced by every walker (segment-recursive, segment-iterative,
+ * segment-codegen, wildcard-codegen). Returns true when the URL matches a
+ * registered route; on success the walker has populated state.handlerIndex
+ * and (for segment paths) state.params.
+ */
+export type MatchFn = (url: string, state: MatchState) => boolean;
+
 export interface MatchState {
   handlerIndex: number;
   paramCount: number;

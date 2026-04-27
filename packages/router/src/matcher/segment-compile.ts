@@ -1,5 +1,5 @@
 import type { SegmentNode } from './segment-tree';
-import type { RadixMatchFn } from './radix-matcher';
+import type { MatchFn } from './match-state';
 
 /**
  * Compile a segment tree into a flat match function via `new Function()`.
@@ -25,7 +25,7 @@ const MAX_SOURCE = 8000;
 export function compileSegmentTree(
   root: SegmentNode,
   decodeParams: boolean,
-): RadixMatchFn | null {
+): MatchFn | null {
   // Empirically tuned. Synthetic flat shapes (`/pfxN/:id`) suggest codegen
   // wins for fanout 3-15. But real router shapes (param1: simple chains;
   // param3: mixed 1/2/3-deep chains) measure differently:
@@ -72,7 +72,7 @@ ${body}
   try {
     const factory = new Function('testers', source) as (
       testers: unknown[],
-    ) => RadixMatchFn;
+    ) => MatchFn;
 
     return factory(ctx.testers);
   } catch {
