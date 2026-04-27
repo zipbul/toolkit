@@ -427,8 +427,6 @@ export class Router<T = unknown> {
     const RouterCacheCtor = RouterCache;
     const ParamsCtor = NullProtoObj;
 
-    const allCodeEntries = Object.entries(this.methodCodes);
-
     // ───────────────────────────────────────────────────────────────────
     // Shape-specialized fast path: pure static-prefix wildcard router.
     //
@@ -453,25 +451,17 @@ export class Router<T = unknown> {
       if (lowerCase) return null;
       if (!allSegment) return null;
 
-      // MethodRegistry pre-registers all 7 HTTP verbs at construction, so
-      // allCodeEntries always carries 7 entries regardless of what was
-      // actually `add()`ed. The signal we want is "how many methods received
-      // routes" — i.e. how many trees are non-null.
-      let activeMethod: string | null = null;
-      let activeCode = -1;
-      let activeCount = 0;
+      // Single-method gate. `activeMethodCodes` was filtered at build()
+      // to only methods that actually received routes (skip the six
+      // pre-registered-but-unused default verbs). One entry = single
+      // active method.
+      if (this.activeMethodCodes.length !== 1) return null;
 
-      for (const [name, code] of allCodeEntries) {
-        if (this.trees[code] != null) {
-          activeMethod = name;
-          activeCode = code;
-          activeCount++;
+      const [activeMethod, activeCode] = this.activeMethodCodes[0]!;
 
-          if (activeCount > 1) return null;
-        }
-      }
-
-      if (activeCount !== 1 || activeMethod === null) return null;
+      // wild specialization needs a tree; static-only methods have no tree
+      // and shouldn't reach here (hasAnyStatic gate would already exclude).
+      if (this.trees[activeCode] == null) return null;
 
       const wild = this.wildSpecs[activeCode];
 
@@ -560,29 +550,12 @@ export class Router<T = unknown> {
     // Single-method optimization. methodCodes always holds all 7 default
     // verbs (MethodRegistry pre-registers them in its constructor), so
     // `allCodeEntries.length === 1` is never true. The signal we want is
-    // "how many methods actually received a route" — i.e. how many trees
-    // are non-null OR have a static-map entry.
-    let activeMethodLiteral: string | null = null;
-    let activeMethodCode = -1;
-    let activeMethodCount = 0;
-
-    for (const [name, code] of allCodeEntries) {
-      let used = this.trees[code] != null;
-
-      if (!used) {
-        for (const path in this.staticRegistered) {
-          if (this.staticRegistered[path]![code]) { used = true; break; }
-        }
-      }
-
-      if (used) {
-        activeMethodLiteral = name;
-        activeMethodCode = code;
-        activeMethodCount++;
-
-        if (activeMethodCount > 1) break;
-      }
-    }
+    // Active-method count: shared with shape-specialization gate.
+    // `activeMethodCodes` was filtered at build() to only methods that
+    // actually received routes (tree OR static).
+    const activeMethodCount = this.activeMethodCodes.length;
+    const activeMethodLiteral = activeMethodCount === 1 ? this.activeMethodCodes[0]![0] : null;
+    const activeMethodCode = activeMethodCount === 1 ? this.activeMethodCodes[0]![1] : -1;
 
     if (activeMethodCount === 1 && activeMethodLiteral !== null) {
       src.push(`if (method !== ${JSON.stringify(activeMethodLiteral)}) return null;`);
