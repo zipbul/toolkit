@@ -263,11 +263,11 @@ describe('sealed state', () => {
 // siblings (which legitimately distinguish at runtime). Both cases must
 // continue to work end-to-end.
 
-describe('radix-walk fallback (optional expansion)', () => {
+describe('sibling-param expansion (multi-optional)', () => {
   // /users/:a?/:b? expands into four routes sharing one handler. The
   // expansions /users/:a and /users/:b create same-position different-name
-  // siblings under one handlerIndex — segment-tree rejects this shape, so
-  // the router falls back to radix-walk.
+  // siblings under one handlerIndex — segment-tree handles them via the
+  // sibling-chain walker with backtracking.
   function makeOptionalRouter() {
     const r = new Router<string>();
     r.add('GET', '/users/:a?/:b?', 'opt');
@@ -276,11 +276,12 @@ describe('radix-walk fallback (optional expansion)', () => {
     return r;
   }
 
-  it('uses radix-walk (allSegmentTrees=false)', () => {
+  it('builds a single segment tree (no fallback walker required)', () => {
     const r = makeOptionalRouter();
-    const flag = (r as unknown as { allSegmentTrees: boolean }).allSegmentTrees;
+    const trees = (r as unknown as { trees: Array<unknown> }).trees;
+    const built = trees.filter(t => t != null);
 
-    expect(flag).toBe(false);
+    expect(built.length).toBe(1);
   });
 
   it('matches each expansion variant correctly', () => {
@@ -328,15 +329,13 @@ describe('radix-walk full walker (tester sibling)', () => {
   });
 });
 
-describe('radix-walk interpreter walker (huge tree → radix-compile bail)', () => {
-  // Interpreter-tier walker fires when (1) segment-tree insert fails AND
-  // (2) radix-compile bails on source size. We trigger (1) via optional
-  // expansion (which creates same-handler sibling params) and (2) via 200
-  // additional routes that bloat the codegen source past 6KB.
+describe('sibling-param expansion under large trees', () => {
+  // Combine sibling-param expansion with 200 additional routes — exercises
+  // the recursive segment walker path on a non-trivial tree shape.
   function makeHugeOptionalRouter() {
     const r = new Router<string>();
 
-    r.add('GET', '/users/:a?/:b?', 'opt'); // creates radix-walk-only path
+    r.add('GET', '/users/:a?/:b?', 'opt');
 
     for (let i = 0; i < 200; i++) {
       r.add('GET', `/zone${i}/category${i}/:name${i}/sub`, `r${i}`);
@@ -347,15 +346,7 @@ describe('radix-walk interpreter walker (huge tree → radix-compile bail)', () 
     return r;
   }
 
-  it('selects the interpreter walker (recognizable matchNode delegate body)', () => {
-    const r = makeHugeOptionalRouter();
-    const trees = (r as unknown as { trees: Array<((u: string, s: unknown) => boolean) | null> }).trees;
-    const tree = trees.find(t => t != null)!;
-
-    expect(tree.toString()).toContain('matchNode');
-  });
-
-  it('matches optional-expansion variants correctly under interpreter', () => {
+  it('matches optional-expansion variants correctly under recursive walker', () => {
     const r = makeHugeOptionalRouter();
 
     expect(r.match('GET', '/users')!.value).toBe('opt');

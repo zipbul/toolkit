@@ -20,7 +20,6 @@ import { OptionalParamDefaults } from './builder/optional-param-defaults';
 import { RouterCache } from './cache';
 import { MethodRegistry } from './method-registry';
 import { buildDecoder } from './processor/decoder';
-import { createRadixWalker } from './matcher/radix-walk';
 import { createMatchState } from './matcher/match-state';
 import {
   buildPathNormalizer,
@@ -76,7 +75,6 @@ interface MatchConfig<T> {
   readonly checkSegLen: boolean;
   readonly hasAnyTree: boolean;
   readonly hasOptDefaults: boolean;
-  readonly allSegment: boolean;
   readonly anyTester: boolean;
   readonly hasAnyStatic: boolean;
   readonly staticOutputsByMethod: Array<Record<string, MatchOutput<T>> | undefined>;
@@ -122,7 +120,6 @@ export class Router<T = unknown> {
   /** True when every method's tree uses the segment walker (params written
    *  directly into state.params). False when any method falls back to the
    *  array-based radix walker. */
-  private allSegmentTrees = true;
   /** True when at least one route has a regex pattern. When false, the
    *  TIMEOUT signalling path is dead — match() can skip errorKind reset. */
   private anyTester = false;
@@ -328,8 +325,6 @@ export class Router<T = unknown> {
       }
     }
 
-    let allSegment = true;
-
     for (const [, code] of allCodes) {
       const segRoot = segmentTrees[code];
 
@@ -342,23 +337,15 @@ export class Router<T = unknown> {
         continue;
       }
 
+      // The segment tree handles every shape the radix builder accepts:
+      // sibling-param chains (from optional expansion or tester+catchall) walk
+      // with backtracking in the recursive walker. A failed segment build here
+      // would mean an invalid pattern slipped past the parser — surface as a
+      // dead method rather than diverging into a parallel matcher.
       this.wildSpecs[code] = null;
-
-      const root = this.radixBuilder!.getRoot(code);
-
-      if (!root) {
-        this.trees[code] = null;
-        continue;
-      }
-
-      // At least one method falls back to radix walker; compileMatchFn must
-      // emit the array-based params build path that radix walkers expect.
-      allSegment = false;
-      const testers = this.radixBuilder!.getTesters(code);
-      this.trees[code] = createRadixWalker(root, testers, decoder, decodeParams);
+      this.trees[code] = null;
     }
 
-    this.allSegmentTrees = allSegment;
     this.anyTester = testerCache.size > 0;
 
     // Pre-build the static MatchOutput objects so match() can return them
@@ -475,7 +462,6 @@ export class Router<T = unknown> {
       hasAnyTree: this.trees.some(t => t != null),
       hasOptDefaults: this.optionalParamDefaults !== undefined
         && !this.optionalParamDefaults.isEmpty(),
-      allSegment: this.allSegmentTrees,
       anyTester: this.anyTester,
       hasAnyStatic,
       staticOutputsByMethod: this.staticOutputsByMethod,
@@ -495,8 +481,8 @@ export class Router<T = unknown> {
    * Shape-specialization gate: returns the wild entry list when this
    * router qualifies for the inline static-prefix wildcard fast path;
    * null otherwise. Conditions: single active method, no statics, no
-   * cache, no opt-defaults, no testers, no case-fold, allSegment, that
-   * method's tree IS a static-prefix wildcard, prefix count ≤ 8.
+   * cache, no opt-defaults, no testers, no case-fold, that method's tree
+   * IS a static-prefix wildcard, prefix count ≤ 8.
    */
   private detectSingleMethodWildSpec(cfg: MatchConfig<T>): WildCodegenEntry[] | null {
     if (cfg.hasAnyStatic) return null;
@@ -504,8 +490,6 @@ export class Router<T = unknown> {
     if (cfg.hasOptDefaults) return null;
     if (cfg.anyTester) return null;
     if (cfg.lowerCase) return null;
-    if (!cfg.allSegment) return null;
-
     if (this.activeMethodCodes.length !== 1) return null;
 
     const [, activeCode] = this.activeMethodCodes[0]!;
@@ -702,79 +686,32 @@ export class Router<T = unknown> {
 
       if (segJs !== '') src.push(segJs);
 
-      if (cfg.allSegment) {
-        // Segment walker writes params directly into matchState.params on
-        // the success-return path only (no commit/rollback).
-        // errorKind/errorMessage reset is skipped when no route has a regex
-        // pattern — TIMEOUT path is dead so the channel never gets dirty.
+      // Segment walker writes params directly into matchState.params on the
+      // success-return path only (no commit/rollback). errorKind/errorMessage
+      // reset is skipped when no route has a regex pattern — TIMEOUT path is
+      // dead so the channel never gets dirty.
+      src.push(`
+        var tr = trees[mc];
+        if (!tr) {
+          ${useCache ? emitMissCacheWrite() : ''}
+          return null;
+        }
+        ${anyTester ? 'matchState.errorKind = null; matchState.errorMessage = null;' : ''}
+        var params = new ParamsCtor();
+        matchState.params = params;
+        var ok = tr(sp, matchState);
+        if (!ok) {
+          ${useCache ? (anyTester ? `if (matchState.errorKind === null) { ${emitMissCacheWrite()} }` : emitMissCacheWrite()) : ''}
+          return null;
+        }
+      `);
+
+      if (hasOptDefaults) {
         src.push(`
-          var tr = trees[mc];
-          if (!tr) {
-            ${useCache ? emitMissCacheWrite() : ''}
-            return null;
-          }
-          ${anyTester ? 'matchState.errorKind = null; matchState.errorMessage = null;' : ''}
-          var params = new ParamsCtor();
-          matchState.params = params;
-          var ok = tr(sp, matchState);
-          if (!ok) {
-            ${useCache ? (anyTester ? `if (matchState.errorKind === null) { ${emitMissCacheWrite()} }` : emitMissCacheWrite()) : ''}
-            return null;
+          if (optDefaults !== undefined && optDefaults.has(matchState.handlerIndex)) {
+            optDefaults.apply(matchState.handlerIndex, params);
           }
         `);
-
-        if (hasOptDefaults) {
-          src.push(`
-            if (optDefaults !== undefined && optDefaults.has(matchState.handlerIndex)) {
-              optDefaults.apply(matchState.handlerIndex, params);
-            }
-          `);
-        }
-      } else {
-        // Radix walker writes to paramNames/paramValues arrays; build
-        // params here.
-        src.push(`
-          var tr = trees[mc];
-          if (!tr) {
-            ${useCache ? emitMissCacheWrite() : ''}
-            return null;
-          }
-          matchState.handlerIndex = -1;
-          matchState.paramCount = 0;
-          matchState.errorKind = null;
-          matchState.errorMessage = null;
-          var ok = tr(sp, matchState);
-          if (!ok) {
-            ${useCache ? `if (matchState.errorKind === null) { ${emitMissCacheWrite()} }` : ''}
-            return null;
-          }
-        `);
-
-        if (hasOptDefaults) {
-          src.push(`
-            var nd = optDefaults !== undefined && optDefaults.has(matchState.handlerIndex);
-            var params;
-            if (matchState.paramCount === 0 && !nd) { params = EMPTY_PARAMS; }
-            else {
-              params = new ParamsCtor();
-              for (var pi = 0; pi < matchState.paramCount; pi++) {
-                params[matchState.paramNames[pi]] = matchState.paramValues[pi];
-              }
-              if (nd) optDefaults.apply(matchState.handlerIndex, params);
-            }
-          `);
-        } else {
-          src.push(`
-            var params;
-            if (matchState.paramCount === 0) { params = EMPTY_PARAMS; }
-            else {
-              params = new ParamsCtor();
-              for (var pi = 0; pi < matchState.paramCount; pi++) {
-                params[matchState.paramNames[pi]] = matchState.paramValues[pi];
-              }
-            }
-          `);
-        }
       }
 
       src.push(`var val = handlers[matchState.handlerIndex];`);
