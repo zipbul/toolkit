@@ -371,6 +371,9 @@ ${inner}
 function decodeBlock(ctx: Ctx, valVar: string): string {
   if (!ctx.decodeParams) return '';
 
+  // Inline decodeURIComponent without the indexOf('%') gate is ~5.6x slower
+  // on no-% inputs (bench/percent-gate.bench.ts). Keep the gate for codegen
+  // paths that bypass the closure decoder.
   return `
         if (${valVar}.indexOf('%') !== -1) { try { ${valVar} = decodeURIComponent(${valVar}); } catch (_e) {} }`;
 }

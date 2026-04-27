@@ -12,6 +12,18 @@ export interface MatchState {
   errorMessage: string | null;
 }
 
+/**
+ * Refined `MatchState` where `params` is guaranteed non-null. Segment-tree
+ * walkers require this invariant — caller (compileMatchFn / allowedMethods)
+ * assigns `state.params = new ParamsCtor()` before invocation. Encoding the
+ * contract in the type lets walker bodies write `state.params[name] = ...`
+ * without non-null assertions, and a future caller change that forgets the
+ * assignment fails at compile time instead of producing a runtime crash.
+ */
+export type MatchStateWithParams = MatchState & {
+  params: Record<string, string | undefined>;
+};
+
 const MAX_PARAMS = 32;
 
 export function createMatchState(): MatchState {

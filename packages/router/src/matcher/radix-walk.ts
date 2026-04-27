@@ -20,9 +20,9 @@ export function createRadixWalker(
   if (compiled !== null) return compiled;
 
   // Specialize decode strategy at build time to eliminate branches in the hot loop.
-  const decode: (raw: string) => string = decodeParams
-    ? raw => (raw.indexOf('%') !== -1 ? decoder(raw) : raw)
-    : raw => raw;
+  // decoder() already short-circuits on no-% — outer gate is dead overhead
+  // (~6%, bench/percent-gate.bench.ts).
+  const decode: (raw: string) => string = decodeParams ? decoder : raw => raw;
 
   // When no route uses a regex pattern, dispatch to the simple walker that omits
   // the tester branch, errorKind propagation, and related overhead.

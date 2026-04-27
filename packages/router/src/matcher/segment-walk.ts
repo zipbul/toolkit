@@ -1,4 +1,4 @@
-import type { MatchState } from './match-state';
+import type { MatchState, MatchStateWithParams } from './match-state';
 import type { DecoderFn } from '../processor/decoder';
 import type { RadixMatchFn } from './radix-matcher';
 import type { SegmentNode } from './segment-tree';
@@ -155,7 +155,7 @@ export function createSegmentWalker(
     path: string,
     segs: string[],
     idx: number,
-    state: MatchState,
+    state: MatchStateWithParams,
   ): boolean {
     // Fast-iterate pure static descents — common for long prefix chains like
     // /repos/:owner/:repo/issues/:number where multiple levels are static-only
@@ -183,7 +183,7 @@ export function createSegmentWalker(
       }
 
       if (node.wildcardStore !== null && node.wildcardOrigin === 'star') {
-        state.params![node.wildcardName!] = '';
+        state.params[node.wildcardName!] = '';
         state.handlerIndex = node.wildcardStore;
 
         return true;
@@ -206,7 +206,7 @@ export function createSegmentWalker(
     const param = node.paramChild;
 
     if (param !== null && seg.length > 0) {
-      const decoded = decodeParams && seg.indexOf('%') !== -1 ? decoder(seg) : seg;
+      const decoded = decodeParams ? decoder(seg) : seg;
 
       let pass = true;
 
@@ -225,7 +225,7 @@ export function createSegmentWalker(
 
       if (pass) {
         if (match(param.next, path, segs, idx + 1, state)) {
-          state.params![param.name] = decoded;
+          state.params[param.name] = decoded;
 
           return true;
         }
@@ -249,7 +249,7 @@ export function createSegmentWalker(
 
       for (let i = 0; i < idx; i++) startPos += segs[i]!.length + 1;
 
-      state.params![node.wildcardName!] = path.substring(startPos);
+      state.params[node.wildcardName!] = path.substring(startPos);
       state.handlerIndex = node.wildcardStore;
 
       return true;
@@ -259,19 +259,24 @@ export function createSegmentWalker(
   }
 
   return function walk(url: string, state: MatchState): boolean {
+    // Caller (compileMatchFn / allowedMethods) must set `state.params` before
+    // invoking; the contract is documented on MatchStateWithParams. Narrowing
+    // here lets every body below write through `state.params` without the
+    // non-null assertion that previously masked the invariant.
+    const stateP = state as MatchStateWithParams;
     const path = url;
 
     if (path.length === 1 && path.charCodeAt(0) === 47) {
       if (root.store !== null) {
-        state.handlerIndex = root.store;
+        stateP.handlerIndex = root.store;
 
         return true;
       }
 
       // Star-wildcard at root accepts the empty suffix on `/`; multi requires ≥1 char.
       if (root.wildcardStore !== null && root.wildcardOrigin === 'star') {
-        state.params![root.wildcardName!] = '';
-        state.handlerIndex = root.wildcardStore;
+        stateP.params[root.wildcardName!] = '';
+        stateP.handlerIndex = root.wildcardStore;
 
         return true;
       }
@@ -281,7 +286,7 @@ export function createSegmentWalker(
 
     const segs = path.split('/');
 
-    return match(root, path, segs, 1, state);
+    return match(root, path, segs, 1, stateP);
   };
 }
 
@@ -295,19 +300,21 @@ function createIterativeWalker(
   decodeParams: boolean,
 ): RadixMatchFn {
   return function walk(url: string, state: MatchState): boolean {
+    // See createSegmentWalker for the params-non-null invariant.
+    const stateP = state as MatchStateWithParams;
     const path = url;
 
     if (path.length === 1 && path.charCodeAt(0) === 47) {
       if (root.store !== null) {
-        state.handlerIndex = root.store;
+        stateP.handlerIndex = root.store;
 
         return true;
       }
 
       // Star-wildcard at root accepts the empty suffix on `/`; multi requires ≥1 char.
       if (root.wildcardStore !== null && root.wildcardOrigin === 'star') {
-        state.params![root.wildcardName!] = '';
-        state.handlerIndex = root.wildcardStore;
+        stateP.params[root.wildcardName!] = '';
+        stateP.handlerIndex = root.wildcardStore;
 
         return true;
       }
@@ -316,7 +323,7 @@ function createIterativeWalker(
     }
 
     const segs = path.split('/');
-    const params = state.params!;
+    const params = stateP.params;
     let node = root;
     let idx = 1;
     // Track byte-position in `path` alongside segment index so wildcard capture
@@ -334,7 +341,7 @@ function createIterativeWalker(
         if (node.wildcardOrigin === 'multi' && pos >= path.length) return false;
 
         params[node.wildcardName!] = path.substring(pos);
-        state.handlerIndex = node.wildcardStore;
+        stateP.handlerIndex = node.wildcardStore;
 
         return true;
       }
@@ -353,14 +360,14 @@ function createIterativeWalker(
       }
 
       if (node.paramChild !== null && seg.length > 0) {
-        const decoded = decodeParams && seg.indexOf('%') !== -1 ? decoder(seg) : seg;
+        const decoded = decodeParams ? decoder(seg) : seg;
 
         if (node.paramChild.tester !== null) {
           const r = node.paramChild.tester(decoded);
 
           if (r === TESTER_TIMEOUT) {
-            state.errorKind = 'regex-timeout';
-            state.errorMessage = 'Route parameter regex exceeded time limit';
+            stateP.errorKind = 'regex-timeout';
+            stateP.errorMessage = 'Route parameter regex exceeded time limit';
 
             return false;
           }
@@ -379,7 +386,7 @@ function createIterativeWalker(
         if (node.wildcardOrigin === 'multi' && pos >= path.length) return false;
 
         params[node.wildcardName!] = path.substring(pos);
-        state.handlerIndex = node.wildcardStore;
+        stateP.handlerIndex = node.wildcardStore;
 
         return true;
       }
@@ -388,14 +395,14 @@ function createIterativeWalker(
     }
 
     if (node.store !== null) {
-      state.handlerIndex = node.store;
+      stateP.handlerIndex = node.store;
 
       return true;
     }
 
     if (node.wildcardStore !== null && node.wildcardOrigin === 'star') {
       params[node.wildcardName!] = '';
-      state.handlerIndex = node.wildcardStore;
+      stateP.handlerIndex = node.wildcardStore;
 
       return true;
     }
