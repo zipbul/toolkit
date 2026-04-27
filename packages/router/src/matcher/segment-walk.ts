@@ -202,16 +202,45 @@ export function createSegmentWalker(
       }
     }
 
-    if (node.paramChild !== null && seg.length > 0) {
+    const head = node.paramChild;
+
+    if (head !== null && seg.length > 0) {
       const decoded = decodeParams ? decoder(seg) : seg;
-      // Walk the sibling chain — each represents a distinct param alternative
-      // at this position (different name and/or pattern). The first whose
-      // subtree completes the URL wins; tester failures and subtree mismatches
-      // both fall through to the next sibling (backtracking).
-      let p: ParamSegment | null = node.paramChild;
+
+      // Single-param fast path (the >95% case). Sibling chains only arise
+      // from optional-param expansion or tester+catchall ordering, so the
+      // common shape skips the loop bookkeeping entirely.
+      let pass = true;
+
+      if (head.tester !== null) {
+        const r = head.tester(decoded);
+
+        if (r === TESTER_TIMEOUT) {
+          state.errorKind = 'regex-timeout';
+          state.errorMessage = 'Route parameter regex exceeded time limit';
+
+          return false;
+        }
+
+        pass = r === TESTER_PASS;
+      }
+
+      if (pass) {
+        if (match(head.next, path, segs, idx + 1, state)) {
+          state.params[head.name] = decoded;
+
+          return true;
+        }
+
+        if (state.errorKind !== null) return false;
+      }
+
+      // Sibling backtracking — runs only when nextSibling is set, so the
+      // single-param case never enters this loop.
+      let p: ParamSegment | null = head.nextSibling;
 
       while (p !== null) {
-        let pass = true;
+        pass = true;
 
         if (p.tester !== null) {
           const r = p.tester(decoded);
