@@ -50,6 +50,38 @@ interface CachedMatchEntry<T> {
   params: RouteParams;
 }
 
+/**
+ * Snapshot of build-time flags + closure references used by the
+ * matchImpl emitters. Built once at compile time by `collectMatchConfig`
+ * and threaded through the per-shape emit methods. Splitting into a
+ * config bag lets the emitters be standalone methods (no implicit
+ * coupling to ~12 enclosing-function locals).
+ */
+interface MatchConfig<T> {
+  readonly useCache: boolean;
+  readonly trimSlash: boolean;
+  readonly lowerCase: boolean;
+  readonly maxPathLen: number;
+  readonly maxSegLen: number;
+  readonly checkPathLen: boolean;
+  readonly checkSegLen: boolean;
+  readonly hasAnyTree: boolean;
+  readonly hasOptDefaults: boolean;
+  readonly allSegment: boolean;
+  readonly anyTester: boolean;
+  readonly hasAnyStatic: boolean;
+  readonly staticOutputsByMethod: Array<Record<string, MatchOutput<T>> | undefined>;
+  readonly staticMap: Record<string, Array<T | undefined>>;
+  readonly methodCodes: Record<string, number>;
+  readonly trees: Array<RadixMatchFn | null>;
+  readonly matchState: MatchState;
+  readonly handlers: T[];
+  readonly optDefaults: OptionalParamDefaults | undefined;
+  readonly hitCacheByMethod: Map<number, RouterCache<CachedMatchEntry<T>>> | undefined;
+  readonly missCacheByMethod: Map<number, Set<string>> | undefined;
+  readonly cacheMaxSize: number;
+}
+
 export class Router<T = unknown> {
   private readonly options: RouterOptions;
   private pathParser: PathParser | null;
@@ -389,173 +421,198 @@ export class Router<T = unknown> {
    * used by the hot path are closure-captured, not `this.*`-dispatched.
    */
   private compileMatchFn(): (method: string, path: string) => MatchOutput<T> | null {
-    const useCache = this.hitCacheByMethod !== undefined;
-    const trimSlash = this._ignoreTrailingSlash;
-    const lowerCase = !this._caseSensitive;
-    const maxPathLen = this._maxPathLength;
-    const maxSegLen = this._maxSegmentLength;
-    const checkPathLen = Number.isFinite(maxPathLen);
-    const checkSegLen = Number.isFinite(maxSegLen);
+    const cfg = this.collectMatchConfig();
+    const wild = this.detectSingleMethodWildSpec(cfg);
 
-    const hasAnyTree = this.trees.some(t => t != null);
-    // True only when at least one route registered `:name?` optional params.
-    // The OptionalParamDefaults instance is always constructed, so a defined
-    // check would always be true and force the dead-branch into hot codegen.
-    const hasOptDefaults = this.optionalParamDefaults !== undefined
-      && !this.optionalParamDefaults.isEmpty();
-    const allSegment = this.allSegmentTrees;
-    const anyTester = this.anyTester;
-    // When no static routes are registered, the staticOutputs probe is dead
-    // weight on every dynamic call — skip emitting it entirely. Saves 1-2 ns
-    // on routers that are pure wildcard/param (e.g. file servers).
+    if (wild !== null) {
+      return this.emitSpecializedWildMatchImpl(cfg, wild);
+    }
+
+    return this.emitGenericMatchImpl(cfg);
+  }
+
+  /** Snapshot of build-time flags + closure-captured references that drive
+   *  matchImpl emission. Built once in compileMatchFn and threaded through
+   *  the per-shape emitters. */
+  private collectMatchConfig(): MatchConfig<T> {
+    const useCache = this.hitCacheByMethod !== undefined;
     let hasAnyStatic = false;
+
     for (const bucket of this.staticOutputsByMethod) {
       if (bucket !== undefined) { hasAnyStatic = true; break; }
     }
 
-    // Closure captures (all read-only at match time)
-    const staticOutputsByMethod = this.staticOutputsByMethod;
-    const staticMap = this.staticMap;
-    const methodCodes = this.methodCodes;
-    const trees = this.trees;
-    const matchState = this.matchState;
-    const handlers = this.handlers;
-    const optDefaults = this.optionalParamDefaults;
-    const hitCacheByMethod = this.hitCacheByMethod;
-    const missCacheByMethod = this.missCacheByMethod;
-    const cacheMaxSize = this.cacheMaxSize;
-    const RouterCacheCtor = RouterCache;
-    const ParamsCtor = NullProtoObj;
+    return {
+      useCache,
+      trimSlash: this._ignoreTrailingSlash,
+      lowerCase: !this._caseSensitive,
+      maxPathLen: this._maxPathLength,
+      maxSegLen: this._maxSegmentLength,
+      checkPathLen: Number.isFinite(this._maxPathLength),
+      checkSegLen: Number.isFinite(this._maxSegmentLength),
+      hasAnyTree: this.trees.some(t => t != null),
+      hasOptDefaults: this.optionalParamDefaults !== undefined
+        && !this.optionalParamDefaults.isEmpty(),
+      allSegment: this.allSegmentTrees,
+      anyTester: this.anyTester,
+      hasAnyStatic,
+      staticOutputsByMethod: this.staticOutputsByMethod,
+      staticMap: this.staticMap,
+      methodCodes: this.methodCodes,
+      trees: this.trees,
+      matchState: this.matchState,
+      handlers: this.handlers,
+      optDefaults: this.optionalParamDefaults,
+      hitCacheByMethod: this.hitCacheByMethod,
+      missCacheByMethod: this.missCacheByMethod,
+      cacheMaxSize: this.cacheMaxSize,
+    };
+  }
 
-    // ───────────────────────────────────────────────────────────────────
-    // Shape-specialized fast path: pure static-prefix wildcard router.
-    //
-    // When the router is single-method, has zero static routes, no cache, no
-    // opt-defaults, no regex testers, no case folding, and the only tree is a
-    // static-prefix wildcard pattern (file server / asset CDN style), emit a
-    // tiny matchImpl that directly returns MatchOutput. This skips:
-    //   - method-code translation (replaced with literal === check)
-    //   - staticOutputs probe (no statics → dead branch)
-    //   - tree dispatch + tr() function call
-    //   - new ParamsCtor() + matchState.params write
-    //   - matchState.handlerIndex round-trip + handlers[] indirection
-    //
-    // Result: a function small enough for JSC FTL to compile aggressively,
-    // matching memoirist's tight `find()` cost profile.
-    // ───────────────────────────────────────────────────────────────────
-    const singleMethodWild = (() => {
-      if (hasAnyStatic) return null;
-      if (useCache) return null;
-      if (hasOptDefaults) return null;
-      if (anyTester) return null;
-      if (lowerCase) return null;
-      if (!allSegment) return null;
+  /**
+   * Shape-specialization gate: returns the wild entry list when this
+   * router qualifies for the inline static-prefix wildcard fast path;
+   * null otherwise. Conditions: single active method, no statics, no
+   * cache, no opt-defaults, no testers, no case-fold, allSegment, that
+   * method's tree IS a static-prefix wildcard, prefix count ≤ 8.
+   */
+  private detectSingleMethodWildSpec(cfg: MatchConfig<T>): WildCodegenEntry[] | null {
+    if (cfg.hasAnyStatic) return null;
+    if (cfg.useCache) return null;
+    if (cfg.hasOptDefaults) return null;
+    if (cfg.anyTester) return null;
+    if (cfg.lowerCase) return null;
+    if (!cfg.allSegment) return null;
 
-      // Single-method gate. `activeMethodCodes` was filtered at build()
-      // to only methods that actually received routes (skip the six
-      // pre-registered-but-unused default verbs). One entry = single
-      // active method.
-      if (this.activeMethodCodes.length !== 1) return null;
+    if (this.activeMethodCodes.length !== 1) return null;
 
-      const [activeMethod, activeCode] = this.activeMethodCodes[0]!;
+    const [, activeCode] = this.activeMethodCodes[0]!;
 
-      // wild specialization needs a tree; static-only methods have no tree
-      // and shouldn't reach here (hasAnyStatic gate would already exclude).
-      if (this.trees[activeCode] == null) return null;
+    if (this.trees[activeCode] == null) return null;
 
-      const wild = this.wildSpecs[activeCode];
+    const wild = this.wildSpecs[activeCode];
 
-      if (wild === null || wild === undefined) return null;
+    if (wild === null || wild === undefined) return null;
+    // Past ~8 prefixes, the inline `startsWith` chain loses to the
+    // segment-tree walker's NullProtoObj keying (5× slower at 50 prefixes
+    // measured). Cap so file-server style routers (≤8 prefixes) still
+    // get the inline win.
+    if (wild.length > 8) return null;
 
-      // Specialization emits one or two `startsWith` probes per prefix.
-      // Past ~8 prefixes the sequential dispatch loses to the segment-tree
-      // walker's O(1) NullProtoObj lookup — measured at 50 prefixes the
-      // inline path is ~5× slower than the walker. Cap so file-server style
-      // routers (≤8 prefixes) still get the inline win, but large prefix
-      // sets fall back to the walker (which the segment-tree codegen will
-      // turn into a `compiledWildWalk` with the same NullProtoObj keying
-      // memoirist uses).
-      if (wild.length > 8) return null;
+    return wild;
+  }
 
-      return { method: activeMethod, entries: wild };
-    })();
+  /**
+   * Emitter for the shape-specialized wildcard fast path.
+   *
+   * For pure static-prefix wildcard routers (file server / asset CDN),
+   * emit a tiny matchImpl that returns MatchOutput directly. Skips
+   * method-code translation, staticOutputs probe, tree dispatch + tr()
+   * call, new ParamsCtor() + matchState.params write, and the
+   * matchState.handlerIndex round-trip. The function is small enough
+   * for JSC FTL to compile aggressively, matching memoirist's tight
+   * `find()` cost profile.
+   */
+  private emitSpecializedWildMatchImpl(
+    cfg: MatchConfig<T>,
+    wildEntries: WildCodegenEntry[],
+  ): (method: string, path: string) => MatchOutput<T> | null {
+    const [theMethod] = this.activeMethodCodes[0]!;
+    const lines: string[] = [];
 
-    if (singleMethodWild !== null) {
-      const { method: theMethod, entries: wildEntries } = singleMethodWild;
-      const lines: string[] = [];
+    if (cfg.checkPathLen) lines.push(`if (path.length > ${cfg.maxPathLen}) return null;`);
+    lines.push(`if (method !== ${JSON.stringify(theMethod)}) return null;`);
+    lines.push(`var sp = path;`);
+    lines.push(`var qi = sp.indexOf('?'); if (qi !== -1) sp = sp.substring(0, qi);`);
 
-      if (checkPathLen) lines.push(`if (path.length > ${maxPathLen}) return null;`);
-      lines.push(`if (method !== ${JSON.stringify(theMethod)}) return null;`);
-      lines.push(`var sp = path;`);
-      lines.push(`var qi = sp.indexOf('?'); if (qi !== -1) sp = sp.substring(0, qi);`);
-
-      if (trimSlash) {
-        lines.push(`if (sp.length > 1 && sp.charCodeAt(sp.length - 1) === 47) sp = sp.substring(0, sp.length - 1);`);
-      }
-
-      if (checkSegLen) {
-        lines.push(`
-          if (sp.length > ${maxSegLen}) {
-            for (var i = 1, sl = 0, ml = ${maxSegLen}; i < sp.length; i++) {
-              if (sp.charCodeAt(i) === 47) { sl = 0; }
-              else { sl++; if (sl > ml) return null; }
-            }
-          }`);
-      }
-
-      // Per-prefix probes. Use full-prefix `startsWith('/X/', 0)` to fold the
-      // leading-slash check into the same call (one fewer charCodeAt branch).
-      // Object literal `{ "name": ... }` (JSON-quoted key) lets JSC pin a
-      // stable hidden class while remaining safe for any wildcard name —
-      // path-parser permits names that aren't strict JS identifiers, so we
-      // can't emit a bare-key literal.
-      for (const e of wildEntries) {
-        const fullPrefixSlash = '/' + e.prefix + '/';
-        const fullPrefixSlashLen = fullPrefixSlash.length;
-        const minLen = e.wildcardOrigin === 'multi' ? fullPrefixSlashLen + 1 : fullPrefixSlashLen;
-        const sliceStart = fullPrefixSlashLen;
-        const nameKey = JSON.stringify(e.wildcardName);
-
-        lines.push(`
-          if (sp.length >= ${minLen} && sp.startsWith(${JSON.stringify(fullPrefixSlash)}, 0)) {
-            return { value: handlers[${e.wildcardStore}], params: { ${nameKey}: sp.substring(${sliceStart}) }, meta: DYNAMIC_META };
-          }`);
-
-        if (e.wildcardOrigin === 'star') {
-          // /prefix (no trailing slash) → empty capture
-          const fullPrefix = '/' + e.prefix;
-
-          lines.push(`
-          if (sp.length === ${fullPrefix.length} && sp === ${JSON.stringify(fullPrefix)}) {
-            return { value: handlers[${e.wildcardStore}], params: { ${nameKey}: '' }, meta: DYNAMIC_META };
-          }`);
-        }
-      }
-
-      lines.push(`return null;`);
-
-      const tinyBody = lines.join('\n');
-      const tinyFactory = new Function(
-        'handlers', 'DYNAMIC_META',
-        `return function match(method, path) {\n${tinyBody}\n};`,
-      );
-
-      return tinyFactory(handlers, DYNAMIC_META) as (method: string, path: string) => MatchOutput<T> | null;
+    if (cfg.trimSlash) {
+      lines.push(`if (sp.length > 1 && sp.charCodeAt(sp.length - 1) === 47) sp = sp.substring(0, sp.length - 1);`);
     }
 
-    const src: string[] = [];
+    if (cfg.checkSegLen) {
+      lines.push(`
+        if (sp.length > ${cfg.maxSegLen}) {
+          for (var i = 1, sl = 0, ml = ${cfg.maxSegLen}; i < sp.length; i++) {
+            if (sp.charCodeAt(i) === 47) { sl = 0; }
+            else { sl++; if (sl > ml) return null; }
+          }
+        }`);
+    }
 
-    if (checkPathLen) src.push(`if (path.length > ${maxPathLen}) return null;`);
+    // Per-prefix probes. Use full-prefix `startsWith('/X/', 0)` to fold the
+    // leading-slash check into the same call (one fewer charCodeAt branch).
+    // Object literal `{ "name": ... }` (JSON-quoted key) lets JSC pin a
+    // stable hidden class while remaining safe for any wildcard name —
+    // path-parser permits names that aren't strict JS identifiers, so we
+    // can't emit a bare-key literal.
+    for (const e of wildEntries) {
+      const fullPrefixSlash = '/' + e.prefix + '/';
+      const fullPrefixSlashLen = fullPrefixSlash.length;
+      const minLen = e.wildcardOrigin === 'multi' ? fullPrefixSlashLen + 1 : fullPrefixSlashLen;
+      const sliceStart = fullPrefixSlashLen;
+      const nameKey = JSON.stringify(e.wildcardName);
 
-    // Single-method optimization. methodCodes always holds all 7 default
-    // verbs (MethodRegistry pre-registers them in its constructor), so
-    // `allCodeEntries.length === 1` is never true. The signal we want is
-    // Active-method count: shared with shape-specialization gate.
-    // `activeMethodCodes` was filtered at build() to only methods that
-    // actually received routes (tree OR static).
+      lines.push(`
+        if (sp.length >= ${minLen} && sp.startsWith(${JSON.stringify(fullPrefixSlash)}, 0)) {
+          return { value: handlers[${e.wildcardStore}], params: { ${nameKey}: sp.substring(${sliceStart}) }, meta: DYNAMIC_META };
+        }`);
+
+      if (e.wildcardOrigin === 'star') {
+        const fullPrefix = '/' + e.prefix;
+
+        lines.push(`
+        if (sp.length === ${fullPrefix.length} && sp === ${JSON.stringify(fullPrefix)}) {
+          return { value: handlers[${e.wildcardStore}], params: { ${nameKey}: '' }, meta: DYNAMIC_META };
+        }`);
+      }
+    }
+
+    lines.push(`return null;`);
+
+    const tinyBody = lines.join('\n');
+    const tinyFactory = new Function(
+      'handlers', 'DYNAMIC_META',
+      `return function match(method, path) {\n${tinyBody}\n};`,
+    );
+
+    return tinyFactory(cfg.handlers, DYNAMIC_META) as (method: string, path: string) => MatchOutput<T> | null;
+  }
+
+  /**
+   * Emitter for the generic matchImpl — every router that doesn't qualify
+   * for the wildcard fast path. Assembles emit blocks based on `cfg`
+   * flags so dead branches are omitted entirely:
+   *
+   *   1. method dispatch (single-method literal vs methodCodes lookup)
+   *   2. path preprocessing (query strip, slash trim, lowercase)
+   *   3. static lookup (closure-captured bucket vs methodCode-indexed)
+   *   4. cache lookup (miss-set short-circuit + hit-cache return)
+   *   5. dynamic match — segment walker (params written by walker)
+   *      OR radix walker (params built from paramNames/paramValues)
+   *   6. cache write + final MatchOutput return
+   */
+  private emitGenericMatchImpl(cfg: MatchConfig<T>): (method: string, path: string) => MatchOutput<T> | null {
     const activeMethodCount = this.activeMethodCodes.length;
     const activeMethodLiteral = activeMethodCount === 1 ? this.activeMethodCodes[0]![0] : null;
     const activeMethodCode = activeMethodCount === 1 ? this.activeMethodCodes[0]![1] : -1;
+    const cacheMaxSize = cfg.cacheMaxSize;
+    const useCache = cfg.useCache;
+    const anyTester = cfg.anyTester;
+    const hasOptDefaults = cfg.hasOptDefaults;
+
+    const emitMissCacheWrite = (): string => `
+      var ms = missCacheByMethod.get(mc);
+      if (ms === undefined) { ms = new Set(); missCacheByMethod.set(mc, ms); }
+      if (ms.size >= ${cacheMaxSize}) {
+        var oldest = ms.values().next().value;
+        if (oldest !== undefined) ms.delete(oldest);
+      }
+      ms.add(sp);
+    `;
+
+    const src: string[] = [];
+
+    if (cfg.checkPathLen) src.push(`if (path.length > ${cfg.maxPathLen}) return null;`);
 
     if (activeMethodCount === 1 && activeMethodLiteral !== null) {
       src.push(`if (method !== ${JSON.stringify(activeMethodLiteral)}) return null;`);
@@ -563,26 +620,20 @@ export class Router<T = unknown> {
     } else {
       src.push(`var mc = methodCodes[method]; if (mc === undefined) return null;`);
     }
+
     src.push(`var sp = path;`);
     src.push(`var qi = sp.indexOf('?'); if (qi !== -1) sp = sp.substring(0, qi);`);
 
-    if (trimSlash) {
+    if (cfg.trimSlash) {
       src.push(`if (sp.length > 1 && sp.charCodeAt(sp.length - 1) === 47) sp = sp.substring(0, sp.length - 1);`);
     }
 
-    if (lowerCase) src.push(`sp = sp.toLowerCase();`);
+    if (cfg.lowerCase) src.push(`sp = sp.toLowerCase();`);
 
-    // Static lookup — always first, always inlined.
-    // Pre-built (frozen) MatchOutput is returned directly to skip the per-call
-    // `{ value, params, meta }` allocation.
-    // Skipped entirely when no static routes are registered (e.g. file-server
-    // routers that are pure wildcard) — every cycle counts on the dynamic path.
-    if (hasAnyStatic) {
-      // Single-method case: closure-capture the resolved bucket directly so
-      // the emitted code does ONE property access (`activeBucket[sp]`)
-      // instead of two (`staticOutputsByMethod[mc][sp]`). Measured: 12.9ns
-      // → 8-9ns at 500 routes, closing most of the gap to rou3's 6.4ns.
-      // Multi-method case keeps the dynamic methodCode-indexed access.
+    // Static lookup. Single-method case closure-captures the resolved
+    // bucket (`activeBucket`) so the lookup collapses to one property
+    // access; multi-method indexes by methodCode at runtime.
+    if (cfg.hasAnyStatic) {
       if (activeMethodCount === 1) {
         src.push(`
           var out = activeBucket[sp];
@@ -599,7 +650,6 @@ export class Router<T = unknown> {
       }
     }
 
-    // Cache lookup — fully inlined (no bound-method indirection)
     if (useCache) {
       src.push(`
         var missSet = missCacheByMethod.get(mc);
@@ -615,19 +665,16 @@ export class Router<T = unknown> {
       `);
     }
 
-    if (!hasAnyTree) {
-      if (useCache) {
-        src.push(emitMissCacheWrite());
-      }
-
+    if (!cfg.hasAnyTree) {
+      if (useCache) src.push(emitMissCacheWrite());
       src.push(`return null;`);
     } else {
-      if (checkSegLen) {
-        // Fast path: a path shorter than maxSegLen cannot possibly contain a
-        // segment that exceeds it, so the per-char scan is skipped entirely.
+      if (cfg.checkSegLen) {
+        // Path shorter than maxSegLen cannot contain a segment that
+        // exceeds it — skip the per-char scan entirely.
         src.push(`
-          if (sp.length > ${maxSegLen}) {
-            for (var i = 1, sl = 0, ml = ${maxSegLen}; i < sp.length; i++) {
+          if (sp.length > ${cfg.maxSegLen}) {
+            for (var i = 1, sl = 0, ml = ${cfg.maxSegLen}; i < sp.length; i++) {
               if (sp.charCodeAt(i) === 47) { sl = 0; }
               else { sl++; if (sl > ml) return null; }
             }
@@ -635,10 +682,9 @@ export class Router<T = unknown> {
         `);
       }
 
-      if (allSegment) {
-        // Segment walker writes params directly into matchState.params; we
-        // pre-allocate it here and the walker mutates on the success-return
-        // path only (no commit/rollback dance).
+      if (cfg.allSegment) {
+        // Segment walker writes params directly into matchState.params on
+        // the success-return path only (no commit/rollback).
         // errorKind/errorMessage reset is skipped when no route has a regex
         // pattern — TIMEOUT path is dead so the channel never gets dirty.
         src.push(`
@@ -665,7 +711,8 @@ export class Router<T = unknown> {
           `);
         }
       } else {
-        // Radix walker writes to paramNames/paramValues arrays; build params here.
+        // Radix walker writes to paramNames/paramValues arrays; build
+        // params here.
         src.push(`
           var tr = trees[mc];
           if (!tr) {
@@ -710,9 +757,7 @@ export class Router<T = unknown> {
         }
       }
 
-      src.push(`
-        var val = handlers[matchState.handlerIndex];
-      `);
+      src.push(`var val = handlers[matchState.handlerIndex];`);
 
       if (useCache) {
         src.push(`
@@ -734,11 +779,11 @@ export class Router<T = unknown> {
       src.push(`return { value: val, params: params, meta: DYNAMIC_META };`);
     }
 
-    // Resolve the active bucket once for single-method routers so the emitted
-    // code has a closure-captured reference (no per-call indexed access into
-    // staticOutputsByMethod).
+    // Resolve the active bucket once for single-method routers so the
+    // emitted code has a closure-captured reference (no per-call indexed
+    // access into staticOutputsByMethod).
     const activeBucket = activeMethodCount === 1
-      ? (staticOutputsByMethod[activeMethodCode] ?? new NullProtoObj() as Record<string, MatchOutput<T>>)
+      ? (cfg.staticOutputsByMethod[activeMethodCode] ?? new NullProtoObj() as Record<string, MatchOutput<T>>)
       : new NullProtoObj() as Record<string, MatchOutput<T>>;
 
     const body = src.join('\n');
@@ -750,22 +795,10 @@ export class Router<T = unknown> {
     );
 
     return factory(
-      staticOutputsByMethod, activeBucket, staticMap, methodCodes, trees, matchState, handlers,
-      optDefaults, hitCacheByMethod, missCacheByMethod, RouterCacheCtor,
-      EMPTY_PARAMS, STATIC_META, CACHE_META, DYNAMIC_META, ParamsCtor,
+      cfg.staticOutputsByMethod, activeBucket, cfg.staticMap, cfg.methodCodes, cfg.trees, cfg.matchState, cfg.handlers,
+      cfg.optDefaults, cfg.hitCacheByMethod, cfg.missCacheByMethod, RouterCache,
+      EMPTY_PARAMS, STATIC_META, CACHE_META, DYNAMIC_META, NullProtoObj,
     ) as (method: string, path: string) => MatchOutput<T> | null;
-
-    function emitMissCacheWrite(): string {
-      return `
-        var ms = missCacheByMethod.get(mc);
-        if (ms === undefined) { ms = new Set(); missCacheByMethod.set(mc, ms); }
-        if (ms.size >= ${cacheMaxSize}) {
-          var oldest = ms.values().next().value;
-          if (oldest !== undefined) ms.delete(oldest);
-        }
-        ms.add(sp);
-      `;
-    }
   }
 
   clearCache(): void {
