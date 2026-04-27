@@ -151,8 +151,15 @@ function emitRootSlashTerminal(root: SegmentNode): string {
 function emitNode(ctx: Ctx, node: SegmentNode, posVar: string, depth: number, justAfterSlash = false): string {
   if (ctx.bail) return '';
 
-  // Defensive bail for any ambiguity that can require backtracking.
+  // Defensive bail for any ambiguity that can require backtracking — both
+  // static-vs-param at the same position and sibling-param chains.
   if (node.staticChildren !== null && node.paramChild !== null) {
+    ctx.bail = true;
+
+    return '';
+  }
+
+  if (node.paramChild !== null && node.paramChild.nextSibling !== null) {
     ctx.bail = true;
 
     return '';

@@ -1,7 +1,7 @@
 import type { MatchState, MatchStateWithParams } from './match-state';
 import type { DecoderFn } from '../processor/decoder';
 import type { RadixMatchFn } from './radix-matcher';
-import type { SegmentNode } from './segment-tree';
+import type { ParamSegment, SegmentNode } from './segment-tree';
 
 import { TESTER_PASS, TESTER_TIMEOUT } from './pattern-tester';
 import { hasAmbiguousNode } from './segment-tree';
@@ -203,34 +203,41 @@ export function createSegmentWalker(
       }
     }
 
-    const param = node.paramChild;
-
-    if (param !== null && seg.length > 0) {
+    if (node.paramChild !== null && seg.length > 0) {
       const decoded = decodeParams ? decoder(seg) : seg;
+      // Walk the sibling chain — each represents a distinct param alternative
+      // at this position (different name and/or pattern). The first whose
+      // subtree completes the URL wins; tester failures and subtree mismatches
+      // both fall through to the next sibling (backtracking).
+      let p: ParamSegment | null = node.paramChild;
 
-      let pass = true;
+      while (p !== null) {
+        let pass = true;
 
-      if (param.tester !== null) {
-        const r = param.tester(decoded);
+        if (p.tester !== null) {
+          const r = p.tester(decoded);
 
-        if (r === TESTER_TIMEOUT) {
-          state.errorKind = 'regex-timeout';
-          state.errorMessage = 'Route parameter regex exceeded time limit';
+          if (r === TESTER_TIMEOUT) {
+            state.errorKind = 'regex-timeout';
+            state.errorMessage = 'Route parameter regex exceeded time limit';
 
-          return false;
+            return false;
+          }
+
+          pass = r === TESTER_PASS;
         }
 
-        pass = r === TESTER_PASS;
-      }
+        if (pass) {
+          if (match(p.next, path, segs, idx + 1, state)) {
+            state.params[p.name] = decoded;
 
-      if (pass) {
-        if (match(param.next, path, segs, idx + 1, state)) {
-          state.params[param.name] = decoded;
+            return true;
+          }
 
-          return true;
+          if (state.errorKind !== null) return false;
         }
 
-        if (state.errorKind !== null) return false;
+        p = p.nextSibling;
       }
     }
 

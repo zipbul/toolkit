@@ -26,7 +26,12 @@ export interface SegmentNode {
 export interface ParamSegment {
   name: string;
   tester: PatternTesterFn | null;
+  /** Subtree rooted at this param. */
   next: SegmentNode;
+  /** Linked-list pointer to the next param alternative at the same position.
+   *  Optional-expansion of `/users/:a?/:b?` produces sibling params (`:a`
+   *  and `:b`) that share an `ownerHandler` and live at the same position. */
+  nextSibling: ParamSegment | null;
 }
 
 export function createSegmentNode(): SegmentNode {
@@ -48,8 +53,10 @@ export interface CompiledTesterProvider {
 
 /**
  * Detect whether the segment tree has any node where the same URL segment
- * could simultaneously match a static child AND a param/wildcard alternative.
- * When false, a non-recursive iterative walker can be used safely.
+ * could simultaneously match multiple alternatives — a static child *and* a
+ * param/wildcard, or two sibling params. When false, a non-recursive
+ * iterative walker can be used safely; otherwise the recursive walker (with
+ * backtracking) must run.
  */
 export function hasAmbiguousNode(root: SegmentNode): boolean {
   const stack: SegmentNode[] = [root];
@@ -61,14 +68,35 @@ export function hasAmbiguousNode(root: SegmentNode): boolean {
       return true;
     }
 
+    if (node.paramChild !== null && node.paramChild.nextSibling !== null) {
+      return true;
+    }
+
     if (node.staticChildren !== null) {
       for (const k in node.staticChildren) stack.push(node.staticChildren[k]!);
     }
 
-    if (node.paramChild !== null) stack.push(node.paramChild.next);
+    let p = node.paramChild;
+
+    while (p !== null) {
+      stack.push(p.next);
+      p = p.nextSibling;
+    }
   }
 
   return false;
+}
+
+/**
+ * Two testers are equivalent for sibling-merge purposes when both are null
+ * (no constraint) or both compile to the same pattern source. We use the
+ * tester reference identity since `testerCache` deduplicates by pattern;
+ * different-source patterns produce different tester objects.
+ */
+function testersEquivalent(a: PatternTesterFn | null, b: PatternTesterFn | null): boolean {
+  if (a === null && b === null) return true;
+  if (a === null || b === null) return false;
+  return a === b;
 }
 
 /**
@@ -129,15 +157,37 @@ export function insertIntoSegmentTree(
       }
 
       if (node.paramChild === null) {
-        node.paramChild = { name: part.name, tester, next: createSegmentNode() };
-      } else if (node.paramChild.name !== part.name) {
-        // Same position already bound to a different param name — segment walker
-        // only supports single-param-per-position. Builder also rejects this
-        // via a route-conflict error, but defend anyway.
-        return false;
-      }
+        node.paramChild = { name: part.name, tester, next: createSegmentNode(), nextSibling: null };
+        node = node.paramChild.next;
+      } else {
+        // Walk the sibling chain looking for a matching (name, pattern) pair
+        // to descend into. A sibling that differs in either is a legitimate
+        // alternative at this position — append to the chain so the walker
+        // can try alternatives with backtracking.
+        let p: ParamSegment | null = node.paramChild;
+        let prev: ParamSegment | null = null;
+        let matched: ParamSegment | null = null;
 
-      node = node.paramChild.next;
+        while (p !== null) {
+          if (p.name === part.name && testersEquivalent(p.tester, tester)) {
+            matched = p;
+            break;
+          }
+
+          prev = p;
+          p = p.nextSibling;
+        }
+
+        if (matched === null) {
+          const fresh: ParamSegment = { name: part.name, tester, next: createSegmentNode(), nextSibling: null };
+          // prev is guaranteed non-null here — paramChild was not null and we
+          // walked to the end of the chain.
+          prev!.nextSibling = fresh;
+          node = fresh.next;
+        } else {
+          node = matched.next;
+        }
+      }
     } else {
       // wildcard — terminal
       node.wildcardStore = handlerIndex;
