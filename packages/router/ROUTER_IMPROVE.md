@@ -1,215 +1,195 @@
-# Router improvement backlog
+# Router 개선 백로그
 
-심층 리뷰에서 도출된 개선 항목과 처리 상태. 모든 항목은 코드 인스펙션 또는
-런타임 재현으로 검증된 사실이며, 각 fix 의 100% 확실성·효과·트레이드오프
-모두 평가 완료.
+라우터 코드베이스의 심층 리뷰에서 도출된 개선 항목들. 각 항목은 검증된
+사실이며, 근본 원인·해결 방향·트레이드오프·효과를 명시한다.
 
-## 처리 완료
+## 라우터 개요 (사전 컨텍스트)
 
-- **#1 옵셔널-파람 폭발 DoS 방어** (commit `5442d71`)
-  20개 옵셔널 = 5.3초 빌드 hang 재현됨. 확장 전 상한 (10) 검사 추가.
-- **#5 active-method 검출 중복** (commit `8091b4d`)
-  두 군데 inline 스캔을 build-time 캐시 `activeMethodCodes` 로 통합.
-- **#4 compileMatchFn 406 라인 분해** (commit `e44967f`)
-  설정 수집 / shape 게이트 / 와일드 emit / 제네릭 emit 4개 메서드로 분리.
-  `MatchConfig<T>` 스냅샷으로 emitter 결합도 낮춤.
+이 라우터는 HTTP 메서드와 URL 패스를 받아 등록된 핸들러로 매칭한다.
+빌드 타임에 라우트 트리를 구성하고, 매치 함수를 라우터 형태에 맞춰 동적
+생성한다. 사용자가 라우트를 등록하면 우선 라우트 명세를 파싱하고 두 종류의
+트리에 동시 삽입한다 — 하나는 LCP 압축된 라디스 트리, 다른 하나는 세그먼트
+단위 트리. 빌드 시점에 라우터의 형태를 분석해 가장 빠른 매칭 함수를 생성한다.
 
-## 폐기 (실제로는 issue 아님)
+매칭 함수는 라우터의 형태에 따라 여러 단계 중 하나로 컴파일된다. 라우트가
+정적 prefix + 와일드카드만 있으면 가장 짧은 전용 함수를, 일반적인 동적
+라우트면 세그먼트 트리 기반 코드젠을, 그것도 너무 복잡하면 인터프리터 식
+워커로 떨어진다. 형태에 정확히 맞는 함수를 생성하기에 핫패스가 매우 짧다.
 
-- **#2 segment-tree tester drop**
-  `paramChild.name` 일치 시 새 tester 무시. radix-builder 가 먼저 catch
-  하므로 public API 로 도달 불가능. defensive 비일관성일 뿐, 진짜 issue 아님.
-- **#8 extractSegments char-by-char loop**
-  의식적 perf 선택. 빌드 콜드패스라 가독성 우선이라도 무방하지만 현 구현도 정상.
-- **#11 hasAnyStatic 매번 재계산**
-  내가 잘못 분석. compileMatchFn 은 build() 에서 1회 호출. 매 match 호출이
-  아니라 빌드 시 1회 — 캐시 가치 없음.
-- **#12 optionalParamDefaults 항상 인스턴스화**
-  `isEmpty()` 게이트가 이미 핫패스 사용 차단. 인스턴스 자체 ~100 바이트.
-  lazy init 측정 가능한 이득 없음.
-- **#14 match + allowedMethods API 분리**
-  사용자 결정한 책임 분리 설계. issue 아니라 의도된 구조.
+매칭 자체는 정적 라우트 lookup → 캐시 lookup → 동적 트리 워킹 순서이며,
+각 단계는 라우터 옵션과 등록된 라우트 형태에 따라 활성화·비활성화된다.
 
-## 남은 항목
+## 용어
 
-### #3. 이중 트리 통합 — 가장 큰 작업
-
-**문제:** `RadixBuilder` (radix tree) + `segment-tree` 둘 다 build() 에서 빌드.
-매치 시 segment-tree 만 사용. radix tree 는 옵셔널 multi-param 확장이
-sibling param (같은 위치 다른 이름) 을 만들 때만 fallback (radix-walk).
-
-**검증:** `git log` + 코드 인스펙션. router.ts:142 (RadixBuilder 생성),
-:1035 (radixBuilder.insert 호출). build() 후 `radixBuilder = null` 로
-clear 되지만 빌드 시간/메모리 소비함.
-
-**근본 해결:** segment-tree 의 `ParamSegment` 에 `next: ParamSegment | null`
-추가 → linked-list of param siblings. 3개 walker (compileSegmentTree
-codegen, createIterativeWalker, recursive match) 모두 sibling 순회 로직
-추가 (radix-walk 의 fallthrough 패턴 그대로).
-
-이후 제거 가능:
-- `src/builder/radix-builder.ts` (454 라인)
-- `src/matcher/radix-walk.ts` (416 라인)
-- `src/matcher/radix-compile.ts` (328 라인)
-- `src/matcher/radix-matcher.ts` (31 라인)
-- `src/builder/radix-node.ts` (67 라인)
-- 관련 테스트 파일들
-
-총 **~1,300 라인 제거** + 이중 build 부하 제거 + 자동 해결되는 항목 (#10, #13).
-
-**리스크:** 중-높음. walker 3개 변경 + segment-tree 구조 변경. backtracking
-처리 추가가 codegen 복잡도 증가 (현재 invariant: paramChild 단일).
-
-**효과:**
-- 코드량: -1,300 라인
-- 빌드 시간: 단일-라우터 ~30% 빠름 추정
-- 메모리: build 중 radix-tree 미생성으로 peak 감소
-- 매치 성능: 변동 없음 (segment-tree 가 이미 매치 전담)
-
-**작업 단계 (예상):**
-1. SegmentNode → 다중-param sibling 지원 (구조체 변경)
-2. recursive match walker → param sibling fallthrough 추가
-3. createIterativeWalker → param sibling fallthrough 추가
-4. compileSegmentTree → emit 에 backtracking 추가 (가장 복잡)
-5. router.ts → radix-builder 의존 제거 (`expandOptionalPublic` 을
-   segment-tree 모듈로 이동)
-6. radix-* 파일들 + 테스트 제거
-7. 전체 회귀 테스트 + 벤치 검증
+- **세그먼트 트리** — URL 을 슬래시 기준으로 분할한 단위로 구성된 트리.
+  현재 라우터의 주 매칭 트리.
+- **라디스 트리** — 공통 접두사를 압축한 trie. 옵셔널 멀티 파람 확장
+  같은 특수 케이스의 fallback 으로만 사용됨.
+- **워커** — 트리를 순회하며 매칭을 수행하는 함수. 코드젠으로 컴파일된
+  것과 인터프리터식인 것이 모두 존재.
+- **샵-특화 매칭 함수** — 라우터 전체가 특정 형태 (예: 정적 접두사 +
+  와일드카드만) 일 때 그 형태에 정확히 맞춰 인라인된 매칭 함수.
+- **옵셔널 파람 확장** — 옵셔널 마커가 있는 라우트 한 개가 빌드 타임에
+  여러 라우트로 펼쳐지는 과정.
+- **활성 메서드** — 라우터에 실제로 라우트가 등록된 HTTP 메서드.
+  기본 7개 메서드는 항상 사전 등록되지만 사용된 것만이 활성.
+- **핫패스 / 콜드패스** — 정상 매치 경로가 핫패스, 미스나 405 분류는
+  콜드패스. 핫패스 비용이 라우터의 성능 지표.
 
 ---
 
-### #6. `normalizePathForLookup` ↔ matchImpl emit 의 코드 중복
+## 1. 라우트 트리가 두 종류로 동시에 빌드된다
 
-**문제:** path-length / query strip / slash trim / lowercase / segLen 검사
-로직이 두 군데 표현됨:
-- `compileMatchFn` 가 emit 하는 인라인 JS (router.ts:594, 597 등)
-- `normalizePathForLookup` 메서드 (router.ts:888~)
+라우터는 같은 라우트를 라디스 트리와 세그먼트 트리 양쪽에 삽입한다.
+실제 매칭에는 세그먼트 트리만 사용되며, 라디스 트리는 옵셔널 멀티-파람의
+형제 파람 케이스같이 세그먼트 트리가 표현하지 못하는 특수 형태에 한해
+fallback 워커로 사용된다.
 
-옵션 동작 변경 시 두 군데 동기 필요. 현재 주석 + `allowed-methods.test.ts`
-가 invariant 핀 박았지만 실제 코드 공유는 아님.
+이로 인한 부담은 빌드 시간과 빌드 중 메모리 사용량이다. 라우트 등록 시마다
+두 트리에 모두 삽입하므로 빌드 시간이 거의 두 배가 된다. 라디스 트리는
+빌드 후 참조가 해제되지만 빌드 중 정점 메모리 사용량은 그대로 발생한다.
 
-**검증:** 코드 인스펙션. `/usr/bin/grep -n "sp.indexOf('?')\|charCodeAt(sp.length - 1)" src/router.ts` 가 4 곳 보고.
+근본 해결 방향은 세그먼트 트리가 같은 위치의 다른 이름 형제 파람을
+지원하도록 확장하는 것이다. 현재 세그먼트 트리는 한 위치에 단일 파람만
+허용하는데, 이 제약을 풀고 형제 파람을 연결 리스트로 보관하면 라디스
+트리의 모든 사용 케이스를 흡수할 수 있다. 이후 라디스 빌더, 라디스 워커,
+라디스 코드젠, 라디스 노드 정의 모두 제거 가능하다.
 
-**근본 해결 옵션:**
-- (a) 헬퍼 함수를 핫패스에서 호출 → 5-10 ns 함수 호출 비용. **회귀.**
-- (b) 빌드 타임에 헬퍼 로직이 emit string 을 생성하게 (단일 출처) →
-  핫패스 영향 0, codegen 복잡도 약간 증가
-- (c) 현 상태 유지 (수동 동기 + 테스트로 핀)
+이 변경의 부작용은 세그먼트 트리 워커 세 종류 모두에 형제 파람 순회 로직을
+추가해야 한다는 점이다. 코드젠 워커는 백트래킹을 emit 해야 하므로 가장
+복잡하다. 반복 워커와 재귀 워커는 비교적 단순한 fallthrough 추가다.
 
-**권고: (b) 시도.** 헬퍼가 `emitNormalizationSrc(opts): string` 를
-반환하면 emit 도 같은 함수에서 생성. allowedMethods 도 같은 코드 사용.
+이 변경이 가장 큰 정리 작업이며, 완료 시 다른 두 항목 (라디스 빌더가 항상
+빌드되는 문제, 워커 종류가 너무 많은 문제) 이 자동으로 해결된다.
 
-**리스크:** 낮음. emit string 생성 헬퍼는 순수 함수.
-
-**효과:**
-- 단일 출처 보장 (invariant drift 불가능)
-- 코드량: 비슷
-- 성능: 변동 없음
-
----
-
-### #7. percent-encoding (`%`) gate 6 군데 중복
-
-**문제:** `decoder.ts` 가 자체 `%` 게이트 보유 (`if (!raw.includes('%')) return raw`),
-그러나 caller 들 (segment-walk, segment-compile, radix-walk, radix-compile)
-이 모두 자체 gate 후 decoder 호출.
-
-**검증:**
-```
-src/processor/decoder.ts:10:    if (!raw.includes('%')) return raw;
-src/matcher/segment-walk.ts:209,356:  decodeParams && seg.indexOf('%') !== -1 ? decoder(seg) : seg
-src/matcher/segment-compile.ts:375:   if (${valVar}.indexOf('%') !== -1) { try { ... } }
-src/matcher/radix-walk.ts:24:    raw => (raw.indexOf('%') !== -1 ? decoder(raw) : raw)
-src/matcher/radix-compile.ts:70,101:  raw.indexOf('%') === -1 ? raw : ...
-```
-
-**의식적 패턴:** caller gate 가 `decoder` 함수 호출 자체를 회피. JSC 가
-decoder 를 인라인 못하면 함수 호출 ~1-2 ns 매번 발생. caller gate 는
-gate 만 inlined → 함수 호출 회피.
-
-**검증 필요:** JSC FTL 가 작은 decoder 함수를 인라인하는가?
-- 인라인 됨 → caller gate 불필요, decoder gate 만 의존
-- 인라인 안 됨 → caller gate 가 perf 절약 (현재 의도)
-
-**작업:**
-1. 단순 라우터로 micro-bench 작성 (caller gate 있음 vs 제거)
-2. 결과에 따라:
-   - caller gate 가 perf 무관 → caller 들에서 제거, decoder 만 의존
-   - caller gate 가 의미 있음 → 현 상태 유지 + 의도된 중복 명시 주석
-
-**리스크:** 낮음. 측정 후 결정.
-
-**효과:** 측정 결과에 따라 코드 5 군데 정리 가능 또는 현 상태 유지.
+리스크는 중간에서 높음 사이다. 워커 세 곳을 동시에 변경하므로 회귀 가능성이
+있고 백트래킹 추가가 코드젠 코드의 명료도를 낮출 수 있다. 효과는 코드량
+대폭 감소, 빌드 시간 단축, 워커 다단계 구조의 단순화다. 매치 시 성능에는
+영향이 없다 — 라디스 워커는 어차피 핫패스가 아니었다.
 
 ---
 
-### #9. `state.params!` 암묵 contract
+## 2. 패스 정규화 로직이 두 군데에 표현되어 있다
 
-**문제:** segment-walk.ts 에서 `state.params!` non-null assertion 6회 사용.
-walker 가 caller (compileMatchFn-emitted matchImpl) 가 `state.params` 를
-세팅했다고 가정. 명시적 contract 부재.
+매치 함수는 사용자가 준 패스에 정규화 단계를 적용한다. 쿼리 스트링 제거,
+끝 슬래시 제거, 대소문자 폴딩, 길이 검사 등이다. 이 로직이 두 곳에 표현된다 —
+매칭 함수 코드젠이 emit 하는 인라인 JavaScript 와, 405 분류용 헬퍼 메서드 안의
+순수 TypeScript.
 
-**검증:** `/usr/bin/grep -c "state\.params!" src/matcher/segment-walk.ts` → 6.
+두 표현은 동일한 동작을 해야 하지만 코드 차원의 공유는 아니다. 라우터
+옵션 동작이 변경되면 두 곳을 모두 같이 수정해야 하며, 어느 한 쪽만 빠뜨리면
+정규화 결과가 갈린다. 현재는 주석으로 invariant 를 명시하고 테스트가
+양쪽을 동시에 핀으로 박지만, 코드 자체로 단일 출처 보장을 못 한다.
 
-**근본 해결 옵션:**
-- (a) walker self-init: walker 가 자체 `new ParamsCtor()`. **이미 시도, perf
-  회귀 (이중 할당) 로 revert** (commit history).
-- (b) **타입 차원 명시**: walker 시그니처를 `(url, state: MatchState & { params: NonNull })`
-  로 좁힘. perf 영향 0, 컴파일러가 invariant 강제.
-- (c) 런타임 assert. perf 비용 + 핫패스에 추가 코드.
+근본 해결은 정규화 로직을 단일 함수로 두고, 매칭 함수 코드젠은 그 함수가
+*빌드 타임에 생성한 emit string* 을 받아 인라인하는 것이다. 즉 정규화의
+시멘틱은 단 한 곳에 정의되며, 핫패스 코드는 여전히 인라인이라 함수 호출
+비용이 없다. 이 방식의 키는 헬퍼가 *런타임* 함수 호출이 아니라 *빌드 타임*
+문자열 생성을 한다는 점이다.
 
-**권고: (b).** 타입 정의 변경만, behavior 무변경.
-
-**리스크:** 낮음. 타입 차원만 변경.
-
-**효과:**
-- 명시적 contract → 호출자가 init 빠뜨리면 컴파일 에러
-- 코드량: 변동 없음
-- 성능: 변동 없음
+리스크는 낮다. 헬퍼는 순수 함수이고 변경 범위가 제한적이다. 효과는 단일
+출처 보장으로 invariant 드리프트 불가능, 코드 가독성 약간 향상, 핫패스
+성능 변동 없음.
 
 ---
 
-### #10. 단일-라우트도 RadixBuilder build
+## 3. 퍼센트 인코딩 검사 게이트가 여러 곳에 중복
 
-**문제:** RadixBuilder 항상 생성·매 라우트마다 insert 호출. segment-tree
-가 모든 케이스 처리해도 radix tree 를 빌드.
+URL 파라미터 값에서 퍼센트 인코딩을 디코딩할 때, 디코더 함수와 호출자
+양쪽이 모두 "퍼센트 문자가 있는지" 검사를 한다. 디코더는 자체 게이트로
+퍼센트가 없으면 원본을 즉시 반환하고, 호출자도 같은 검사를 인라인으로
+한 뒤 디코더를 호출한다.
 
-**검증:**
-```
-src/router.ts:162:    this.radixBuilder = new RadixBuilder(buildConfig);
-src/router.ts:1035:   radixBuilder!.insert(offsetResult, parts, handlerIndex);
-```
+이 중복은 의도된 것일 가능성이 있다. 호출자 게이트가 디코더 함수 호출
+자체를 회피하기 위함이다. JavaScript 엔진이 디코더 함수를 핫패스에
+인라인해 준다면 호출자 게이트는 불필요하지만, 인라인하지 않는다면 매번
+함수 호출 비용이 발생한다. 호출자 게이트가 그 비용을 사전에 차단한다.
 
-**해결:** **#3 통합 시 자동 해결.** 독립 fix 가능하지만 path-parser 가
-radix-builder 의 `expandOptionalPublic` 사용하는 의존성 분리 필요.
-#3 와 함께 처리가 효율적.
+문제는 이 가정이 검증되지 않았다는 점이다. 실제로 엔진이 인라인을 하는지
+측정하지 않았고, 만약 한다면 호출자 게이트 다섯 곳은 모두 데드 코드다.
+
+근본 해결은 우선 측정이다. 단순한 라우터로 호출자 게이트가 있는 경우와
+없는 경우의 매치 성능을 비교한다. 결과에 따라 두 가지 중 하나를 선택한다 —
+게이트가 의미 없으면 호출자에서 모두 제거하고 디코더만 의존, 게이트가
+의미 있으면 현 상태 유지하고 의도된 중복임을 주석으로 명시.
+
+리스크는 측정 자체가 낮으며, 결과에 따른 정리 작업도 단순하다. 효과는
+측정에 따라 다르다 — 정리 가능하면 다섯 곳의 표현 통일, 의도된 패턴이면
+주석으로 미래의 수정자가 의도를 알 수 있게 됨.
 
 ---
 
-### #13. walker 5종 → 6종 (정정)
+## 4. 워커가 caller 의 사전 작업에 암묵적으로 의존
 
-**문제:** 매칭 walker 가 6종 존재:
-- `compiledWildWalk` (segment-walk:76)
-- `compiledSegmentWalk` (segment-compile:56)
-- `createIterativeWalker` (segment-walk:292)
-- recursive `match` (segment-walk:251)
-- `compiledWalk` (radix-compile:51)
-- `createSimpleWalker` (radix-walk:40)
-- `createFullWalker` (radix-walk:220)
+세그먼트 트리 워커들은 매치 시작 시 호출자가 일정한 상태를 미리 세팅했다고
+가정한다. 구체적으로 매치 상태 객체의 파람 컨테이너가 비어 있는 새 객체로
+초기화되어 있어야 한다. 워커는 이 가정을 코드 차원에서 강제하지 않고, 단지
+타입 시스템에서 non-null assertion 으로 회피한다.
 
-실제로는 7종. 다중 fallback tier 의 복잡도 부담.
+이 패턴은 핫패스 성능에는 문제가 없다. 호출자인 매칭 함수가 항상 사전
+초기화를 하고, 워커는 그 위에 쓴다. 그러나 contract 가 명시되지 않아
+호출자가 변경될 때 워커가 깨질 위험이 있다. 과거에 워커가 자체 초기화하도록
+변경을 시도했으나 호출자도 같은 초기화를 해서 이중 할당이 되어 회귀했다.
 
-**해결:** **#3 통합 시 radix 계열 walker 4개 제거 → 3종으로 축소** (codegen
-wild / codegen general / iterative or recursive). 자동 해결.
+근본 해결은 타입 차원의 contract 명시다. 워커 시그니처를 "매치 상태의
+파람 컨테이너가 반드시 존재한다" 는 정제된 타입으로 좁힌다. 호출자가
+초기화를 빠뜨리면 컴파일 에러가 발생하므로 invariant 가 코드 차원에서
+강제된다. 런타임 동작은 전혀 바뀌지 않는다.
+
+리스크는 매우 낮다. 타입만 변경한다. 효과는 명시적 contract 로 향후
+변경자가 invariant 를 인지할 수 있게 됨, 코드량과 성능 모두 변동 없음.
+
+---
+
+## 5. 라우터 빌더가 단일-라우트에서도 풀 빌드
+
+라디스 빌더 인스턴스가 라우터 생성자에서 무조건 생성되며, 라우트 등록
+시마다 라디스 트리에 삽입한다. 매칭에 라디스 트리가 사용되지 않는 케이스
+(즉 거의 모든 케이스) 에서도 라디스 빌더의 모든 작업이 수행된다.
+
+이 항목은 1번 항목 (이중 트리 통합) 과 직접적으로 연결된다. 1번이
+완료되면 라디스 빌더 자체가 사라지므로 자동 해결된다. 1번 없이 독립적으로
+해결하려면 패스 파서가 라디스 빌더의 옵셔널 확장 함수에 의존하는 부분을
+세그먼트 트리 모듈로 옮겨야 한다. 분리 작업이 가능하지만 어차피 통합이
+계획되어 있으므로 함께 처리하는 것이 효율적이다.
+
+---
+
+## 6. 매칭 워커가 일곱 종류로 분기
+
+라우터는 라우트 형태와 라우터 옵션에 따라 일곱 종류의 매칭 워커 중 하나를
+사용한다. 와일드카드 전용 코드젠 워커, 세그먼트 트리 일반 코드젠 워커,
+세그먼트 트리 반복 워커, 세그먼트 트리 재귀 워커, 라디스 트리 코드젠 워커,
+라디스 트리 단순 인터프리터, 라디스 트리 풀 인터프리터.
+
+이 다단계 fallback 은 라우터 형태마다 가장 빠른 워커를 선택하기 위함이다.
+그러나 종류가 너무 많으면 유지보수 부담과 인지 부하가 커진다. 코드 변경
+시 어떤 워커들에 영향이 가는지 추적이 어렵고, 어떤 라우터가 어떤 워커로
+가는지 파악하기도 복잡하다.
+
+이 항목 역시 1번 항목 (이중 트리 통합) 과 직결된다. 통합이 완료되면 라디스
+계열 워커 네 종류가 사라지면서 워커가 세 종류로 줄어든다. 독립적인 단순화
+방안은 없다 — 워커 종류는 라우터 형태의 다양성을 반영하며, 같은 형태를
+다른 워커로 처리하면 성능이 떨어진다.
 
 ---
 
 ## 우선순위 권고
 
-1. **#9 (타입 contract)** — 가장 안전, 즉시 가능, 사이드 이펙트 0
-2. **#7 (% gate 측정)** — 낮은 리스크, 결정 후 정리 또는 유지
-3. **#6 (normalize emit 헬퍼)** — 중간 리스크, 단일 출처 보장
-4. **#3 (이중 트리 통합)** — 큰 작업, 신중한 단계별 진행. 완료 시 #10, #13
-   자동 해결 + 1,300 라인 dead code 제거
+가장 안전하고 즉시 가능한 작업부터 가장 큰 리팩터 순으로:
 
-각 항목 별 PR/커밋으로 분리 권장. #3 는 단계별 (1~7) 로 commit 분할.
+먼저 4번 (타입 contract 명시) — 사이드 이펙트가 전무하며 변경 범위가
+타입 정의에 한정된다. 컴파일 차원의 안전망을 추가한다.
+
+다음 3번 (퍼센트 게이트 측정) — 측정 결과에 따라 정리 또는 유지를 결정한다.
+어느 쪽으로 결정되든 코드 의도가 명확해진다.
+
+다음 2번 (패스 정규화 단일 출처) — 헬퍼가 빌드 타임에 emit string 을
+생성하도록 변경. 단일 출처 보장으로 향후 옵션 동작 변경 시 안전성 확보.
+
+마지막 1번 (이중 트리 통합) — 가장 큰 작업이며 5번과 6번이 자동 해결된다.
+워커 변경이 광범위하므로 단계별로 commit 을 분리해 회귀 추적을 쉽게 한다.
+
+각 항목은 독립 PR/커밋으로 분리할 수 있다. 1번은 내부 단계 (세그먼트 트리
+구조 변경 → 워커 세 종류 각각 sibling 지원 → 라디스 의존 제거 → 라디스
+파일 제거) 별로 다시 분할 권장.
