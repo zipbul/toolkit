@@ -245,7 +245,7 @@ describe('misuse rejection', () => {
 
   it('still allows siblings from the same route via optional-param expansion', () => {
     // /users/:a?/:b? expands to four routes ALL sharing the same handler
-    // index. The radix-builder records the original handler on each ParamNode
+    // index. The segment-tree insert records ownerHandler on each ParamSegment
     // and skips the unreachability check when colliding siblings come from
     // the same expansion family (they all converge on the same handler).
     const r = new Router<string>();

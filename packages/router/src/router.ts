@@ -10,13 +10,12 @@ import type {
 } from './types';
 import type { MatchFn } from './matcher/match-state';
 import type { MatchState } from './matcher/match-state';
-import type { BuilderConfig } from './builder/types';
 
 import { err, isErr } from '@zipbul/result';
 import { RouterError } from './error';
 import { PathParser } from './builder/path-parser';
-import { RadixBuilder } from './builder/radix-builder';
 import { OptionalParamDefaults } from './builder/optional-param-defaults';
+import { expandOptional } from './builder/route-expand';
 import { RouterCache } from './cache';
 import { MethodRegistry } from './method-registry';
 import { buildDecoder } from './processor/decoder';
@@ -34,7 +33,6 @@ import { createSegmentNode, insertIntoSegmentTree } from './matcher/segment-tree
 import type { SegmentNode } from './matcher/segment-tree';
 import { createSegmentWalker, detectWildCodegenSpec } from './matcher/segment-walk';
 import type { WildCodegenEntry } from './matcher/segment-walk';
-import type { PathPart } from './builder/path-parser';
 import type { PatternTesterFn } from './types';
 
 const ALL_METHODS: readonly HttpMethod[] = ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS', 'HEAD'];
@@ -92,7 +90,6 @@ interface MatchConfig<T> {
 export class Router<T = unknown> {
   private readonly options: RouterOptions;
   private pathParser: PathParser | null;
-  private radixBuilder: RadixBuilder | null;
   private readonly methodRegistry = new MethodRegistry();
 
   private _ignoreTrailingSlash = true;
@@ -109,7 +106,7 @@ export class Router<T = unknown> {
   private sealed = false;
 
   private handlers: T[] = [];
-  private optionalParamDefaults: OptionalParamDefaults | undefined;
+  private optionalParamDefaults: OptionalParamDefaults;
   private trees: Array<MatchFn | null> = [];
   /** Per-method wildcard codegen entries when the segment tree is a pure
    *  static-prefix wildcard pattern (e.g. file-server style). When all
@@ -117,14 +114,14 @@ export class Router<T = unknown> {
    *  matchImpl that inlines these probes and skips the generic pipeline —
    *  shape-tailored codegen lets JSC FTL the entire match path. */
   private wildSpecs: Array<WildCodegenEntry[] | null> = [];
-  /** True when every method's tree uses the segment walker (params written
-   *  directly into state.params). False when any method falls back to the
-   *  array-based radix walker. */
   /** True when at least one route has a regex pattern. When false, the
    *  TIMEOUT signalling path is dead — match() can skip errorKind reset. */
   private anyTester = false;
-  /** Per-method registered routes — used to build the segment tree at seal. */
-  private readonly routeRecords: Array<{ methodCode: number; parts: PathPart[]; handlerIndex: number }> = [];
+  /** Per-method segment-tree root, populated incrementally as add() is called. */
+  private readonly segmentTrees: Array<SegmentNode | null> = [];
+  /** Tester cache shared across registrations so identical regex patterns
+   *  compile only once. Reset to empty after build() releases parser state. */
+  private testerCache: Map<string, PatternTesterFn> = new Map();
   /** Specialized match closure assembled by compileMatchFn() at build time. */
   private matchImpl!: (method: string, path: string) => MatchOutput<T> | null;
   private matchState!: MatchState;
@@ -179,18 +176,7 @@ export class Router<T = unknown> {
       regexSafety.validator = options.regexSafety.validator;
     }
 
-    const buildConfig: BuilderConfig = {
-      regexSafety,
-      optionalParamDefaults: new OptionalParamDefaults(options.optionalParamBehavior),
-    };
-
-    if (options.regexAnchorPolicy !== undefined) {
-      buildConfig.regexAnchorPolicy = options.regexAnchorPolicy;
-    }
-
-    if (options.onWarn !== undefined) {
-      buildConfig.onWarn = options.onWarn;
-    }
+    this.optionalParamDefaults = new OptionalParamDefaults(options.optionalParamBehavior);
 
     this.pathParser = new PathParser({
       caseSensitive: options.caseSensitive ?? true,
@@ -200,8 +186,6 @@ export class Router<T = unknown> {
       regexAnchorPolicy: options.regexAnchorPolicy,
       onWarn: options.onWarn,
     });
-
-    this.radixBuilder = new RadixBuilder(buildConfig);
   }
 
   add(method: HttpMethod | HttpMethod[] | '*', path: string, value: T): void {
@@ -285,50 +269,15 @@ export class Router<T = unknown> {
     for (const [m, c] of allCodes) codes[m] = c;
     this.methodCodes = codes;
 
-    this.optionalParamDefaults = this.radixBuilder!.optionalParamDefaults;
-
     const decoder = buildDecoder();
     const decodeParams = this.options.decodeParams ?? true;
 
-    // Build one segment tree per method, seeded from the raw registered parts
-    // (not the LCP-compressed radix tree — walking that would conflate
-    // partial-segment splits with real segment boundaries).
-    const segmentTrees: Array<SegmentNode | null> = [];
-    const segmentBuildOk: boolean[] = [];
-    const testerCache = new Map<string, PatternTesterFn>();
-
-    for (const rec of this.routeRecords) {
-      if (segmentTrees[rec.methodCode] === undefined) {
-        segmentTrees[rec.methodCode] = createSegmentNode();
-        segmentBuildOk[rec.methodCode] = true;
-      }
-
-      if (!segmentBuildOk[rec.methodCode]) continue;
-
-      // Re-expand optional params the same way the radix insert did. We use
-      // the radixBuilder's expansion helper to stay consistent.
-      const expansions = this.radixBuilder!.expandOptionalPublic(rec.parts, rec.handlerIndex);
-
-      for (const { parts: expParts, handlerIndex: hIdx } of expansions) {
-        const ok = insertIntoSegmentTree(
-          segmentTrees[rec.methodCode]!,
-          expParts,
-          hIdx,
-          this.options.regexSafety,
-          testerCache,
-        );
-
-        if (!ok) {
-          segmentBuildOk[rec.methodCode] = false;
-          break;
-        }
-      }
-    }
-
+    // Per-method segment trees were built incrementally during add(); here we
+    // just wire up walkers and detect specialized shapes per method.
     for (const [, code] of allCodes) {
-      const segRoot = segmentTrees[code];
+      const segRoot = this.segmentTrees[code];
 
-      if (segRoot !== undefined && segRoot !== null && segmentBuildOk[code]) {
+      if (segRoot !== undefined && segRoot !== null) {
         // Detect static-prefix wildcard shape — when the entire router shape
         // satisfies certain conditions (single method, no statics, etc.),
         // compileMatchFn will inline these probes directly into matchImpl.
@@ -337,16 +286,11 @@ export class Router<T = unknown> {
         continue;
       }
 
-      // The segment tree handles every shape the radix builder accepts:
-      // sibling-param chains (from optional expansion or tester+catchall) walk
-      // with backtracking in the recursive walker. A failed segment build here
-      // would mean an invalid pattern slipped past the parser — surface as a
-      // dead method rather than diverging into a parallel matcher.
       this.wildSpecs[code] = null;
       this.trees[code] = null;
     }
 
-    this.anyTester = testerCache.size > 0;
+    this.anyTester = this.testerCache.size > 0;
 
     // Pre-build the static MatchOutput objects so match() can return them
     // directly without allocating { value, params, meta } per hit.
@@ -404,7 +348,9 @@ export class Router<T = unknown> {
     this._maxSegmentLength = this.options.maxSegmentLength ?? 256;
 
     this.pathParser = null;
-    this.radixBuilder = null;
+    // Tester cache held per-route insert during add(); release after seal so
+    // dev-mode swap-and-rebuild scenarios start fresh.
+    this.testerCache = new Map();
 
     this._normalizePath = buildPathNormalizer({
       checkPathLen: Number.isFinite(this._maxPathLength),
@@ -962,21 +908,34 @@ export class Router<T = unknown> {
     const handlerIndex = this.handlers.length;
     this.handlers.push(value);
 
-    const insertResult = this.radixBuilder!.insert(offsetResult, parts, handlerIndex);
+    const expansion = expandOptional(parts, handlerIndex, this.optionalParamDefaults);
 
-    if (isErr(insertResult)) {
-      // Roll back the handler slot so failed inserts do not leak storage.
+    if (isErr(expansion)) {
       this.handlers.pop();
 
-      return err<RouterErrData>({
-        ...insertResult.data,
-        path,
-        method,
-      });
+      return err<RouterErrData>({ ...expansion.data, path, method });
     }
 
-    // Record parts so seal() can build a segment tree from the original
-    // (pre-LCP-split) route shape.
-    this.routeRecords.push({ methodCode: offsetResult, parts, handlerIndex });
+    if (this.segmentTrees[offsetResult] === undefined || this.segmentTrees[offsetResult] === null) {
+      this.segmentTrees[offsetResult] = createSegmentNode();
+    }
+
+    const root = this.segmentTrees[offsetResult]!;
+
+    for (const { parts: expParts, handlerIndex: hIdx } of expansion) {
+      const insertResult = insertIntoSegmentTree(
+        root,
+        expParts,
+        hIdx,
+        this.options.regexSafety,
+        this.testerCache,
+      );
+
+      if (isErr(insertResult)) {
+        this.handlers.pop();
+
+        return err<RouterErrData>({ ...insertResult.data, path, method });
+      }
+    }
   }
 }
