@@ -1,7 +1,7 @@
 {
   "name": "@zipbul/router",
   "version": "0.2.3",
-  "description": "High-performance radix-tree URL router for Bun",
+  "description": "High-performance segment-tree URL router for Bun",
   "license": "MIT",
   "author": "Junhyung Park (https://github.com/parkrevil)",
   "repository": {
@@ -13,7 +13,7 @@
   "homepage": "https://github.com/zipbul/toolkit/tree/main/packages/router#readme",
   "keywords": [
     "router",
-    "radix-tree",
+    "segment-tree",
     "url-router",
     "http",
     "bun",

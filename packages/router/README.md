@@ -5,10 +5,10 @@
 [![npm](https://img.shields.io/npm/v/@zipbul/router)](https://www.npmjs.com/package/@zipbul/router)
 ![coverage](https://img.shields.io/endpoint?url=https://gist.githubusercontent.com/parkrevil/3965fb9d1fe2d6fc5c321cb38d88c823/raw/router-coverage.json)
 
-A high-performance radix-tree URL router for Bun.
-Character-level trie with per-method tree isolation, regex param patterns, and structured error handling.
+A high-performance segment-tree URL router for Bun.
+Per-method tree isolation, regex param patterns, sibling-param backtracking, and structured error handling.
 
-> Static routes resolve via O(1) Map lookup. Dynamic routes traverse an iterative radix walker with monomorphic property access.
+> Static routes resolve via O(1) Map lookup. Dynamic routes traverse a shape-specialized walker (codegen / iterative / recursive with backtracking) emitted at `build()` time.
 
 <br>
 
@@ -80,7 +80,7 @@ router.addAll([
 
 ### `router.build()`
 
-Compiles the radix trie. Must be called before `match()`. Returns `this` for chaining.
+Seals the router and emits the specialized match function. Must be called before `match()`. Returns `this` for chaining.
 
 ```typescript
 router.build();

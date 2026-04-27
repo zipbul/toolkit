@@ -5,10 +5,10 @@
 [![npm](https://img.shields.io/npm/v/@zipbul/router)](https://www.npmjs.com/package/@zipbul/router)
 ![coverage](https://img.shields.io/endpoint?url=https://gist.githubusercontent.com/parkrevil/3965fb9d1fe2d6fc5c321cb38d88c823/raw/router-coverage.json)
 
-Bun을 위한 고성능 래딕스 트리 URL 라우터입니다.
-문자 단위 트라이, HTTP 메서드별 트리 분리, 정규식 파라미터 패턴, 구조화된 에러 처리를 지원합니다.
+Bun을 위한 고성능 세그먼트 트리 URL 라우터입니다.
+HTTP 메서드별 트리 분리, 정규식 파라미터 패턴, 형제 파라미터 백트래킹, 구조화된 에러 처리를 지원합니다.
 
-> 정적 라우트는 O(1) Map 조회로 해소됩니다. 동적 라우트는 단형(monomorphic) 프로퍼티 접근을 사용하는 반복형 래딕스 워커로 탐색합니다.
+> 정적 라우트는 O(1) Map 조회로 해소됩니다. 동적 라우트는 `build()` 시점에 라우터 형태에 맞춰 emit 되는 워커 (코드젠 / 반복 / 백트래킹 재귀) 로 탐색합니다.
 
 <br>
 
@@ -80,7 +80,7 @@ router.addAll([
 
 ### `router.build()`
 
-래딕스 트라이를 컴파일합니다. `match()` 호출 전에 반드시 실행해야 합니다. 체이닝을 위해 `this`를 반환합니다.
+라우터를 봉인하고 특화된 매치 함수를 emit 합니다. `match()` 호출 전에 반드시 실행해야 합니다. 체이닝을 위해 `this`를 반환합니다.
 
 ```typescript
 router.build();
