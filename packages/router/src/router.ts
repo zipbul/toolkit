@@ -22,6 +22,15 @@ import { MethodRegistry } from './method-registry';
 import { buildDecoder } from './processor/decoder';
 import { createRadixWalker } from './matcher/radix-walk';
 import { createMatchState } from './matcher/match-state';
+import {
+  buildPathNormalizer,
+  emitLowerCase,
+  emitPathLenCheck,
+  emitQueryStrip,
+  emitSegLenCheck,
+  emitTrailingSlashTrim,
+} from './matcher/path-normalize';
+import type { NormalizeCfg, PathNormalizer } from './matcher/path-normalize';
 import { createSegmentNode, insertIntoSegmentTree } from './matcher/segment-tree';
 import type { SegmentNode } from './matcher/segment-tree';
 import { createSegmentWalker, detectWildCodegenSpec } from './matcher/segment-walk';
@@ -92,6 +101,10 @@ export class Router<T = unknown> {
   private _caseSensitive = true;
   private _maxPathLength = 2048;
   private _maxSegmentLength = 256;
+  /** Compiled at seal time from the same emit helpers used by compileMatchFn,
+   *  so the cold `allowedMethods` lookup cannot drift from the hot match path.
+   *  Identity normalizer (returns input unchanged) before build(). */
+  private _normalizePath: PathNormalizer = path => path;
   private hitCacheByMethod: Map<number, RouterCache<CachedMatchEntry<T>>> | undefined;
   private missCacheByMethod: Map<number, Set<string>> | undefined;
   private cacheMaxSize: number = 1000;
@@ -406,6 +419,15 @@ export class Router<T = unknown> {
     this.pathParser = null;
     this.radixBuilder = null;
 
+    this._normalizePath = buildPathNormalizer({
+      checkPathLen: Number.isFinite(this._maxPathLength),
+      maxPathLen: this._maxPathLength,
+      trimSlash: this._ignoreTrailingSlash,
+      lowerCase: !this._caseSensitive,
+      checkSegLen: Number.isFinite(this._maxSegmentLength),
+      maxSegLen: this._maxSegmentLength,
+    });
+
     this.matchImpl = this.compileMatchFn();
 
     return this;
@@ -612,7 +634,10 @@ export class Router<T = unknown> {
 
     const src: string[] = [];
 
-    if (cfg.checkPathLen) src.push(`if (path.length > ${cfg.maxPathLen}) return null;`);
+    const normCfg: NormalizeCfg = cfg;
+    const pathLenJs = emitPathLenCheck(normCfg, 'path', 'return null;');
+
+    if (pathLenJs !== '') src.push(pathLenJs);
 
     if (activeMethodCount === 1 && activeMethodLiteral !== null) {
       src.push(`if (method !== ${JSON.stringify(activeMethodLiteral)}) return null;`);
@@ -621,14 +646,15 @@ export class Router<T = unknown> {
       src.push(`var mc = methodCodes[method]; if (mc === undefined) return null;`);
     }
 
-    src.push(`var sp = path;`);
-    src.push(`var qi = sp.indexOf('?'); if (qi !== -1) sp = sp.substring(0, qi);`);
+    src.push(emitQueryStrip('path', 'sp'));
 
-    if (cfg.trimSlash) {
-      src.push(`if (sp.length > 1 && sp.charCodeAt(sp.length - 1) === 47) sp = sp.substring(0, sp.length - 1);`);
-    }
+    const trimJs = emitTrailingSlashTrim(normCfg, 'sp');
 
-    if (cfg.lowerCase) src.push(`sp = sp.toLowerCase();`);
+    if (trimJs !== '') src.push(trimJs);
+
+    const lowerJs = emitLowerCase(normCfg, 'sp');
+
+    if (lowerJs !== '') src.push(lowerJs);
 
     // Static lookup. Single-method case closure-captures the resolved
     // bucket (`activeBucket`) so the lookup collapses to one property
@@ -669,18 +695,12 @@ export class Router<T = unknown> {
       if (useCache) src.push(emitMissCacheWrite());
       src.push(`return null;`);
     } else {
-      if (cfg.checkSegLen) {
-        // Path shorter than maxSegLen cannot contain a segment that
-        // exceeds it — skip the per-char scan entirely.
-        src.push(`
-          if (sp.length > ${cfg.maxSegLen}) {
-            for (var i = 1, sl = 0, ml = ${cfg.maxSegLen}; i < sp.length; i++) {
-              if (sp.charCodeAt(i) === 47) { sl = 0; }
-              else { sl++; if (sl > ml) return null; }
-            }
-          }
-        `);
-      }
+      // Per-segment length scan, deferred until after static lookup so
+      // static cache hits skip it. Path shorter than maxSegLen cannot have
+      // a segment that exceeds it — emitter elides the loop in that case.
+      const segJs = emitSegLenCheck(normCfg, 'sp', 'return null;');
+
+      if (segJs !== '') src.push(segJs);
 
       if (cfg.allSegment) {
         // Segment walker writes params directly into matchState.params on
@@ -883,50 +903,17 @@ export class Router<T = unknown> {
   }
 
   /**
-   * Path normalization shared with the codegen-emitted matchImpl logic.
-   * Returns the normalized `sp` string for downstream lookup, or `null`
-   * when the path violates `maxPathLength` or any segment exceeds
-   * `maxSegmentLength`. **MUST stay semantically in sync with the inline
-   * code emitted by `compileMatchFn`.** Tests in `allowed-methods.test.ts`
-   * cover the option matrix and pin both implementations to the same
-   * behavior — change one, change the other.
+   * Path normalization for the cold-path `allowedMethods()` lookup. Returns
+   * the normalized `sp` string for downstream lookup, or `null` when the
+   * path violates `maxPathLength` or any segment exceeds `maxSegmentLength`.
+   *
+   * The normalizer body is compiled once at seal time from the *same* emit
+   * helpers (`emitPathLenCheck` + `emitQueryStrip` + …) used by the hot
+   * `compileMatchFn` codegen — so the two paths cannot drift in semantics
+   * even if option handling changes. See `matcher/path-normalize.ts`.
    */
   private normalizePathForLookup(path: string): string | null {
-    if (Number.isFinite(this._maxPathLength) && path.length > this._maxPathLength) {
-      return null;
-    }
-
-    let sp = path;
-    const qi = sp.indexOf('?');
-
-    if (qi !== -1) sp = sp.substring(0, qi);
-
-    if (
-      this._ignoreTrailingSlash
-      && sp.length > 1
-      && sp.charCodeAt(sp.length - 1) === 47
-    ) {
-      sp = sp.substring(0, sp.length - 1);
-    }
-
-    if (!this._caseSensitive) sp = sp.toLowerCase();
-
-    if (Number.isFinite(this._maxSegmentLength) && sp.length > this._maxSegmentLength) {
-      const ml = this._maxSegmentLength;
-      let sl = 0;
-
-      for (let i = 1; i < sp.length; i++) {
-        if (sp.charCodeAt(i) === 47) {
-          sl = 0;
-        } else {
-          sl++;
-
-          if (sl > ml) return null;
-        }
-      }
-    }
-
-    return sp;
+    return this._normalizePath(path);
   }
 
   private checkWildcardNameConflict(
