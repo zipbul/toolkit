@@ -9,7 +9,7 @@
  *   `emitRootSlashTerminal` only handled bare `root.store`, not the wildcard
  *   variant; iterative and recursive walkers had the same gap).
  * - `:a:b` style collapsed param names — surprising user-visible behavior.
- *   We now reject router-metacharacters (':', '*', '?', '+', '/', '{', '}')
+ *   We now reject router-metacharacters (':', '*', '?', '+', '/', '(', ')')
  *   inside param names so `/:a:b` errors at registration time.
  */
 import { describe, it, expect } from 'bun:test';
@@ -172,7 +172,7 @@ describe('param-name validation', () => {
   it('rejects metacharacters in :name+ multi-wildcard form', () => {
     const r = new Router<string>();
 
-    expect(() => r.add('GET', '/files/:p{*+', 'invalid')).toThrow(RouterError);
+    expect(() => r.add('GET', '/files/:p(*+', 'invalid')).toThrow(RouterError);
   });
 
   it('rejects metacharacters in :name* star-wildcard form', () => {

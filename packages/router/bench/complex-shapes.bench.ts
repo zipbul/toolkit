@@ -47,7 +47,7 @@ const comboR = setupComboR();
 
 // ── Shape 3: 4-param chain with regex testers at multiple positions ──
 
-const REGEX_ROUTE = '/api/:apiVer{\\d+}/orgs/:org/repos/:repo{[\\w-]+}/issues/:issueId{\\d+}';
+const REGEX_ROUTE = '/api/:apiVer(\\d+)/orgs/:org/repos/:repo([\\w-]+)/issues/:issueId(\\d+)';
 const REGEX_URL   = '/api/3/orgs/anthropic/repos/zipbul-toolkit/issues/12345';
 
 function setupRegexZ() { const r = new Router<number>(); r.add('GET', REGEX_ROUTE, 1); r.build(); return r; }
@@ -203,7 +203,7 @@ function setup1kZ() {
   for (let i = 0; i < 200; i++) r.add('GET', `/static/page${i}`, id++);
   for (let i = 0; i < 200; i++) r.add('GET', `/users${i}/:id`, id++);
   for (let i = 0; i < 200; i++) r.add('GET', `/orgs${i}/:org/repos/:repo`, id++);
-  for (let i = 0; i < 100; i++) r.add('GET', `/search${i}/:q{[a-z]+}`, id++);  // regex
+  for (let i = 0; i < 100; i++) r.add('GET', `/search${i}/:q([a-z]+)`, id++);  // regex
   for (let i = 0; i < 100; i++) r.add('GET', `/files${i}/*path`, id++);          // wildcard
   for (let i = 0; i < 200; i++) r.add('GET', `/api${i}/v1/users/:id/posts/:post/comments/:c`, id++);
   r.build();

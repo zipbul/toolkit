@@ -113,7 +113,7 @@ describe('Router<T> errors', () => {
   it('should throw for unclosed regex pattern (route-parse)', () => {
     const router = new Router<string>();
 
-    const err = catchRouterError(() => router.add('GET', '/users/:id{\\d+', 'invalid-regex'));
+    const err = catchRouterError(() => router.add('GET', '/users/:id(\\d+', 'invalid-regex'));
     expect(err.data.kind).toBe('route-parse');
   });
 
@@ -219,7 +219,7 @@ describe('Router<T> errors', () => {
       regexSafety: { mode: 'error', forbidBackreferences: true },
     });
 
-    const err = catchRouterError(() => router.add('GET', '/users/:id{([a-z])\\1}', 'handler'));
+    const err = catchRouterError(() => router.add('GET', '/users/:id(([a-z])\\1)', 'handler'));
     expect(err.data.kind).toBe('regex-unsafe');
     expect(err.data.message).toContain('Backreferences');
   });
@@ -229,7 +229,7 @@ describe('Router<T> errors', () => {
       regexSafety: { mode: 'error', maxLength: 5 },
     });
 
-    const err = catchRouterError(() => router.add('GET', '/users/:id{[a-zA-Z0-9]+}', 'handler'));
+    const err = catchRouterError(() => router.add('GET', '/users/:id([a-zA-Z0-9]+)', 'handler'));
     expect(err.data.kind).toBe('regex-unsafe');
     expect(err.data.message).toContain('exceeds limit');
   });
@@ -240,7 +240,7 @@ describe('Router<T> errors', () => {
       regexSafety: { mode: 'warn', forbidBackreferences: true },
       onWarn: w => warnings.push(w.kind),
     });
-    router.add('GET', '/users/:id{([a-z])\\1}', 'handler');
+    router.add('GET', '/users/:id(([a-z])\\1)', 'handler');
     expect(warnings).toEqual(['regex-unsafe']);
   });
 
@@ -254,7 +254,7 @@ describe('Router<T> errors', () => {
       },
     });
 
-    expect(() => router.add('GET', '/users/:id{\\d+}', 'handler')).toThrow(
+    expect(() => router.add('GET', '/users/:id(\\d+)', 'handler')).toThrow(
       'validator timeout simulation',
     );
   });
@@ -262,7 +262,7 @@ describe('Router<T> errors', () => {
   it('should throw error when regexAnchorPolicy=error and pattern contains anchor', () => {
     const router = new Router<string>({ regexAnchorPolicy: 'error' });
 
-    const err = catchRouterError(() => router.add('GET', '/users/:id{^\\d+$}', 'handler'));
+    const err = catchRouterError(() => router.add('GET', '/users/:id(^\\d+$)', 'handler'));
     expect(err.data.kind).toBe('regex-anchor');
     expect(err.data.message).toContain('anchors');
   });

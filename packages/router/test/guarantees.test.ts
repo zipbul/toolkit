@@ -304,7 +304,7 @@ describe('radix-walk full walker (tester sibling)', () => {
   // to the catchall.
   function makeTesterRouter() {
     const r = new Router<string>();
-    r.add('GET', '/users/:id{\\d+}', 'numeric');
+    r.add('GET', '/users/:id(\\d+)', 'numeric');
     r.add('GET', '/users/:slug', 'catchall');
     r.build();
 

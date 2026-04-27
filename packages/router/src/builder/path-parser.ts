@@ -232,8 +232,8 @@ export class PathParser {
       core = core.slice(0, -1);
     }
 
-    // Multi/zero-or-more → convert to wildcard (only if no '{' pattern)
-    if (core.endsWith('+') && !core.includes('{')) {
+    // Multi/zero-or-more → convert to wildcard (only if no '(' pattern)
+    if (core.endsWith('+') && !core.includes('(')) {
       const name = core.slice(1, -1); // skip ':' and '+'
       const validation = validateParamName(name, ':', path);
 
@@ -252,7 +252,7 @@ export class PathParser {
       return { type: 'wildcard', name, origin: 'multi' };
     }
 
-    if (core.endsWith('*') && !core.includes('{')) {
+    if (core.endsWith('*') && !core.includes('(')) {
       const name = core.slice(1, -1); // skip ':' and '*'
       const validation = validateParamName(name, ':', path);
 
@@ -274,14 +274,14 @@ export class PathParser {
     // Extract name and pattern
     let name: string;
     let pattern: string | null = null;
-    const braceIdx = core.indexOf('{');
+    const parenIdx = core.indexOf('(');
 
-    if (braceIdx === -1) {
+    if (parenIdx === -1) {
       name = core.slice(1); // skip ':'
     } else {
-      name = core.slice(1, braceIdx);
+      name = core.slice(1, parenIdx);
 
-      if (!core.endsWith('}')) {
+      if (!core.endsWith(')')) {
         return err({
           kind: 'route-parse',
           message: `Unclosed regex pattern in parameter ':${name}': ${path}`,
@@ -289,7 +289,7 @@ export class PathParser {
         });
       }
 
-      pattern = core.slice(braceIdx + 1, -1) || null;
+      pattern = core.slice(parenIdx + 1, -1) || null;
     }
 
     const nameValidation = validateParamName(name, ':', path);
@@ -425,8 +425,8 @@ export class PathParser {
 
 /**
  * Reject router-metacharacters inside a param/wildcard name. Without this,
- * `/:a:b` silently parses as a single param named "a:b" and `/*p{\w+}`
- * registers a wildcard with the literal name `p{\w+}` — both surprising
+ * `/:a:b` silently parses as a single param named "a:b" and `/*p(\w+)`
+ * registers a wildcard with the literal name `p(\w+)` — both surprising
  * non-matches at runtime. We allow letters, digits, underscore, hyphen,
  * and any non-metacharacter Unicode chars.
  *
@@ -449,15 +449,15 @@ function validateParamName(
 
   for (let i = 0; i < name.length; i++) {
     const ch = name.charCodeAt(i);
-    // ':' 58, '*' 42, '?' 63, '+' 43, '/' 47, '{' 123, '}' 125
-    if (ch === 58 || ch === 42 || ch === 63 || ch === 43 || ch === 47 || ch === 123 || ch === 125) {
+    // ':' 58, '*' 42, '?' 63, '+' 43, '/' 47, '(' 40, ')' 41
+    if (ch === 58 || ch === 42 || ch === 63 || ch === 43 || ch === 47 || ch === 40 || ch === 41) {
       const hint = prefix === ':'
         ? "Use '/:a/:b' for two consecutive params."
-        : "Wildcards do not accept regex patterns — use a regex param like ':name{...}' for that.";
+        : "Wildcards do not accept regex patterns — use a regex param like ':name(...)' for that.";
 
       return err({
         kind: 'route-parse',
-        message: `Invalid character '${name.charAt(i)}' in ${prefix === ':' ? 'parameter' : 'wildcard'} name '${prefix}${name}'. Names must not contain router metacharacters (':', '*', '?', '+', '/', '{', '}'). ${hint}`,
+        message: `Invalid character '${name.charAt(i)}' in ${prefix === ':' ? 'parameter' : 'wildcard'} name '${prefix}${name}'. Names must not contain router metacharacters (':', '*', '?', '+', '/', '(', ')'). ${hint}`,
         path,
         segment: name,
       });

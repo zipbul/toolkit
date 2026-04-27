@@ -212,9 +212,9 @@ describe('Router<T>', () => {
       expect('id' in result!.params).toBe(false);
     });
 
-    it('should match regex-constrained param (:id{\\d+})', () => {
+    it('should match regex-constrained param (:id(\\d+))', () => {
       const router = new Router<string>();
-      router.add('GET', '/users/:id{\\d+}', 'user');
+      router.add('GET', '/users/:id(\\d+)', 'user');
       router.build();
 
       // Should match numeric

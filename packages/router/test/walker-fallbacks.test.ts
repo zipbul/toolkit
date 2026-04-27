@@ -286,7 +286,7 @@ describe('regex testers under fallback walkers', () => {
   it('passes when value matches regex, fails otherwise (recursive walker)', () => {
     const r = new Router<string>();
     // Tester on :id forces tester path. Add ambiguity so fallback walker runs.
-    r.add('GET', '/api/v1/:id{\\d+}', 'numeric');
+    r.add('GET', '/api/v1/:id(\\d+)', 'numeric');
     r.add('GET', '/api/:ver/users', 'pv');
     r.build();
 

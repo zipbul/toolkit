@@ -6,12 +6,12 @@ import { Router, RouterError } from '../index';
 test('handlers slot is rolled back when insert fails (route-conflict)', () => {
   const r = new Router<string>();
 
-  r.add('GET', '/users/:id{\\d+}', 'digit');
+  r.add('GET', '/users/:id(\\d+)', 'digit');
 
   // 같은 path, 다른 pattern → route-conflict (insertParam 실패)
   let threw: unknown = null;
   try {
-    r.add('GET', '/users/:id{[a-z]+}', 'alpha');
+    r.add('GET', '/users/:id([a-z]+)', 'alpha');
   } catch (e) {
     threw = e;
   }
@@ -29,14 +29,14 @@ test('handlers slot is rolled back when insert fails (route-conflict)', () => {
 test('no leak when many inserts fail in sequence', () => {
   const r = new Router<string>();
 
-  r.add('GET', '/x/:id{\\d+}', 'base');
+  r.add('GET', '/x/:id(\\d+)', 'base');
 
   const baseHandlers = (r as any).handlers.length;
 
   // 10번 실패 유도
   for (let i = 0; i < 10; i++) {
     try {
-      r.add('GET', '/x/:id{[a-z]+}', `bad-${i}`);
+      r.add('GET', '/x/:id([a-z]+)', `bad-${i}`);
     } catch {
       // expected
     }

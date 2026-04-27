@@ -109,7 +109,7 @@ describe('Router<T> options', () => {
       regexSafety: { mode: 'error' },
     });
 
-    const err = catchRouterError(() => router.add('GET', '/test/:val{(a+)+}', 'test'));
+    const err = catchRouterError(() => router.add('GET', '/test/:val((a+)+)', 'test'));
     expect(err.data.kind).toBe('regex-unsafe');
   });
 

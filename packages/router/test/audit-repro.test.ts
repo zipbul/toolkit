@@ -54,7 +54,7 @@ test('AUDIT validator throw is wrapped into RouterError', () => {
 
   let threw: unknown = null;
   try {
-    r.add('GET', '/x/:id{\\d+}', 'x');
+    r.add('GET', '/x/:id(\\d+)', 'x');
   } catch (e) {
     threw = e;
   }

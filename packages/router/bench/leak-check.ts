@@ -18,7 +18,7 @@ const routes: Array<[string, string]> = [
   ['GET', '/orgs/:org/repos/:repo/pulls/:num/files'],
   ['GET', '/files/*path'],
   ['GET', '/docs/:section?/:page?'],
-  ['GET', '/api/v:version{\\d+}/resource/:id{\\d+}'],
+  ['GET', '/api/v:version(\\d+)/resource/:id(\\d+)'],
 ];
 
 for (const [m, p] of routes) router.add(m as any, p, `${m} ${p}`);

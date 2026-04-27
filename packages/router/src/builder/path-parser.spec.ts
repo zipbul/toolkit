@@ -90,7 +90,7 @@ describe('PathParser', () => {
     });
 
     it('should parse param with regex pattern', () => {
-      const result = parse('/users/:id{\\d+}');
+      const result = parse('/users/:id(\\d+)');
       expect(isErr(result)).toBe(false);
       if (!isErr(result)) {
         expect(result.isDynamic).toBe(true);
@@ -122,7 +122,7 @@ describe('PathParser', () => {
     });
 
     it('should reject unclosed regex pattern', () => {
-      const result = parse('/users/:id{\\d+');
+      const result = parse('/users/:id(\\d+');
       expect(isErr(result)).toBe(true);
       if (isErr(result)) expect(result.data.kind).toBe('route-parse');
     });
@@ -235,7 +235,7 @@ describe('PathParser', () => {
 
   describe('regex safety', () => {
     it('should reject unsafe regex patterns with mode=error', () => {
-      const result = parse('/test/:val{(a+)+}', {
+      const result = parse('/test/:val((a+)+)', {
         regexSafety: { mode: 'error', maxLength: 256, forbidBacktrackingTokens: true, forbidBackreferences: true },
       });
       expect(isErr(result)).toBe(true);
@@ -243,7 +243,7 @@ describe('PathParser', () => {
     });
 
     it('should allow safe regex patterns', () => {
-      const result = parse('/test/:val{\\d+}', {
+      const result = parse('/test/:val(\\d+)', {
         regexSafety: { mode: 'error', maxLength: 256, forbidBacktrackingTokens: true, forbidBackreferences: true },
       });
       expect(isErr(result)).toBe(false);

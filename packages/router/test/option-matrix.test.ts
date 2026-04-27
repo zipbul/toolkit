@@ -63,7 +63,7 @@ describe('ignoreTrailingSlash: true × route type', () => {
 
   it('regex param: trailing slash trim does not bypass tester', () => {
     const r = new Router<string>();
-    r.add('GET', '/users/:id{\\d+}', 'u');
+    r.add('GET', '/users/:id(\\d+)', 'u');
     r.build();
 
     expect(r.match('GET', '/users/42/')!.value).toBe('u');
@@ -370,7 +370,7 @@ describe('triple combinations', () => {
       enableCache: true,
     });
     // %34%32 = "42" — encoded numeric. Tester runs on decoded value.
-    r.add('GET', '/users/:id{\\d+}', 'u');
+    r.add('GET', '/users/:id(\\d+)', 'u');
     r.build();
 
     const a = r.match('GET', '/users/%34%32')!;

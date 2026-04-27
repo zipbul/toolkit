@@ -121,7 +121,7 @@ describe('Router<T> combinations', () => {
   describe('option × route type', () => {
     it('should match lowered input against regex param when caseSensitive=false', () => {
       const router = new Router<string>({ caseSensitive: false });
-      router.add('GET', '/users/:id{\\d+}', 'val');
+      router.add('GET', '/users/:id(\\d+)', 'val');
       router.build();
 
       const result = router.match('GET', '/USERS/42');

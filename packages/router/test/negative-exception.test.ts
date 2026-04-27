@@ -136,26 +136,26 @@ describe('regex safety options', () => {
     const r = new Router<string>({ regexSafety: { maxLength: 10 } });
     const longPattern = '\\d'.repeat(20); // 40 chars
 
-    expect(() => r.add('GET', `/x/:id{${longPattern}}`, 'x')).toThrow(RouterError);
+    expect(() => r.add('GET', `/x/:id(${longPattern})`, 'x')).toThrow(RouterError);
   });
 
   it('throws RouterError on backreference patterns by default', () => {
     const r = new Router<string>();
 
-    expect(() => r.add('GET', '/x/:id{(a)\\1}', 'x')).toThrow(RouterError);
+    expect(() => r.add('GET', '/x/:id((a)\\1)', 'x')).toThrow(RouterError);
   });
 
   it('rejects forbidden backtracking tokens (nested quantifiers like (a+)+ )', () => {
     const r = new Router<string>();
 
     // (a+)+ — classic catastrophic-backtracking nested quantifier.
-    expect(() => r.add('GET', '/x/:id{(a+)+}', 'x')).toThrow(RouterError);
+    expect(() => r.add('GET', '/x/:id((a+)+)', 'x')).toThrow(RouterError);
   });
 
   it('regexAnchorPolicy: error rejects ^ or $ in patterns', () => {
     const r = new Router<string>({ regexAnchorPolicy: 'error' });
 
-    expect(() => r.add('GET', '/x/:id{^abc$}', 'x')).toThrow(RouterError);
+    expect(() => r.add('GET', '/x/:id(^abc$)', 'x')).toThrow(RouterError);
   });
 
   it('regexAnchorPolicy: warn fires onWarn but does not throw', () => {
@@ -165,7 +165,7 @@ describe('regex safety options', () => {
       onWarn: w => warnings.push(w),
     });
 
-    expect(() => r.add('GET', '/x/:id{^abc$}', 'x')).not.toThrow();
+    expect(() => r.add('GET', '/x/:id(^abc$)', 'x')).not.toThrow();
     expect(warnings.length).toBeGreaterThan(0);
   });
 });
@@ -186,7 +186,7 @@ describe('regex tester runtime', () => {
     });
 
     // catastrophic backtracking pattern + matching input (well-known ReDoS)
-    r.add('GET', '/x/:id{(a+)+b}', 'x');
+    r.add('GET', '/x/:id((a+)+b)', 'x');
     r.build();
 
     const evil = 'a'.repeat(40) + 'X'; // forces exponential backtracking
@@ -260,10 +260,10 @@ describe('misuse rejection', () => {
 
   it('allows sibling params when one has a regex tester', () => {
     // Tester-bearing siblings can legitimately distinguish at runtime.
-    // /a/:id{\\d+} matches digits only; /a/:slug catches the rest. Insertion
+    // /a/:id(\\d+) matches digits only; /a/:slug catches the rest. Insertion
     // order (numeric tester first) makes both reachable.
     const r = new Router<string>();
-    r.add('GET', '/a/:id{\\d+}', 'numeric');
+    r.add('GET', '/a/:id(\\d+)', 'numeric');
 
     expect(() => r.add('GET', '/a/:slug', 'catchall')).not.toThrow();
     r.build();
