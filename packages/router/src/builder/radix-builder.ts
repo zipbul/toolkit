@@ -36,6 +36,25 @@ export class RadixBuilder {
     parts: PathPart[],
     handlerIndex: number,
   ): Result<void, RouterErrData> {
+    // DoS guard: each optional param doubles expansion count (2^N). At
+    // N=20 the build hangs ~5 s (measured); N=25 allocates 33M parts
+    // arrays. Cap at 10 (1024 expansions, milliseconds-level build) —
+    // far above realistic APIs and below pathological territory.
+    const MAX_OPTIONAL = 10;
+    let optionalCount = 0;
+
+    for (let i = 0; i < parts.length; i++) {
+      const part = parts[i]!;
+
+      if (part.type === 'param' && part.optional && ++optionalCount > MAX_OPTIONAL) {
+        return err({
+          kind: 'segment-limit',
+          message: `Path has more than ${MAX_OPTIONAL} optional parameters. Each optional doubles the route-expansion count and risks pathological build cost.`,
+          suggestion: 'Reduce optionals or split into multiple explicit routes.',
+        });
+      }
+    }
+
     // Expand optional params into multiple insertion paths
     const expansions = this.expandOptional(parts, handlerIndex);
 
