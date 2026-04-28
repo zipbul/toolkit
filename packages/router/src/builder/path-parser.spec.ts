@@ -126,6 +126,19 @@ describe('PathParser', () => {
       expect(isErr(result)).toBe(true);
       if (isErr(result)) expect(result.data.kind).toBe('route-parse');
     });
+
+    it('should treat whitespace-only regex `(   )` as no-pattern (F15 contract)', () => {
+      // Without this, the matcher would compile a literal-whitespace regex —
+      // almost certainly a typo. Empty `()` and whitespace-only `(   )` collapse
+      // to the same no-pattern shape.
+      const result = parse('/users/:id(   )');
+      expect(isErr(result)).toBe(false);
+      if (!isErr(result)) {
+        const idPart = result.parts.find(p => p.type === 'param' && p.name === 'id');
+        expect(idPart).toBeDefined();
+        expect((idPart as { pattern: string | null }).pattern).toBeNull();
+      }
+    });
   });
 
   describe('wildcard paths', () => {
