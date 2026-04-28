@@ -180,12 +180,28 @@ describe('Router<T> errors', () => {
     }
   });
 
-  it('should throw for conflicting wildcard names at same node', () => {
+  it('should throw for conflicting wildcard names at same node within the same method (F9 — method-scoped)', () => {
     const router = new Router<string>();
     router.add('GET', '/files/*path', 'files-get');
 
-    const err = catchRouterError(() => router.add('POST', '/files/*other', 'files-post'));
+    const err = catchRouterError(() => router.add('GET', '/files/*other', 'files-get-2'));
     expect(err.data.kind).toBe('route-conflict');
+  });
+
+  it('should allow the same wildcard prefix with different names across distinct methods (F9 — cross-method coexistence)', () => {
+    // Pre-A5 the registration below threw because the wildcard-name index
+    // was a single global Map<prefix, name>. A5 keys it by methodCode so
+    // GET and POST tables are independent — the realistic case where one
+    // verb serves files (`*path`) and another serves uploads (`*upload`)
+    // at the same prefix now works.
+    const router = new Router<string>();
+    router.add('GET', '/files/*path', 'files-get');
+
+    expect(() => router.add('POST', '/files/*upload', 'files-post')).not.toThrow();
+
+    router.build();
+    expect(router.match('GET', '/files/a.txt')!.value).toBe('files-get');
+    expect(router.match('POST', '/files/upload.bin')!.value).toBe('files-post');
   });
 
   it('should throw sealed error with registeredCount=0 from addAll after build', () => {

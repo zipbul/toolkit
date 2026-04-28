@@ -151,8 +151,13 @@ export class Router<T = unknown> {
    *  call per invocation. Tuple form keeps name+code together for the
    *  tight loop in allowedMethods. */
   private activeMethodCodes: ReadonlyArray<readonly [string, number]> = [];
-  /** Track wildcard names per normalized prefix for cross-method conflict detection */
-  private wildcardNames: Map<string, string> = new Map();
+  /** Per-method wildcard-name index: methodCode → (prefix → wildcardName).
+   *  Conflict detection is *scoped to a single method* — `GET /api/*file`
+   *  and `POST /api/*name` are independent registrations and may coexist.
+   *  This matches users' mental model: one HTTP method's routing table is
+   *  unrelated to another's. The previous cross-method scoping was an
+   *  over-restriction with no design rationale on record. */
+  private wildcardNamesByMethod: Map<number, Map<string, string>> = new Map();
 
   constructor(options: RouterOptions = {}) {
     this.options = options;
@@ -372,6 +377,7 @@ export class Router<T = unknown> {
     Object.freeze(this.staticMap);
     Object.freeze(this.staticRegistered);
     Object.freeze(this.activeMethodCodes);
+    Object.freeze(this.wildcardNamesByMethod);
 
     return this;
   }
@@ -812,25 +818,33 @@ export class Router<T = unknown> {
   private checkWildcardNameConflict(
     parts: import('./builder/path-parser').PathPart[],
     normalized: string,
+    methodCode: number,
     method: string,
   ): Result<void, RouterErrData> {
+    let scope = this.wildcardNamesByMethod.get(methodCode);
+
     for (const part of parts) {
       if (part.type === 'wildcard') {
         // Build prefix key (path without wildcard)
         const prefix = normalized.replace(/\/[*:].*$/, '');
-        const existing = this.wildcardNames.get(prefix);
+        const existing = scope?.get(prefix);
 
         if (existing !== undefined && existing !== part.name) {
           return err<RouterErrData>({
             kind: 'route-conflict',
-            message: `Wildcard '*${part.name}' conflicts with existing wildcard '*${existing}' at path prefix '${prefix}'`,
+            message: `Wildcard '*${part.name}' conflicts with existing wildcard '*${existing}' at path prefix '${prefix}' for method ${method}`,
             segment: part.name,
             conflictsWith: existing,
             method,
           });
         }
 
-        this.wildcardNames.set(prefix, part.name);
+        if (scope === undefined) {
+          scope = new Map();
+          this.wildcardNamesByMethod.set(methodCode, scope);
+        }
+
+        scope.set(prefix, part.name);
         break;
       }
     }
@@ -838,14 +852,19 @@ export class Router<T = unknown> {
 
   private checkStaticWildcardConflict(
     normalized: string,
+    methodCode: number,
     method: string,
   ): Result<void, RouterErrData> {
-    // Check if any wildcard prefix is a parent of this static route
-    for (const [prefix] of this.wildcardNames) {
+    const scope = this.wildcardNamesByMethod.get(methodCode);
+
+    if (scope === undefined) return;
+
+    // Check if any wildcard prefix in this method is a parent of this static route
+    for (const [prefix] of scope) {
       if (normalized.startsWith(prefix + '/') || normalized === prefix) {
         return err<RouterErrData>({
           kind: 'route-conflict',
-          message: `Static route '${normalized}' conflicts with existing wildcard at '${prefix}/*'`,
+          message: `Static route '${normalized}' conflicts with existing wildcard at '${prefix}/*' for method ${method}`,
           segment: normalized,
           method,
         });
@@ -875,16 +894,16 @@ export class Router<T = unknown> {
 
     const { parts, normalized, isDynamic } = parseResult;
 
-    // Check for wildcard name conflicts across methods
-    const wcConflict = this.checkWildcardNameConflict(parts, normalized, method);
+    // Per-method wildcard-name conflict (cross-method coexistence allowed)
+    const wcConflict = this.checkWildcardNameConflict(parts, normalized, offsetResult, method);
 
     if (isErr(wcConflict)) {
       return wcConflict;
     }
 
-    // Check for static route conflicting with existing wildcard
+    // Check for static route conflicting with existing wildcard *within the same method*
     if (!isDynamic) {
-      const wcBlockConflict = this.checkStaticWildcardConflict(normalized, method);
+      const wcBlockConflict = this.checkStaticWildcardConflict(normalized, offsetResult, method);
 
       if (isErr(wcBlockConflict)) {
         return wcBlockConflict;

@@ -114,7 +114,10 @@ describe('add() rejects malformed registration input', () => {
     expect(() => r.add('GET', '/files/*p/middle', 'f')).toThrow(RouterError);
   });
 
-  it('throws RouterError on cross-method wildcard name conflict', () => {
+  // Mislabeled pre-A5 ("cross-method"): both ops are GET. After A5 (F9)
+  // the conflict check is method-scoped, so this still represents the
+  // same-method case that *must* still throw.
+  it('throws RouterError on same-method conflicting wildcard names', () => {
     const r = new Router<string>();
     r.add('GET', '/files/*p', 'f');
 
