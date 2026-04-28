@@ -15,12 +15,21 @@ const DEFAULT_METHODS: ReadonlyArray<readonly [string, number]> = [
 const MAX_METHODS = 32;
 
 export class MethodRegistry {
+  /** Insertion-ordered map — fed to callers that need to iterate `[name, code]`
+   *  pairs (router build() walks this for activeMethodCodes). */
   private readonly methodToOffset = new Map<string, number>();
+  /** Prototype-less object mirror of `methodToOffset`. router pre-A6 rebuilt
+   *  this on every build() by walking the Map; carrying it as the registry's
+   *  authoritative O(1) lookup table avoids the conversion. Created via
+   *  `Object.create(null)` for the same reason router's NullProtoObj exists —
+   *  no Object.prototype walk on every match. */
+  private readonly codeMap: Record<string, number> = Object.create(null) as Record<string, number>;
   private nextOffset: number;
 
   constructor() {
     for (const [method, offset] of DEFAULT_METHODS) {
       this.methodToOffset.set(method, offset);
+      this.codeMap[method] = offset;
     }
 
     this.nextOffset = DEFAULT_METHODS.length;
@@ -43,6 +52,7 @@ export class MethodRegistry {
 
     const offset = this.nextOffset++;
     this.methodToOffset.set(method, offset);
+    this.codeMap[method] = offset;
 
     return offset;
   }
@@ -57,5 +67,15 @@ export class MethodRegistry {
 
   getAllCodes(): ReadonlyMap<string, number> {
     return this.methodToOffset;
+  }
+
+  /**
+   * Same data as `getAllCodes()` but as a prototype-less Record for hot-path
+   * lookup. The returned object is the registry's internal table — callers
+   * must not freeze or mutate it (router consumes it as a closure-captured
+   * matchImpl input; freeze would tank JSC inline caches per F22 partition).
+   */
+  getCodeMap(): Readonly<Record<string, number>> {
+    return this.codeMap;
   }
 }

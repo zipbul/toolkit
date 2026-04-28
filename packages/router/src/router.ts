@@ -260,10 +260,9 @@ export class Router<T = unknown> {
     this.sealed = true;
 
     const allCodes = this.methodRegistry.getAllCodes();
-    const codes = new NullProtoObj() as Record<string, number>;
-
-    for (const [m, c] of allCodes) codes[m] = c;
-    this.methodCodes = codes;
+    // `getCodeMap()` returns a prototype-less Record kept up to date by the
+    // registry itself, so the previous build-time conversion loop is gone.
+    this.methodCodes = this.methodRegistry.getCodeMap() as Record<string, number>;
 
     const decoder = buildDecoder();
     const decodeParams = this.options.decodeParams ?? true;

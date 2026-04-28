@@ -1,6 +1,5 @@
 import { describe, it, expect } from 'bun:test';
 import { isErr } from '@zipbul/result';
-import type { RouterErrData } from './types';
 
 import { MethodRegistry } from './method-registry';
 
@@ -418,6 +417,55 @@ describe('MethodRegistry', () => {
       expect(reg.getOrCreate('B')).toBe(8);
       reg.getOrCreate('B'); // re-register, no gap
       expect(reg.getOrCreate('C')).toBe(9);
+    });
+  });
+
+  // ── CM: getCodeMap (F11 / A6) ──
+
+  describe('getCodeMap', () => {
+    it('should expose every default method with the same offset as getOrCreate', () => {
+      const reg = new MethodRegistry();
+      const map = reg.getCodeMap();
+
+      expect(map.GET).toBe(0);
+      expect(map.POST).toBe(1);
+      expect(map.PUT).toBe(2);
+      expect(map.PATCH).toBe(3);
+      expect(map.DELETE).toBe(4);
+      expect(map.OPTIONS).toBe(5);
+      expect(map.HEAD).toBe(6);
+    });
+
+    it('should reflect newly registered custom methods immediately', () => {
+      const reg = new MethodRegistry();
+      reg.getOrCreate('PROPFIND');
+      const map = reg.getCodeMap();
+
+      expect(map.PROPFIND).toBe(7);
+    });
+
+    it('should be a prototype-less object so unrelated property reads return undefined', () => {
+      // Object.prototype contains entries like `toString`. A plain `{}` would
+      // resolve `map.toString` to a function, masking "method not registered"
+      // as a truthy hit. The registry must hand out a null-prototype Record.
+      const reg = new MethodRegistry();
+      const map = reg.getCodeMap() as unknown as Record<string, unknown>;
+
+      expect(Object.getPrototypeOf(map)).toBeNull();
+      expect(map.toString).toBeUndefined();
+      expect(map.hasOwnProperty).toBeUndefined();
+    });
+
+    it('should agree with getAllCodes() entry-by-entry', () => {
+      const reg = new MethodRegistry();
+      reg.getOrCreate('PROPFIND');
+      reg.getOrCreate('LOCK');
+
+      const map = reg.getCodeMap();
+
+      for (const [name, code] of reg.getAllCodes()) {
+        expect(map[name]).toBe(code);
+      }
     });
   });
 });
