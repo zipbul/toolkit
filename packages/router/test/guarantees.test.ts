@@ -271,6 +271,7 @@ describe('sealed state', () => {
       staticMap: Record<string, unknown>;
       staticRegistered: Record<string, unknown>;
       activeMethodCodes: ReadonlyArray<readonly [string, number]>;
+      wildcardNamesByMethod: Map<number, Map<string, string>>;
       trees: unknown[];
       staticOutputsByMethod: unknown[];
       methodCodes: Record<string, unknown>;
@@ -281,6 +282,7 @@ describe('sealed state', () => {
     expect(Object.isFrozen(internal.staticMap)).toBe(true);
     expect(Object.isFrozen(internal.staticRegistered)).toBe(true);
     expect(Object.isFrozen(internal.activeMethodCodes)).toBe(true);
+    expect(Object.isFrozen(internal.wildcardNamesByMethod)).toBe(true);
 
     // Hot-path tables: kept mutable for JSC IC perf — but the `sealed` flag
     // rejects every public mutation path, so the lack of freeze is not
