@@ -204,6 +204,21 @@ describe('Router<T> errors', () => {
     expect(router.match('POST', '/files/upload.bin')!.value).toBe('files-post');
   });
 
+  it('should allow a static route under another method even when one method has a wildcard at the same prefix (F9 — cross-method static/wildcard coexistence)', () => {
+    // Same scoping rationale as the wildcard/wildcard case above, but for
+    // the static-vs-wildcard conflict path. Pre-A5 `POST /files/static`
+    // was rejected because GET registered `/files/*p` first; A5 makes the
+    // static-conflict check method-local, so POST gets its own clean slate.
+    const router = new Router<string>();
+    router.add('GET', '/files/*p', 'files-list');
+
+    expect(() => router.add('POST', '/files/static', 'static-upload')).not.toThrow();
+
+    router.build();
+    expect(router.match('GET', '/files/anything')!.value).toBe('files-list');
+    expect(router.match('POST', '/files/static')!.value).toBe('static-upload');
+  });
+
   it('should throw sealed error with registeredCount=0 from addAll after build', () => {
     const router = new Router<string>();
     router.add('GET', '/x', 'x');
