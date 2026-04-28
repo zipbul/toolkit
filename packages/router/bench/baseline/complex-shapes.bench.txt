@@ -6,164 +6,164 @@ runtime: bun 1.3.13 (x64-linux)
 
 benchmark                             avg (min … max) p75 / p99    (min … top 1%)
 ----------------------------------------------------- -------------------------------
-deep10 — @zipbul                       259.29 ns/iter 259.29 ns ▇█                   
-                              (234.89 ns … 562.26 ns) 376.04 ns ██▄                  
-                              (  0.00  b … 816.00  b)  32.98  b ███▇▄▂▂▂▂▂▇▅▂▁▂▁▂▁▂▁▁
+deep10 — @zipbul                       258.56 ns/iter 262.72 ns  █                   
+                              (233.72 ns … 503.92 ns) 354.16 ns ▂█                   
+                              (  0.00  b … 480.00  b)  32.61  b ███▇▃▃▂▁▁▁▂▄▄▃▃▂▁▁▁▁▁
 
-deep10 — memoirist                     264.93 ns/iter 263.55 ns  █                   
-                              (252.92 ns … 522.49 ns) 375.25 ns  █                   
-                              (  0.00  b …  48.00  b)   0.23  b ▇██▄▂▂▁▂▁▁▁▁▁▁▁▁▁▁▁▁▁
+deep10 — memoirist                     266.07 ns/iter 264.84 ns  █                   
+                              (251.74 ns … 583.84 ns) 353.68 ns  ██                  
+                              (  0.00  b … 144.00  b)   0.38  b ▂██▆▃▃▂▂▁▂▁▁▁▁▁▁▁▁▁▁▁
 
-deep10 — rou3                          266.14 ns/iter 262.89 ns  █                   
-                              (247.65 ns … 588.00 ns) 506.49 ns ██                   
-                              (  0.00  b … 576.00  b)   6.42  b ██▅▂▂▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁
+deep10 — rou3                          261.18 ns/iter 257.01 ns  █                   
+                              (241.48 ns … 665.32 ns) 480.20 ns ▅█                   
+                              (  0.00  b … 624.00  b)   5.77  b ██▆▂▂▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁
 
 summary
   deep10 — @zipbul
-   1.02x faster than deep10 — memoirist
-   1.03x faster than deep10 — rou3
+   1.01x faster than deep10 — rou3
+   1.03x faster than deep10 — memoirist
 
 ----------------------------------------------------- -------------------------------
-combo (3-param + wildcard) — @zipbul    79.93 ns/iter  79.00 ns  █                   
-                               (71.48 ns … 346.51 ns) 133.25 ns  ██                  
-                              (  0.00  b …  96.00  b)   0.21  b ▂██▆▃▃▂▁▁▁▁▁▁▁▁▁▁▁▁▁▁
+combo (3-param + wildcard) — @zipbul    79.57 ns/iter  78.80 ns  ▅█                  
+                               (71.11 ns … 376.07 ns) 130.74 ns  ██                  
+                              (  0.00  b …  48.00  b)   0.11  b ▂███▄▂▂▁▁▁▁▁▁▁▁▁▁▁▁▁▁
 
-combo (3-param + wildcard) — memoirist  86.78 ns/iter  85.73 ns  █                   
-                               (78.40 ns … 413.59 ns) 150.39 ns  █▂                  
-                              (  0.00  b …  48.00  b)   0.10  b ▄██▄▃▂▂▁▁▁▁▁▁▁▁▁▁▁▁▁▁
+combo (3-param + wildcard) — memoirist  87.13 ns/iter  86.41 ns   █                  
+                               (78.21 ns … 434.67 ns) 134.68 ns  ▄█▃                 
+                              (  0.00  b …  48.00  b)   0.17  b ▁███▅▃▂▁▁▁▁▁▁▁▁▁▁▁▁▁▁
 
-combo (3-param + wildcard) — rou3      168.74 ns/iter 164.62 ns  █                   
-                              (149.45 ns … 531.64 ns) 400.16 ns ▇█                   
-                              (  0.00  b … 480.00  b)   6.67  b ██▅▂▂▂▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁
+combo (3-param + wildcard) — rou3      170.94 ns/iter 166.51 ns ▃█                   
+                              (152.58 ns … 592.53 ns) 421.90 ns ██                   
+                              (  0.00  b … 528.00  b)   6.56  b ██▄▂▂▂▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁
 
 summary
   combo (3-param + wildcard) — @zipbul
    1.09x faster than combo (3-param + wildcard) — memoirist
-   2.11x faster than combo (3-param + wildcard) — rou3
+   2.15x faster than combo (3-param + wildcard) — rou3
 
 ----------------------------------------------------- -------------------------------
-regex (4 params, 2 testers) — @zipbul  110.32 ns/iter 110.55 ns   █                  
-                              (100.02 ns … 388.21 ns) 154.47 ns  ▅██▄                
-                              (  0.00  b … 192.00  b)   0.56  b ▁████▅▃▂▂▁▁▁▂▁▁▁▁▁▁▁▁
+regex (4 params, 2 testers) — @zipbul  109.64 ns/iter 108.84 ns  █                   
+                               (99.02 ns … 390.90 ns) 193.52 ns  ██                  
+                              (  0.00  b … 240.00  b)   0.62  b ▅██▅▂▂▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁
 
-regex (no constraint) — memoirist       97.44 ns/iter  95.73 ns  █                   
-                               (88.87 ns … 406.77 ns) 163.08 ns  █                   
-                              (  0.00  b …  96.00  b)   0.14  b ▄██▃▃▂▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁
+regex (no constraint) — memoirist       98.00 ns/iter  96.32 ns  █                   
+                               (89.23 ns … 427.41 ns) 176.95 ns  █                   
+                              (  0.00  b …  96.00  b)   0.17  b ▆█▇▃▂▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁
 
 summary
   regex (no constraint) — memoirist
-   1.13x faster than regex (4 params, 2 testers) — @zipbul
+   1.12x faster than regex (4 params, 2 testers) — @zipbul
 
 ----------------------------------------------------- -------------------------------
-500-route 3-param hit — @zipbul         78.44 ns/iter  77.11 ns  █                   
-                               (72.80 ns … 365.34 ns) 124.29 ns ██                   
-                              (  0.00  b … 240.00  b)   0.56  b ███▄▂▂▂▂▁▁▁▁▁▁▁▁▁▁▁▁▁
+500-route 3-param hit — @zipbul         77.39 ns/iter  75.76 ns  █                   
+                               (70.18 ns … 383.31 ns) 133.04 ns  █                   
+                              (  0.00  b … 192.00  b)   0.57  b ▄██▃▂▂▂▁▁▁▁▁▁▁▁▁▁▁▁▁▁
 
-500-route 3-param hit — memoirist       97.96 ns/iter  96.95 ns  █                   
-                               (88.82 ns … 414.19 ns) 187.07 ns ▂█                   
-                              (  0.00  b …  48.00  b)   0.06  b ███▃▂▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁
+500-route 3-param hit — memoirist       96.98 ns/iter  95.47 ns  █                   
+                               (87.75 ns … 423.33 ns) 166.99 ns  █▃                  
+                              (  0.00  b …  48.00  b)   0.03  b ▆██▄▃▂▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁
 
-500-route 3-param hit — rou3           115.53 ns/iter 113.00 ns ▅█                   
-                              (101.36 ns … 468.90 ns) 338.62 ns ██                   
-                              (  0.00  b … 240.00  b)   0.30  b ██▄▂▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁
+500-route 3-param hit — rou3           115.00 ns/iter 112.80 ns ▅█                   
+                              (103.14 ns … 445.65 ns) 308.58 ns ██                   
+                              (  0.00  b … 192.00  b)   0.26  b ██▄▂▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁
 
 summary
   500-route 3-param hit — @zipbul
    1.25x faster than 500-route 3-param hit — memoirist
-   1.47x faster than 500-route 3-param hit — rou3
+   1.49x faster than 500-route 3-param hit — rou3
 
 ----------------------------------------------------- -------------------------------
-500-route static hit — @zipbul          16.19 ns/iter  16.95 ns        █             
-                                (12.98 ns … 72.37 ns)  23.91 ns    ▄▄▄██▆            
-                              (  0.00  b …  48.00  b)   0.03  b ▂▅▆██████▂▂▂▁▁▁▁▁▁▁▁▁
+500-route static hit — @zipbul          16.40 ns/iter  16.92 ns      █               
+                                (12.90 ns … 73.84 ns)  27.59 ns   ▂▂▆█▅              
+                              (  0.00  b …  48.00  b)   0.04  b ▂▃█████▂▂▁▁▁▁▁▁▁▁▁▁▁▁
 
-500-route static hit — memoirist        39.64 ns/iter  37.63 ns ▂█                   
-                               (34.80 ns … 368.70 ns)  75.79 ns ██                   
-                              (  0.00  b … 192.00  b)   4.98  b ██▆▂▂▁▁▁▁▁▁▁▁▂▂▂▁▁▁▁▁
+500-route static hit — memoirist        38.50 ns/iter  36.53 ns  █                   
+                               (33.54 ns … 325.44 ns)  82.32 ns ▂█                   
+                              (  0.00  b … 192.00  b)   4.84  b ██▄▂▂▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁
 
-500-route static hit — rou3              6.76 ns/iter   7.84 ns  █                   
-                                 (5.79 ns … 51.26 ns)  11.30 ns  █                   
-                              (  0.00  b …  48.00  b)   0.10  b ▇█▃▁▁▁▁▃▇▃▁▁▁▁▁▁▁▁▁▁▁
+500-route static hit — rou3              6.88 ns/iter   7.93 ns  █                   
+                                 (5.87 ns … 49.58 ns)  11.78 ns  █                   
+                              (  0.00  b …  48.00  b)   0.10  b ▆█▂▁▁▁▁▆▅▁▁▁▁▂▁▁▁▁▁▁▁
 
 summary
   500-route static hit — rou3
    2.39x faster than 500-route static hit — @zipbul
-   5.86x faster than 500-route static hit — memoirist
+   5.6x faster than 500-route static hit — memoirist
 
 ----------------------------------------------------- -------------------------------
-50-prefix wild — @zipbul                44.61 ns/iter  41.69 ns  █                   
-                               (37.24 ns … 350.17 ns) 112.81 ns ▆█                   
-                              (  0.00  b … 336.00  b)   5.47  b ██▄▂▂▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁
+50-prefix wild — @zipbul                44.13 ns/iter  41.64 ns  █                   
+                               (36.57 ns … 432.80 ns) 111.70 ns  █                   
+                              (  0.00  b … 240.00  b)   5.31  b ▇█▅▂▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁
 
-50-prefix wild — memoirist              35.06 ns/iter  34.48 ns   █▅                 
-                               (30.15 ns … 323.51 ns)  56.99 ns  ▆██                 
-                              (  0.00  b …  48.00  b)   0.02  b ▁███▇▄▃▂▂▁▁▁▁▁▁▁▁▁▁▁▁
+50-prefix wild — memoirist              34.60 ns/iter  34.13 ns   █▆                 
+                               (29.77 ns … 313.50 ns)  54.82 ns  ▆██                 
+                              (  0.00  b …  48.00  b)   0.02  b ▂████▅▃▂▂▁▁▁▁▁▁▁▁▁▁▁▁
 
 summary
   50-prefix wild — memoirist
-   1.27x faster than 50-prefix wild — @zipbul
+   1.28x faster than 50-prefix wild — @zipbul
 
 ----------------------------------------------------- -------------------------------
-deep20 — @zipbul                       521.93 ns/iter 518.73 ns  █                   
-                              (490.95 ns … 830.73 ns) 801.22 ns  █                   
-                              (  0.00  b … 720.00  b)   5.22  b ▆██▃▂▂▂▁▁▁▁▁▁▁▁▁▁▁▁▁▁
+deep20 — @zipbul                       519.07 ns/iter 515.54 ns  █                   
+                              (489.07 ns … 839.62 ns) 775.76 ns  █                   
+                              (  0.00  b … 720.00  b)   5.20  b ▇█▇▃▃▂▂▁▁▁▁▁▁▁▁▁▁▁▁▁▁
 
-deep20 — memoirist                     624.71 ns/iter 620.73 ns  █                   
-                              (596.52 ns … 937.19 ns) 841.06 ns ▆█                   
-                              (  0.00  b …  48.00  b)   0.18  b ██▇▄▃▂▁▂▁▁▂▁▁▁▁▁▁▁▁▁▁
+deep20 — memoirist                     624.66 ns/iter 619.69 ns  █                   
+                              (595.73 ns … 966.90 ns) 880.77 ns ▂█                   
+                              (  0.00  b …  48.00  b)   0.54  b ██▆▃▂▂▂▁▁▁▂▂▁▁▁▁▁▁▁▁▁
 
 summary
   deep20 — @zipbul
    1.2x faster than deep20 — memoirist
 
 ----------------------------------------------------- -------------------------------
-1000-route static hit — @zipbul         13.45 ns/iter  13.83 ns      █               
-                                (10.89 ns … 74.29 ns)  22.75 ns    ▂▄█               
-                              (  0.00  b …  48.00  b)   0.03  b ▂▇▆███▅▂▁▁▁▁▁▁▁▁▁▁▁▁▁
+1000-route static hit — @zipbul         12.76 ns/iter  13.64 ns       █              
+                                (10.46 ns … 78.90 ns)  21.07 ns  ▇▆  ▂█              
+                              (  0.00  b …  48.00  b)   0.02  b ▂██████▃▂▂▁▁▁▁▁▁▁▁▁▁▁
 
-1000-route static hit — memoirist       43.84 ns/iter  42.20 ns  █                   
-                               (37.80 ns … 335.06 ns)  79.81 ns  █                   
-                              (  0.00  b … 144.00  b)   5.43  b ▇█▇▄▂▂▁▁▁▁▁▁▁▁▂▂▁▁▁▁▁
+1000-route static hit — memoirist       43.25 ns/iter  41.41 ns  █                   
+                               (37.17 ns … 342.99 ns)  79.53 ns  █▂                  
+                              (  0.00  b … 144.00  b)   5.33  b ▄██▄▂▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁
 
 summary
   1000-route static hit — @zipbul
-   3.26x faster than 1000-route static hit — memoirist
+   3.39x faster than 1000-route static hit — memoirist
 
 ----------------------------------------------------- -------------------------------
-1000-route 3-param chain — @zipbul      73.68 ns/iter  72.50 ns  █                   
-                               (67.03 ns … 388.07 ns) 127.31 ns  █                   
-                              (  0.00  b …  48.00  b)   0.13  b ▆█▇▃▂▂▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁
+1000-route 3-param chain — @zipbul      74.44 ns/iter  73.24 ns  █                   
+                               (67.51 ns … 375.10 ns) 132.20 ns  █                   
+                              (  0.00  b …  48.00  b)   0.08  b ▅██▃▃▂▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁
 
-1000-route 3-param chain — memoirist    92.10 ns/iter  91.72 ns  █                   
-                               (85.38 ns … 391.45 ns) 131.35 ns  ██                  
-                              (  0.00  b …  48.00  b)   0.03  b ▂███▄▃▂▂▁▁▁▁▁▁▁▁▁▁▁▁▁
+1000-route 3-param chain — memoirist    89.99 ns/iter  89.48 ns  █                   
+                               (83.56 ns … 415.97 ns) 126.78 ns  ██▂                 
+                              (  0.00  b …  48.00  b)   0.05  b ▃███▅▂▂▂▁▁▁▁▁▁▁▁▁▁▁▁▁
 
 summary
   1000-route 3-param chain — @zipbul
-   1.25x faster than 1000-route 3-param chain — memoirist
+   1.21x faster than 1000-route 3-param chain — memoirist
 
 ----------------------------------------------------- -------------------------------
-1000-route wildcard — @zipbul           34.48 ns/iter  33.03 ns  █                   
-                               (29.18 ns … 367.46 ns)  59.45 ns  █▄                  
-                              (  0.00  b …  48.00  b)   0.03  b ▂██▅▄▂▂▁▁▁▁▁▁▁▁▁▁▁▁▁▁
+1000-route wildcard — @zipbul           35.15 ns/iter  33.79 ns  █                   
+                               (30.21 ns … 316.36 ns)  64.38 ns  █▅                  
+                              (  0.00  b …  96.00  b)   0.05  b ▃██▅▃▂▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁
 
-1000-route wildcard — memoirist         35.94 ns/iter  35.12 ns   █                  
-                               (31.00 ns … 345.93 ns)  59.66 ns  ▆█▄                 
+1000-route wildcard — memoirist         35.77 ns/iter  35.11 ns   █                  
+                               (30.91 ns … 302.88 ns)  59.52 ns  ▆█▆                 
                               (  0.00  b …  48.00  b)   0.02  b ▂███▆▃▂▂▁▁▁▁▁▁▁▁▁▁▁▁▁
 
 summary
   1000-route wildcard — @zipbul
-   1.04x faster than 1000-route wildcard — memoirist
+   1.02x faster than 1000-route wildcard — memoirist
 
 ----------------------------------------------------- -------------------------------
-1000-route regex param — @zipbul        45.45 ns/iter  44.34 ns  ▂█                  
-                               (39.74 ns … 355.04 ns)  75.11 ns  ██                  
-                              (  0.00  b …  96.00  b)   0.23  b ▂███▄▂▂▁▂▂▁▁▁▁▁▁▁▁▁▁▁
+1000-route regex param — @zipbul        45.87 ns/iter  44.94 ns   █                  
+                               (40.11 ns … 363.63 ns)  74.69 ns  ██▃                 
+                              (  0.00  b … 144.00  b)   0.22  b ▃███▅▃▂▂▂▁▁▁▁▁▁▁▁▁▁▁▁
 
-1000-route regex param — memoirist      45.29 ns/iter  44.43 ns  █                   
-                               (40.80 ns … 360.01 ns)  78.13 ns  █                   
-                              (  0.00  b …   0.00  b)   0.00  b ███▄▂▂▂▁▁▁▁▁▁▁▁▁▁▁▁▁▁
+1000-route regex param — memoirist      44.17 ns/iter  43.21 ns  █                   
+                               (39.43 ns … 391.83 ns)  82.90 ns  █                   
+                              (  0.00  b …  48.00  b)   0.01  b ▆██▃▂▂▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁
 
 summary
   1000-route regex param — memoirist
-   1x faster than 1000-route regex param — @zipbul
+   1.04x faster than 1000-route regex param — @zipbul

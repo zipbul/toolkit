@@ -1,367 +1,367 @@
 $ bun run bench/router.bench.ts
-clk: ~4.98 GHz
+clk: ~5.01 GHz
 cpu: 13th Gen Intel(R) Core(TM) i7-13700K
 runtime: bun 1.3.13 (x64-linux)
 
 benchmark                                         avg (min … max) p75 / p99    (min … top 1%)
 ----------------------------------------------------------------- -------------------------------
-static match (10 routes)                           365.32 ps/iter 317.38 ps █                    
-                                          (314.70 ps … 144.09 ns) 413.57 ps █▂                   
-                                          (  0.00  b …  96.00  b)   0.02  b ██▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁
+static match (10 routes)                           358.80 ps/iter 317.38 ps  █▅                  
+                                          (314.94 ps … 140.41 ns) 339.11 ps  ██                  
+                                          (  0.00  b …  96.00  b)   0.01  b ▁██▂▃▄▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁
 
-static match (100 routes)                          491.09 ps/iter 317.14 ps █                    
-                                          (314.70 ps … 126.23 ns)  12.43 ns █                    
+static match (100 routes)                          494.75 ps/iter 317.14 ps █                    
+                                          (314.70 ps … 136.05 ns)  12.28 ns █                    
                                           (  0.00  b …  96.00  b)   0.02  b █▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁
 
-static match (500 routes)                          844.20 ps/iter 318.85 ps █                    
-                                          (315.43 ps … 110.62 ns)  14.81 ns █                    
+static match (500 routes)                          839.65 ps/iter 319.09 ps █                    
+                                          (315.43 ps … 143.87 ns)  14.84 ns █                    
                                           (  0.00  b …  96.00  b)   0.03  b █▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁
 
-static match (1000 routes)                           4.96 ns/iter  13.51 ns █                    
-                                           (314.94 ps … 86.59 ns)  19.96 ns █                    
-                                          (  0.00  b …  96.00  b)   0.09  b █▁▁▁▁▁▁▁▁▁▁▁▂▂▂▄▂▂▃▁▁
+static match (1000 routes)                           4.48 ns/iter  12.47 ns █                    
+                                           (314.70 ps … 89.04 ns)  18.23 ns █                    
+                                          (  0.00  b …  96.00  b)   0.06  b █▁▁▁▁▁▁▁▁▁▁▁▁▂▂▂▄▂▂▃▁
 
 summary
   static match (10 routes)
-   1.34x faster than static match (100 routes)
-   2.31x faster than static match (500 routes)
-   13.58x faster than static match (1000 routes)
+   1.38x faster than static match (100 routes)
+   2.34x faster than static match (500 routes)
+   12.48x faster than static match (1000 routes)
 
 ----------------------------------------------------------------- -------------------------------
-param match: /users/:id                             43.87 ns/iter  41.28 ns  █                   
-                                           (36.70 ns … 380.07 ns) 104.82 ns ██                   
-                                          (  0.00  b … 192.00  b)   5.66  b ██▆▃▂▂▁▁▁▂▂▁▁▁▁▁▁▁▁▁▁
+param match: /users/:id                             43.67 ns/iter  41.60 ns  █                   
+                                           (37.53 ns … 330.04 ns)  89.29 ns ▄█                   
+                                          (  0.00  b … 144.00  b)   5.55  b ██▇▃▂▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁
 
-param match: /users/:id/posts/:postId               51.72 ns/iter  50.74 ns  █                   
-                                           (46.91 ns … 342.35 ns)  95.42 ns ▆█                   
-                                          (  0.00  b …  96.00  b)   0.12  b ██▇▃▂▂▁▂▁▁▁▁▁▁▁▁▁▁▁▁▁
+param match: /users/:id/posts/:postId               51.30 ns/iter  50.52 ns  █                   
+                                           (46.75 ns … 355.08 ns)  80.81 ns  █                   
+                                          (  0.00  b … 144.00  b)   0.21  b ▃█▇▅▂▂▂▁▁▁▁▁▁▁▁▁▁▁▁▁▁
 
-param match: 3-deep params                          67.31 ns/iter  66.72 ns  █                   
-                                           (62.02 ns … 350.62 ns) 108.92 ns ▃█                   
-                                          (  0.00  b …  96.00  b)   0.19  b ███▄▃▂▂▁▁▁▁▁▁▁▁▁▁▁▁▁▁
+param match: 3-deep params                          67.25 ns/iter  66.38 ns  █                   
+                                           (61.66 ns … 362.16 ns) 118.93 ns ▂█                   
+                                          (  0.00  b …  48.00  b)   0.13  b ██▇▃▂▂▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁
 
-param match: 3-deep (org/team/member)               91.30 ns/iter  90.17 ns  █                   
-                                           (82.27 ns … 395.03 ns) 168.22 ns  █                   
-                                          (  0.00  b …  96.00  b)   0.29  b ▅██▄▂▂▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁
+param match: 3-deep (org/team/member)               91.79 ns/iter  90.31 ns  █                   
+                                           (82.02 ns … 382.13 ns) 174.28 ns  █▂                  
+                                          (  0.00  b …  96.00  b)   0.34  b ▂██▃▂▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁
 
 summary
   param match: /users/:id
-   1.18x faster than param match: /users/:id/posts/:postId
-   1.53x faster than param match: 3-deep params
-   2.08x faster than param match: 3-deep (org/team/member)
+   1.17x faster than param match: /users/:id/posts/:postId
+   1.54x faster than param match: 3-deep params
+   2.1x faster than param match: 3-deep (org/team/member)
 
 ----------------------------------------------------------------- -------------------------------
-wildcard match: short suffix                        28.61 ns/iter  27.22 ns  █                   
-                                           (24.22 ns … 397.73 ns)  55.92 ns  █▃                  
-                                          (  0.00  b …  96.00  b)   0.06  b ▂██▃▂▂▂▁▁▁▁▁▁▁▁▁▁▁▁▁▁
+wildcard match: short suffix                        28.53 ns/iter  27.29 ns  █                   
+                                           (24.40 ns … 302.70 ns)  52.44 ns  █▆                  
+                                          (  0.00  b …  48.00  b)   0.03  b ▁██▄▃▂▂▁▁▁▁▁▁▁▁▁▁▁▁▁▁
 
-wildcard match: deep suffix                         36.04 ns/iter  34.59 ns  █                   
-                                           (31.61 ns … 369.55 ns)  65.01 ns  █                   
-                                          (  0.00  b …  48.00  b)   0.05  b ▃█▅▄▂▂▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁
+wildcard match: deep suffix                         36.72 ns/iter  36.08 ns  █▇                  
+                                           (31.89 ns … 366.23 ns)  62.79 ns  ██                  
+                                          (  0.00  b …  48.00  b)   0.02  b ▂███▅▂▂▁▁▁▁▁▁▁▁▁▁▁▁▁▁
 
-wildcard match: very long suffix                    42.33 ns/iter  40.65 ns  █                   
-                                           (37.36 ns … 333.17 ns)  82.49 ns  █                   
-                                          (  0.00  b …  48.00  b)   0.18  b ▇█▅▃▂▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁
+wildcard match: very long suffix                    41.90 ns/iter  40.84 ns  █                   
+                                           (37.44 ns … 344.61 ns)  71.64 ns  █                   
+                                          (  0.00  b …  48.00  b)   0.18  b ▃█▇▅▂▂▂▁▁▁▁▁▁▁▁▁▁▁▁▁▁
 
 summary
   wildcard match: short suffix
-   1.26x faster than wildcard match: deep suffix
-   1.48x faster than wildcard match: very long suffix
+   1.29x faster than wildcard match: deep suffix
+   1.47x faster than wildcard match: very long suffix
 
 ----------------------------------------------------------------- -------------------------------
-cache hit (100 routes)                              13.98 ns/iter  14.92 ns  █   ▃               
-                                            (11.89 ns … 54.34 ns)  24.17 ns  █ ▅ █               
-                                          (  0.00  b …  48.00  b)   0.02  b ▇█████▄▂▂▁▁▁▁▁▁▁▁▁▁▁▁
+cache hit (100 routes)                              13.95 ns/iter  14.75 ns  █                   
+                                            (11.90 ns … 62.74 ns)  23.94 ns  ██▇ ▂▃              
+                                          (  0.00  b …  48.00  b)   0.01  b ▃██████▂▂▁▁▁▁▁▁▁▁▁▁▁▁
 
-no-cache (100 routes)                                3.82 ns/iter   3.75 ns  █▆                  
-                                             (3.43 ns … 54.25 ns)   6.51 ns  ██                  
-                                          (  0.00  b …  48.00  b)   0.01  b ▁██▆▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁
+no-cache (100 routes)                                3.80 ns/iter   3.79 ns    █                 
+                                             (3.39 ns … 62.89 ns)   5.81 ns   ▂█                 
+                                          (  0.00  b …  48.00  b)   0.02  b ▁▂██▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁
 
-cache hit (1000 routes)                             16.63 ns/iter  16.70 ns      █               
-                                            (13.34 ns … 64.27 ns)  26.47 ns      █               
-                                          (  0.00  b …  48.00  b)   0.02  b ▁▃▃▂▄█▂▂▁▁▁▁▁▁▁▁▁▁▁▁▁
+cache hit (1000 routes)                             16.68 ns/iter  16.70 ns      █               
+                                            (13.08 ns … 79.17 ns)  27.49 ns      █               
+                                          (  0.00  b …  48.00  b)   0.03  b ▁▂▂▂▇█▂▂▁▁▁▁▁▁▁▁▁▁▁▁▁
 
-no-cache (1000 routes)                               4.46 ns/iter   4.32 ns  █                   
-                                             (4.09 ns … 80.01 ns)   7.83 ns  █                   
-                                          (  0.00  b …  48.00  b)   0.01  b ▁█▅▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁
+no-cache (1000 routes)                               4.50 ns/iter   4.45 ns  █▇                  
+                                             (4.22 ns … 47.20 ns)   7.07 ns  ██                  
+                                          (  0.00  b …  48.00  b)   0.02  b ███▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁
 
 summary
   no-cache (100 routes)
-   1.17x faster than no-cache (1000 routes)
-   3.66x faster than cache hit (100 routes)
-   4.36x faster than cache hit (1000 routes)
+   1.18x faster than no-cache (1000 routes)
+   3.67x faster than cache hit (100 routes)
+   4.39x faster than cache hit (1000 routes)
 
 ----------------------------------------------------------------- -------------------------------
-param cache hit: /users/:id                         24.39 ns/iter  22.62 ns  █                   
-                                           (20.81 ns … 359.34 ns)  49.19 ns  █                   
-                                          (  0.00  b … 192.00  b)   3.27  b ██▃▂▂▁▁▁▁▂▂▁▁▁▁▁▁▁▁▁▁
+param cache hit: /users/:id                         24.15 ns/iter  22.89 ns  █                   
+                                           (20.83 ns … 297.95 ns)  43.88 ns  █                   
+                                          (  0.00  b …  96.00  b)   3.19  b ▅█▇▃▂▁▁▁▁▁▁▂▂▁▂▁▁▁▁▁▁
 
-param no-cache: /users/:id                          34.52 ns/iter  32.88 ns  █                   
-                                           (30.90 ns … 303.73 ns)  56.03 ns  █                   
-                                          (  0.00  b …  48.00  b)   0.03  b ▂█▄▃▂▂▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁
+param no-cache: /users/:id                          34.69 ns/iter  33.33 ns  █                   
+                                           (31.06 ns … 321.62 ns)  63.39 ns  █                   
+                                          (  0.00  b …  48.00  b)   0.02  b ██▄▃▂▂▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁
 
-param cache hit: 3-deep                             16.83 ns/iter  16.13 ns  █                   
-                                           (14.80 ns … 318.82 ns)  31.68 ns  █                   
-                                          (  0.00  b …  48.00  b)   0.03  b ▂█▆▂▂▂▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁
+param cache hit: 3-deep                             16.90 ns/iter  16.43 ns  ██                  
+                                           (14.76 ns … 288.11 ns)  30.51 ns  ██                  
+                                          (  0.00  b …  48.00  b)   0.04  b ▂██▄▂▂▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁
 
-param no-cache: 3-deep                              64.80 ns/iter  63.84 ns  █                   
-                                           (59.17 ns … 351.69 ns) 118.73 ns ██                   
-                                          (  0.00  b …  48.00  b)   0.06  b ███▄▂▂▁▂▁▁▁▁▁▁▁▁▁▁▁▁▁
+param no-cache: 3-deep                              63.05 ns/iter  62.62 ns  █                   
+                                           (58.42 ns … 302.10 ns)  99.67 ns  █                   
+                                          (  0.00  b …  96.00  b)   0.05  b ▆██▄▂▂▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁
 
 summary
   param cache hit: 3-deep
-   1.45x faster than param cache hit: /users/:id
+   1.43x faster than param cache hit: /users/:id
    2.05x faster than param no-cache: /users/:id
-   3.85x faster than param no-cache: 3-deep
+   3.73x faster than param no-cache: 3-deep
 
 ----------------------------------------------------------------- -------------------------------
-404 miss (10 routes)                                16.89 ns/iter  17.12 ns     █                
-                                            (14.25 ns … 62.11 ns)  29.76 ns  ▄▂ █                
-                                          (  0.00  b …  48.00  b)   0.02  b ▃████▂▂▂▁▁▁▁▁▁▁▁▁▁▁▁▁
+404 miss (10 routes)                                16.51 ns/iter  16.70 ns      █               
+                                            (13.62 ns … 56.09 ns)  26.01 ns      █               
+                                          (  0.00  b …  48.00  b)   0.01  b ▁▄▄▅▅█▂▂▁▁▁▁▁▁▁▁▁▁▁▁▁
 
-404 miss (100 routes)                               17.00 ns/iter  16.77 ns    █                 
-                                            (13.88 ns … 82.01 ns)  31.18 ns    █                 
-                                          (  0.00  b …  48.00  b)   0.02  b ▁▄▆█▃▂▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁
+404 miss (100 routes)                               16.62 ns/iter  16.70 ns     █                
+                                            (13.69 ns … 61.15 ns)  27.51 ns     █                
+                                          (  0.00  b …  48.00  b)   0.01  b ▁▃▅▆█▃▂▂▁▁▁▁▁▁▁▁▁▁▁▁▁
 
-404 miss (1000 routes)                              16.59 ns/iter  16.73 ns      █               
-                                            (13.71 ns … 47.73 ns)  26.72 ns      █               
-                                          (  0.00  b …  48.00  b)   0.03  b ▁▅▅▆▇█▂▂▁▁▁▁▁▁▁▁▁▁▁▁▁
+404 miss (1000 routes)                              16.10 ns/iter  16.68 ns     █                
+                                           (13.62 ns … 108.85 ns)  29.54 ns  ▇█▃█                
+                                          (  0.00  b …  48.00  b)   0.02  b ▆████▃▂▂▁▁▁▁▁▁▁▁▁▁▁▁▁
 
 summary
   404 miss (1000 routes)
-   1.02x faster than 404 miss (10 routes)
-   1.02x faster than 404 miss (100 routes)
+   1.03x faster than 404 miss (10 routes)
+   1.03x faster than 404 miss (100 routes)
 
 ----------------------------------------------------------------- -------------------------------
-mixed static hit (100 routes)                       11.78 ns/iter  12.78 ns  █                   
-                                             (9.71 ns … 54.26 ns)  22.22 ns  █▆ ▄█               
-                                          (  0.00  b …  48.00  b)   0.04  b ▇█████▃▃▂▁▁▁▁▁▁▁▁▁▁▁▁
+mixed static hit (100 routes)                       11.70 ns/iter  12.75 ns  ▆▄    █             
+                                             (9.72 ns … 53.81 ns)  18.75 ns  ██  ▄▅█             
+                                          (  0.00  b …  48.00  b)   0.02  b ▆███▆███▃▂▁▁▁▁▁▁▁▁▁▁▁
 
-mixed param hit (100 routes)                        68.95 ns/iter  66.81 ns  █                   
-                                           (60.71 ns … 340.01 ns) 116.23 ns  █                   
-                                          (  0.00  b … 288.00  b)   9.34  b ███▄▂▁▂▁▁▁▁▁▂▂▂▁▁▁▁▁▁
+mixed param hit (100 routes)                        69.40 ns/iter  66.92 ns  █                   
+                                           (60.92 ns … 391.53 ns) 124.86 ns  █                   
+                                          (  0.00  b … 192.00  b)   9.36  b ▇██▃▂▁▁▁▁▁▁▂▁▂▁▁▁▁▁▁▁
 
-mixed wildcard hit (100 routes)                     49.67 ns/iter  48.49 ns  █                   
-                                           (44.14 ns … 378.76 ns)  86.34 ns  █                   
-                                          (  0.00  b … 144.00  b)   0.14  b ▅█▆▄▃▂▂▁▁▁▁▁▁▁▁▁▁▁▁▁▁
+mixed wildcard hit (100 routes)                     51.48 ns/iter  50.32 ns  █                   
+                                           (45.75 ns … 333.30 ns) 101.24 ns  █                   
+                                          (  0.00  b …  96.00  b)   0.09  b ███▃▂▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁
 
-mixed cached static hit                              2.82 ns/iter 959.96 ps █                    
-                                           (931.40 ps … 82.40 ns)  16.16 ns █                    
-                                          (  0.00  b …  96.00  b)   0.06  b █▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▂▁▂▂▁
+mixed cached static hit                              2.34 ns/iter 961.18 ps █                    
+                                           (933.11 ps … 75.56 ns)  15.41 ns █                    
+                                          (  0.00  b …  48.00  b)   0.07  b █▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▂▁▂▂
 
-mixed cached param hit                              24.62 ns/iter  23.71 ns  █                   
-                                           (20.76 ns … 304.38 ns)  46.41 ns  ██                  
-                                          (  0.00  b …  96.00  b)   3.24  b ███▄▂▂▂▁▁▁▁▂▃▂▁▁▁▁▁▁▁
+mixed cached param hit                              25.24 ns/iter  24.32 ns  █                   
+                                           (21.01 ns … 363.76 ns)  47.17 ns  █▆                  
+                                          (  0.00  b …  96.00  b)   3.28  b ▄██▇▂▂▁▁▁▁▁▂▂▂▂▂▁▁▁▁▁
 
 summary
   mixed cached static hit
-   4.18x faster than mixed static hit (100 routes)
-   8.73x faster than mixed cached param hit
-   17.62x faster than mixed wildcard hit (100 routes)
-   24.46x faster than mixed param hit (100 routes)
+   5x faster than mixed static hit (100 routes)
+   10.78x faster than mixed cached param hit
+   21.99x faster than mixed wildcard hit (100 routes)
+   29.65x faster than mixed param hit (100 routes)
 
 ----------------------------------------------------------------- -------------------------------
-full-options static match                           63.40 ns/iter  62.19 ns ▄█▃                  
-                                             (51.91 ns … 1.94 µs) 134.44 ns ███                  
-                                          (  0.00  b …   8.77 kb)  34.92  b ████▃▅▄▂▂▁▁▁▁▁▁▁▁▁▁▁▁
+full-options static match                           65.84 ns/iter  67.19 ns  █  ▂▄               
+                                             (50.32 ns … 2.84 µs) 115.62 ns ▆█  ██               
+                                          (  0.00  b …   8.72 kb)  36.57  b ██▅█████▃▂▂▂▁▁▁▁▁▁▁▁▁
 
-full-options param match                            95.01 ns/iter  91.35 ns █                    
-                                             (80.55 ns … 3.33 µs) 186.58 ns █▇▄                  
-                                          (  0.00  b …   2.63 kb)  12.45  b ███▅▃▂▂▁▁▁▁▁▁▁▁▁▁▁▁▁▁
+full-options param match                            91.99 ns/iter  88.44 ns ▂█                   
+                                             (77.91 ns … 3.37 µs) 177.91 ns ██                   
+                                          (  0.00  b … 192.00  b)  10.33  b ███▄▆▃▁▂▁▁▁▁▁▁▁▁▁▁▁▁▁
 
-full-options wildcard match                         96.48 ns/iter  91.89 ns  █                   
-                                             (80.97 ns … 3.40 µs) 186.00 ns  █▆                  
-                                          (  0.00  b …  48.00  b)   0.54  b ▆██▅▃▂▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁
+full-options wildcard match                         92.43 ns/iter  86.14 ns   █                  
+                                             (75.40 ns … 3.28 µs) 164.30 ns  ▃█                  
+                                          (  0.00  b …  48.00  b)   0.60  b ▄██▆▃▂▂▁▁▁▁▁▁▁▁▁▁▁▁▁▁
 
-full-options trailing slash                        116.96 ns/iter 111.63 ns ▂█                   
-                                            (100.18 ns … 2.48 µs) 228.19 ns ██                   
-                                          (  0.00  b … 192.00  b)  13.48  b ███▄▂▂▂▁▁▁▁▁▁▁▁▁▁▁▁▁▁
+full-options trailing slash                        120.02 ns/iter 114.28 ns  █                   
+                                            (104.20 ns … 2.47 µs) 231.28 ns ▂█                   
+                                          (  0.00  b … 192.00  b)  13.88  b ██▆▄▂▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁
 
-full-options collapsed slashes                      81.21 ns/iter  81.95 ns  █▅▆                 
-                                           (65.38 ns … 909.33 ns) 159.20 ns  ███▅                
-                                          (  0.00  b …   5.81 kb)  26.88  b █████▅▃▂▂▂▁▂▁▁▂▁▁▁▁▁▁
+full-options collapsed slashes                      81.08 ns/iter  82.84 ns   █▆▃                
+                                           (66.68 ns … 985.07 ns) 131.07 ns  ████▇               
+                                          (  0.00  b …   5.81 kb)  26.01  b ▇██████▆▅▃▃▃▂▂▁▁▁▁▁▁▁
 
 summary
   full-options static match
-   1.28x faster than full-options collapsed slashes
-   1.5x faster than full-options param match
-   1.52x faster than full-options wildcard match
-   1.84x faster than full-options trailing slash
+   1.23x faster than full-options collapsed slashes
+   1.4x faster than full-options param match
+   1.4x faster than full-options wildcard match
+   1.82x faster than full-options trailing slash
 
 ----------------------------------------------------------------- -------------------------------
-add+build 10 static routes                         155.52 µs/iter 173.97 µs   ▃▆▅█▅▃▃            
-                                           (98.61 µs … 324.60 µs) 283.12 µs ▂████████▇▄▅▆▂▃▁▁▁▁▁▂
-                                        gc(  1.30 ms …   4.07 ms)   1.31 kb (  0.00  b…192.00 kb)
+add+build 10 static routes                         110.89 µs/iter 121.78 µs ▄█▂                  
+                                           (83.90 µs … 272.64 µs) 230.62 µs ███▇▆▅▄▄▃▃▂▂▂▂▂▂▁▁▁▁▁
+                                        gc(  1.07 ms …   3.53 ms)   1.46 kb (  0.00  b…384.00 kb)
 
-add+build 100 static routes                        239.75 µs/iter 257.92 µs   ▄█▇ ▂▃             
-                                          (180.39 µs … 431.60 µs) 386.69 µs ▂▇██████▇▆▅▄▃▂▁▂▂▁▂▁▁
-                                        gc(  1.27 ms …   4.78 ms)   2.55 kb (  0.00  b…192.00 kb)
+add+build 100 static routes                        206.20 µs/iter 221.65 µs  █▆                  
+                                          (167.95 µs … 345.98 µs) 329.72 µs ██████▆▇▅▂▃▃▃▂▃▂▁▂▂▁▁
+                                        gc(  1.26 ms …   3.69 ms)   2.20 kb (  0.00  b…192.00 kb)
 
-add+build 500 static routes                        561.70 µs/iter 576.24 µs    █▅▃               
-                                          (463.28 µs … 943.87 µs) 885.36 µs ▄▇████▆▅▃▃▂▂▁▂▂▁▁▁▁▁▁
-                                        gc(  1.38 ms …   4.48 ms)  11.64 kb (  0.00  b…576.00 kb)
+add+build 500 static routes                        497.76 µs/iter 521.67 µs  ▄█▂▂                
+                                          (437.15 µs … 780.93 µs) 663.98 µs ▃████▅▃▆▅▃▃▃▂▃▂▁▁▂▂▂▂
+                                        gc(  1.22 ms …   3.50 ms)  10.76 kb (  0.00  b…384.00 kb)
 
-add+build 1000 static routes                       968.25 µs/iter 990.63 µs   ▄█▄▅               
-                                            (801.20 µs … 1.73 ms)   1.50 ms ▂▇████▆▄▃▃▂▁▂▁▂▂▁▁▂▁▁
-                                        gc(  1.58 ms …   5.81 ms)  27.27 kb (  0.00  b…576.00 kb)
+add+build 1000 static routes                       843.63 µs/iter 855.31 µs  ▂█▆▂                
+                                            (773.68 µs … 1.25 ms)   1.05 ms ▃█████▆▄▃▃▁▂▃▃▁▂▂▂▂▂▂
+                                        gc(  1.20 ms …   3.07 ms)  20.91 kb (  0.00  b…576.00 kb)
 
                                                    ┌                                            ┐
-                                                   ╷┌┬   ╷
-                        add+build 10 static routes ├┤│───┤
-                                                   ╵└┴   ╵
-                                                      ╷┌┬   ╷
-                       add+build 100 static routes    ├┤│───┤
-                                                      ╵└┴   ╵
-                                                               ╷┌─┬         ╷
-                       add+build 500 static routes             ├┤ │─────────┤
-                                                               ╵└─┴         ╵
-                                                                          ╷ ┌──┬┐               ╷
-                      add+build 1000 static routes                        ├─┤  │├───────────────┤
-                                                                          ╵ └──┴┘               ╵
+                                                   ┌┬┐    ╷
+                        add+build 10 static routes ││├────┤
+                                                   └┴┘    ╵
+                                                       ┌─┬    ╷
+                       add+build 100 static routes     │ │────┤
+                                                       └─┴    ╵
+                                                                   ╷┌─┬┐      ╷
+                       add+build 500 static routes                 ├┤ │├──────┤
+                                                                   ╵└─┴┘      ╵
+                                                                                   ╷┌─┬┐        ╷
+                      add+build 1000 static routes                                 ├┤ │├────────┤
+                                                                                   ╵└─┴┘        ╵
                                                    └                                            ┘
-                                                   98.61 µs           797.06 µs           1.50 ms
+                                                   83.90 µs           567.72 µs           1.05 ms
 
 ----------------------------------------------------------------- -------------------------------
-add+build 100 mixed routes                         285.58 µs/iter 306.02 µs    █▅▄▅              
-                                          (203.15 µs … 536.60 µs) 507.13 µs ▃▆██████▆▆▂▃▃▁▁▂▁▁▁▁▂
-                                        gc(  1.33 ms …   4.66 ms)   6.76 kb (  0.00  b…576.00 kb)
+add+build 100 mixed routes                         240.60 µs/iter 259.08 µs  █▂                  
+                                          (194.89 µs … 493.02 µs) 368.67 µs ▅█████▆▇▄▄▄▃▃▂▃▁▁▂▂▁▁
+                                        gc(  1.26 ms …   3.35 ms)   8.56 kb (  0.00  b…384.00 kb)
 
-add+build 100 mixed + cache                        292.33 µs/iter 310.40 µs    ▂ █▄▄▆            
-                                          (222.21 µs … 481.64 µs) 426.35 µs ▃▅███████▇█▅▅▂▂▂▂▂▂▁▂
-                                        gc(  1.26 ms …   4.87 ms)   1.37 kb (  0.00  b…192.00 kb)
+add+build 100 mixed + cache                        264.83 µs/iter 289.76 µs  █▅ ▂                
+                                          (210.79 µs … 457.64 µs) 395.38 µs ▄████▇█▇▅▆▅▄▄▄▃▂▂▂▂▂▂
+                                        gc(  1.15 ms …   4.36 ms)   1.13 kb (  0.00  b…192.00 kb)
 
                                                    ┌                                            ┐
-                                                   ╷      ┌────┬──┐                             ╷
-                        add+build 100 mixed routes ├──────┤    │  ├─────────────────────────────┤
-                                                   ╵      └────┴──┘                             ╵
-                                                      ╷     ┌───┬──┐                ╷
-                       add+build 100 mixed + cache    ├─────┤   │  ├────────────────┤
-                                                      ╵     └───┴──┘                ╵
+                                                   ╷  ┌──────┬───┐                        ╷
+                        add+build 100 mixed routes ├──┤      │   ├────────────────────────┤
+                                                   ╵  └──────┴───┘                        ╵
+                                                       ╷   ┌───────┬────┐                       ╷
+                       add+build 100 mixed + cache     ├───┤       │    ├───────────────────────┤
+                                                       ╵   └───────┴────┘                       ╵
                                                    └                                            ┘
-                                                   203.15 µs         355.14 µs          507.13 µs
+                                                   194.89 µs         295.14 µs          395.38 µs
 
 ----------------------------------------------------------------- -------------------------------
-regex param match: /:id(\d+)                        53.45 ns/iter  49.89 ns █▃                   
-                                           (44.88 ns … 378.30 ns) 112.08 ns ██                   
-                                          (  0.00  b … 288.00  b)   8.59  b ██▆▃▂▁▁▁▁▁▁▁▁▂▃▂▁▁▁▁▁
+regex param match: /:id(\d+)                        52.31 ns/iter  49.29 ns ▂█                   
+                                           (44.46 ns … 388.90 ns) 112.97 ns ██                   
+                                          (  0.00  b … 240.00  b)   8.28  b ██▆▃▂▁▁▁▁▁▁▁▂▂▁▁▁▁▁▁▁
 
-regex param match: 2-deep regex params              46.55 ns/iter  44.79 ns  █                   
-                                           (39.29 ns … 458.48 ns)  97.45 ns ▅█                   
-                                          (  0.00  b …  96.00  b)   0.33  b ██▅▂▃▅▂▁▁▁▁▁▁▁▁▁▁▁▁▁▁
+regex param match: 2-deep regex params              44.10 ns/iter  43.00 ns  █                   
+                                           (38.57 ns … 327.14 ns)  68.73 ns  █▂                  
+                                          (  0.00  b … 144.00  b)   0.32  b ▅██▅▃▂▂▁▂▃▃▂▁▁▁▁▁▁▁▁▁
 
-regex param match: /:id(\d+)/comments               54.02 ns/iter  53.40 ns  █                   
-                                           (46.98 ns … 417.23 ns) 100.17 ns  █                   
-                                          (  0.00  b … 240.00  b)   0.78  b ▆█▆▃▅▂▂▂▁▁▁▁▁▁▁▁▁▁▁▁▁
+regex param match: /:id(\d+)/comments               52.76 ns/iter  52.42 ns  █                   
+                                           (46.91 ns … 389.87 ns)  93.48 ns ▃█                   
+                                          (  0.00  b … 288.00  b)   0.59  b ███▄▃▅▂▂▂▁▁▁▁▁▁▁▁▁▁▁▁
 
-regex param cache hit: /:id(\d+)                    14.75 ns/iter  13.35 ns  █                   
-                                           (11.90 ns … 346.51 ns)  29.30 ns  █                   
-                                          (  0.00  b … 144.00  b)   0.46  b ▂█▄▁▂▁▁▁▂▃▂▁▁▁▁▁▁▁▁▁▁
+regex param cache hit: /:id(\d+)                    13.70 ns/iter  12.87 ns  █                   
+                                           (11.25 ns … 296.80 ns)  26.14 ns  █▇                  
+                                          (  0.00  b … 240.00  b)   0.38  b ▄██▃▂▂▁▁▁▃▃▂▁▁▁▁▁▁▁▁▁
 
 summary
   regex param cache hit: /:id(\d+)
-   3.16x faster than regex param match: 2-deep regex params
-   3.62x faster than regex param match: /:id(\d+)
-   3.66x faster than regex param match: /:id(\d+)/comments
+   3.22x faster than regex param match: 2-deep regex params
+   3.82x faster than regex param match: /:id(\d+)
+   3.85x faster than regex param match: /:id(\d+)/comments
 
 ----------------------------------------------------------------- -------------------------------
-optional param match: with lang param (/en/docs)    43.91 ns/iter  42.81 ns  █                   
-                                           (38.54 ns … 355.96 ns)  80.83 ns  █                   
-                                          (  0.00  b …  96.00  b)   0.22  b ▄█▆▄▂▂▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁
+optional param match: with lang param (/en/docs)    41.94 ns/iter  41.47 ns  █                   
+                                           (37.27 ns … 323.21 ns)  66.26 ns  █▆                  
+                                          (  0.00  b … 192.00  b)   0.30  b ▃██▇▅▃▂▂▁▁▁▁▁▁▁▁▁▁▁▁▁
 
-optional param match: without lang param (/docs)    34.70 ns/iter  34.46 ns  █                   
-                                           (29.29 ns … 389.71 ns)  64.81 ns  █                   
-                                          (  0.00  b …  48.00  b)   0.21  b ▂█▇█▃▂▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁
+optional param match: without lang param (/docs)    33.39 ns/iter  33.15 ns  █                   
+                                           (28.29 ns … 344.64 ns)  63.57 ns  █                   
+                                          (  0.00  b …  96.00  b)   0.20  b ▅███▃▂▂▁▁▁▁▁▁▁▁▁▁▁▁▁▁
 
-optional param match: nested /:lang?/docs/:section  59.97 ns/iter  59.17 ns  █                   
-                                           (53.85 ns … 324.09 ns)  99.36 ns  █▃                  
-                                          (  0.00  b …  48.00  b)   0.07  b ▃██▅▃▂▂▁▁▁▁▁▁▁▁▁▁▁▁▁▁
+optional param match: nested /:lang?/docs/:section  59.47 ns/iter  58.74 ns  █▇                  
+                                           (53.33 ns … 390.26 ns)  90.98 ns  ██▃                 
+                                          (  0.00  b …  48.00  b)   0.12  b ▃███▅▃▃▂▂▂▁▁▁▁▁▁▁▁▁▁▁
 
-optional param cache hit: with lang                 19.90 ns/iter  20.36 ns       █              
-                                           (11.91 ns … 363.25 ns)  40.33 ns      ▃█              
-                                          (  0.00  b … 192.00  b)   0.73  b ▅█▁▁▁██▃▂▄▂▁▁▁▁▁▁▁▁▁▁
+optional param cache hit: with lang                 19.07 ns/iter  20.25 ns        █             
+                                           (11.63 ns … 305.11 ns)  33.62 ns  ▂     █▆            
+                                          (  0.00  b …  96.00  b)   0.72  b ▇█▂▁▁▁▁██▃▂▂▃▂▁▁▁▁▁▁▁
 
-optional param cache hit: without lang              16.12 ns/iter  15.19 ns  █                   
-                                           (13.88 ns … 364.41 ns)  29.83 ns  █                   
-                                          (  0.00  b …  48.00  b)   0.02  b ▂██▂▂▂▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁
+optional param cache hit: without lang              15.01 ns/iter  14.59 ns  █                   
+                                           (13.25 ns … 317.76 ns)  27.04 ns  █▅                  
+                                          (  0.00  b …  48.00  b)   0.01  b ▅██▃▂▂▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁
 
 summary
   optional param cache hit: without lang
-   1.23x faster than optional param cache hit: with lang
-   2.15x faster than optional param match: without lang param (/docs)
-   2.72x faster than optional param match: with lang param (/en/docs)
-   3.72x faster than optional param match: nested /:lang?/docs/:section
+   1.27x faster than optional param cache hit: with lang
+   2.22x faster than optional param match: without lang param (/docs)
+   2.79x faster than optional param match: with lang param (/en/docs)
+   3.96x faster than optional param match: nested /:lang?/docs/:section
 
 ----------------------------------------------------------------- -------------------------------
-multi-method: GET match                             50.90 ns/iter  49.46 ns  █                   
-                                           (45.11 ns … 299.01 ns)  99.32 ns  █                   
-                                          (  0.00  b …  96.00  b)   0.07  b ▅█▅▃▂▂▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁
+multi-method: GET match                             47.65 ns/iter  46.85 ns  █                   
+                                           (42.39 ns … 327.48 ns)  83.25 ns  █▆                  
+                                          (  0.00  b …  96.00  b)   0.05  b ▂██▅▃▂▂▁▁▁▁▁▁▁▁▁▁▁▁▁▁
 
-multi-method: POST match                            49.51 ns/iter  48.19 ns  █                   
-                                           (44.35 ns … 365.46 ns)  98.31 ns  █                   
-                                          (  0.00  b …  48.00  b)   0.10  b ██▆▂▂▁▂▁▁▁▁▁▁▁▁▁▁▁▁▁▁
+multi-method: POST match                            50.74 ns/iter  49.89 ns  █                   
+                                           (46.25 ns … 323.66 ns)  79.23 ns  █                   
+                                          (  0.00  b …  96.00  b)   0.10  b ▄██▅▃▂▂▂▁▁▁▁▁▁▁▁▁▁▁▁▁
 
-multi-method: DELETE match                          50.66 ns/iter  49.05 ns  █                   
-                                           (44.03 ns … 339.10 ns) 101.49 ns  █                   
-                                          (  0.00  b …  48.00  b)   0.12  b ▆█▇▃▂▂▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁
+multi-method: DELETE match                          50.89 ns/iter  50.14 ns  █                   
+                                           (46.21 ns … 326.34 ns)  83.64 ns  █                   
+                                          (  0.00  b …  48.00  b)   0.12  b ▅██▄▃▂▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁
 
-multi-method: PATCH match                           51.94 ns/iter  50.67 ns  █                   
-                                           (46.23 ns … 329.02 ns)  91.70 ns  █▃                  
-                                          (  0.00  b …  48.00  b)   0.09  b ▃██▄▂▂▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁
+multi-method: PATCH match                           52.24 ns/iter  51.55 ns  █                   
+                                           (46.52 ns … 343.50 ns)  87.37 ns  ██                  
+                                          (  0.00  b …  48.00  b)   0.09  b ▂██▇▃▂▂▁▁▁▁▁▁▁▁▁▁▁▁▁▁
 
-multi-method: wrong method (405)                     3.13 ns/iter   2.66 ns  █▆                  
-                                             (2.21 ns … 70.84 ns)   7.07 ns  ██                  
-                                          (  0.00  b …  48.00  b)   0.04  b ▁██▁▁▁▁▁▁▁▁▁▁▁▁▂▅▂▁▁▁
+multi-method: wrong method (405)                     3.24 ns/iter   2.81 ns  █                   
+                                             (2.52 ns … 54.55 ns)   6.86 ns  █                   
+                                          (  0.00  b …  48.00  b)   0.04  b ▃█▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▃▁
 
 summary
   multi-method: wrong method (405)
-   15.81x faster than multi-method: POST match
-   16.17x faster than multi-method: DELETE match
-   16.25x faster than multi-method: GET match
-   16.58x faster than multi-method: PATCH match
+   14.69x faster than multi-method: GET match
+   15.64x faster than multi-method: POST match
+   15.69x faster than multi-method: DELETE match
+   16.1x faster than multi-method: PATCH match
 
 ----------------------------------------------------------------- -------------------------------
-addAll+build 100 static routes                     275.33 µs/iter 289.61 µs  ▂▅█▆                
-                                          (206.32 µs … 579.38 µs) 554.21 µs ▃█████▅▃▃▁▂▁▂▁▁▁▁▁▁▁▁
-                                        gc(  1.42 ms …   6.51 ms)   3.54 kb (  0.00  b…192.00 kb)
+addAll+build 100 static routes                     209.21 µs/iter 223.04 µs  █▇▄                 
+                                          (173.26 µs … 334.02 µs) 307.40 µs ▇███▇██▇▄▂▃▄▄▃▂▃▃▁▂▁▁
+                                        gc(  1.24 ms …   3.45 ms)   0.00  b (  0.00  b…  0.00  b)
 
-addAll+build 500 static routes                     587.05 µs/iter 619.04 µs  █▅▅▇▃▄              
-                                            (477.67 µs … 1.00 ms) 936.37 µs ▃██████▆█▃▃▃▃▁▁▁▁▁▁▁▁
-                                        gc(  1.49 ms …   5.07 ms)   5.15 kb (  0.00  b…192.00 kb)
+addAll+build 500 static routes                     506.64 µs/iter 527.08 µs  ▃█▅▂▂               
+                                          (453.02 µs … 739.35 µs) 648.77 µs ▄█████▇▅▆▄▄▃▃▄▂▂▂▂▁▂▂
+                                        gc(  1.28 ms …   3.54 ms)   3.44 kb (  0.00  b…192.00 kb)
 
-addAll+build 1000 static routes                    924.84 µs/iter 959.34 µs   █▄▃                
-                                            (815.57 µs … 1.42 ms)   1.29 ms ▄▇████▇▆▃▃▃▂▂▁▁▁▂▁▁▁▁
-                                        gc(  1.42 ms …   3.95 ms)  15.67 kb (  0.00  b…576.00 kb)
+addAll+build 1000 static routes                    888.96 µs/iter 926.19 µs  █▇▃                 
+                                            (796.03 µs … 1.45 ms)   1.24 ms ▇█████▇▆▂▅▃▂▂▁▂▁▁▁▁▁▁
+                                        gc(  1.40 ms …   4.02 ms)  13.29 kb (  0.00  b…576.00 kb)
 
-addAll+build 100 param routes                      263.74 µs/iter 281.71 µs   ▃█▆▅▄              
-                                          (203.56 µs … 490.54 µs) 445.20 µs ▂███████▇▅▂▂▁▂▁▁▁▁▁▁▁
-                                        gc(  1.35 ms …   3.92 ms)   4.07 kb (  0.00  b…192.00 kb)
+addAll+build 100 param routes                      222.75 µs/iter 238.13 µs  █▅▂▂                
+                                          (185.82 µs … 368.44 µs) 326.82 µs ▃█████▅▆▅▃▅▄▂▂▂▂▁▂▁▁▁
+                                        gc(  1.20 ms …   3.14 ms)   1.68 kb (  0.00  b…192.00 kb)
 
-addAll+build 500 param routes                      681.38 µs/iter 703.24 µs   ▅█                 
-                                            (566.34 µs … 1.18 ms)   1.09 ms ▂▆███▆▆▃▃▁▂▂▂▂▁▁▁▁▁▁▁
-                                        gc(  1.35 ms …   5.68 ms)  12.00 kb (  0.00  b…384.00 kb)
+addAll+build 500 param routes                      551.53 µs/iter 562.65 µs  █▆▂                 
+                                          (504.30 µs … 930.08 µs) 709.59 µs ▄████▇▅▅▃▂▂▁▂▂▂▁▂▁▁▁▁
+                                        gc(  1.31 ms …   3.20 ms)   8.32 kb (  0.00  b…576.00 kb)
 
-addAll+build 1000 param routes                       1.21 ms/iter   1.21 ms   █▇                 
-                                              (1.03 ms … 2.09 ms)   1.97 ms ▂████▃▃▂▂▁▁▂▁▁▂▁▂▁▁▁▁
-                                        gc(  1.65 ms …   5.32 ms)  24.77 kb (  0.00  b…960.00 kb)
+addAll+build 1000 param routes                       1.00 ms/iter   1.03 ms  █▄                  
+                                            (910.96 µs … 1.66 ms)   1.47 ms ▇████▄▅▃▂▂▁▁▁▁▁▁▂▁▁▁▁
+                                        gc(  1.40 ms …   3.20 ms)  35.87 kb (  0.00  b…960.00 kb)
 
                                                    ┌                                            ┐
-                                                   ╷┌┬      ╷
-                    addAll+build 100 static routes ├┤│──────┤
-                                                   ╵└┴      ╵
-                                                          ╷┌─┬┐       ╷
-                    addAll+build 500 static routes        ├┤ │├───────┤
-                                                          ╵└─┴┘       ╵
-                                                                   ╷┌┬┐        ╷
-                   addAll+build 1000 static routes                 ├┤│├────────┤
-                                                                   ╵└┴┘        ╵
-                                                   ╷┌┬   ╷
-                     addAll+build 100 param routes ├┤│───┤
-                                                   ╵└┴   ╵
-                                                            ╷ ┌┬┐         ╷
-                     addAll+build 500 param routes          ├─┤│├─────────┤
-                                                            ╵ └┴┘         ╵
-                                                                        ╷ ┌──┬                  ╷
-                    addAll+build 1000 param routes                      ├─┤  │──────────────────┤
-                                                                        ╵ └──┴                  ╵
+                                                   ┌┬┐  ╷
+                    addAll+build 100 static routes ││├──┤
+                                                   └┴┘  ╵
+                                                             ┌─┬    ╷
+                    addAll+build 500 static routes           │ │────┤
+                                                             └─┴    ╵
+                                                                         ╷┌─┬┐          ╷
+                   addAll+build 1000 static routes                       ├┤ │├──────────┤
+                                                                         ╵└─┴┘          ╵
+                                                   ╷┌┬  ╷
+                     addAll+build 100 param routes ├┤│──┤
+                                                   ╵└┴  ╵
+                                                               ┌┬┐    ╷
+                     addAll+build 500 param routes             ││├────┤
+                                                               └┴┘    ╵
+                                                                             ╷┌─┬┐              ╷
+                    addAll+build 1000 param routes                           ├┤ │├──────────────┤
+                                                                             ╵└─┴┘              ╵
                                                    └                                            ┘
-                                                   203.56 µs           1.09 ms            1.97 ms
+                                                   173.26 µs          819.49 µs           1.47 ms

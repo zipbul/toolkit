@@ -1,272 +1,272 @@
 Sanity check passed: all routers match test paths.
 
-clk: ~4.99 GHz
+clk: ~5.00 GHz
 cpu: 13th Gen Intel(R) Core(TM) i7-13700K
 runtime: bun 1.3.13 (x64-linux)
 
 benchmark                    avg (min … max) p75 / p99    (min … top 1%)
 -------------------------------------------- -------------------------------
-static — @zipbul/router       294.98 ps/iter 247.56 ps   █                  
-                     (222.90 ps … 124.90 ns) 468.02 ps   █                  
-                     (  0.00  b …  96.00  b)   0.02  b ▁▁█▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁
+static — @zipbul/router       280.98 ps/iter 248.05 ps           █          
+                      (223.14 ps … 99.41 ns) 269.78 ps           █▂         
+                     (  0.00  b …  96.00  b)   0.02  b ▁▁▁▁▁▁▁▁▁▁██▄▁▁▁▁▁▁▁▁
 
-static — find-my-way          109.36 ns/iter 101.95 ns  █                   
-                      (88.26 ns … 516.50 ns) 357.57 ns ▄█                   
-                     (  0.00  b … 384.00  b)  11.98  b ██▃▁▁▁▁▁▂▂▁▁▁▁▁▁▁▁▁▁▁
+static — find-my-way          105.80 ns/iter  98.97 ns █                    
+                      (89.08 ns … 447.38 ns) 370.64 ns ██                   
+                     (  0.00  b … 384.00  b)  11.60  b ██▂▁▁▁▁▁▁▁▁▁▂▁▁▁▁▁▁▁▁
 
-static — memoirist             39.35 ns/iter  37.78 ns   █                  
-                      (32.38 ns … 431.97 ns)  75.89 ns  ▆█                  
-                     (  0.00  b …  48.00  b)   0.13  b ▃██▇▃▂▂▁▁▁▁▁▁▁▁▁▁▁▁▁▁
+static — memoirist             36.91 ns/iter  35.82 ns  ▃█                  
+                      (31.53 ns … 415.62 ns)  64.09 ns  ██▂                 
+                     (  0.00  b …  96.00  b)   0.13  b ▃███▄▂▂▂▁▁▁▁▁▁▁▁▁▁▁▁▁
 
-static — rou3                 256.33 ps/iter  93.51 ps █                    
-                      (86.18 ps … 124.74 ns)   6.34 ns █                    
-                     (  0.00  b …  96.00  b)   0.03  b █▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁
+static — rou3                 247.69 ps/iter  93.26 ps █                    
+                       (86.91 ps … 78.68 ns)   6.17 ns █                    
+                     (  0.00  b …  48.00  b)   0.03  b █▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁
 
-static — hono RegExpRouter     34.74 ns/iter  32.00 ns   █                  
-                       (24.00 ns … 30.83 µs)  89.00 ns   █                  
-                     (  0.00  b … 192.00 kb)  10.43  b ▁██▆▂▁▂▁▁▁▁▁▁▁▁▁▁▁▁▁▁
+static — hono RegExpRouter     34.21 ns/iter  32.00 ns  ██                  
+                       (24.00 ns … 42.90 µs) 102.00 ns  ██                  
+                     (  0.00  b … 192.00 kb)  21.20  b ▁██▄▂▃▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁
 
-static — hono TrieRouter      333.34 ns/iter 204.00 ns █                    
-                     (138.00 ns … 635.89 µs)   2.38 µs █                    
-                     (  0.00  b … 192.00 kb) 313.01  b █▇▂▁▁▁▁▁▁▂▁▁▁▁▁▁▁▁▁▁▁
+static — hono TrieRouter      116.78 ns/iter 108.30 ns ██                   
+                      (93.76 ns … 506.33 ns) 433.74 ns ██                   
+                     (  0.00  b … 768.00  b)  12.18  b ██▃▂▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁
 
-static — koa-tree-router       48.82 ns/iter  48.05 ns  █                   
-                      (43.64 ns … 391.89 ns)  83.78 ns  █                   
-                     (  0.00  b … 192.00  b)   1.47  b ▄█▆▄▂▂▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁
+static — koa-tree-router       47.33 ns/iter  46.88 ns  █                   
+                      (42.14 ns … 454.04 ns)  79.56 ns ▄█                   
+                     (  0.00  b …   0.98 kb)   1.06  b ███▇▄▃▂▂▂▁▁▁▁▁▁▁▁▁▁▁▁
 
 summary
   static — rou3
-   1.15x faster than static — @zipbul/router
-   135.54x faster than static — hono RegExpRouter
-   153.51x faster than static — memoirist
-   190.46x faster than static — koa-tree-router
-   426.63x faster than static — find-my-way
-   1300.44x faster than static — hono TrieRouter
+   1.13x faster than static — @zipbul/router
+   138.11x faster than static — hono RegExpRouter
+   149.01x faster than static — memoirist
+   191.07x faster than static — koa-tree-router
+   427.16x faster than static — find-my-way
+   471.47x faster than static — hono TrieRouter
 
 -------------------------------------------- -------------------------------
-param1 — @zipbul/router        28.86 ns/iter  32.32 ns  █                   
-                      (22.37 ns … 419.69 ns)  49.89 ns  █▄                  
-                     (  0.00  b …  96.00  b)   0.21  b ▃██▃▃▂▂▄█▃▂▂▁▁▁▁▁▁▁▁▁
+param1 — @zipbul/router        30.54 ns/iter  32.12 ns  █                   
+                      (21.76 ns … 391.43 ns)  58.16 ns  █   █▅              
+                     (  0.00  b … 144.00  b)   0.42  b ▅█▄▂▂██▅▄▂▂▂▁▁▁▁▁▁▁▁▁
 
-param1 — find-my-way           80.16 ns/iter  77.96 ns █                    
-                      (69.91 ns … 471.85 ns) 320.49 ns █▄                   
-                     (  0.00  b …  96.00  b)   0.41  b ██▃▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁
+param1 — find-my-way           92.44 ns/iter  86.35 ns █                    
+                      (73.38 ns … 475.95 ns) 292.41 ns █▄                   
+                     (  0.00  b …  96.00  b)   0.27  b ██▃▂▁▄▂▂▂▁▁▁▁▁▁▁▁▁▁▁▁
 
-param1 — memoirist             40.71 ns/iter  40.19 ns  ▇█                  
-                      (35.42 ns … 347.35 ns)  70.03 ns  ██▂                 
-                     (  0.00  b …  48.00  b)   0.05  b ▃███▆▃▂▁▂▁▁▁▁▁▁▁▁▁▁▁▁
+param1 — memoirist             32.69 ns/iter  31.36 ns  █                   
+                      (28.92 ns … 394.99 ns)  59.49 ns  █                   
+                     (  0.00  b …  48.00  b)   0.09  b ▇█▆▃▂▂▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁
 
-param1 — rou3                  42.83 ns/iter  40.84 ns  █                   
-                      (37.05 ns … 399.07 ns)  93.22 ns ▇█                   
-                     (  0.00  b … 192.00  b)   0.83  b ██▆▃▂▂▂▁▁▁▁▁▁▁▁▁▁▁▁▁▁
+param1 — rou3                  47.16 ns/iter  44.79 ns ▅█                   
+                      (40.55 ns … 448.91 ns)  98.20 ns ██                   
+                     (  0.00  b … 192.00  b)   0.72  b ███▃▂▂▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁
 
-param1 — hono RegExpRouter    220.36 ns/iter 124.00 ns █                    
-                     (109.00 ns … 465.57 µs)   1.85 µs █                    
-                     (  0.00  b … 192.00 kb) 227.51  b █▂▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁
+param1 — hono RegExpRouter    203.55 ns/iter 123.00 ns █                    
+                     (107.00 ns … 296.69 µs)   1.69 µs █                    
+                     (  0.00  b … 192.00 kb) 229.46  b █▃▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁
 
-param1 — hono TrieRouter      351.06 ns/iter 368.03 ns      █▃              
-                     (238.94 ns … 749.70 ns) 679.37 ns      ██              
-                     (  0.00  b … 864.00  b)  15.36  b ██▂▁▁██▆▂▁▁▁▂▁▁▁▁▁▁▂▁
+param1 — hono TrieRouter      364.41 ns/iter 372.47 ns      █               
+                     (240.98 ns … 823.17 ns) 713.81 ns      █               
+                     (  0.00  b … 864.00  b)  15.40  b ▇▃▂▁▁██▃▂▁▁▁▁▁▁▁▁▁▁▁▂
 
-param1 — koa-tree-router      104.84 ns/iter 104.01 ns  ▆█                  
-                      (93.99 ns … 411.87 ns) 157.16 ns  ██▆                 
-                     (  0.00  b … 192.00  b)   2.96  b ▃███▆▅▂▂▂▁▁▂▁▁▁▁▁▁▁▁▁
+param1 — koa-tree-router      104.09 ns/iter 103.68 ns  █                   
+                      (92.99 ns … 411.11 ns) 182.72 ns  ██                  
+                     (  0.00  b …  96.00  b)   2.70  b ▄██▇▃▂▂▁▁▁▁▁▁▁▁▁▁▁▁▁▁
 
 summary
   param1 — @zipbul/router
-   1.41x faster than param1 — memoirist
-   1.48x faster than param1 — rou3
-   2.78x faster than param1 — find-my-way
-   3.63x faster than param1 — koa-tree-router
-   7.64x faster than param1 — hono RegExpRouter
-   12.17x faster than param1 — hono TrieRouter
+   1.07x faster than param1 — memoirist
+   1.54x faster than param1 — rou3
+   3.03x faster than param1 — find-my-way
+   3.41x faster than param1 — koa-tree-router
+   6.66x faster than param1 — hono RegExpRouter
+   11.93x faster than param1 — hono TrieRouter
 
 -------------------------------------------- -------------------------------
-param3 — @zipbul/router        59.71 ns/iter  58.66 ns     ▆█               
-                      (42.37 ns … 414.58 ns) 105.13 ns     ██               
-                     (  0.00  b … 192.00  b)   0.75  b ▁▁▁▁██▆▃▂▂▁▁▁▁▁▁▁▁▁▁▁
+param3 — @zipbul/router        57.86 ns/iter  57.19 ns      █▂              
+                      (40.86 ns … 439.61 ns)  94.37 ns      ██              
+                     (  0.00  b … 192.00  b)   0.83  b ▂▂▁▁▂██▅▃▂▂▁▁▁▁▁▁▁▁▁▁
 
-param3 — find-my-way          151.37 ns/iter 147.88 ns █                    
-                     (138.08 ns … 486.87 ns) 412.48 ns █▆                   
-                     (  0.00  b … 144.00  b)   0.99  b ██▂▁▂▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁
+param3 — find-my-way          151.67 ns/iter 147.17 ns █▂                   
+                     (137.12 ns … 521.16 ns) 388.04 ns ██                   
+                     (  0.00  b … 144.00  b)   0.99  b ██▃▂▂▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁
 
-param3 — memoirist             73.53 ns/iter  72.32 ns  █                   
-                      (66.64 ns … 393.95 ns) 132.70 ns  █                   
-                     (  0.00  b …  96.00  b)   0.06  b ▆██▃▂▂▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁
+param3 — memoirist             73.76 ns/iter  72.58 ns  █                   
+                      (66.32 ns … 423.52 ns) 126.22 ns  █▂                  
+                     (  0.00  b …  96.00  b)   0.08  b ▅██▄▃▂▂▁▁▁▁▁▁▁▁▁▁▁▁▁▁
 
-param3 — rou3                  67.93 ns/iter  65.60 ns  █                   
-                      (60.31 ns … 481.70 ns) 136.73 ns ██                   
-                     (  0.00  b … 240.00  b)   1.48  b ██▆▄▂▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁
+param3 — rou3                  67.09 ns/iter  65.34 ns  █                   
+                      (60.69 ns … 404.09 ns) 136.28 ns ██                   
+                     (  0.00  b … 192.00  b)   1.20  b ██▅▃▂▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁
 
-param3 — hono RegExpRouter     94.13 ns/iter  92.10 ns █                    
-                      (85.05 ns … 417.68 ns) 258.59 ns █▇                   
-                     (  0.00  b …  96.00  b)   0.16  b ██▃▂▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁
+param3 — hono RegExpRouter     93.22 ns/iter  91.12 ns ▃█                   
+                      (83.99 ns … 455.62 ns) 211.95 ns ██                   
+                     (  0.00  b …  48.00  b)   0.11  b ██▅▂▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁
 
-param3 — hono TrieRouter      703.54 ns/iter 721.85 ns       █              
-                       (575.69 ns … 1.06 µs)   1.04 µs       █              
-                     (  0.00  b … 192.00  b)   1.60  b ▅█▃▂▂▇█▅▄▁▂▂▁▂▁▁▁▁▁▁▁
+param3 — hono TrieRouter      705.20 ns/iter 737.29 ns       █              
+                       (578.96 ns … 1.07 µs)   1.06 µs  ▄    █              
+                     (  0.00  b …  96.00  b)   1.81  b ▆█▄▂▁▃██▂▃▂▁▂▁▂▁▁▁▁▁▁
 
-param3 — koa-tree-router      275.94 ns/iter 274.41 ns   █                  
-                     (234.54 ns … 595.89 ns) 513.13 ns   █▂                 
-                     (  0.00  b … 288.00  b)   7.43  b ▂▃██▃▂▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁
+param3 — koa-tree-router      264.63 ns/iter 260.24 ns  ▅█                  
+                     (230.94 ns … 600.33 ns) 531.34 ns  ██                  
+                     (  0.00  b … 288.00  b)   6.97  b ▂██▄▂▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁
 
 summary
   param3 — @zipbul/router
-   1.14x faster than param3 — rou3
-   1.23x faster than param3 — memoirist
-   1.58x faster than param3 — hono RegExpRouter
-   2.53x faster than param3 — find-my-way
-   4.62x faster than param3 — koa-tree-router
-   11.78x faster than param3 — hono TrieRouter
+   1.16x faster than param3 — rou3
+   1.27x faster than param3 — memoirist
+   1.61x faster than param3 — hono RegExpRouter
+   2.62x faster than param3 — find-my-way
+   4.57x faster than param3 — koa-tree-router
+   12.19x faster than param3 — hono TrieRouter
 
 -------------------------------------------- -------------------------------
-wild — @zipbul/router          31.93 ns/iter  30.68 ns  █▇                  
-                      (27.35 ns … 376.82 ns)  56.43 ns  ██                  
-                     (  0.00  b … 144.00  b)   0.07  b ▂██▆▄▂▂▁▁▁▁▁▁▁▁▁▁▁▁▁▁
+wild — @zipbul/router          31.43 ns/iter  29.82 ns  █                   
+                      (27.44 ns … 387.19 ns)  57.08 ns  █                   
+                     (  0.00  b …  96.00  b)   0.07  b ▅█▅▃▂▂▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁
 
-wild — find-my-way             69.68 ns/iter  67.10 ns █                    
-                      (59.67 ns … 448.25 ns) 291.84 ns █▃                   
-                     (  0.00  b … 144.00  b)   0.38  b ██▂▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁
+wild — find-my-way             68.38 ns/iter  65.02 ns █                    
+                      (58.34 ns … 473.18 ns) 301.19 ns █                    
+                     (  0.00  b … 144.00  b)   0.41  b ██▂▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁
 
-wild — memoirist               27.12 ns/iter  25.91 ns   █                  
-                      (22.74 ns … 375.02 ns)  46.17 ns  ▃█                  
-                     (  0.00  b …  96.00  b)   0.08  b ▁███▃▃▂▂▁▁▁▁▁▁▁▁▁▁▁▁▁
+wild — memoirist               25.84 ns/iter  24.84 ns   █                  
+                      (21.73 ns … 366.71 ns)  46.28 ns  ▆█                  
+                     (  0.00  b …  96.00  b)   0.08  b ▃██▇▃▂▂▁▁▁▁▁▁▁▁▁▁▁▁▁▁
 
-wild — rou3                    84.05 ns/iter  82.60 ns █                    
-                      (73.01 ns … 484.48 ns) 248.91 ns ██                   
-                     (  0.00  b … 288.00  b)   3.94  b ██▅▃▂▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁
+wild — rou3                    84.22 ns/iter  81.88 ns ▅█                   
+                      (74.30 ns … 477.08 ns) 195.53 ns ██                   
+                     (  0.00  b … 336.00  b)   3.85  b ██▆▃▂▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁
 
-wild — hono RegExpRouter      160.19 ns/iter  94.00 ns █                    
-                      (86.00 ns … 184.86 µs)   1.59 µs █                    
-                     (  0.00  b … 384.00 kb)  54.98  b █▂▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁
+wild — hono RegExpRouter      156.18 ns/iter  98.00 ns █                    
+                      (86.00 ns … 445.45 µs)   1.50 µs █                    
+                     (  0.00  b … 192.00 kb)  91.84  b █▂▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁
 
-wild — hono TrieRouter        123.90 ns/iter 115.06 ns ▄█                   
-                      (99.80 ns … 561.91 ns) 434.11 ns ██                   
-                     (  0.00  b … 864.00  b)   9.74  b ██▃▂▁▁▁▁▁▁▁▁▁▁▁▁▂▁▁▁▁
+wild — hono TrieRouter        116.65 ns/iter 109.34 ns █▅                   
+                      (96.79 ns … 469.76 ns) 399.87 ns ██                   
+                     (  0.00  b … 960.00  b)   8.55  b ██▃▂▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁
 
-wild — koa-tree-router        125.65 ns/iter 124.61 ns   █                  
-                     (111.33 ns … 427.55 ns) 199.82 ns  ██▆                 
-                     (  0.00  b … 144.00  b)   5.22  b ▂███▅▃▂▂▁▂▁▁▁▁▁▁▁▁▁▁▁
+wild — koa-tree-router        123.93 ns/iter 123.11 ns   ▂█                 
+                     (107.20 ns … 480.67 ns) 188.59 ns   ██▅                
+                     (  0.00  b … 144.00  b)   4.97  b ▂▂███▆▃▂▂▁▁▁▁▁▁▁▁▁▁▁▁
 
 summary
   wild — memoirist
-   1.18x faster than wild — @zipbul/router
-   2.57x faster than wild — find-my-way
-   3.1x faster than wild — rou3
-   4.57x faster than wild — hono TrieRouter
-   4.63x faster than wild — koa-tree-router
-   5.91x faster than wild — hono RegExpRouter
+   1.22x faster than wild — @zipbul/router
+   2.65x faster than wild — find-my-way
+   3.26x faster than wild — rou3
+   4.51x faster than wild — hono TrieRouter
+   4.8x faster than wild — koa-tree-router
+   6.04x faster than wild — hono RegExpRouter
 
 -------------------------------------------- -------------------------------
-gh-static — @zipbul/router    368.49 ps/iter 317.38 ps █                    
-                     (314.94 ps … 111.27 ns) 424.07 ps █                    
-                     (  0.00  b …  96.00  b)   0.01  b █▅▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁
+gh-static — @zipbul/router    368.07 ps/iter 317.38 ps  █                   
+                     (315.19 ps … 109.92 ns) 356.45 ps  █                   
+                     (  0.00  b …  48.00  b)   0.02  b ▅█▂▃▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁
 
-gh-static — find-my-way        38.11 ns/iter  34.34 ns █                    
-                      (28.54 ns … 377.04 ns) 238.98 ns █                    
-                     (  0.00  b … 528.00  b)   5.18  b ██▂▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁
+gh-static — find-my-way        35.81 ns/iter  32.65 ns █                    
+                      (26.32 ns … 421.12 ns) 239.97 ns █▄                   
+                     (  0.00  b … 528.00  b)   4.76  b ██▂▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁
 
-gh-static — memoirist          16.89 ns/iter  16.10 ns   █                  
-                      (13.48 ns … 405.19 ns)  30.94 ns  ▂█                  
-                     (  0.00  b …  48.00  b)   0.06  b ▁███▅▃▂▂▁▁▁▁▁▁▁▁▁▁▁▁▁
+gh-static — memoirist          16.11 ns/iter  15.43 ns  █▃                  
+                      (12.94 ns … 345.18 ns)  30.58 ns  ██▅                 
+                     (  0.00  b …  48.00  b)   0.08  b ▃███▅▃▂▂▁▁▁▁▁▁▁▁▁▁▁▁▁
 
-gh-static — rou3                6.45 ns/iter   6.20 ns  █                   
-                        (5.84 ns … 55.47 ns)  10.87 ns  █                   
-                     (  0.00  b …  96.00  b)   0.05  b ██▃▂▄▂▁▁▁▁▁▁▁▁▂▁▁▁▁▁▁
+gh-static — rou3              969.21 ps/iter 862.30 ps █                    
+                      (765.87 ps … 91.41 ns)   5.41 ns █                    
+                     (  0.00  b …  96.00  b)   0.12  b █▁▁▁▁▁▂▁▁▁▁▁▁▁▁▁▁▁▁▁▁
 
-gh-static — hono RegExpRouter   1.02 ns/iter 579.59 ps █                    
-                     (574.71 ps … 104.94 ns)   7.50 ns █                    
-                     (  0.00  b …  48.00  b)   0.01  b █▁▁▁▁▁▁▁▂▁▁▁▁▁▁▁▁▁▁▁▂
+gh-static — hono RegExpRouter   1.07 ns/iter 582.03 ps █                    
+                      (574.22 ps … 95.88 ns)   7.56 ns █                    
+                     (  0.00  b …  48.00  b)   0.03  b █▁▁▁▁▁▁▁▃▁▁▁▁▁▁▁▁▁▁▁▂
 
-gh-static — hono TrieRouter    95.91 ns/iter  87.25 ns █                    
-                      (77.99 ns … 464.04 ns) 364.01 ns █▃                   
-                     (  0.00  b … 624.00  b)  13.77  b ██▂▂▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁
+gh-static — hono TrieRouter    92.84 ns/iter  86.39 ns █                    
+                      (76.00 ns … 465.95 ns) 362.91 ns █▆                   
+                     (  0.00  b … 672.00  b)  13.09  b ██▂▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁
 
-gh-static — koa-tree-router    61.50 ns/iter  60.63 ns  █                   
-                      (54.58 ns … 361.15 ns) 105.22 ns  █▂                  
-                     (  0.00  b …  96.00  b)   2.52  b ▁██▅▃▂▂▁▁▁▁▁▁▁▁▁▁▁▁▁▁
+gh-static — koa-tree-router    58.63 ns/iter  57.58 ns  ▆█                  
+                      (51.69 ns … 384.28 ns)  95.63 ns  ██                  
+                     (  0.00  b …  96.00  b)   2.35  b ▂███▄▃▂▂▂▁▁▁▁▁▂▁▁▁▁▁▁
 
 summary
   gh-static — @zipbul/router
-   2.78x faster than gh-static — hono RegExpRouter
-   17.5x faster than gh-static — rou3
-   45.83x faster than gh-static — memoirist
-   103.43x faster than gh-static — find-my-way
-   166.91x faster than gh-static — koa-tree-router
-   260.27x faster than gh-static — hono TrieRouter
+   2.63x faster than gh-static — rou3
+   2.91x faster than gh-static — hono RegExpRouter
+   43.78x faster than gh-static — memoirist
+   97.3x faster than gh-static — find-my-way
+   159.28x faster than gh-static — koa-tree-router
+   252.24x faster than gh-static — hono TrieRouter
 
 -------------------------------------------- -------------------------------
-gh-param — @zipbul/router      61.95 ns/iter  60.82 ns  █▂                  
-                      (55.47 ns … 399.59 ns) 103.79 ns  ██                  
-                     (  0.00  b …  96.00  b)   0.16  b ▃██▆▂▂▂▂▁▁▁▁▁▁▁▁▁▁▁▁▁
+gh-param — @zipbul/router      60.57 ns/iter  59.48 ns  █                   
+                      (54.56 ns … 409.97 ns) 107.05 ns  █▂                  
+                     (  0.00  b …  96.00  b)   0.19  b ▆██▄▂▂▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁
 
-gh-param — find-my-way        222.68 ns/iter 216.38 ns  █                   
-                     (200.89 ns … 539.33 ns) 441.86 ns ▄█                   
-                     (  0.00  b … 240.00  b)   2.40  b ██▄▂▂▁▃▃▁▁▁▁▁▁▁▁▁▁▁▁▁
+gh-param — find-my-way        221.47 ns/iter 213.83 ns  █                   
+                     (194.63 ns … 538.89 ns) 427.13 ns ▇█                   
+                     (  0.00  b … 240.00  b)   2.45  b ██▅▂▂▂▁▂▄▂▁▁▁▁▁▁▁▁▁▁▁
 
-gh-param — memoirist           79.52 ns/iter  78.42 ns  █                   
-                      (73.65 ns … 356.64 ns) 127.10 ns  █                   
-                     (  0.00  b …  48.00  b)   0.05  b ███▄▂▂▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁
+gh-param — memoirist           78.12 ns/iter  77.48 ns  █                   
+                      (72.39 ns … 423.73 ns) 113.06 ns  █▃                  
+                     (  0.00  b …   0.00  b)   0.00  b ▆██▆▄▂▂▂▁▁▁▁▁▁▁▁▁▁▁▁▁
 
-gh-param — rou3                71.18 ns/iter  69.91 ns  █                   
-                      (64.60 ns … 378.22 ns) 119.83 ns  █                   
-                     (  0.00  b …  48.00  b)   0.47  b ███▄▂▂▂▁▁▁▁▁▁▁▁▁▁▁▁▁▁
+gh-param — rou3                74.04 ns/iter  72.77 ns  █                   
+                      (67.12 ns … 422.96 ns) 129.85 ns  █                   
+                     (  0.00  b … 192.00  b)   0.80  b ▇██▄▂▂▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁
 
-gh-param — hono RegExpRouter  187.61 ns/iter 184.26 ns  █                   
-                     (164.40 ns … 563.10 ns) 472.09 ns ▄█                   
-                     (  0.00  b …  96.00  b)   0.32  b ██▆▂▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁
+gh-param — hono RegExpRouter  180.78 ns/iter 175.64 ns ▅█                   
+                     (163.93 ns … 550.98 ns) 444.41 ns ██                   
+                     (  0.00  b …  96.00  b)   0.36  b ██▃▂▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁
 
-gh-param — hono TrieRouter    760.13 ns/iter 797.28 ns ▃▃   ▂█              
-                       (649.85 ns … 1.14 µs)   1.08 µs ██   ██▆             
-                     (  0.00  b … 240.00  b)   4.15  b ███▇▂████▆▂▂▁▃▂▂▂▁▂▃▂
+gh-param — hono TrieRouter    749.08 ns/iter 764.68 ns      █               
+                       (642.60 ns … 1.28 µs)   1.10 µs  █  ▆█               
+                     (  0.00  b … 288.00  b)   4.98  b ▇██▃██▇▄▃▂▁▃▁▁▁▂▂▁▂▁▁
 
-gh-param — koa-tree-router    405.98 ns/iter 403.65 ns    █                 
-                     (359.89 ns … 683.32 ns) 618.89 ns   ▆█                 
-                     (  0.00  b … 336.00  b)  18.79  b ▂▅██▅▃▂▂▁▂▂▁▁▁▁▁▁▁▁▁▁
+gh-param — koa-tree-router    389.34 ns/iter 387.65 ns  █                   
+                     (361.03 ns … 743.79 ns) 654.69 ns  █                   
+                     (  0.00  b … 528.00  b)  18.14  b ▄██▄▂▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁
 
 summary
   gh-param — @zipbul/router
-   1.15x faster than gh-param — rou3
-   1.28x faster than gh-param — memoirist
-   3.03x faster than gh-param — hono RegExpRouter
-   3.59x faster than gh-param — find-my-way
-   6.55x faster than gh-param — koa-tree-router
-   12.27x faster than gh-param — hono TrieRouter
+   1.22x faster than gh-param — rou3
+   1.29x faster than gh-param — memoirist
+   2.98x faster than gh-param — hono RegExpRouter
+   3.66x faster than gh-param — find-my-way
+   6.43x faster than gh-param — koa-tree-router
+   12.37x faster than gh-param — hono TrieRouter
 
 -------------------------------------------- -------------------------------
-miss — @zipbul/router          18.07 ns/iter  18.41 ns      █               
-                       (14.53 ns … 58.45 ns)  28.93 ns      █               
-                     (  0.00  b …  48.00  b)   0.02  b ▁▃▇▄▅█▄▂▂▁▁▁▁▁▁▁▁▁▁▁▁
+miss — @zipbul/router          18.09 ns/iter  18.00 ns      █               
+                       (14.74 ns … 59.42 ns)  28.59 ns     ▇█               
+                     (  0.00  b …  48.00  b)   0.02  b ▁▃▂▂██▂▂▁▁▁▁▁▁▁▁▁▁▁▁▁
 
-miss — find-my-way             57.59 ns/iter  54.74 ns  █                   
-                      (50.20 ns … 375.40 ns) 103.85 ns ▃█                   
-                     (  0.00  b … 144.00  b)   9.41  b ██▆▃▂▂▂▁▁▁▁▁▁▁▂▂▂▁▁▁▁
+miss — find-my-way             55.64 ns/iter  53.42 ns  █                   
+                      (48.45 ns … 426.92 ns)  96.37 ns  █                   
+                     (  0.00  b … 192.00  b)   8.97  b ██▇▃▂▂▂▁▁▁▁▁▁▂▁▂▂▁▁▁▁
 
-miss — memoirist               15.32 ns/iter  15.37 ns  █▂                  
-                       (13.83 ns … 60.99 ns)  26.00 ns  ██                  
-                     (  0.00  b …  48.00  b)   0.00  b ▂███▃▂▂▁▁▁▁▁▁▁▁▁▁▁▁▁▁
+miss — memoirist               15.96 ns/iter  15.96 ns    █                 
+                       (13.72 ns … 68.01 ns)  26.88 ns    █                 
+                     (  0.00  b …   0.00  b)   0.00  b ▁▃██▇▂▂▁▁▁▁▁▁▁▁▁▁▁▁▁▁
 
-miss — rou3                    50.35 ns/iter  46.52 ns █▄                   
-                      (41.07 ns … 409.59 ns) 160.57 ns ██                   
-                     (  0.00  b … 336.00  b)   8.66  b ██▃▂▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁
+miss — rou3                    53.82 ns/iter  50.30 ns █▃                   
+                      (45.33 ns … 420.26 ns) 139.32 ns ██                   
+                     (  0.00  b … 336.00  b)   9.12  b ██▄▂▂▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁
 
-miss — hono RegExpRouter       24.18 ns/iter  22.82 ns  █                   
-                      (20.90 ns … 356.54 ns)  43.98 ns  █                   
-                     (  0.00  b …  48.00  b)   0.03  b ▂██▂▂▂▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁
+miss — hono RegExpRouter       22.07 ns/iter  20.64 ns  █                   
+                      (19.17 ns … 391.36 ns)  37.72 ns  █                   
+                     (  0.00  b …  96.00  b)   0.04  b ▂█▇▂▂▂▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁
 
-miss — hono TrieRouter        139.68 ns/iter 133.18 ns ▆█                   
-                     (118.51 ns … 511.96 ns) 438.56 ns ██                   
-                     (  0.00  b …  48.00  b)   0.08  b ██▃▂▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁
+miss — hono TrieRouter        140.29 ns/iter 134.23 ns █▃                   
+                     (119.63 ns … 505.84 ns) 428.79 ns ██                   
+                     (  0.00  b …  48.00  b)   0.16  b ██▅▂▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁
 
-miss — koa-tree-router         29.59 ns/iter  28.16 ns  █                   
-                      (26.17 ns … 390.55 ns)  49.61 ns  █                   
-                     (  0.00  b …  48.00  b)   0.02  b ▂█▆▃▃▂▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁
+miss — koa-tree-router         27.93 ns/iter  26.33 ns  █                   
+                      (24.58 ns … 364.22 ns)  48.61 ns  █                   
+                     (  0.00  b …  48.00  b)   0.01  b ▂█▄▂▂▂▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁
 
 summary
   miss — memoirist
-   1.18x faster than miss — @zipbul/router
-   1.58x faster than miss — hono RegExpRouter
-   1.93x faster than miss — koa-tree-router
-   3.29x faster than miss — rou3
-   3.76x faster than miss — find-my-way
-   9.12x faster than miss — hono TrieRouter
+   1.13x faster than miss — @zipbul/router
+   1.38x faster than miss — hono RegExpRouter
+   1.75x faster than miss — koa-tree-router
+   3.37x faster than miss — rou3
+   3.49x faster than miss — find-my-way
+   8.79x faster than miss — hono TrieRouter

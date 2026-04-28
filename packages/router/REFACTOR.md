@@ -89,7 +89,7 @@
 
 | 파일 | 내용 | 비교 대상 |
 |---|---|---|
-| `baseline/router.bench.txt` | § 0.1~0.4 전체 (현 `/tmp/bench-baseline.txt` 이전) | 자체 회귀 |
+| `baseline/router.bench.txt` | § 0.1~0.4 전체 (`bench/router.bench.ts` raw 출력, ANSI strip) | 자체 회귀 |
 | `baseline/comparison.bench.txt` | `bench/comparison.bench.ts` raw 출력 | find-my-way / hono / koa-tree-router / memoirist / rou3 |
 | `baseline/complex-shapes.bench.txt` | `bench/complex-shapes.bench.ts` raw 출력 | 자체 (복잡 라우트 shape) |
 | `baseline/percent-gate.bench.txt` | `bench/percent-gate.bench.ts` raw 출력 | decode 게이트 정책 |
