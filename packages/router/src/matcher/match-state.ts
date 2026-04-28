@@ -1,3 +1,5 @@
+import { MAX_PARAMS } from '../builder/constants';
+
 /**
  * Function shape produced by every walker (segment-recursive, segment-iterative,
  * segment-codegen, wildcard-codegen). Returns true when the URL matches a
@@ -31,8 +33,6 @@ export interface MatchState {
 export type MatchStateWithParams = MatchState & {
   params: Record<string, string | undefined>;
 };
-
-const MAX_PARAMS = 32;
 
 export function createMatchState(): MatchState {
   // Pre-fill the param arrays with empty strings so they're packed (no holes).

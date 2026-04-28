@@ -4,49 +4,6 @@ import { isErr } from '@zipbul/result';
 import { PatternUtils } from './pattern-utils';
 
 describe('PatternUtils', () => {
-  describe('acquireCompiledPattern', () => {
-    it('should return a RegExp that matches the given source and flags', () => {
-      const utils = new PatternUtils({});
-      const regex = utils.acquireCompiledPattern('\\d+', '');
-
-      expect(isErr(regex)).toBe(false);
-      expect((regex as RegExp).test('123')).toBe(true);
-      expect((regex as RegExp).test('abc')).toBe(false);
-    });
-
-    it('should return the same RegExp instance for identical source and flags (cache hit)', () => {
-      const utils = new PatternUtils({});
-      const r1 = utils.acquireCompiledPattern('\\d+', '');
-      const r2 = utils.acquireCompiledPattern('\\d+', '');
-
-      expect(r1).toBe(r2);
-    });
-
-    it('should return different RegExp instances for different sources', () => {
-      const utils = new PatternUtils({});
-      const r1 = utils.acquireCompiledPattern('\\d+', '');
-      const r2 = utils.acquireCompiledPattern('[a-z]+', '');
-
-      expect(r1).not.toBe(r2);
-    });
-
-    it('should differentiate cache keys by flags', () => {
-      const utils = new PatternUtils({});
-      const r1 = utils.acquireCompiledPattern('abc', '');
-      const r2 = utils.acquireCompiledPattern('abc', 'i');
-
-      expect(r1).not.toBe(r2);
-    });
-
-    it('should return Err(route-parse) for invalid regex source', () => {
-      const utils = new PatternUtils({});
-      const result = utils.acquireCompiledPattern('[abc', '');
-
-      expect(isErr(result)).toBe(true);
-      expect((result as any).data.kind).toBe('route-parse');
-    });
-  });
-
   describe('normalizeParamPatternSource', () => {
     it('should return clean pattern unchanged when no anchors are present (policy=silent)', () => {
       const utils = new PatternUtils({ regexAnchorPolicy: 'silent' });

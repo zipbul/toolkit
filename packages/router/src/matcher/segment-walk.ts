@@ -1,5 +1,5 @@
 import type { MatchFn, MatchState, MatchStateWithParams } from './match-state';
-import type { DecoderFn } from '../processor/decoder';
+import type { DecoderFn } from './decoder';
 import type { ParamSegment, SegmentNode } from './segment-tree';
 
 import { TESTER_PASS, TESTER_TIMEOUT } from './pattern-tester';

@@ -28,9 +28,11 @@ export class OptionalParamDefaults {
    * True when no optional-param defaults are tracked. Used by router codegen
    * to skip the `optDefaults.has(handlerIndex)` runtime probe entirely when
    * the router has no `:name?` routes — i.e. on every dynamic match.
+   * `behavior === 'omit'` keeps `defaults` empty via the early return in
+   * `record()`, so size is the single source of truth.
    */
   isEmpty(): boolean {
-    return this.behavior === 'omit' || this.defaults.size === 0;
+    return this.defaults.size === 0;
   }
 
   apply(key: number, params: RouteParams): void {

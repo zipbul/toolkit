@@ -3,15 +3,8 @@ import type { PathPart } from './path-parser';
 import type { RouterErrData } from '../types';
 
 import { err } from '@zipbul/result';
+import { MAX_OPTIONAL } from './constants';
 import { OptionalParamDefaults } from './optional-param-defaults';
-
-/**
- * Each optional param doubles the expansion count (2^N). At N=20 the build
- * hangs ~5s; N=25 allocates 33M parts arrays. Capped at 10 (1024 expansions,
- * milliseconds-level build) — far above realistic APIs and below pathological
- * territory.
- */
-const MAX_OPTIONAL = 10;
 
 export interface ExpandedRoute {
   parts: PathPart[];

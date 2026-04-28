@@ -2,6 +2,16 @@ import type { Result } from '@zipbul/result';
 import type { RegexSafetyOptions, RouterErrData, RouterWarning } from '../types';
 
 import { err, isErr } from '@zipbul/result';
+import {
+  CC_COLON,
+  CC_LPAREN,
+  CC_PLUS,
+  CC_QUESTION,
+  CC_RPAREN,
+  CC_SLASH,
+  CC_STAR,
+  MAX_PARAMS,
+} from './constants';
 import { PatternUtils } from './pattern-utils';
 import { assessRegexSafety } from './regex-safety';
 
@@ -45,7 +55,7 @@ export class PathParser {
 
   parse(path: string): Result<ParseResult, RouterErrData> {
     // 1. Basic validation
-    if (path.length === 0 || path.charCodeAt(0) !== 47) {
+    if (path.length === 0 || path.charCodeAt(0) !== CC_SLASH) {
       return err({
         kind: 'route-parse',
         message: `Path must start with '/': ${path}`,
@@ -77,15 +87,15 @@ export class PathParser {
     for (const seg of segments) {
       const fc = seg.charCodeAt(0);
 
-      if (fc === 58 || fc === 42) { // ':' or '*'
+      if (fc === CC_COLON || fc === CC_STAR) {
         paramCount++;
       }
     }
 
-    if (paramCount > 32) {
+    if (paramCount > MAX_PARAMS) {
       return err({
         kind: 'segment-limit',
-        message: `Path has ${paramCount} parameters, exceeding the maximum of 32: ${path}`,
+        message: `Path has ${paramCount} parameters, exceeding the maximum of ${MAX_PARAMS}: ${path}`,
         path,
       });
     }
@@ -101,7 +111,7 @@ export class PathParser {
       const seg = segments[i]!;
       const firstChar = seg.charCodeAt(0);
 
-      if (firstChar === 58) { // ':'
+      if (firstChar === CC_COLON) {
         // Flush static buffer
         if (staticBuf.length > 0) {
           parts.push({ type: 'static', value: staticBuf });
@@ -136,7 +146,7 @@ export class PathParser {
         if (i < segments.length - 1) {
           staticBuf = '/';
         }
-      } else if (firstChar === 42) { // '*'
+      } else if (firstChar === CC_STAR) {
         // Flush static buffer
         if (staticBuf.length > 0) {
           parts.push({ type: 'static', value: staticBuf });
@@ -195,7 +205,7 @@ export class PathParser {
         const firstChar = seg.charCodeAt(0);
 
         // Don't lowercase :param or *wildcard segments
-        if (firstChar !== 58 && firstChar !== 42) {
+        if (firstChar !== CC_COLON && firstChar !== CC_STAR) {
           segments[i] = seg.toLowerCase();
         }
       }
@@ -207,7 +217,7 @@ export class PathParser {
     for (const seg of segments) {
       const firstChar = seg.charCodeAt(0);
 
-      if (firstChar !== 58 && firstChar !== 42 && seg.length > maxLen) {
+      if (firstChar !== CC_COLON && firstChar !== CC_STAR && seg.length > maxLen) {
         return err({
           kind: 'segment-limit',
           message: `Segment length exceeds limit: ${seg.substring(0, 20)}...`,
@@ -449,8 +459,16 @@ function validateParamName(
 
   for (let i = 0; i < name.length; i++) {
     const ch = name.charCodeAt(i);
-    // ':' 58, '*' 42, '?' 63, '+' 43, '/' 47, '(' 40, ')' 41
-    if (ch === 58 || ch === 42 || ch === 63 || ch === 43 || ch === 47 || ch === 40 || ch === 41) {
+
+    if (
+      ch === CC_COLON
+      || ch === CC_STAR
+      || ch === CC_QUESTION
+      || ch === CC_PLUS
+      || ch === CC_SLASH
+      || ch === CC_LPAREN
+      || ch === CC_RPAREN
+    ) {
       const hint = prefix === ':'
         ? "Use '/:a/:b' for two consecutive params."
         : "Wildcards do not accept regex patterns — use a regex param like ':name(...)' for that.";

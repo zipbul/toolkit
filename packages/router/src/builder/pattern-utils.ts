@@ -6,36 +6,10 @@ import { err } from '@zipbul/result';
 import { START_ANCHOR_PATTERN, END_ANCHOR_PATTERN } from './constants';
 
 export class PatternUtils {
-  private readonly compiledPatternCache = new Map<string, RegExp>();
   private readonly config: BuilderConfig;
 
   constructor(config: BuilderConfig) {
     this.config = config;
-  }
-
-  acquireCompiledPattern(source: string, flags: string): Result<RegExp, RouterErrData> {
-    const key = `${flags}|${source}`;
-    const cached = this.compiledPatternCache.get(key);
-
-    if (cached) {
-      return cached;
-    }
-
-    let compiled: RegExp;
-
-    try {
-      compiled = new RegExp(`^(?:${source})$`, flags);
-    } catch (e) {
-      return err<RouterErrData>({
-        kind: 'route-parse',
-        message: `Invalid regex pattern '${source}': ${e instanceof Error ? e.message : String(e)}`,
-        segment: source,
-      });
-    }
-
-    this.compiledPatternCache.set(key, compiled);
-
-    return compiled;
   }
 
   normalizeParamPatternSource(patternSrc: string): Result<string, RouterErrData> {

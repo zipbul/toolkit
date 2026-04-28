@@ -18,7 +18,7 @@ import { OptionalParamDefaults } from './builder/optional-param-defaults';
 import { expandOptional } from './builder/route-expand';
 import { RouterCache } from './cache';
 import { MethodRegistry } from './method-registry';
-import { buildDecoder } from './processor/decoder';
+import { buildDecoder } from './matcher/decoder';
 import { createMatchState } from './matcher/match-state';
 import {
   buildPathNormalizer,
