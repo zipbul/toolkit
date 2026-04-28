@@ -165,13 +165,19 @@ describe('Router<T> errors', () => {
     const r1 = new Router<string>();
     r1.build();
     const sealed = catchRouterError(() => r1.add('GET', '/x', 'x'));
-    expect(typeof sealed.data.suggestion).toBe('string');
+    expect(sealed.data.kind).toBe('router-sealed');
+    if (sealed.data.kind === 'router-sealed') {
+      expect(typeof sealed.data.suggestion).toBe('string');
+    }
 
     // route-duplicate
     const r3 = new Router<string>();
     r3.add('GET', '/x', 'x');
     const dup = catchRouterError(() => r3.add('GET', '/x', 'x2'));
-    expect(typeof dup.data.suggestion).toBe('string');
+    expect(dup.data.kind).toBe('route-duplicate');
+    if (dup.data.kind === 'route-duplicate') {
+      expect(typeof dup.data.suggestion).toBe('string');
+    }
   });
 
   it('should throw for conflicting wildcard names at same node', () => {

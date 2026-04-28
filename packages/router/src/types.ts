@@ -52,27 +52,43 @@ export type RouterErrKind =
   | 'segment-limit';     // 빌드 시 세그먼트 길이/수/파라미터 수 상한 초과
 
 /**
- * Result 에러에 첨부되는 데이터.
- * `err<RouterErrData>({ kind, message, ... })` 형태로 사용.
+ * 모든 에러에 공통으로 부착될 수 있는 caller-context 필드.
+ *
+ * `path` / `method` 는 라우터 상위 레이어 (addOne, addAll) 가 다운스트림
+ * 에러에 *컨텍스트* 로 덧붙이는 값이라 어떤 `kind` 에도 합법. `registeredCount`
+ * 는 addAll() 의 fail-fast wrapper 가 추가하는 진단 정보.
+ *
+ * Kind 별 *required* 필드는 본 컨텍스트 *밖* 의 union 멤버에 정의된다
+ * (예: `route-conflict.segment`). 즉 narrowing 후엔 kind-필수 필드만
+ * 강제되고, 컨텍스트는 항상 optional 로 접근.
  */
-export interface RouterErrData {
-  /** 에러 종류 (discriminant) */
-  kind: RouterErrKind;
-  /** 사람이 읽을 수 있는 상세 설명 */
-  message: string;
-  /** 문제가 된 전체 경로 (등록 시점 또는 매치 시점) */
+export interface RouterErrContext {
   path?: string;
-  /** 문제가 된 HTTP 메서드 */
   method?: string;
-  /** 문제가 된 개별 세그먼트 */
-  segment?: string;
-  /** 충돌 대상 (기존에 등록된 라우트 등) */
-  conflictsWith?: string;
-  /** 수정 제안 (가능한 경우) */
-  suggestion?: string;
   /** addAll() fail-fast 시 에러 전까지 성공한 등록 수 */
   registeredCount?: number;
 }
+
+/**
+ * `Result` 에러에 첨부되는 데이터 — kind 별 discriminated union.
+ *
+ * 각 `kind` 마다 *해당 케이스에서만 의미가 있는* 필드를 required 로 선언.
+ * 유저는 `if (e.kind === 'route-conflict')` 로 좁힌 후 `e.segment` 를 안전
+ * 접근. 필수/선택 분류는 모든 에러 생성 사이트의 *실제 채움 패턴* 을 audit
+ * 하여 결정한다 — required 필드는 *모든* 호출 사이트가 채우고 있음을
+ * TypeScript 가 강제하는 보장.
+ */
+export type RouterErrData = RouterErrContext & (
+  | { kind: 'router-sealed'; message: string; suggestion: string }
+  | { kind: 'route-duplicate'; message: string; suggestion?: string }
+  | { kind: 'route-conflict'; message: string; segment: string; conflictsWith?: string }
+  | { kind: 'route-parse'; message: string; segment?: string }
+  | { kind: 'param-duplicate'; message: string; path: string; segment: string }
+  | { kind: 'regex-unsafe'; message: string; segment: string }
+  | { kind: 'regex-anchor'; message: string; segment: string; suggestion?: string }
+  | { kind: 'method-limit'; message: string; method: string }
+  | { kind: 'segment-limit'; message: string; segment?: string; suggestion?: string }
+);
 
 /**
  * 라이브러리가 발행하는 경고 정보.
@@ -95,15 +111,24 @@ export interface MatchMeta {
 }
 
 /**
- * match() 성공 시 반환되는 결과.
- * add() 시 등록한 값(T)과 파라미터, 메타 정보를 포함한다.
+ * 매칭 성공 시 반환되는 *공통 페이로드* (value + params).
+ *
+ * `MatchOutput<T>` 와 `CachedMatchEntry<T>` 모두 이 형태를 공유하며 유일한
+ * 차이는 `meta` 필드의 유무다. 본 베이스를 분리해두면 캐시 컨테이너와
+ * 외부 반환 사이에서 변환 비용 0 으로 공유할 수 있다.
  */
-export interface MatchOutput<T> {
+export interface MatchPayload<T> {
   /** add() 시 등록한 값 그대로 */
   value: T;
   /** 추출된 경로 파라미터 */
-  params: Record<string, string | undefined>;
+  params: RouteParams;
+}
+
+/**
+ * match() 성공 시 반환되는 결과.
+ * add() 시 등록한 값(T)과 파라미터, 메타 정보를 포함한다.
+ */
+export interface MatchOutput<T> extends MatchPayload<T> {
   /** 매칭 메타 정보 */
   meta: MatchMeta;
 }
-
