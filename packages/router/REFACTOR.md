@@ -1084,15 +1084,58 @@ packages/router/test/               ★ 신규 파일 (F단계)
 
 ---
 
+## 7. 진행 현황 (live status)
+
+각 단계의 머지 commit SHA 와 적용된 finding 을 기록. 본 절은 PR 진행에
+따라 추가 갱신된다.
+
+### 7.1 완료된 PR
+
+| PR | Commit | 단계 | Findings | 비고 |
+|---|---|---|---|---|
+| #1 | `712da8e` | infra | — | REFACTOR.md, scripts/check-test-policy, package.json pretest |
+| — | `1c850bb` | infra | — | baseline ANSI strip + README + env 메타 |
+| — | `b2dddc0` | infra | — | quieter-load 재캡처 + /tmp 잔여 ref 제거 |
+| #2 | `2ec47f8` | A1 | F5, F19, F20, F21, F24 | 데드코드 / isEmpty 단축 / processor→matcher / charCode + MAX_PARAMS/OPTIONAL 통합 |
+| #3 | `41a9d25` | A2 | F3, F13, F4, F23, F15 | parse 3-stage, registerParam, expandOptional 4-함수, 두 invariant docstring, 빈 패턴 caller-trim |
+| — | `85f313e` | A2-fix | — | route-expand.spec (9 tests) + F15 lock-in (1 test) — A2 의 spec 누락 보완 |
+
+### 7.2 미완료 단계
+
+| 단계 | Findings 잔여 | 의존 |
+|---|---|---|
+| A3 | F7, F10 | — |
+| A4 | F8(reg), F18, F22 | A3 (F7 필드 사용) |
+| A5 | F9 | — |
+| A6 | F11 | — |
+| B1~B5 | F1, F2 (codegen) | A 단계 전체 |
+| C1~C2 | F12, F14, F16 | B3 |
+| D1~D2 | F17 + 회귀 검증 | C |
+| E1~E2 | F6 | D |
+| F1~F12 | F25~F33 | E |
+
+### 7.3 검증 baseline (현 시점)
+
+- `bun test`: **566 pass / 0 fail** (PR#1 시점 561 → A1 후 556 → A2 후 566)
+- `bun run build`: clean
+- `tsc --noEmit -p tsconfig.json`: 2 pre-existing errors in `error.spec.ts`
+  (둘 다 `RouterErrKind` 미정의 멤버 — A3 의 F7 discriminated union 화로
+  자연 해소 예정). PR#1 base 와 동일 카운트, 회귀 없음.
+- coverage: line + branch 100% on builder/* 전체.
+- check:test-policy: clean.
+- bench (router.bench): 핫패스 모든 항목 baseline ±0.5 ns 이내.
+
+---
+
 ## 부록 A — 추적 매트릭스
 
 | Finding | 심각 | 단계 | 파일 |
 |---|---|---|---|
 | F1 Router SRP | 상 | B1-B5 | router.ts → pipeline/* + codegen/* |
 | F2 emitGenericMatchImpl 159 lines | 상 | B3 | router.ts → codegen/emitter.ts |
-| F3 path-parser SRP | 상 | A2 | builder/path-parser.ts |
-| F4 route-expand 가드+조합 결합 | 상 | A2 | builder/route-expand.ts |
-| F5 acquireCompiledPattern dead | 상 | A1 | builder/pattern-utils.ts |
+| F3 path-parser SRP | 상 | A2 ✅ 41a9d25 | builder/path-parser.ts |
+| F4 route-expand 가드+조합 결합 | 상 | A2 ✅ 41a9d25 | builder/route-expand.ts |
+| F5 acquireCompiledPattern dead | 상 | A1 ✅ 2ec47f8 | builder/pattern-utils.ts |
 | F6 export 경계 (PathPart 누수) | 상 | E1, E2 | index.ts, router.ts, types.ts |
 | F7 RouterErrData (kind/message만 필수) | 중 | A3 | types.ts |
 | F8 sealed/isErr 중복 (registration) | 중 | A4 | router.ts → pipeline/registration.ts |
@@ -1101,18 +1144,18 @@ packages/router/test/               ★ 신규 파일 (F단계)
 | F10 MatchOutput/CachedMatchEntry 중복 | 중 | A3 | types.ts, router.ts |
 | F11 getAllCodes 변환 | 중 | A6 | method-registry.ts |
 | F12 워커 dispatch 분산 | 중 | C2 | matcher/segment-walk.ts, codegen/segment-compile.ts → codegen/walker-strategy.ts |
-| F13 path-parser 파람 검증 4 회 | 중 | A2 | builder/path-parser.ts |
+| F13 path-parser 파람 검증 4 회 | 중 | A2 ✅ 41a9d25 | builder/path-parser.ts |
 | F14 codegen escape 미문서화 | 중 | C1 | codegen/segment-compile.ts, codegen/escape.ts (신규) |
-| F15 normalizeParamPatternSource 암묵 반환 | 중 | A2 | builder/pattern-utils.ts |
+| F15 normalizeParamPatternSource 암묵 반환 | 중 | A2 ✅ 41a9d25 | builder/pattern-utils.ts |
 | F16 emit 변수명 하드코딩 (qi/len/mc) | 중 | C1 | matcher/path-normalize.ts, codegen/segment-compile.ts |
 | F17 segment-walk fast path 중복 | 중 | D1 | matcher/segment-walk.ts |
 | F18 `_` 접두사 일관성 | 하 | A4 | router.ts |
-| F19 isEmpty 중복 | 하 | A1 | builder/optional-param-defaults.ts |
-| F20 processor/ 단일 파일 | 하 | A1 | processor/decoder.ts → matcher/decoder.ts |
-| F21 charCode 매직 넘버 | 하 | A1 | builder/path-parser.ts, builder/constants.ts |
+| F19 isEmpty 중복 | 하 | A1 ✅ 2ec47f8 | builder/optional-param-defaults.ts |
+| F20 processor/ 단일 파일 | 하 | A1 ✅ 2ec47f8 | processor/decoder.ts → matcher/decoder.ts |
+| F21 charCode 매직 넘버 | 하 | A1 ✅ 2ec47f8 | builder/path-parser.ts, builder/constants.ts |
 | F22 segmentTrees freeze | 하 | A4 | router.ts (→ B2 후 pipeline/build) |
-| F23 mergeStaticParts `//` 정규화 | 하 | A2 (docstring only) | builder/route-expand.ts |
-| F24 MAX_PARAMS 상수 분산 | 중 | A1 | builder/constants.ts, builder/path-parser.ts, matcher/match-state.ts |
+| F23 mergeStaticParts `//` 정규화 | 하 | A2 ✅ 41a9d25 (docstring only) | builder/route-expand.ts |
+| F24 MAX_PARAMS 상수 분산 | 중 | A1 ✅ 2ec47f8 | builder/constants.ts, builder/path-parser.ts, matcher/match-state.ts |
 | F25 Router class 명분 부재 | 상 | F1 | router.ts (createRouter 팩토리) |
 | F26 라이프사이클 boolean 산재 | 상 | F2 | types.ts (RouterApi<T,S> phantom) |
 | F27 Result duck-typing | 중 | F3 (평가) | packages/result + consumer |
