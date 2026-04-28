@@ -1113,12 +1113,13 @@ packages/router/test/               ★ 신규 파일 (F단계)
 | #4 | `5ffdb44` | A3 | F7, F10 | RouterErrData → discriminated union, MatchPayload 베이스 도입, error.spec/router-errors.test 정합 |
 | — | `77bce9e` | A3-fix | — | RouterErrContext / MatchPayload public export 제거 (인라인) — 잘못 도입한 공개 표면 회수 |
 | #5 | `8a97815` | A4 | F8(reg), F18, F22 | assertNotSealed/unwrapOrThrow 헬퍼, `_` 접두사 제거, build-only freeze (hot-path 제외 + JSC IC 보호), V8→JSC 정정 |
+| — | `44e66f9` | A4-fix | — | F22 처방의 stale "+ 핵심 lookup 테이블에도 동일 적용" 표현을 실제 partition (build-only 5종 + hot-path 4종 비-동결) 으로 정정 |
+| #6 | `dc4683c` | A5 | F9 | wildcardNames → wildcardNamesByMethod (methodCode 키). 메서드 횡단 충돌 검출 제거 — GET /files/*path + POST /files/*upload 공존 가능. F22 freeze 목록 추가 |
 
 ### 7.2 미완료 단계
 
 | 단계 | Findings 잔여 | 의존 |
 |---|---|---|
-| A5 | F9 | — |
 | A6 | F11 | — |
 | B1~B5 | F1, F2 (codegen) | A 단계 전체 |
 | C1~C2 | F12, F14, F16 | B3 |
@@ -1128,7 +1129,7 @@ packages/router/test/               ★ 신규 파일 (F단계)
 
 ### 7.3 검증 baseline (현 시점)
 
-- `bun test`: **567 pass / 0 fail** (PR#1 시점 561 → A1 후 556 → A2 후 566 → A3 유지 → A4 후 567 freeze lock-in spec 추가)
+- `bun test`: **568 pass / 0 fail** (PR#1 시점 561 → A1 후 556 → A2 후 566 → A3 유지 → A4 후 567 freeze lock-in spec 추가 → A5 후 568 cross-method coexistence spec 추가)
 - `bun run build`: clean
 - `tsc --noEmit -p tsconfig.json`: **0 errors** (A3 의 F7 discriminated
   union 화로 pre-existing 2건 자연 해소).
@@ -1151,7 +1152,7 @@ packages/router/test/               ★ 신규 파일 (F단계)
 | F7 RouterErrData (kind/message만 필수) | 중 | A3 ✅ 5ffdb44+77bce9e | types.ts |
 | F8 sealed/isErr 중복 (registration) | 중 | A4 ✅ 8a97815 | router.ts → pipeline/registration.ts |
 | F8 not-built 가드 (match) | 중 | B4 | router.ts → pipeline/match.ts |
-| F9 wildcardNames cross-method | 중 | A5 | router.ts (→ B1 후 pipeline/registration) |
+| F9 wildcardNames cross-method | 중 | A5 ✅ dc4683c | router.ts (→ B1 후 pipeline/registration) |
 | F10 MatchOutput/CachedMatchEntry 중복 | 중 | A3 ✅ 5ffdb44+77bce9e | types.ts (MatchOutput), router.ts (file-local CacheEntry) |
 | F11 getAllCodes 변환 | 중 | A6 | method-registry.ts |
 | F12 워커 dispatch 분산 | 중 | C2 | matcher/segment-walk.ts, codegen/segment-compile.ts → codegen/walker-strategy.ts |
