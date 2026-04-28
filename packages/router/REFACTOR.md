@@ -428,8 +428,14 @@ git add bench/baseline && git commit -m "bench: capture baseline for refactor"
 - 사실: `sealed` flag 가 add 경로를 차단하지만 `segmentTrees` 배열
   자체는 freeze 되지 않음. 외부에서 prototype-pollution 등으로 접근
   가능성은 없으나 명시적 immutable 표현 부재.
-- 처방: § 단계 A4 — build() 종료 시 `Object.freeze(this.segmentTrees)`
-  + 핵심 lookup 테이블에도 동일 적용.
+- 처방: § 단계 A4 — build() 종료 시 *build-only* 테이블에만
+  `Object.freeze` 적용 (`segmentTrees`, `wildSpecs`, `staticMap`,
+  `staticRegistered`, `activeMethodCodes`). **핫패스 lookup 테이블
+  (`handlers`, `trees`, `staticOutputsByMethod`, `methodCodes`) 은 의도적
+  비-동결** — 컴파일된 matchImpl 이 closure-capture 한 frozen 객체를
+  매 dynamic match 시 인덱싱하면 JSC inline cache 가 degrade 되어
+  5-10 ns/match 회귀 (bench 검증 결과). `sealed` 가 모든 외부 변형
+  경로를 거부하므로 비-동결로 인한 실질적 위험은 0.
 
 ### F24 [중] `MAX_PARAMS = 32` 상수 분산 (path-parser ↔ match-state)
 - 위치: `src/builder/path-parser.ts:85, 88` (`> 32`, 메시지 `"the maximum
@@ -610,8 +616,13 @@ git add bench/baseline && git commit -m "bench: capture baseline for refactor"
 - F8: `assertNotSealed(ctx)` / `unwrapOrThrow(result, ctx)` 헬퍼.
   add/addAll 단순화.
 - F18: `_` 접두사 5 개 일괄 제거.
-- F22: build() 후 `Object.freeze(this.segmentTrees)` + handlers + staticMap.
-- 검증: spec 의 mutation 시도 테스트 (없으면 1 개 추가).
+- F22: build() 후 *build-only* 테이블 동결 (`segmentTrees`, `wildSpecs`,
+  `staticMap`, `staticRegistered`, `activeMethodCodes`). `handlers` /
+  `trees` / `staticOutputsByMethod` / `methodCodes` 는 hot-path 에서
+  closure-capture 되어 매 dynamic match 시 인덱싱되므로 비-동결 (JSC IC
+  degradation 5-10 ns/match 회피).
+- 검증: freeze partition lock-in spec 추가 (frozen 5 / not-frozen 4 +
+  TypeError throw 시도). bench: 핫패스 ±1 ns 이내.
 
 #### A5. wildcardNames 자료구조 메서드별 분리
 - F9: `wildcardNames: Map<string, string>` 을 `wildcardNamesByMethod:
