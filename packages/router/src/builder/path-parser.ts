@@ -53,8 +53,29 @@ export class PathParser {
     });
   }
 
+  /**
+   * 3-stage pipeline:
+   *   1. validatePath  — cheap structural pre-flight (leading `/`).
+   *   2. tokenize      — split + trailing-slash + case-fold + length/count gates.
+   *   3. parseTokens   — semantic parse into PathPart[].
+   * Each stage is independently testable; failures short-circuit with `Err`.
+   */
   parse(path: string): Result<ParseResult, RouterErrData> {
-    // 1. Basic validation
+    const validation = this.validatePath(path);
+
+    if (validation !== null) return validation;
+
+    const tokenizeResult = this.tokenize(path);
+
+    if (isErr(tokenizeResult)) return tokenizeResult;
+
+    const { segments, normalized } = tokenizeResult;
+
+    return this.parseTokens(segments, normalized, path);
+  }
+
+  /** Stage 1 — structural sanity. Fails fast on `''`, missing `/`. */
+  private validatePath(path: string): Result<never, RouterErrData> | null {
     if (path.length === 0 || path.charCodeAt(0) !== CC_SLASH) {
       return err({
         kind: 'route-parse',
@@ -63,16 +84,59 @@ export class PathParser {
       });
     }
 
-    // 2. Normalize segments
-    const normResult = this.normalizeSegments(path);
+    return null;
+  }
 
-    if (isErr(normResult)) {
-      return normResult;
+  /**
+   * Stage 2 — split + normalize + enforce hard limits. Returns the segment
+   * array consumed by stage 3 alongside the canonical normalized path used
+   * by lookup. Limits enforced here (segment count ≤ 64, length ≤ maxLen,
+   * param count ≤ MAX_PARAMS) are token-level constraints, so they belong
+   * with tokenization rather than semantic parse.
+   */
+  private tokenize(
+    path: string,
+  ): Result<{ segments: string[]; normalized: string }, RouterErrData> {
+    // Split by '/' (skip leading '/')
+    const body = path.length > 1 ? path.slice(1) : '';
+    const segments = body === '' ? [] : body.split('/');
+
+    // Handle trailing slash
+    if (this.config.ignoreTrailingSlash) {
+      if (segments.length > 0 && segments[segments.length - 1] === '') {
+        segments.pop();
+      }
     }
 
-    const { segments, normalized } = normResult;
+    // Case fold (static segments only — dynamic ones keep original case for param names)
+    if (!this.config.caseSensitive) {
+      for (let i = 0; i < segments.length; i++) {
+        const seg = segments[i]!;
+        const firstChar = seg.charCodeAt(0);
 
-    // 2b. Validate segment count
+        if (firstChar !== CC_COLON && firstChar !== CC_STAR) {
+          segments[i] = seg.toLowerCase();
+        }
+      }
+    }
+
+    // Validate segment lengths (static segments only)
+    const maxLen = this.config.maxSegmentLength;
+
+    for (const seg of segments) {
+      const firstChar = seg.charCodeAt(0);
+
+      if (firstChar !== CC_COLON && firstChar !== CC_STAR && seg.length > maxLen) {
+        return err({
+          kind: 'segment-limit',
+          message: `Segment length exceeds limit: ${seg.substring(0, 20)}...`,
+          segment: seg.substring(0, 40),
+          suggestion: `Shorten the path segment to ${maxLen} characters or fewer.`,
+        });
+      }
+    }
+
+    // Validate segment count
     if (segments.length > 64) {
       return err({
         kind: 'segment-limit',
@@ -81,7 +145,7 @@ export class PathParser {
       });
     }
 
-    // 2c. Validate param count
+    // Validate param count
     let paramCount = 0;
 
     for (const seg of segments) {
@@ -100,7 +164,22 @@ export class PathParser {
       });
     }
 
-    // 3. Parse segments into PathParts
+    const normalized = segments.length > 0 ? '/' + segments.join('/') : '/';
+
+    return { segments, normalized };
+  }
+
+  /**
+   * Stage 3 — walk the tokenized segments and emit `PathPart[]`. Static
+   * segments are accumulated into a buffer and flushed when a dynamic one
+   * appears; consecutive statics share a single PathPart so the matcher can
+   * compare prefixes in one go.
+   */
+  private parseTokens(
+    segments: string[],
+    normalized: string,
+    path: string,
+  ): Result<ParseResult, RouterErrData> {
     this.activeParams.clear();
 
     const parts: PathPart[] = [];
@@ -112,7 +191,6 @@ export class PathParser {
       const firstChar = seg.charCodeAt(0);
 
       if (firstChar === CC_COLON) {
-        // Flush static buffer
         if (staticBuf.length > 0) {
           parts.push({ type: 'static', value: staticBuf });
           staticBuf = '';
@@ -142,12 +220,10 @@ export class PathParser {
 
         parts.push(paramResult);
 
-        // Add '/' separator after param (if not last segment)
         if (i < segments.length - 1) {
           staticBuf = '/';
         }
       } else if (firstChar === CC_STAR) {
-        // Flush static buffer
         if (staticBuf.length > 0) {
           parts.push({ type: 'static', value: staticBuf });
           staticBuf = '';
@@ -163,73 +239,24 @@ export class PathParser {
 
         parts.push(wcResult);
       } else {
-        // Static segment
         staticBuf += seg;
 
-        // Add '/' separator after static segment (if not last segment)
         if (i < segments.length - 1) {
           staticBuf += '/';
         }
       }
     }
 
-    // Flush remaining static buffer
     if (staticBuf.length > 0) {
       parts.push({ type: 'static', value: staticBuf });
     }
 
-    // Handle root path '/' with no segments
+    // Root path `/` with no segments
     if (parts.length === 0) {
       parts.push({ type: 'static', value: '/' });
     }
 
     return { parts, normalized, isDynamic };
-  }
-
-  private normalizeSegments(path: string): Result<{ segments: string[]; normalized: string }, RouterErrData> {
-    // Split by '/' (skip leading '/')
-    const body = path.length > 1 ? path.slice(1) : '';
-    let segments = body === '' ? [] : body.split('/');
-
-    // Handle trailing slash
-    if (this.config.ignoreTrailingSlash) {
-      if (segments.length > 0 && segments[segments.length - 1] === '') {
-        segments.pop();
-      }
-    }
-
-    // Case fold (static segments only — dynamic ones keep original case for param names)
-    if (!this.config.caseSensitive) {
-      for (let i = 0; i < segments.length; i++) {
-        const seg = segments[i]!;
-        const firstChar = seg.charCodeAt(0);
-
-        // Don't lowercase :param or *wildcard segments
-        if (firstChar !== CC_COLON && firstChar !== CC_STAR) {
-          segments[i] = seg.toLowerCase();
-        }
-      }
-    }
-
-    // Validate segment lengths (static segments only)
-    const maxLen = this.config.maxSegmentLength;
-
-    for (const seg of segments) {
-      const firstChar = seg.charCodeAt(0);
-
-      if (firstChar !== CC_COLON && firstChar !== CC_STAR && seg.length > maxLen) {
-        return err({
-          kind: 'segment-limit',
-          message: `Segment length exceeds limit: ${seg.substring(0, 20)}...`,
-          segment: seg.substring(0, 40),
-          suggestion: `Shorten the path segment to ${maxLen} characters or fewer.`,
-        });
-      }
-    }
-
-    const normalized = segments.length > 0 ? '/' + segments.join('/') : '/';
-
-    return { segments, normalized };
   }
 
   private parseParam(seg: string, path: string): Result<PathPart, RouterErrData> {
@@ -249,16 +276,10 @@ export class PathParser {
 
       if (validation !== null) return validation;
 
-      if (this.activeParams.has(name)) {
-        return err({
-          kind: 'param-duplicate',
-          message: `Duplicate parameter name ':${name}' in path: ${path}`,
-          path,
-          segment: name,
-        });
-      }
+      const dup = this.registerParam(name, ':', path);
 
-      this.activeParams.add(name);
+      if (dup !== null) return dup;
+
       return { type: 'wildcard', name, origin: 'multi' };
     }
 
@@ -268,16 +289,10 @@ export class PathParser {
 
       if (validation !== null) return validation;
 
-      if (this.activeParams.has(name)) {
-        return err({
-          kind: 'param-duplicate',
-          message: `Duplicate parameter name ':${name}' in path: ${path}`,
-          path,
-          segment: name,
-        });
-      }
+      const dup = this.registerParam(name, ':', path);
 
-      this.activeParams.add(name);
+      if (dup !== null) return dup;
+
       return { type: 'wildcard', name, origin: 'star' };
     }
 
@@ -299,24 +314,20 @@ export class PathParser {
         });
       }
 
-      pattern = core.slice(parenIdx + 1, -1) || null;
+      // Whitespace-only `(   )` collapses to no-pattern, matching the empty
+      // `()` shape — the matcher would otherwise compile a literal-whitespace
+      // regex which is almost certainly a typo.
+      const rawPattern = core.slice(parenIdx + 1, -1);
+      pattern = rawPattern.trim() === '' ? null : rawPattern;
     }
 
     const nameValidation = validateParamName(name, ':', path);
 
     if (nameValidation !== null) return nameValidation;
 
-    // Check duplicate param names
-    if (this.activeParams.has(name)) {
-      return err({
-        kind: 'param-duplicate',
-        message: `Duplicate parameter name ':${name}' in path: ${path}`,
-        path,
-        segment: name,
-      });
-    }
+    const dup = this.registerParam(name, ':', path);
 
-    this.activeParams.add(name);
+    if (dup !== null) return dup;
 
     // Validate regex pattern
     if (pattern !== null) {
@@ -362,11 +373,28 @@ export class PathParser {
       });
     }
 
-    // Check duplicate
+    const dup = this.registerParam(name, '*', path);
+
+    if (dup !== null) return dup;
+
+    return { type: 'wildcard', name, origin };
+  }
+
+  /**
+   * Reject duplicate `:name` / `*name` within the same path. Returns null on
+   * success (and registers the name), or an `Err` carrying the duplicate
+   * diagnostic. Caller must run `validateParamName` first — this helper
+   * trusts the name shape and only enforces uniqueness.
+   */
+  private registerParam(
+    name: string,
+    prefix: ':' | '*',
+    path: string,
+  ): Result<never, RouterErrData> | null {
     if (this.activeParams.has(name)) {
       return err({
         kind: 'param-duplicate',
-        message: `Duplicate parameter name '*${name}' in path: ${path}`,
+        message: `Duplicate parameter name '${prefix}${name}' in path: ${path}`,
         path,
         segment: name,
       });
@@ -374,7 +402,7 @@ export class PathParser {
 
     this.activeParams.add(name);
 
-    return { type: 'wildcard', name, origin };
+    return null;
   }
 
   private validatePattern(pattern: string): Result<void, RouterErrData> {

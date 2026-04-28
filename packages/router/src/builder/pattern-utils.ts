@@ -12,11 +12,24 @@ export class PatternUtils {
     this.config = config;
   }
 
+  /**
+   * Strip anchors from a parameter regex source, applying the configured
+   * regexAnchorPolicy (silent / warn / error) when anchors were present.
+   *
+   * Contract: callers must filter out empty / whitespace-only pattern
+   * sources before invoking this method. The current sole caller —
+   * `PathParser.parseParam` — collapses `:name(   )` to a no-pattern param
+   * (`pattern = null`), so this method only runs for non-empty patterns
+   * and the empty-trim branch acts as a defensive fallback.
+   */
   normalizeParamPatternSource(patternSrc: string): Result<string, RouterErrData> {
     let normalized = patternSrc.trim();
 
     if (!normalized) {
-      return normalized;
+      // Defensive fallback — should be unreachable per the contract above.
+      // `.*` mirrors the anchors-only fallback below so callers never see
+      // an empty success value.
+      return '.*';
     }
 
     let removed = false;

@@ -11,6 +11,11 @@ export interface ExpandedRoute {
   handlerIndex: number;
 }
 
+interface OptionalCollection {
+  indices: number[];
+  names: string[];
+}
+
 /**
  * Expand a route's optional params into the cartesian set of variants the
  * matcher must register. For `/:a?/:b?` this yields four variants — both
@@ -27,32 +32,66 @@ export function expandOptional(
   handlerIndex: number,
   optionalDefaults: OptionalParamDefaults,
 ): Result<ExpandedRoute[], RouterErrData> {
-  const optionalIndices: number[] = [];
-  const optionalNames: string[] = [];
+  const collection = collectOptionalIndices(parts);
+
+  const guard = validateOptionalCount(collection.indices.length);
+
+  if (guard !== null) return guard;
+
+  if (collection.indices.length === 0) {
+    return [{ parts, handlerIndex }];
+  }
+
+  optionalDefaults.record(handlerIndex, collection.names);
+
+  return enumerateExpansions(parts, handlerIndex, collection.indices);
+}
+
+/** Walk parts once, recording the index and name of every optional param. */
+function collectOptionalIndices(parts: PathPart[]): OptionalCollection {
+  const indices: number[] = [];
+  const names: string[] = [];
 
   for (let i = 0; i < parts.length; i++) {
     const part = parts[i]!;
 
     if (part.type === 'param' && part.optional) {
-      optionalIndices.push(i);
-      optionalNames.push(part.name);
-
-      if (optionalIndices.length > MAX_OPTIONAL) {
-        return err({
-          kind: 'segment-limit',
-          message: `Path has more than ${MAX_OPTIONAL} optional parameters. Each optional doubles the route-expansion count and risks pathological build cost.`,
-          suggestion: 'Reduce optionals or split into multiple explicit routes.',
-        });
-      }
+      indices.push(i);
+      names.push(part.name);
     }
   }
 
-  if (optionalIndices.length === 0) {
-    return [{ parts, handlerIndex }];
+  return { indices, names };
+}
+
+/**
+ * Reject paths with too many optional params before the 2^N cartesian loop
+ * runs. Returning `null` means safe to expand.
+ */
+function validateOptionalCount(
+  count: number,
+): Result<never, RouterErrData> | null {
+  if (count > MAX_OPTIONAL) {
+    return err({
+      kind: 'segment-limit',
+      message: `Path has more than ${MAX_OPTIONAL} optional parameters. Each optional doubles the route-expansion count and risks pathological build cost.`,
+      suggestion: 'Reduce optionals or split into multiple explicit routes.',
+    });
   }
 
-  optionalDefaults.record(handlerIndex, optionalNames);
+  return null;
+}
 
+/**
+ * Emit one ExpandedRoute per subset of optionals to keep. Index 0 is the
+ * "all-present" variant; subsequent indices iterate the 2^N - 1 non-empty
+ * drop-subsets via bitmask. Empty results collapse to root `/`.
+ */
+function enumerateExpansions(
+  parts: PathPart[],
+  handlerIndex: number,
+  optionalIndices: number[],
+): ExpandedRoute[] {
   const result: ExpandedRoute[] = [];
 
   // Full path (all optionals present, marked as required for insertion).
@@ -61,8 +100,7 @@ export function expandOptional(
   );
   result.push({ parts: fullParts, handlerIndex });
 
-  // Iterate the 2^N - 1 non-empty subsets of "which optionals to drop". The
-  // bit pattern selects which optional indices get filtered out.
+  // Iterate the 2^N - 1 non-empty subsets of "which optionals to drop".
   for (let bit = 1; bit < (1 << optionalIndices.length); bit++) {
     const filtered: PathPart[] = [];
 
@@ -77,8 +115,13 @@ export function expandOptional(
       }
 
       if (skip) {
-        // Strip trailing slash from the preceding static so e.g.
-        // `/users/` + dropped `:id` doesn't become `/users/`.
+        // Invariant A — drop-time slash trim:
+        // When a dropped optional follows a static that ends in `/`, the
+        // trailing slash must be stripped so e.g. `/users/` + dropped `:id`
+        // doesn't produce a route ending in `/users/`. This is *not*
+        // redundant with the post-merge `//` collapse below — the two cover
+        // disjoint cases (this one removes a single trailing `/`; the
+        // collapse fixes `//` produced by concatenating two static parts).
         if (filtered.length > 0) {
           const prev = filtered[filtered.length - 1]!;
 
@@ -120,6 +163,17 @@ export function expandOptional(
   return result;
 }
 
+/**
+ * Coalesce consecutive static parts into one and normalize any `//` produced
+ * by the concatenation.
+ *
+ * Invariant B — post-merge `//` collapse:
+ * Two static segments produced by `enumerateExpansions` (e.g. a leading `/`
+ * + a trimmed prev that already ends `/`) can join into `…//…`. The replace
+ * collapses every such double slash. This is *not* redundant with invariant A
+ * (slash trim during drop) — that one fires before merge, this one fires
+ * after, and the two together are property-tested in router.property.test.
+ */
 function mergeStaticParts(parts: PathPart[]): PathPart[] {
   const result: PathPart[] = [];
 
