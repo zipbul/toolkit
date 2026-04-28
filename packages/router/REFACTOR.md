@@ -1115,6 +1115,7 @@ packages/router/test/               ★ 신규 파일 (F단계)
 | #5 | `8a97815` | A4 | F8(reg), F18, F22 | assertNotSealed/unwrapOrThrow 헬퍼, `_` 접두사 제거, build-only freeze (hot-path 제외 + JSC IC 보호), V8→JSC 정정 |
 | — | `44e66f9` | A4-fix | — | F22 처방의 stale "+ 핵심 lookup 테이블에도 동일 적용" 표현을 실제 partition (build-only 5종 + hot-path 4종 비-동결) 으로 정정 |
 | #6 | `dc4683c` | A5 | F9 | wildcardNames → wildcardNamesByMethod (methodCode 키). 메서드 횡단 충돌 검출 제거 — GET /files/*path + POST /files/*upload 공존 가능. F22 freeze 목록 추가 |
+| — | `51aed28` | A5-fix | — | cross-method static/wildcard 공존 spec 추가 — A5 의 신규 동작 중 wildcard/wildcard 만 커버하고 static/wildcard 쌍을 빠뜨림 |
 
 ### 7.2 미완료 단계
 
@@ -1129,7 +1130,7 @@ packages/router/test/               ★ 신규 파일 (F단계)
 
 ### 7.3 검증 baseline (현 시점)
 
-- `bun test`: **568 pass / 0 fail** (PR#1 시점 561 → A1 후 556 → A2 후 566 → A3 유지 → A4 후 567 freeze lock-in spec 추가 → A5 후 568 cross-method coexistence spec 추가)
+- `bun test`: **569 pass / 0 fail** (PR#1 시점 561 → A1 후 556 → A2 후 566 → A3 유지 → A4 후 567 freeze lock-in spec 추가 → A5 후 569 cross-method wildcard/wildcard + static/wildcard coexistence spec 추가)
 - `bun run build`: clean
 - `tsc --noEmit -p tsconfig.json`: **0 errors** (A3 의 F7 discriminated
   union 화로 pre-existing 2건 자연 해소).
