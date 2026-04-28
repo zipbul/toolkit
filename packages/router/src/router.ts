@@ -3,7 +3,6 @@ import type { Result } from '@zipbul/result';
 import type {
   MatchMeta,
   MatchOutput,
-  MatchPayload,
   RegexSafetyOptions,
   RouteParams,
   RouterErrData,
@@ -52,6 +51,13 @@ const STATIC_META: MatchMeta = Object.freeze({ source: 'static' } as const);
 const CACHE_META: MatchMeta = Object.freeze({ source: 'cache' } as const);
 const DYNAMIC_META: MatchMeta = Object.freeze({ source: 'dynamic' } as const);
 
+// Cache stores only the value/params pair — meta is attached at lookup time
+// (see CACHE_META). File-local; not part of the public surface.
+interface CacheEntry<T> {
+  value: T;
+  params: RouteParams;
+}
+
 /**
  * Snapshot of build-time flags + closure references used by the
  * matchImpl emitters. Built once at compile time by `collectMatchConfig`
@@ -78,7 +84,7 @@ interface MatchConfig<T> {
   readonly matchState: MatchState;
   readonly handlers: T[];
   readonly optDefaults: OptionalParamDefaults | undefined;
-  readonly hitCacheByMethod: Map<number, RouterCache<MatchPayload<T>>> | undefined;
+  readonly hitCacheByMethod: Map<number, RouterCache<CacheEntry<T>>> | undefined;
   readonly missCacheByMethod: Map<number, Set<string>> | undefined;
   readonly cacheMaxSize: number;
 }
@@ -96,7 +102,7 @@ export class Router<T = unknown> {
    *  so the cold `allowedMethods` lookup cannot drift from the hot match path.
    *  Identity normalizer (returns input unchanged) before build(). */
   private _normalizePath: PathNormalizer = path => path;
-  private hitCacheByMethod: Map<number, RouterCache<MatchPayload<T>>> | undefined;
+  private hitCacheByMethod: Map<number, RouterCache<CacheEntry<T>>> | undefined;
   private missCacheByMethod: Map<number, Set<string>> | undefined;
   private cacheMaxSize: number = 1000;
   private sealed = false;
