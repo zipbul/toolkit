@@ -1184,12 +1184,25 @@ packages/router/test/               ★ 신규 파일 (F단계)
 cd packages/router
 
 # 0) 베이스라인 캡처 (단계 A1 진입 전, 1 회만)
+#    캡처 직전: 다른 CPU 부하 없는 상태에서 실행.
 mkdir -p bench/baseline
 bun run bench                                > bench/baseline/router.bench.txt 2>&1
 bun run bench/comparison.bench.ts            > bench/baseline/comparison.bench.txt 2>&1
 bun run bench/complex-shapes.bench.ts        > bench/baseline/complex-shapes.bench.txt 2>&1
 bun run bench/percent-gate.bench.ts          > bench/baseline/percent-gate.bench.txt 2>&1
-{ uname -a; bun --version; lscpu | head -20; } > bench/baseline/env.txt
+# ANSI 컬러 escape 제거 — diff 친화 (필수)
+sed -i 's/\x1b\[[0-9;]*m//g' bench/baseline/*.bench.txt
+# env 메타: OS / Bun / CPU 모델 / 실시간 MHz / scaling / load
+{ echo "=== System ==="; uname -a;
+  echo; echo "=== Bun ==="; bun --version;
+  echo; echo "=== CPU (lscpu) ==="; lscpu | head -25;
+  echo; echo "=== CPU MHz (per-core) ==="; /bin/grep MHz /proc/cpuinfo | head -8;
+  echo; echo "=== Scaling driver/governor ==="
+  cat /sys/devices/system/cpu/cpu0/cpufreq/scaling_driver 2>/dev/null || echo "n/a"
+  cat /sys/devices/system/cpu/cpu0/cpufreq/scaling_governor 2>/dev/null || echo "n/a"
+  echo; echo "=== Memory ==="; free -h;
+  echo; echo "=== Load (post-bench) ==="; uptime;
+} > bench/baseline/env.txt
 git add bench/baseline && git commit -m "bench: capture baseline for refactor"
 
 # 1) 테스트 (모든 PR)

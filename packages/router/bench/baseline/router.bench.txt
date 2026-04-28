@@ -1,367 +1,367 @@
 $ bun run bench/router.bench.ts
-[90mclk: ~4.98 GHz[0m
-[90mcpu: 13th Gen Intel(R) Core(TM) i7-13700K[0m
-[90mruntime: bun 1.3.13 (x64-linux)[0m
+clk: ~4.98 GHz
+cpu: 13th Gen Intel(R) Core(TM) i7-13700K
+runtime: bun 1.3.13 (x64-linux)
 
 benchmark                                         avg (min … max) p75 / p99    (min … top 1%)
 ----------------------------------------------------------------- -------------------------------
-static match (10 routes)                           [1m[33m365.32 ps[0m[1m/iter[0m [90m317.38 ps[0m [36m█         [0m[33m [0m[35m          [0m
-                                          [90m([0m[36m314.70 ps[0m[90m … [0m[35m144.09 ns[0m[90m)[0m [90m413.57 ps[0m [36m█▂        [0m[33m [0m[35m          [0m
-                                          [90m([0m[33m  0.00  b[0m[90m … [0m[33m 96.00  b[0m[90m) [0m[33m  0.02  b[0m [36m██▁▁▁▁▁▁▁▁[0m[33m▁[0m[35m▁▁▁▁▁▁▁▁▁▁[0m
+static match (10 routes)                           365.32 ps/iter 317.38 ps █                    
+                                          (314.70 ps … 144.09 ns) 413.57 ps █▂                   
+                                          (  0.00  b …  96.00  b)   0.02  b ██▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁
 
-static match (100 routes)                          [1m[33m491.09 ps[0m[1m/iter[0m [90m317.14 ps[0m [33m█[0m[35m                    [0m
-                                          [90m([0m[36m314.70 ps[0m[90m … [0m[35m126.23 ns[0m[90m)[0m [90m 12.43 ns[0m [33m█[0m[35m                    [0m
-                                          [90m([0m[33m  0.00  b[0m[90m … [0m[33m 96.00  b[0m[90m) [0m[33m  0.02  b[0m [33m█[0m[35m▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁[0m
+static match (100 routes)                          491.09 ps/iter 317.14 ps █                    
+                                          (314.70 ps … 126.23 ns)  12.43 ns █                    
+                                          (  0.00  b …  96.00  b)   0.02  b █▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁
 
-static match (500 routes)                          [1m[33m844.20 ps[0m[1m/iter[0m [90m318.85 ps[0m [36m█[0m[33m [0m[35m                   [0m
-                                          [90m([0m[36m315.43 ps[0m[90m … [0m[35m110.62 ns[0m[90m)[0m [90m 14.81 ns[0m [36m█[0m[33m [0m[35m                   [0m
-                                          [90m([0m[33m  0.00  b[0m[90m … [0m[33m 96.00  b[0m[90m) [0m[33m  0.03  b[0m [36m█[0m[33m▁[0m[35m▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁[0m
+static match (500 routes)                          844.20 ps/iter 318.85 ps █                    
+                                          (315.43 ps … 110.62 ns)  14.81 ns █                    
+                                          (  0.00  b …  96.00  b)   0.03  b █▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁
 
-static match (1000 routes)                         [1m[33m  4.96 ns[0m[1m/iter[0m [90m 13.51 ns[0m [36m█    [0m[33m [0m[35m               [0m
-                                           [90m([0m[36m314.94 ps[0m[90m … [0m[35m86.59 ns[0m[90m)[0m [90m 19.96 ns[0m [36m█    [0m[33m [0m[35m               [0m
-                                          [90m([0m[33m  0.00  b[0m[90m … [0m[33m 96.00  b[0m[90m) [0m[33m  0.09  b[0m [36m█▁▁▁▁[0m[33m▁[0m[35m▁▁▁▁▁▁▂▂▂▄▂▂▃▁▁[0m
+static match (1000 routes)                           4.96 ns/iter  13.51 ns █                    
+                                           (314.94 ps … 86.59 ns)  19.96 ns █                    
+                                          (  0.00  b …  96.00  b)   0.09  b █▁▁▁▁▁▁▁▁▁▁▁▂▂▂▄▂▂▃▁▁
 
-[1msummary[0m
-  [1m[36mstatic match (10 routes)[0m
-   [32m1.34[0mx faster than [1m[36mstatic match (100 routes)[0m
-   [32m2.31[0mx faster than [1m[36mstatic match (500 routes)[0m
-   [32m13.58[0mx faster than [1m[36mstatic match (1000 routes)[0m
+summary
+  static match (10 routes)
+   1.34x faster than static match (100 routes)
+   2.31x faster than static match (500 routes)
+   13.58x faster than static match (1000 routes)
 
-[90m----------------------------------------------------------------- -------------------------------[0m
-param match: /users/:id                            [1m[33m 43.87 ns[0m[1m/iter[0m [90m 41.28 ns[0m [36m █[0m[33m [0m[35m                  [0m
-                                           [90m([0m[36m36.70 ns[0m[90m … [0m[35m380.07 ns[0m[90m)[0m [90m104.82 ns[0m [36m██[0m[33m [0m[35m                  [0m
-                                          [90m([0m[33m  0.00  b[0m[90m … [0m[33m192.00  b[0m[90m) [0m[33m  5.66  b[0m [36m██[0m[33m▆[0m[35m▃▂▂▁▁▁▂▂▁▁▁▁▁▁▁▁▁▁[0m
+----------------------------------------------------------------- -------------------------------
+param match: /users/:id                             43.87 ns/iter  41.28 ns  █                   
+                                           (36.70 ns … 380.07 ns) 104.82 ns ██                   
+                                          (  0.00  b … 192.00  b)   5.66  b ██▆▃▂▂▁▁▁▂▂▁▁▁▁▁▁▁▁▁▁
 
-param match: /users/:id/posts/:postId              [1m[33m 51.72 ns[0m[1m/iter[0m [90m 50.74 ns[0m [36m █[0m[33m [0m[35m                  [0m
-                                           [90m([0m[36m46.91 ns[0m[90m … [0m[35m342.35 ns[0m[90m)[0m [90m 95.42 ns[0m [36m▆█[0m[33m [0m[35m                  [0m
-                                          [90m([0m[33m  0.00  b[0m[90m … [0m[33m 96.00  b[0m[90m) [0m[33m  0.12  b[0m [36m██[0m[33m▇[0m[35m▃▂▂▁▂▁▁▁▁▁▁▁▁▁▁▁▁▁[0m
+param match: /users/:id/posts/:postId               51.72 ns/iter  50.74 ns  █                   
+                                           (46.91 ns … 342.35 ns)  95.42 ns ▆█                   
+                                          (  0.00  b …  96.00  b)   0.12  b ██▇▃▂▂▁▂▁▁▁▁▁▁▁▁▁▁▁▁▁
 
-param match: 3-deep params                         [1m[33m 67.31 ns[0m[1m/iter[0m [90m 66.72 ns[0m [36m █[0m[33m [0m[35m                  [0m
-                                           [90m([0m[36m62.02 ns[0m[90m … [0m[35m350.62 ns[0m[90m)[0m [90m108.92 ns[0m [36m▃█[0m[33m [0m[35m                  [0m
-                                          [90m([0m[33m  0.00  b[0m[90m … [0m[33m 96.00  b[0m[90m) [0m[33m  0.19  b[0m [36m██[0m[33m█[0m[35m▄▃▂▂▁▁▁▁▁▁▁▁▁▁▁▁▁▁[0m
+param match: 3-deep params                          67.31 ns/iter  66.72 ns  █                   
+                                           (62.02 ns … 350.62 ns) 108.92 ns ▃█                   
+                                          (  0.00  b …  96.00  b)   0.19  b ███▄▃▂▂▁▁▁▁▁▁▁▁▁▁▁▁▁▁
 
-param match: 3-deep (org/team/member)              [1m[33m 91.30 ns[0m[1m/iter[0m [90m 90.17 ns[0m [36m █[0m[33m [0m[35m                  [0m
-                                           [90m([0m[36m82.27 ns[0m[90m … [0m[35m395.03 ns[0m[90m)[0m [90m168.22 ns[0m [36m █[0m[33m [0m[35m                  [0m
-                                          [90m([0m[33m  0.00  b[0m[90m … [0m[33m 96.00  b[0m[90m) [0m[33m  0.29  b[0m [36m▅█[0m[33m█[0m[35m▄▂▂▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁[0m
+param match: 3-deep (org/team/member)               91.30 ns/iter  90.17 ns  █                   
+                                           (82.27 ns … 395.03 ns) 168.22 ns  █                   
+                                          (  0.00  b …  96.00  b)   0.29  b ▅██▄▂▂▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁
 
-[1msummary[0m
-  [1m[36mparam match: /users/:id[0m
-   [32m1.18[0mx faster than [1m[36mparam match: /users/:id/posts/:postId[0m
-   [32m1.53[0mx faster than [1m[36mparam match: 3-deep params[0m
-   [32m2.08[0mx faster than [1m[36mparam match: 3-deep (org/team/member)[0m
+summary
+  param match: /users/:id
+   1.18x faster than param match: /users/:id/posts/:postId
+   1.53x faster than param match: 3-deep params
+   2.08x faster than param match: 3-deep (org/team/member)
 
-[90m----------------------------------------------------------------- -------------------------------[0m
-wildcard match: short suffix                       [1m[33m 28.61 ns[0m[1m/iter[0m [90m 27.22 ns[0m [36m █ [0m[33m [0m[35m                 [0m
-                                           [90m([0m[36m24.22 ns[0m[90m … [0m[35m397.73 ns[0m[90m)[0m [90m 55.92 ns[0m [36m █▃[0m[33m [0m[35m                 [0m
-                                          [90m([0m[33m  0.00  b[0m[90m … [0m[33m 96.00  b[0m[90m) [0m[33m  0.06  b[0m [36m▂██[0m[33m▃[0m[35m▂▂▂▁▁▁▁▁▁▁▁▁▁▁▁▁▁[0m
+----------------------------------------------------------------- -------------------------------
+wildcard match: short suffix                        28.61 ns/iter  27.22 ns  █                   
+                                           (24.22 ns … 397.73 ns)  55.92 ns  █▃                  
+                                          (  0.00  b …  96.00  b)   0.06  b ▂██▃▂▂▂▁▁▁▁▁▁▁▁▁▁▁▁▁▁
 
-wildcard match: deep suffix                        [1m[33m 36.04 ns[0m[1m/iter[0m [90m 34.59 ns[0m [36m █ [0m[33m [0m[35m                 [0m
-                                           [90m([0m[36m31.61 ns[0m[90m … [0m[35m369.55 ns[0m[90m)[0m [90m 65.01 ns[0m [36m █ [0m[33m [0m[35m                 [0m
-                                          [90m([0m[33m  0.00  b[0m[90m … [0m[33m 48.00  b[0m[90m) [0m[33m  0.05  b[0m [36m▃█▅[0m[33m▄[0m[35m▂▂▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁[0m
+wildcard match: deep suffix                         36.04 ns/iter  34.59 ns  █                   
+                                           (31.61 ns … 369.55 ns)  65.01 ns  █                   
+                                          (  0.00  b …  48.00  b)   0.05  b ▃█▅▄▂▂▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁
 
-wildcard match: very long suffix                   [1m[33m 42.33 ns[0m[1m/iter[0m [90m 40.65 ns[0m [36m █[0m[33m [0m[35m                  [0m
-                                           [90m([0m[36m37.36 ns[0m[90m … [0m[35m333.17 ns[0m[90m)[0m [90m 82.49 ns[0m [36m █[0m[33m [0m[35m                  [0m
-                                          [90m([0m[33m  0.00  b[0m[90m … [0m[33m 48.00  b[0m[90m) [0m[33m  0.18  b[0m [36m▇█[0m[33m▅[0m[35m▃▂▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁[0m
+wildcard match: very long suffix                    42.33 ns/iter  40.65 ns  █                   
+                                           (37.36 ns … 333.17 ns)  82.49 ns  █                   
+                                          (  0.00  b …  48.00  b)   0.18  b ▇█▅▃▂▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁
 
-[1msummary[0m
-  [1m[36mwildcard match: short suffix[0m
-   [32m1.26[0mx faster than [1m[36mwildcard match: deep suffix[0m
-   [32m1.48[0mx faster than [1m[36mwildcard match: very long suffix[0m
+summary
+  wildcard match: short suffix
+   1.26x faster than wildcard match: deep suffix
+   1.48x faster than wildcard match: very long suffix
 
-[90m----------------------------------------------------------------- -------------------------------[0m
-cache hit (100 routes)                             [1m[33m 13.98 ns[0m[1m/iter[0m [90m 14.92 ns[0m [36m █ [0m[33m [0m[35m ▃               [0m
-                                            [90m([0m[36m11.89 ns[0m[90m … [0m[35m54.34 ns[0m[90m)[0m [90m 24.17 ns[0m [36m █ [0m[33m▅[0m[35m █               [0m
-                                          [90m([0m[33m  0.00  b[0m[90m … [0m[33m 48.00  b[0m[90m) [0m[33m  0.02  b[0m [36m▇██[0m[33m█[0m[35m██▄▂▂▁▁▁▁▁▁▁▁▁▁▁▁[0m
+----------------------------------------------------------------- -------------------------------
+cache hit (100 routes)                              13.98 ns/iter  14.92 ns  █   ▃               
+                                            (11.89 ns … 54.34 ns)  24.17 ns  █ ▅ █               
+                                          (  0.00  b …  48.00  b)   0.02  b ▇█████▄▂▂▁▁▁▁▁▁▁▁▁▁▁▁
 
-no-cache (100 routes)                              [1m[33m  3.82 ns[0m[1m/iter[0m [90m  3.75 ns[0m [36m █▆[0m[33m [0m[35m                 [0m
-                                             [90m([0m[36m3.43 ns[0m[90m … [0m[35m54.25 ns[0m[90m)[0m [90m  6.51 ns[0m [36m ██[0m[33m [0m[35m                 [0m
-                                          [90m([0m[33m  0.00  b[0m[90m … [0m[33m 48.00  b[0m[90m) [0m[33m  0.01  b[0m [36m▁██[0m[33m▆[0m[35m▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁[0m
+no-cache (100 routes)                                3.82 ns/iter   3.75 ns  █▆                  
+                                             (3.43 ns … 54.25 ns)   6.51 ns  ██                  
+                                          (  0.00  b …  48.00  b)   0.01  b ▁██▆▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁
 
-cache hit (1000 routes)                            [1m[33m 16.63 ns[0m[1m/iter[0m [90m 16.70 ns[0m [36m     [0m[33m█[0m[35m               [0m
-                                            [90m([0m[36m13.34 ns[0m[90m … [0m[35m64.27 ns[0m[90m)[0m [90m 26.47 ns[0m [36m     [0m[33m█[0m[35m               [0m
-                                          [90m([0m[33m  0.00  b[0m[90m … [0m[33m 48.00  b[0m[90m) [0m[33m  0.02  b[0m [36m▁▃▃▂▄[0m[33m█[0m[35m▂▂▁▁▁▁▁▁▁▁▁▁▁▁▁[0m
+cache hit (1000 routes)                             16.63 ns/iter  16.70 ns      █               
+                                            (13.34 ns … 64.27 ns)  26.47 ns      █               
+                                          (  0.00  b …  48.00  b)   0.02  b ▁▃▃▂▄█▂▂▁▁▁▁▁▁▁▁▁▁▁▁▁
 
-no-cache (1000 routes)                             [1m[33m  4.46 ns[0m[1m/iter[0m [90m  4.32 ns[0m [36m █[0m[33m [0m[35m                  [0m
-                                             [90m([0m[36m4.09 ns[0m[90m … [0m[35m80.01 ns[0m[90m)[0m [90m  7.83 ns[0m [36m █[0m[33m [0m[35m                  [0m
-                                          [90m([0m[33m  0.00  b[0m[90m … [0m[33m 48.00  b[0m[90m) [0m[33m  0.01  b[0m [36m▁█[0m[33m▅[0m[35m▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁[0m
+no-cache (1000 routes)                               4.46 ns/iter   4.32 ns  █                   
+                                             (4.09 ns … 80.01 ns)   7.83 ns  █                   
+                                          (  0.00  b …  48.00  b)   0.01  b ▁█▅▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁
 
-[1msummary[0m
-  [1m[36mno-cache (100 routes)[0m
-   [32m1.17[0mx faster than [1m[36mno-cache (1000 routes)[0m
-   [32m3.66[0mx faster than [1m[36mcache hit (100 routes)[0m
-   [32m4.36[0mx faster than [1m[36mcache hit (1000 routes)[0m
+summary
+  no-cache (100 routes)
+   1.17x faster than no-cache (1000 routes)
+   3.66x faster than cache hit (100 routes)
+   4.36x faster than cache hit (1000 routes)
 
-[90m----------------------------------------------------------------- -------------------------------[0m
-param cache hit: /users/:id                        [1m[33m 24.39 ns[0m[1m/iter[0m [90m 22.62 ns[0m [36m █ [0m[33m [0m[35m                 [0m
-                                           [90m([0m[36m20.81 ns[0m[90m … [0m[35m359.34 ns[0m[90m)[0m [90m 49.19 ns[0m [36m █ [0m[33m [0m[35m                 [0m
-                                          [90m([0m[33m  0.00  b[0m[90m … [0m[33m192.00  b[0m[90m) [0m[33m  3.27  b[0m [36m██▃[0m[33m▂[0m[35m▂▁▁▁▁▂▂▁▁▁▁▁▁▁▁▁▁[0m
+----------------------------------------------------------------- -------------------------------
+param cache hit: /users/:id                         24.39 ns/iter  22.62 ns  █                   
+                                           (20.81 ns … 359.34 ns)  49.19 ns  █                   
+                                          (  0.00  b … 192.00  b)   3.27  b ██▃▂▂▁▁▁▁▂▂▁▁▁▁▁▁▁▁▁▁
 
-param no-cache: /users/:id                         [1m[33m 34.52 ns[0m[1m/iter[0m [90m 32.88 ns[0m [36m █ [0m[33m [0m[35m                 [0m
-                                           [90m([0m[36m30.90 ns[0m[90m … [0m[35m303.73 ns[0m[90m)[0m [90m 56.03 ns[0m [36m █ [0m[33m [0m[35m                 [0m
-                                          [90m([0m[33m  0.00  b[0m[90m … [0m[33m 48.00  b[0m[90m) [0m[33m  0.03  b[0m [36m▂█▄[0m[33m▃[0m[35m▂▂▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁[0m
+param no-cache: /users/:id                          34.52 ns/iter  32.88 ns  █                   
+                                           (30.90 ns … 303.73 ns)  56.03 ns  █                   
+                                          (  0.00  b …  48.00  b)   0.03  b ▂█▄▃▂▂▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁
 
-param cache hit: 3-deep                            [1m[33m 16.83 ns[0m[1m/iter[0m [90m 16.13 ns[0m [36m █[0m[33m [0m[35m                  [0m
-                                           [90m([0m[36m14.80 ns[0m[90m … [0m[35m318.82 ns[0m[90m)[0m [90m 31.68 ns[0m [36m █[0m[33m [0m[35m                  [0m
-                                          [90m([0m[33m  0.00  b[0m[90m … [0m[33m 48.00  b[0m[90m) [0m[33m  0.03  b[0m [36m▂█[0m[33m▆[0m[35m▂▂▂▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁[0m
+param cache hit: 3-deep                             16.83 ns/iter  16.13 ns  █                   
+                                           (14.80 ns … 318.82 ns)  31.68 ns  █                   
+                                          (  0.00  b …  48.00  b)   0.03  b ▂█▆▂▂▂▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁
 
-param no-cache: 3-deep                             [1m[33m 64.80 ns[0m[1m/iter[0m [90m 63.84 ns[0m [36m █[0m[33m [0m[35m                  [0m
-                                           [90m([0m[36m59.17 ns[0m[90m … [0m[35m351.69 ns[0m[90m)[0m [90m118.73 ns[0m [36m██[0m[33m [0m[35m                  [0m
-                                          [90m([0m[33m  0.00  b[0m[90m … [0m[33m 48.00  b[0m[90m) [0m[33m  0.06  b[0m [36m██[0m[33m█[0m[35m▄▂▂▁▂▁▁▁▁▁▁▁▁▁▁▁▁▁[0m
+param no-cache: 3-deep                              64.80 ns/iter  63.84 ns  █                   
+                                           (59.17 ns … 351.69 ns) 118.73 ns ██                   
+                                          (  0.00  b …  48.00  b)   0.06  b ███▄▂▂▁▂▁▁▁▁▁▁▁▁▁▁▁▁▁
 
-[1msummary[0m
-  [1m[36mparam cache hit: 3-deep[0m
-   [32m1.45[0mx faster than [1m[36mparam cache hit: /users/:id[0m
-   [32m2.05[0mx faster than [1m[36mparam no-cache: /users/:id[0m
-   [32m3.85[0mx faster than [1m[36mparam no-cache: 3-deep[0m
+summary
+  param cache hit: 3-deep
+   1.45x faster than param cache hit: /users/:id
+   2.05x faster than param no-cache: /users/:id
+   3.85x faster than param no-cache: 3-deep
 
-[90m----------------------------------------------------------------- -------------------------------[0m
-404 miss (10 routes)                               [1m[33m 16.89 ns[0m[1m/iter[0m [90m 17.12 ns[0m [36m   [0m[33m [0m[35m█                [0m
-                                            [90m([0m[36m14.25 ns[0m[90m … [0m[35m62.11 ns[0m[90m)[0m [90m 29.76 ns[0m [36m ▄▂[0m[33m [0m[35m█                [0m
-                                          [90m([0m[33m  0.00  b[0m[90m … [0m[33m 48.00  b[0m[90m) [0m[33m  0.02  b[0m [36m▃██[0m[33m█[0m[35m█▂▂▂▁▁▁▁▁▁▁▁▁▁▁▁▁[0m
+----------------------------------------------------------------- -------------------------------
+404 miss (10 routes)                                16.89 ns/iter  17.12 ns     █                
+                                            (14.25 ns … 62.11 ns)  29.76 ns  ▄▂ █                
+                                          (  0.00  b …  48.00  b)   0.02  b ▃████▂▂▂▁▁▁▁▁▁▁▁▁▁▁▁▁
 
-404 miss (100 routes)                              [1m[33m 17.00 ns[0m[1m/iter[0m [90m 16.77 ns[0m [36m   █[0m[33m [0m[35m                [0m
-                                            [90m([0m[36m13.88 ns[0m[90m … [0m[35m82.01 ns[0m[90m)[0m [90m 31.18 ns[0m [36m   █[0m[33m [0m[35m                [0m
-                                          [90m([0m[33m  0.00  b[0m[90m … [0m[33m 48.00  b[0m[90m) [0m[33m  0.02  b[0m [36m▁▄▆█[0m[33m▃[0m[35m▂▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁[0m
+404 miss (100 routes)                               17.00 ns/iter  16.77 ns    █                 
+                                            (13.88 ns … 82.01 ns)  31.18 ns    █                 
+                                          (  0.00  b …  48.00  b)   0.02  b ▁▄▆█▃▂▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁
 
-404 miss (1000 routes)                             [1m[33m 16.59 ns[0m[1m/iter[0m [90m 16.73 ns[0m [36m    [0m[33m [0m[35m█               [0m
-                                            [90m([0m[36m13.71 ns[0m[90m … [0m[35m47.73 ns[0m[90m)[0m [90m 26.72 ns[0m [36m    [0m[33m [0m[35m█               [0m
-                                          [90m([0m[33m  0.00  b[0m[90m … [0m[33m 48.00  b[0m[90m) [0m[33m  0.03  b[0m [36m▁▅▅▆[0m[33m▇[0m[35m█▂▂▁▁▁▁▁▁▁▁▁▁▁▁▁[0m
+404 miss (1000 routes)                              16.59 ns/iter  16.73 ns      █               
+                                            (13.71 ns … 47.73 ns)  26.72 ns      █               
+                                          (  0.00  b …  48.00  b)   0.03  b ▁▅▅▆▇█▂▂▁▁▁▁▁▁▁▁▁▁▁▁▁
 
-[1msummary[0m
-  [1m[36m404 miss (1000 routes)[0m
-   [32m1.02[0mx faster than [1m[36m404 miss (10 routes)[0m
-   [32m1.02[0mx faster than [1m[36m404 miss (100 routes)[0m
+summary
+  404 miss (1000 routes)
+   1.02x faster than 404 miss (10 routes)
+   1.02x faster than 404 miss (100 routes)
 
-[90m----------------------------------------------------------------- -------------------------------[0m
-mixed static hit (100 routes)                      [1m[33m 11.78 ns[0m[1m/iter[0m [90m 12.78 ns[0m [36m █ [0m[33m [0m[35m                 [0m
-                                             [90m([0m[36m9.71 ns[0m[90m … [0m[35m54.26 ns[0m[90m)[0m [90m 22.22 ns[0m [36m █▆[0m[33m [0m[35m▄█               [0m
-                                          [90m([0m[33m  0.00  b[0m[90m … [0m[33m 48.00  b[0m[90m) [0m[33m  0.04  b[0m [36m▇██[0m[33m█[0m[35m██▃▃▂▁▁▁▁▁▁▁▁▁▁▁▁[0m
+----------------------------------------------------------------- -------------------------------
+mixed static hit (100 routes)                       11.78 ns/iter  12.78 ns  █                   
+                                             (9.71 ns … 54.26 ns)  22.22 ns  █▆ ▄█               
+                                          (  0.00  b …  48.00  b)   0.04  b ▇█████▃▃▂▁▁▁▁▁▁▁▁▁▁▁▁
 
-mixed param hit (100 routes)                       [1m[33m 68.95 ns[0m[1m/iter[0m [90m 66.81 ns[0m [36m █ [0m[33m [0m[35m                 [0m
-                                           [90m([0m[36m60.71 ns[0m[90m … [0m[35m340.01 ns[0m[90m)[0m [90m116.23 ns[0m [36m █ [0m[33m [0m[35m                 [0m
-                                          [90m([0m[33m  0.00  b[0m[90m … [0m[33m288.00  b[0m[90m) [0m[33m  9.34  b[0m [36m███[0m[33m▄[0m[35m▂▁▂▁▁▁▁▁▂▂▂▁▁▁▁▁▁[0m
+mixed param hit (100 routes)                        68.95 ns/iter  66.81 ns  █                   
+                                           (60.71 ns … 340.01 ns) 116.23 ns  █                   
+                                          (  0.00  b … 288.00  b)   9.34  b ███▄▂▁▂▁▁▁▁▁▂▂▂▁▁▁▁▁▁
 
-mixed wildcard hit (100 routes)                    [1m[33m 49.67 ns[0m[1m/iter[0m [90m 48.49 ns[0m [36m █ [0m[33m [0m[35m                 [0m
-                                           [90m([0m[36m44.14 ns[0m[90m … [0m[35m378.76 ns[0m[90m)[0m [90m 86.34 ns[0m [36m █ [0m[33m [0m[35m                 [0m
-                                          [90m([0m[33m  0.00  b[0m[90m … [0m[33m144.00  b[0m[90m) [0m[33m  0.14  b[0m [36m▅█▆[0m[33m▄[0m[35m▃▂▂▁▁▁▁▁▁▁▁▁▁▁▁▁▁[0m
+mixed wildcard hit (100 routes)                     49.67 ns/iter  48.49 ns  █                   
+                                           (44.14 ns … 378.76 ns)  86.34 ns  █                   
+                                          (  0.00  b … 144.00  b)   0.14  b ▅█▆▄▃▂▂▁▁▁▁▁▁▁▁▁▁▁▁▁▁
 
-mixed cached static hit                            [1m[33m  2.82 ns[0m[1m/iter[0m [90m959.96 ps[0m [36m█ [0m[33m [0m[35m                  [0m
-                                           [90m([0m[36m931.40 ps[0m[90m … [0m[35m82.40 ns[0m[90m)[0m [90m 16.16 ns[0m [36m█ [0m[33m [0m[35m                  [0m
-                                          [90m([0m[33m  0.00  b[0m[90m … [0m[33m 96.00  b[0m[90m) [0m[33m  0.06  b[0m [36m█▁[0m[33m▁[0m[35m▁▁▁▁▁▁▁▁▁▁▁▁▁▂▁▂▂▁[0m
+mixed cached static hit                              2.82 ns/iter 959.96 ps █                    
+                                           (931.40 ps … 82.40 ns)  16.16 ns █                    
+                                          (  0.00  b …  96.00  b)   0.06  b █▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▂▁▂▂▁
 
-mixed cached param hit                             [1m[33m 24.62 ns[0m[1m/iter[0m [90m 23.71 ns[0m [36m █ [0m[33m [0m[35m                 [0m
-                                           [90m([0m[36m20.76 ns[0m[90m … [0m[35m304.38 ns[0m[90m)[0m [90m 46.41 ns[0m [36m ██[0m[33m [0m[35m                 [0m
-                                          [90m([0m[33m  0.00  b[0m[90m … [0m[33m 96.00  b[0m[90m) [0m[33m  3.24  b[0m [36m███[0m[33m▄[0m[35m▂▂▂▁▁▁▁▂▃▂▁▁▁▁▁▁▁[0m
+mixed cached param hit                              24.62 ns/iter  23.71 ns  █                   
+                                           (20.76 ns … 304.38 ns)  46.41 ns  ██                  
+                                          (  0.00  b …  96.00  b)   3.24  b ███▄▂▂▂▁▁▁▁▂▃▂▁▁▁▁▁▁▁
 
-[1msummary[0m
-  [1m[36mmixed cached static hit[0m
-   [32m4.18[0mx faster than [1m[36mmixed static hit (100 routes)[0m
-   [32m8.73[0mx faster than [1m[36mmixed cached param hit[0m
-   [32m17.62[0mx faster than [1m[36mmixed wildcard hit (100 routes)[0m
-   [32m24.46[0mx faster than [1m[36mmixed param hit (100 routes)[0m
+summary
+  mixed cached static hit
+   4.18x faster than mixed static hit (100 routes)
+   8.73x faster than mixed cached param hit
+   17.62x faster than mixed wildcard hit (100 routes)
+   24.46x faster than mixed param hit (100 routes)
 
-[90m----------------------------------------------------------------- -------------------------------[0m
-full-options static match                          [1m[33m 63.40 ns[0m[1m/iter[0m [90m 62.19 ns[0m [36m▄█▃[0m[33m [0m[35m                 [0m
-                                             [90m([0m[36m51.91 ns[0m[90m … [0m[35m1.94 µs[0m[90m)[0m [90m134.44 ns[0m [36m███[0m[33m [0m[35m                 [0m
-                                          [90m([0m[33m  0.00  b[0m[90m … [0m[33m  8.77 kb[0m[90m) [0m[33m 34.92  b[0m [36m███[0m[33m█[0m[35m▃▅▄▂▂▁▁▁▁▁▁▁▁▁▁▁▁[0m
+----------------------------------------------------------------- -------------------------------
+full-options static match                           63.40 ns/iter  62.19 ns ▄█▃                  
+                                             (51.91 ns … 1.94 µs) 134.44 ns ███                  
+                                          (  0.00  b …   8.77 kb)  34.92  b ████▃▅▄▂▂▁▁▁▁▁▁▁▁▁▁▁▁
 
-full-options param match                           [1m[33m 95.01 ns[0m[1m/iter[0m [90m 91.35 ns[0m [36m█  [0m[33m [0m[35m                 [0m
-                                             [90m([0m[36m80.55 ns[0m[90m … [0m[35m3.33 µs[0m[90m)[0m [90m186.58 ns[0m [36m█▇▄[0m[33m [0m[35m                 [0m
-                                          [90m([0m[33m  0.00  b[0m[90m … [0m[33m  2.63 kb[0m[90m) [0m[33m 12.45  b[0m [36m███[0m[33m▅[0m[35m▃▂▂▁▁▁▁▁▁▁▁▁▁▁▁▁▁[0m
+full-options param match                            95.01 ns/iter  91.35 ns █                    
+                                             (80.55 ns … 3.33 µs) 186.58 ns █▇▄                  
+                                          (  0.00  b …   2.63 kb)  12.45  b ███▅▃▂▂▁▁▁▁▁▁▁▁▁▁▁▁▁▁
 
-full-options wildcard match                        [1m[33m 96.48 ns[0m[1m/iter[0m [90m 91.89 ns[0m [36m █ [0m[33m [0m[35m                 [0m
-                                             [90m([0m[36m80.97 ns[0m[90m … [0m[35m3.40 µs[0m[90m)[0m [90m186.00 ns[0m [36m █▆[0m[33m [0m[35m                 [0m
-                                          [90m([0m[33m  0.00  b[0m[90m … [0m[33m 48.00  b[0m[90m) [0m[33m  0.54  b[0m [36m▆██[0m[33m▅[0m[35m▃▂▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁[0m
+full-options wildcard match                         96.48 ns/iter  91.89 ns  █                   
+                                             (80.97 ns … 3.40 µs) 186.00 ns  █▆                  
+                                          (  0.00  b …  48.00  b)   0.54  b ▆██▅▃▂▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁
 
-full-options trailing slash                        [1m[33m116.96 ns[0m[1m/iter[0m [90m111.63 ns[0m [36m▂█ [0m[33m [0m[35m                 [0m
-                                            [90m([0m[36m100.18 ns[0m[90m … [0m[35m2.48 µs[0m[90m)[0m [90m228.19 ns[0m [36m██ [0m[33m [0m[35m                 [0m
-                                          [90m([0m[33m  0.00  b[0m[90m … [0m[33m192.00  b[0m[90m) [0m[33m 13.48  b[0m [36m███[0m[33m▄[0m[35m▂▂▂▁▁▁▁▁▁▁▁▁▁▁▁▁▁[0m
+full-options trailing slash                        116.96 ns/iter 111.63 ns ▂█                   
+                                            (100.18 ns … 2.48 µs) 228.19 ns ██                   
+                                          (  0.00  b … 192.00  b)  13.48  b ███▄▂▂▂▁▁▁▁▁▁▁▁▁▁▁▁▁▁
 
-full-options collapsed slashes                     [1m[33m 81.21 ns[0m[1m/iter[0m [90m 81.95 ns[0m [36m █▅[0m[33m▆[0m[35m                 [0m
-                                           [90m([0m[36m65.38 ns[0m[90m … [0m[35m909.33 ns[0m[90m)[0m [90m159.20 ns[0m [36m ██[0m[33m█[0m[35m▅                [0m
-                                          [90m([0m[33m  0.00  b[0m[90m … [0m[33m  5.81 kb[0m[90m) [0m[33m 26.88  b[0m [36m███[0m[33m█[0m[35m█▅▃▂▂▂▁▂▁▁▂▁▁▁▁▁▁[0m
+full-options collapsed slashes                      81.21 ns/iter  81.95 ns  █▅▆                 
+                                           (65.38 ns … 909.33 ns) 159.20 ns  ███▅                
+                                          (  0.00  b …   5.81 kb)  26.88  b █████▅▃▂▂▂▁▂▁▁▂▁▁▁▁▁▁
 
-[1msummary[0m
-  [1m[36mfull-options static match[0m
-   [32m1.28[0mx faster than [1m[36mfull-options collapsed slashes[0m
-   [32m1.5[0mx faster than [1m[36mfull-options param match[0m
-   [32m1.52[0mx faster than [1m[36mfull-options wildcard match[0m
-   [32m1.84[0mx faster than [1m[36mfull-options trailing slash[0m
+summary
+  full-options static match
+   1.28x faster than full-options collapsed slashes
+   1.5x faster than full-options param match
+   1.52x faster than full-options wildcard match
+   1.84x faster than full-options trailing slash
 
-[90m----------------------------------------------------------------- -------------------------------[0m
-add+build 10 static routes                         [1m[33m155.52 µs[0m[1m/iter[0m [90m173.97 µs[0m [36m  ▃▆▅█[0m[33m▅[0m[35m▃▃            [0m
-                                           [90m([0m[36m98.61 µs[0m[90m … [0m[35m324.60 µs[0m[90m)[0m [90m283.12 µs[0m [36m▂█████[0m[33m█[0m[35m██▇▄▅▆▂▃▁▁▁▁▁▂[0m
-                                        [90mgc([0m[34m  1.30 ms[0m[90m … [0m[34m  4.07 ms[0m[90m)[0m [33m  1.31 kb[0m[90m ([0m[33m  0.00  b[0m[90m…[0m[33m192.00 kb[0m[90m)[0m
+----------------------------------------------------------------- -------------------------------
+add+build 10 static routes                         155.52 µs/iter 173.97 µs   ▃▆▅█▅▃▃            
+                                           (98.61 µs … 324.60 µs) 283.12 µs ▂████████▇▄▅▆▂▃▁▁▁▁▁▂
+                                        gc(  1.30 ms …   4.07 ms)   1.31 kb (  0.00  b…192.00 kb)
 
-add+build 100 static routes                        [1m[33m239.75 µs[0m[1m/iter[0m [90m257.92 µs[0m [36m  ▄█▇ [0m[33m▂[0m[35m▃             [0m
-                                          [90m([0m[36m180.39 µs[0m[90m … [0m[35m431.60 µs[0m[90m)[0m [90m386.69 µs[0m [36m▂▇████[0m[33m█[0m[35m█▇▆▅▄▃▂▁▂▂▁▂▁▁[0m
-                                        [90mgc([0m[34m  1.27 ms[0m[90m … [0m[34m  4.78 ms[0m[90m)[0m [33m  2.55 kb[0m[90m ([0m[33m  0.00  b[0m[90m…[0m[33m192.00 kb[0m[90m)[0m
+add+build 100 static routes                        239.75 µs/iter 257.92 µs   ▄█▇ ▂▃             
+                                          (180.39 µs … 431.60 µs) 386.69 µs ▂▇██████▇▆▅▄▃▂▁▂▂▁▂▁▁
+                                        gc(  1.27 ms …   4.78 ms)   2.55 kb (  0.00  b…192.00 kb)
 
-add+build 500 static routes                        [1m[33m561.70 µs[0m[1m/iter[0m [90m576.24 µs[0m [36m   █▅[0m[33m▃[0m[35m               [0m
-                                          [90m([0m[36m463.28 µs[0m[90m … [0m[35m943.87 µs[0m[90m)[0m [90m885.36 µs[0m [36m▄▇███[0m[33m█[0m[35m▆▅▃▃▂▂▁▂▂▁▁▁▁▁▁[0m
-                                        [90mgc([0m[34m  1.38 ms[0m[90m … [0m[34m  4.48 ms[0m[90m)[0m [33m 11.64 kb[0m[90m ([0m[33m  0.00  b[0m[90m…[0m[33m576.00 kb[0m[90m)[0m
+add+build 500 static routes                        561.70 µs/iter 576.24 µs    █▅▃               
+                                          (463.28 µs … 943.87 µs) 885.36 µs ▄▇████▆▅▃▃▂▂▁▂▂▁▁▁▁▁▁
+                                        gc(  1.38 ms …   4.48 ms)  11.64 kb (  0.00  b…576.00 kb)
 
-add+build 1000 static routes                       [1m[33m968.25 µs[0m[1m/iter[0m [90m990.63 µs[0m [36m  ▄█▄[0m[33m▅[0m[35m               [0m
-                                            [90m([0m[36m801.20 µs[0m[90m … [0m[35m1.73 ms[0m[90m)[0m [90m  1.50 ms[0m [36m▂▇███[0m[33m█[0m[35m▆▄▃▃▂▁▂▁▂▂▁▁▂▁▁[0m
-                                        [90mgc([0m[34m  1.58 ms[0m[90m … [0m[34m  5.81 ms[0m[90m)[0m [33m 27.27 kb[0m[90m ([0m[33m  0.00  b[0m[90m…[0m[33m576.00 kb[0m[90m)[0m
-
-                                                   ┌                                            ┐
-                                                   [36m╷┌[0m[33m┬[0m[35m   ╷[0m
-                        add+build 10 static routes [36m├┤[0m[33m│[0m[35m───┤[0m
-                                                   [36m╵└[0m[33m┴[0m[35m   ╵[0m
-                                                   [36m   ╷┌[0m[33m┬[0m[35m   ╷[0m
-                       add+build 100 static routes [36m   ├┤[0m[33m│[0m[35m───┤[0m
-                                                   [36m   ╵└[0m[33m┴[0m[35m   ╵[0m
-                                                   [36m            ╷┌─[0m[33m┬[0m[35m         ╷[0m
-                       add+build 500 static routes [36m            ├┤ [0m[33m│[0m[35m─────────┤[0m
-                                                   [36m            ╵└─[0m[33m┴[0m[35m         ╵[0m
-                                                   [36m                       ╷ ┌──[0m[33m┬[0m[35m┐               ╷[0m
-                      add+build 1000 static routes [36m                       ├─┤  [0m[33m│[0m[35m├───────────────┤[0m
-                                                   [36m                       ╵ └──[0m[33m┴[0m[35m┘               ╵[0m
-                                                   └                                            ┘
-                                                   [36m98.61 µs[0m           [90m797.06 µs[0m           [35m1.50 ms[0m
-
-[90m----------------------------------------------------------------- -------------------------------[0m
-add+build 100 mixed routes                         [1m[33m285.58 µs[0m[1m/iter[0m [90m306.02 µs[0m [36m   █▅[0m[33m▄[0m[35m▅              [0m
-                                          [90m([0m[36m203.15 µs[0m[90m … [0m[35m536.60 µs[0m[90m)[0m [90m507.13 µs[0m [36m▃▆███[0m[33m█[0m[35m██▆▆▂▃▃▁▁▂▁▁▁▁▂[0m
-                                        [90mgc([0m[34m  1.33 ms[0m[90m … [0m[34m  4.66 ms[0m[90m)[0m [33m  6.76 kb[0m[90m ([0m[33m  0.00  b[0m[90m…[0m[33m576.00 kb[0m[90m)[0m
-
-add+build 100 mixed + cache                        [1m[33m292.33 µs[0m[1m/iter[0m [90m310.40 µs[0m [36m   ▂ █▄[0m[33m▄[0m[35m▆            [0m
-                                          [90m([0m[36m222.21 µs[0m[90m … [0m[35m481.64 µs[0m[90m)[0m [90m426.35 µs[0m [36m▃▅█████[0m[33m█[0m[35m█▇█▅▅▂▂▂▂▂▂▁▂[0m
-                                        [90mgc([0m[34m  1.26 ms[0m[90m … [0m[34m  4.87 ms[0m[90m)[0m [33m  1.37 kb[0m[90m ([0m[33m  0.00  b[0m[90m…[0m[33m192.00 kb[0m[90m)[0m
+add+build 1000 static routes                       968.25 µs/iter 990.63 µs   ▄█▄▅               
+                                            (801.20 µs … 1.73 ms)   1.50 ms ▂▇████▆▄▃▃▂▁▂▁▂▂▁▁▂▁▁
+                                        gc(  1.58 ms …   5.81 ms)  27.27 kb (  0.00  b…576.00 kb)
 
                                                    ┌                                            ┐
-                                                   [36m╷      ┌────[0m[33m┬[0m[35m──┐                             ╷[0m
-                        add+build 100 mixed routes [36m├──────┤    [0m[33m│[0m[35m  ├─────────────────────────────┤[0m
-                                                   [36m╵      └────[0m[33m┴[0m[35m──┘                             ╵[0m
-                                                   [36m   ╷     ┌───[0m[33m┬[0m[35m──┐                ╷[0m
-                       add+build 100 mixed + cache [36m   ├─────┤   [0m[33m│[0m[35m  ├────────────────┤[0m
-                                                   [36m   ╵     └───[0m[33m┴[0m[35m──┘                ╵[0m
+                                                   ╷┌┬   ╷
+                        add+build 10 static routes ├┤│───┤
+                                                   ╵└┴   ╵
+                                                      ╷┌┬   ╷
+                       add+build 100 static routes    ├┤│───┤
+                                                      ╵└┴   ╵
+                                                               ╷┌─┬         ╷
+                       add+build 500 static routes             ├┤ │─────────┤
+                                                               ╵└─┴         ╵
+                                                                          ╷ ┌──┬┐               ╷
+                      add+build 1000 static routes                        ├─┤  │├───────────────┤
+                                                                          ╵ └──┴┘               ╵
                                                    └                                            ┘
-                                                   [36m203.15 µs[0m         [90m355.14 µs[0m          [35m507.13 µs[0m
+                                                   98.61 µs           797.06 µs           1.50 ms
 
-[90m----------------------------------------------------------------- -------------------------------[0m
-regex param match: /:id(\d+)                       [1m[33m 53.45 ns[0m[1m/iter[0m [90m 49.89 ns[0m [36m█▃ [0m[33m [0m[35m                 [0m
-                                           [90m([0m[36m44.88 ns[0m[90m … [0m[35m378.30 ns[0m[90m)[0m [90m112.08 ns[0m [36m██ [0m[33m [0m[35m                 [0m
-                                          [90m([0m[33m  0.00  b[0m[90m … [0m[33m288.00  b[0m[90m) [0m[33m  8.59  b[0m [36m██▆[0m[33m▃[0m[35m▂▁▁▁▁▁▁▁▁▂▃▂▁▁▁▁▁[0m
+----------------------------------------------------------------- -------------------------------
+add+build 100 mixed routes                         285.58 µs/iter 306.02 µs    █▅▄▅              
+                                          (203.15 µs … 536.60 µs) 507.13 µs ▃▆██████▆▆▂▃▃▁▁▂▁▁▁▁▂
+                                        gc(  1.33 ms …   4.66 ms)   6.76 kb (  0.00  b…576.00 kb)
 
-regex param match: 2-deep regex params             [1m[33m 46.55 ns[0m[1m/iter[0m [90m 44.79 ns[0m [36m █[0m[33m [0m[35m                  [0m
-                                           [90m([0m[36m39.29 ns[0m[90m … [0m[35m458.48 ns[0m[90m)[0m [90m 97.45 ns[0m [36m▅█[0m[33m [0m[35m                  [0m
-                                          [90m([0m[33m  0.00  b[0m[90m … [0m[33m 96.00  b[0m[90m) [0m[33m  0.33  b[0m [36m██[0m[33m▅[0m[35m▂▃▅▂▁▁▁▁▁▁▁▁▁▁▁▁▁▁[0m
-
-regex param match: /:id(\d+)/comments              [1m[33m 54.02 ns[0m[1m/iter[0m [90m 53.40 ns[0m [36m █ [0m[33m [0m[35m                 [0m
-                                           [90m([0m[36m46.98 ns[0m[90m … [0m[35m417.23 ns[0m[90m)[0m [90m100.17 ns[0m [36m █ [0m[33m [0m[35m                 [0m
-                                          [90m([0m[33m  0.00  b[0m[90m … [0m[33m240.00  b[0m[90m) [0m[33m  0.78  b[0m [36m▆█▆[0m[33m▃[0m[35m▅▂▂▂▁▁▁▁▁▁▁▁▁▁▁▁▁[0m
-
-regex param cache hit: /:id(\d+)                   [1m[33m 14.75 ns[0m[1m/iter[0m [90m 13.35 ns[0m [36m █ [0m[33m [0m[35m                 [0m
-                                           [90m([0m[36m11.90 ns[0m[90m … [0m[35m346.51 ns[0m[90m)[0m [90m 29.30 ns[0m [36m █ [0m[33m [0m[35m                 [0m
-                                          [90m([0m[33m  0.00  b[0m[90m … [0m[33m144.00  b[0m[90m) [0m[33m  0.46  b[0m [36m▂█▄[0m[33m▁[0m[35m▂▁▁▁▂▃▂▁▁▁▁▁▁▁▁▁▁[0m
-
-[1msummary[0m
-  [1m[36mregex param cache hit: /:id(\d+)[0m
-   [32m3.16[0mx faster than [1m[36mregex param match: 2-deep regex params[0m
-   [32m3.62[0mx faster than [1m[36mregex param match: /:id(\d+)[0m
-   [32m3.66[0mx faster than [1m[36mregex param match: /:id(\d+)/comments[0m
-
-[90m----------------------------------------------------------------- -------------------------------[0m
-optional param match: with lang param (/en/docs)   [1m[33m 43.91 ns[0m[1m/iter[0m [90m 42.81 ns[0m [36m █ [0m[33m [0m[35m                 [0m
-                                           [90m([0m[36m38.54 ns[0m[90m … [0m[35m355.96 ns[0m[90m)[0m [90m 80.83 ns[0m [36m █ [0m[33m [0m[35m                 [0m
-                                          [90m([0m[33m  0.00  b[0m[90m … [0m[33m 96.00  b[0m[90m) [0m[33m  0.22  b[0m [36m▄█▆[0m[33m▄[0m[35m▂▂▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁[0m
-
-optional param match: without lang param (/docs)   [1m[33m 34.70 ns[0m[1m/iter[0m [90m 34.46 ns[0m [36m █ [0m[33m [0m[35m                 [0m
-                                           [90m([0m[36m29.29 ns[0m[90m … [0m[35m389.71 ns[0m[90m)[0m [90m 64.81 ns[0m [36m █ [0m[33m [0m[35m                 [0m
-                                          [90m([0m[33m  0.00  b[0m[90m … [0m[33m 48.00  b[0m[90m) [0m[33m  0.21  b[0m [36m▂█▇[0m[33m█[0m[35m▃▂▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁[0m
-
-optional param match: nested /:lang?/docs/:section [1m[33m 59.97 ns[0m[1m/iter[0m [90m 59.17 ns[0m [36m █ [0m[33m [0m[35m                 [0m
-                                           [90m([0m[36m53.85 ns[0m[90m … [0m[35m324.09 ns[0m[90m)[0m [90m 99.36 ns[0m [36m █▃[0m[33m [0m[35m                 [0m
-                                          [90m([0m[33m  0.00  b[0m[90m … [0m[33m 48.00  b[0m[90m) [0m[33m  0.07  b[0m [36m▃██[0m[33m▅[0m[35m▃▂▂▁▁▁▁▁▁▁▁▁▁▁▁▁▁[0m
-
-optional param cache hit: with lang                [1m[33m 19.90 ns[0m[1m/iter[0m [90m 20.36 ns[0m [36m      [0m[33m█[0m[35m              [0m
-                                           [90m([0m[36m11.91 ns[0m[90m … [0m[35m363.25 ns[0m[90m)[0m [90m 40.33 ns[0m [36m     ▃[0m[33m█[0m[35m              [0m
-                                          [90m([0m[33m  0.00  b[0m[90m … [0m[33m192.00  b[0m[90m) [0m[33m  0.73  b[0m [36m▅█▁▁▁█[0m[33m█[0m[35m▃▂▄▂▁▁▁▁▁▁▁▁▁▁[0m
-
-optional param cache hit: without lang             [1m[33m 16.12 ns[0m[1m/iter[0m [90m 15.19 ns[0m [36m █ [0m[33m [0m[35m                 [0m
-                                           [90m([0m[36m13.88 ns[0m[90m … [0m[35m364.41 ns[0m[90m)[0m [90m 29.83 ns[0m [36m █ [0m[33m [0m[35m                 [0m
-                                          [90m([0m[33m  0.00  b[0m[90m … [0m[33m 48.00  b[0m[90m) [0m[33m  0.02  b[0m [36m▂██[0m[33m▂[0m[35m▂▂▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁[0m
-
-[1msummary[0m
-  [1m[36moptional param cache hit: without lang[0m
-   [32m1.23[0mx faster than [1m[36moptional param cache hit: with lang[0m
-   [32m2.15[0mx faster than [1m[36moptional param match: without lang param (/docs)[0m
-   [32m2.72[0mx faster than [1m[36moptional param match: with lang param (/en/docs)[0m
-   [32m3.72[0mx faster than [1m[36moptional param match: nested /:lang?/docs/:section[0m
-
-[90m----------------------------------------------------------------- -------------------------------[0m
-multi-method: GET match                            [1m[33m 50.90 ns[0m[1m/iter[0m [90m 49.46 ns[0m [36m █[0m[33m [0m[35m                  [0m
-                                           [90m([0m[36m45.11 ns[0m[90m … [0m[35m299.01 ns[0m[90m)[0m [90m 99.32 ns[0m [36m █[0m[33m [0m[35m                  [0m
-                                          [90m([0m[33m  0.00  b[0m[90m … [0m[33m 96.00  b[0m[90m) [0m[33m  0.07  b[0m [36m▅█[0m[33m▅[0m[35m▃▂▂▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁[0m
-
-multi-method: POST match                           [1m[33m 49.51 ns[0m[1m/iter[0m [90m 48.19 ns[0m [36m █[0m[33m [0m[35m                  [0m
-                                           [90m([0m[36m44.35 ns[0m[90m … [0m[35m365.46 ns[0m[90m)[0m [90m 98.31 ns[0m [36m █[0m[33m [0m[35m                  [0m
-                                          [90m([0m[33m  0.00  b[0m[90m … [0m[33m 48.00  b[0m[90m) [0m[33m  0.10  b[0m [36m██[0m[33m▆[0m[35m▂▂▁▂▁▁▁▁▁▁▁▁▁▁▁▁▁▁[0m
-
-multi-method: DELETE match                         [1m[33m 50.66 ns[0m[1m/iter[0m [90m 49.05 ns[0m [36m █[0m[33m [0m[35m                  [0m
-                                           [90m([0m[36m44.03 ns[0m[90m … [0m[35m339.10 ns[0m[90m)[0m [90m101.49 ns[0m [36m █[0m[33m [0m[35m                  [0m
-                                          [90m([0m[33m  0.00  b[0m[90m … [0m[33m 48.00  b[0m[90m) [0m[33m  0.12  b[0m [36m▆█[0m[33m▇[0m[35m▃▂▂▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁[0m
-
-multi-method: PATCH match                          [1m[33m 51.94 ns[0m[1m/iter[0m [90m 50.67 ns[0m [36m █ [0m[33m [0m[35m                 [0m
-                                           [90m([0m[36m46.23 ns[0m[90m … [0m[35m329.02 ns[0m[90m)[0m [90m 91.70 ns[0m [36m █▃[0m[33m [0m[35m                 [0m
-                                          [90m([0m[33m  0.00  b[0m[90m … [0m[33m 48.00  b[0m[90m) [0m[33m  0.09  b[0m [36m▃██[0m[33m▄[0m[35m▂▂▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁[0m
-
-multi-method: wrong method (405)                   [1m[33m  3.13 ns[0m[1m/iter[0m [90m  2.66 ns[0m [36m █▆ [0m[33m [0m[35m                [0m
-                                             [90m([0m[36m2.21 ns[0m[90m … [0m[35m70.84 ns[0m[90m)[0m [90m  7.07 ns[0m [36m ██ [0m[33m [0m[35m                [0m
-                                          [90m([0m[33m  0.00  b[0m[90m … [0m[33m 48.00  b[0m[90m) [0m[33m  0.04  b[0m [36m▁██▁[0m[33m▁[0m[35m▁▁▁▁▁▁▁▁▁▁▂▅▂▁▁▁[0m
-
-[1msummary[0m
-  [1m[36mmulti-method: wrong method (405)[0m
-   [32m15.81[0mx faster than [1m[36mmulti-method: POST match[0m
-   [32m16.17[0mx faster than [1m[36mmulti-method: DELETE match[0m
-   [32m16.25[0mx faster than [1m[36mmulti-method: GET match[0m
-   [32m16.58[0mx faster than [1m[36mmulti-method: PATCH match[0m
-
-[90m----------------------------------------------------------------- -------------------------------[0m
-addAll+build 100 static routes                     [1m[33m275.33 µs[0m[1m/iter[0m [90m289.61 µs[0m [36m ▂▅█[0m[33m▆[0m[35m                [0m
-                                          [90m([0m[36m206.32 µs[0m[90m … [0m[35m579.38 µs[0m[90m)[0m [90m554.21 µs[0m [36m▃███[0m[33m█[0m[35m█▅▃▃▁▂▁▂▁▁▁▁▁▁▁▁[0m
-                                        [90mgc([0m[34m  1.42 ms[0m[90m … [0m[34m  6.51 ms[0m[90m)[0m [33m  3.54 kb[0m[90m ([0m[33m  0.00  b[0m[90m…[0m[33m192.00 kb[0m[90m)[0m
-
-addAll+build 500 static routes                     [1m[33m587.05 µs[0m[1m/iter[0m [90m619.04 µs[0m [36m █▅▅▇[0m[33m▃[0m[35m▄              [0m
-                                            [90m([0m[36m477.67 µs[0m[90m … [0m[35m1.00 ms[0m[90m)[0m [90m936.37 µs[0m [36m▃████[0m[33m█[0m[35m█▆█▃▃▃▃▁▁▁▁▁▁▁▁[0m
-                                        [90mgc([0m[34m  1.49 ms[0m[90m … [0m[34m  5.07 ms[0m[90m)[0m [33m  5.15 kb[0m[90m ([0m[33m  0.00  b[0m[90m…[0m[33m192.00 kb[0m[90m)[0m
-
-addAll+build 1000 static routes                    [1m[33m924.84 µs[0m[1m/iter[0m [90m959.34 µs[0m [36m  █▄▃[0m[33m [0m[35m               [0m
-                                            [90m([0m[36m815.57 µs[0m[90m … [0m[35m1.42 ms[0m[90m)[0m [90m  1.29 ms[0m [36m▄▇███[0m[33m█[0m[35m▇▆▃▃▃▂▂▁▁▁▂▁▁▁▁[0m
-                                        [90mgc([0m[34m  1.42 ms[0m[90m … [0m[34m  3.95 ms[0m[90m)[0m [33m 15.67 kb[0m[90m ([0m[33m  0.00  b[0m[90m…[0m[33m576.00 kb[0m[90m)[0m
-
-addAll+build 100 param routes                      [1m[33m263.74 µs[0m[1m/iter[0m [90m281.71 µs[0m [36m  ▃█▆[0m[33m▅[0m[35m▄              [0m
-                                          [90m([0m[36m203.56 µs[0m[90m … [0m[35m490.54 µs[0m[90m)[0m [90m445.20 µs[0m [36m▂████[0m[33m█[0m[35m██▇▅▂▂▁▂▁▁▁▁▁▁▁[0m
-                                        [90mgc([0m[34m  1.35 ms[0m[90m … [0m[34m  3.92 ms[0m[90m)[0m [33m  4.07 kb[0m[90m ([0m[33m  0.00  b[0m[90m…[0m[33m192.00 kb[0m[90m)[0m
-
-addAll+build 500 param routes                      [1m[33m681.38 µs[0m[1m/iter[0m [90m703.24 µs[0m [36m  ▅█[0m[33m [0m[35m                [0m
-                                            [90m([0m[36m566.34 µs[0m[90m … [0m[35m1.18 ms[0m[90m)[0m [90m  1.09 ms[0m [36m▂▆██[0m[33m█[0m[35m▆▆▃▃▁▂▂▂▂▁▁▁▁▁▁▁[0m
-                                        [90mgc([0m[34m  1.35 ms[0m[90m … [0m[34m  5.68 ms[0m[90m)[0m [33m 12.00 kb[0m[90m ([0m[33m  0.00  b[0m[90m…[0m[33m384.00 kb[0m[90m)[0m
-
-addAll+build 1000 param routes                     [1m[33m  1.21 ms[0m[1m/iter[0m [90m  1.21 ms[0m [36m  █▇[0m[33m [0m[35m                [0m
-                                              [90m([0m[36m1.03 ms[0m[90m … [0m[35m2.09 ms[0m[90m)[0m [90m  1.97 ms[0m [36m▂███[0m[33m█[0m[35m▃▃▂▂▁▁▂▁▁▂▁▂▁▁▁▁[0m
-                                        [90mgc([0m[34m  1.65 ms[0m[90m … [0m[34m  5.32 ms[0m[90m)[0m [33m 24.77 kb[0m[90m ([0m[33m  0.00  b[0m[90m…[0m[33m960.00 kb[0m[90m)[0m
+add+build 100 mixed + cache                        292.33 µs/iter 310.40 µs    ▂ █▄▄▆            
+                                          (222.21 µs … 481.64 µs) 426.35 µs ▃▅███████▇█▅▅▂▂▂▂▂▂▁▂
+                                        gc(  1.26 ms …   4.87 ms)   1.37 kb (  0.00  b…192.00 kb)
 
                                                    ┌                                            ┐
-                                                   [36m╷┌[0m[33m┬[0m[35m      ╷[0m
-                    addAll+build 100 static routes [36m├┤[0m[33m│[0m[35m──────┤[0m
-                                                   [36m╵└[0m[33m┴[0m[35m      ╵[0m
-                                                   [36m       ╷┌─[0m[33m┬[0m[35m┐       ╷[0m
-                    addAll+build 500 static routes [36m       ├┤ [0m[33m│[0m[35m├───────┤[0m
-                                                   [36m       ╵└─[0m[33m┴[0m[35m┘       ╵[0m
-                                                   [36m                ╷┌[0m[33m┬[0m[35m┐        ╷[0m
-                   addAll+build 1000 static routes [36m                ├┤[0m[33m│[0m[35m├────────┤[0m
-                                                   [36m                ╵└[0m[33m┴[0m[35m┘        ╵[0m
-                                                   [36m╷┌[0m[33m┬[0m[35m   ╷[0m
-                     addAll+build 100 param routes [36m├┤[0m[33m│[0m[35m───┤[0m
-                                                   [36m╵└[0m[33m┴[0m[35m   ╵[0m
-                                                   [36m         ╷ ┌[0m[33m┬[0m[35m┐         ╷[0m
-                     addAll+build 500 param routes [36m         ├─┤[0m[33m│[0m[35m├─────────┤[0m
-                                                   [36m         ╵ └[0m[33m┴[0m[35m┘         ╵[0m
-                                                   [36m                     ╷ ┌──[0m[33m┬[0m[35m                  ╷[0m
-                    addAll+build 1000 param routes [36m                     ├─┤  [0m[33m│[0m[35m──────────────────┤[0m
-                                                   [36m                     ╵ └──[0m[33m┴[0m[35m                  ╵[0m
+                                                   ╷      ┌────┬──┐                             ╷
+                        add+build 100 mixed routes ├──────┤    │  ├─────────────────────────────┤
+                                                   ╵      └────┴──┘                             ╵
+                                                      ╷     ┌───┬──┐                ╷
+                       add+build 100 mixed + cache    ├─────┤   │  ├────────────────┤
+                                                      ╵     └───┴──┘                ╵
                                                    └                                            ┘
-                                                   [36m203.56 µs[0m           [90m1.09 ms[0m            [35m1.97 ms[0m
+                                                   203.15 µs         355.14 µs          507.13 µs
+
+----------------------------------------------------------------- -------------------------------
+regex param match: /:id(\d+)                        53.45 ns/iter  49.89 ns █▃                   
+                                           (44.88 ns … 378.30 ns) 112.08 ns ██                   
+                                          (  0.00  b … 288.00  b)   8.59  b ██▆▃▂▁▁▁▁▁▁▁▁▂▃▂▁▁▁▁▁
+
+regex param match: 2-deep regex params              46.55 ns/iter  44.79 ns  █                   
+                                           (39.29 ns … 458.48 ns)  97.45 ns ▅█                   
+                                          (  0.00  b …  96.00  b)   0.33  b ██▅▂▃▅▂▁▁▁▁▁▁▁▁▁▁▁▁▁▁
+
+regex param match: /:id(\d+)/comments               54.02 ns/iter  53.40 ns  █                   
+                                           (46.98 ns … 417.23 ns) 100.17 ns  █                   
+                                          (  0.00  b … 240.00  b)   0.78  b ▆█▆▃▅▂▂▂▁▁▁▁▁▁▁▁▁▁▁▁▁
+
+regex param cache hit: /:id(\d+)                    14.75 ns/iter  13.35 ns  █                   
+                                           (11.90 ns … 346.51 ns)  29.30 ns  █                   
+                                          (  0.00  b … 144.00  b)   0.46  b ▂█▄▁▂▁▁▁▂▃▂▁▁▁▁▁▁▁▁▁▁
+
+summary
+  regex param cache hit: /:id(\d+)
+   3.16x faster than regex param match: 2-deep regex params
+   3.62x faster than regex param match: /:id(\d+)
+   3.66x faster than regex param match: /:id(\d+)/comments
+
+----------------------------------------------------------------- -------------------------------
+optional param match: with lang param (/en/docs)    43.91 ns/iter  42.81 ns  █                   
+                                           (38.54 ns … 355.96 ns)  80.83 ns  █                   
+                                          (  0.00  b …  96.00  b)   0.22  b ▄█▆▄▂▂▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁
+
+optional param match: without lang param (/docs)    34.70 ns/iter  34.46 ns  █                   
+                                           (29.29 ns … 389.71 ns)  64.81 ns  █                   
+                                          (  0.00  b …  48.00  b)   0.21  b ▂█▇█▃▂▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁
+
+optional param match: nested /:lang?/docs/:section  59.97 ns/iter  59.17 ns  █                   
+                                           (53.85 ns … 324.09 ns)  99.36 ns  █▃                  
+                                          (  0.00  b …  48.00  b)   0.07  b ▃██▅▃▂▂▁▁▁▁▁▁▁▁▁▁▁▁▁▁
+
+optional param cache hit: with lang                 19.90 ns/iter  20.36 ns       █              
+                                           (11.91 ns … 363.25 ns)  40.33 ns      ▃█              
+                                          (  0.00  b … 192.00  b)   0.73  b ▅█▁▁▁██▃▂▄▂▁▁▁▁▁▁▁▁▁▁
+
+optional param cache hit: without lang              16.12 ns/iter  15.19 ns  █                   
+                                           (13.88 ns … 364.41 ns)  29.83 ns  █                   
+                                          (  0.00  b …  48.00  b)   0.02  b ▂██▂▂▂▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁
+
+summary
+  optional param cache hit: without lang
+   1.23x faster than optional param cache hit: with lang
+   2.15x faster than optional param match: without lang param (/docs)
+   2.72x faster than optional param match: with lang param (/en/docs)
+   3.72x faster than optional param match: nested /:lang?/docs/:section
+
+----------------------------------------------------------------- -------------------------------
+multi-method: GET match                             50.90 ns/iter  49.46 ns  █                   
+                                           (45.11 ns … 299.01 ns)  99.32 ns  █                   
+                                          (  0.00  b …  96.00  b)   0.07  b ▅█▅▃▂▂▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁
+
+multi-method: POST match                            49.51 ns/iter  48.19 ns  █                   
+                                           (44.35 ns … 365.46 ns)  98.31 ns  █                   
+                                          (  0.00  b …  48.00  b)   0.10  b ██▆▂▂▁▂▁▁▁▁▁▁▁▁▁▁▁▁▁▁
+
+multi-method: DELETE match                          50.66 ns/iter  49.05 ns  █                   
+                                           (44.03 ns … 339.10 ns) 101.49 ns  █                   
+                                          (  0.00  b …  48.00  b)   0.12  b ▆█▇▃▂▂▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁
+
+multi-method: PATCH match                           51.94 ns/iter  50.67 ns  █                   
+                                           (46.23 ns … 329.02 ns)  91.70 ns  █▃                  
+                                          (  0.00  b …  48.00  b)   0.09  b ▃██▄▂▂▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁
+
+multi-method: wrong method (405)                     3.13 ns/iter   2.66 ns  █▆                  
+                                             (2.21 ns … 70.84 ns)   7.07 ns  ██                  
+                                          (  0.00  b …  48.00  b)   0.04  b ▁██▁▁▁▁▁▁▁▁▁▁▁▁▂▅▂▁▁▁
+
+summary
+  multi-method: wrong method (405)
+   15.81x faster than multi-method: POST match
+   16.17x faster than multi-method: DELETE match
+   16.25x faster than multi-method: GET match
+   16.58x faster than multi-method: PATCH match
+
+----------------------------------------------------------------- -------------------------------
+addAll+build 100 static routes                     275.33 µs/iter 289.61 µs  ▂▅█▆                
+                                          (206.32 µs … 579.38 µs) 554.21 µs ▃█████▅▃▃▁▂▁▂▁▁▁▁▁▁▁▁
+                                        gc(  1.42 ms …   6.51 ms)   3.54 kb (  0.00  b…192.00 kb)
+
+addAll+build 500 static routes                     587.05 µs/iter 619.04 µs  █▅▅▇▃▄              
+                                            (477.67 µs … 1.00 ms) 936.37 µs ▃██████▆█▃▃▃▃▁▁▁▁▁▁▁▁
+                                        gc(  1.49 ms …   5.07 ms)   5.15 kb (  0.00  b…192.00 kb)
+
+addAll+build 1000 static routes                    924.84 µs/iter 959.34 µs   █▄▃                
+                                            (815.57 µs … 1.42 ms)   1.29 ms ▄▇████▇▆▃▃▃▂▂▁▁▁▂▁▁▁▁
+                                        gc(  1.42 ms …   3.95 ms)  15.67 kb (  0.00  b…576.00 kb)
+
+addAll+build 100 param routes                      263.74 µs/iter 281.71 µs   ▃█▆▅▄              
+                                          (203.56 µs … 490.54 µs) 445.20 µs ▂███████▇▅▂▂▁▂▁▁▁▁▁▁▁
+                                        gc(  1.35 ms …   3.92 ms)   4.07 kb (  0.00  b…192.00 kb)
+
+addAll+build 500 param routes                      681.38 µs/iter 703.24 µs   ▅█                 
+                                            (566.34 µs … 1.18 ms)   1.09 ms ▂▆███▆▆▃▃▁▂▂▂▂▁▁▁▁▁▁▁
+                                        gc(  1.35 ms …   5.68 ms)  12.00 kb (  0.00  b…384.00 kb)
+
+addAll+build 1000 param routes                       1.21 ms/iter   1.21 ms   █▇                 
+                                              (1.03 ms … 2.09 ms)   1.97 ms ▂████▃▃▂▂▁▁▂▁▁▂▁▂▁▁▁▁
+                                        gc(  1.65 ms …   5.32 ms)  24.77 kb (  0.00  b…960.00 kb)
+
+                                                   ┌                                            ┐
+                                                   ╷┌┬      ╷
+                    addAll+build 100 static routes ├┤│──────┤
+                                                   ╵└┴      ╵
+                                                          ╷┌─┬┐       ╷
+                    addAll+build 500 static routes        ├┤ │├───────┤
+                                                          ╵└─┴┘       ╵
+                                                                   ╷┌┬┐        ╷
+                   addAll+build 1000 static routes                 ├┤│├────────┤
+                                                                   ╵└┴┘        ╵
+                                                   ╷┌┬   ╷
+                     addAll+build 100 param routes ├┤│───┤
+                                                   ╵└┴   ╵
+                                                            ╷ ┌┬┐         ╷
+                     addAll+build 500 param routes          ├─┤│├─────────┤
+                                                            ╵ └┴┘         ╵
+                                                                        ╷ ┌──┬                  ╷
+                    addAll+build 1000 param routes                      ├─┤  │──────────────────┤
+                                                                        ╵ └──┴                  ╵
+                                                   └                                            ┘
+                                                   203.56 µs           1.09 ms            1.97 ms

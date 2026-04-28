@@ -1,27 +1,27 @@
-[90mclk: ~5.01 GHz[0m
-[90mcpu: 13th Gen Intel(R) Core(TM) i7-13700K[0m
-[90mruntime: bun 1.3.13 (x64-linux)[0m
+clk: ~5.01 GHz
+cpu: 13th Gen Intel(R) Core(TM) i7-13700K
+runtime: bun 1.3.13 (x64-linux)
 
 benchmark                                 avg (min … max) p75 / p99    (min … top 1%)
 --------------------------------------------------------- -------------------------------
-via decoder() — gate-then-call             [1m[33m  9.23 ns[0m[1m/iter[0m [90m  9.11 ns[0m [36m   █[0m[33m [0m[35m                [0m
-                                     [90m([0m[36m7.74 ns[0m[90m … [0m[35m65.79 ns[0m[90m)[0m [90m 15.68 ns[0m [36m  ██[0m[33m [0m[35m                [0m
-                                  [90m([0m[33m  0.00  b[0m[90m … [0m[33m 96.00  b[0m[90m) [0m[33m  2.37  b[0m [36m▁▃██[0m[33m▇[0m[35m▂▂▂▂▂▂▂▁▁▁▁▁▁▁▁▁[0m
+via decoder() — gate-then-call               9.23 ns/iter   9.11 ns    █                 
+                                     (7.74 ns … 65.79 ns)  15.68 ns   ██                 
+                                  (  0.00  b …  96.00  b)   2.37  b ▁▃██▇▂▂▂▂▂▂▂▁▁▁▁▁▁▁▁▁
 
-via decoder() — decoder-only               [1m[33m  8.81 ns[0m[1m/iter[0m [90m  8.99 ns[0m [36m  █▆[0m[33m▄[0m[35m                [0m
-                                     [90m([0m[36m7.27 ns[0m[90m … [0m[35m53.30 ns[0m[90m)[0m [90m 15.06 ns[0m [36m ▃██[0m[33m█[0m[35m▄               [0m
-                                  [90m([0m[33m  0.00  b[0m[90m … [0m[33m 96.00  b[0m[90m) [0m[33m  1.16  b[0m [36m▁███[0m[33m█[0m[35m█▅▂▂▂▂▂▂▁▁▁▁▁▁▁▁[0m
+via decoder() — decoder-only                 8.81 ns/iter   8.99 ns   █▆▄                
+                                     (7.27 ns … 53.30 ns)  15.06 ns  ▃███▄               
+                                  (  0.00  b …  96.00  b)   1.16  b ▁█████▅▂▂▂▂▂▂▁▁▁▁▁▁▁▁
 
-inline decodeURIComponent — gate-then-call [1m[33m  9.34 ns[0m[1m/iter[0m [90m  9.83 ns[0m [36m   █▃[0m[33m [0m[35m               [0m
-                                     [90m([0m[36m7.20 ns[0m[90m … [0m[35m76.01 ns[0m[90m)[0m [90m 16.39 ns[0m [36m  ▅██[0m[33m [0m[35m▇              [0m
-                                  [90m([0m[33m  0.00  b[0m[90m … [0m[33m 48.00  b[0m[90m) [0m[33m  1.50  b[0m [36m▁▇███[0m[33m▅[0m[35m█▂▂▅▃▂▁▁▁▁▁▁▁▁▁[0m
+inline decodeURIComponent — gate-then-call   9.34 ns/iter   9.83 ns    █▃                
+                                     (7.20 ns … 76.01 ns)  16.39 ns   ▅██ ▇              
+                                  (  0.00  b …  48.00  b)   1.50  b ▁▇███▅█▂▂▅▃▂▁▁▁▁▁▁▁▁▁
 
-inline decodeURIComponent — no gate        [1m[33m 48.31 ns[0m[1m/iter[0m [90m 50.43 ns[0m [36m     █[0m[33m [0m[35m              [0m
-                                   [90m([0m[36m38.48 ns[0m[90m … [0m[35m155.32 ns[0m[90m)[0m [90m 72.98 ns[0m [36m▄    █[0m[33m▇[0m[35m▂             [0m
-                                  [90m([0m[33m  0.00  b[0m[90m … [0m[33m 96.00  b[0m[90m) [0m[33m  5.23  b[0m [36m█▅▃▂▂█[0m[33m█[0m[35m█▅▆▃▂▂▂▁▁▁▁▁▁▁[0m
+inline decodeURIComponent — no gate         48.31 ns/iter  50.43 ns      █               
+                                   (38.48 ns … 155.32 ns)  72.98 ns ▄    █▇▂             
+                                  (  0.00  b …  96.00  b)   5.23  b █▅▃▂▂███▅▆▃▂▂▂▁▁▁▁▁▁▁
 
-[1msummary[0m
-  [1m[36mvia decoder() — decoder-only[0m
-   [32m1.05[0mx faster than [1m[36mvia decoder() — gate-then-call[0m
-   [32m1.06[0mx faster than [1m[36minline decodeURIComponent — gate-then-call[0m
-   [32m5.48[0mx faster than [1m[36minline decodeURIComponent — no gate[0m
+summary
+  via decoder() — decoder-only
+   1.05x faster than via decoder() — gate-then-call
+   1.06x faster than inline decodeURIComponent — gate-then-call
+   5.48x faster than inline decodeURIComponent — no gate
