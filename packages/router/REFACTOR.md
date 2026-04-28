@@ -1101,12 +1101,12 @@ packages/router/test/               ★ 신규 파일 (F단계)
 | — | `85f313e` | A2-fix | — | route-expand.spec (9 tests) + F15 lock-in (1 test) — A2 의 spec 누락 보완 |
 | #4 | `5ffdb44` | A3 | F7, F10 | RouterErrData → discriminated union, MatchPayload 베이스 도입, error.spec/router-errors.test 정합 |
 | — | `77bce9e` | A3-fix | — | RouterErrContext / MatchPayload public export 제거 (인라인) — 잘못 도입한 공개 표면 회수 |
+| #5 | `8a97815` | A4 | F8(reg), F18, F22 | assertNotSealed/unwrapOrThrow 헬퍼, `_` 접두사 제거, build-only freeze (hot-path 제외 + JSC IC 보호), V8→JSC 정정 |
 
 ### 7.2 미완료 단계
 
 | 단계 | Findings 잔여 | 의존 |
 |---|---|---|
-| A4 | F8(reg), F18, F22 | A3 (F7 필드 사용) ✅ A3 완료 |
 | A5 | F9 | — |
 | A6 | F11 | — |
 | B1~B5 | F1, F2 (codegen) | A 단계 전체 |
@@ -1117,7 +1117,7 @@ packages/router/test/               ★ 신규 파일 (F단계)
 
 ### 7.3 검증 baseline (현 시점)
 
-- `bun test`: **566 pass / 0 fail** (PR#1 시점 561 → A1 후 556 → A2 후 566 → A3 유지)
+- `bun test`: **567 pass / 0 fail** (PR#1 시점 561 → A1 후 556 → A2 후 566 → A3 유지 → A4 후 567 freeze lock-in spec 추가)
 - `bun run build`: clean
 - `tsc --noEmit -p tsconfig.json`: **0 errors** (A3 의 F7 discriminated
   union 화로 pre-existing 2건 자연 해소).
@@ -1138,7 +1138,7 @@ packages/router/test/               ★ 신규 파일 (F단계)
 | F5 acquireCompiledPattern dead | 상 | A1 ✅ 2ec47f8 | builder/pattern-utils.ts |
 | F6 export 경계 (PathPart 누수) | 상 | E1, E2 | index.ts, router.ts, types.ts |
 | F7 RouterErrData (kind/message만 필수) | 중 | A3 ✅ 5ffdb44+77bce9e | types.ts |
-| F8 sealed/isErr 중복 (registration) | 중 | A4 | router.ts → pipeline/registration.ts |
+| F8 sealed/isErr 중복 (registration) | 중 | A4 ✅ 8a97815 | router.ts → pipeline/registration.ts |
 | F8 not-built 가드 (match) | 중 | B4 | router.ts → pipeline/match.ts |
 | F9 wildcardNames cross-method | 중 | A5 | router.ts (→ B1 후 pipeline/registration) |
 | F10 MatchOutput/CachedMatchEntry 중복 | 중 | A3 ✅ 5ffdb44+77bce9e | types.ts (MatchOutput), router.ts (file-local CacheEntry) |
@@ -1149,11 +1149,11 @@ packages/router/test/               ★ 신규 파일 (F단계)
 | F15 normalizeParamPatternSource 암묵 반환 | 중 | A2 ✅ 41a9d25 | builder/pattern-utils.ts |
 | F16 emit 변수명 하드코딩 (qi/len/mc) | 중 | C1 | matcher/path-normalize.ts, codegen/segment-compile.ts |
 | F17 segment-walk fast path 중복 | 중 | D1 | matcher/segment-walk.ts |
-| F18 `_` 접두사 일관성 | 하 | A4 | router.ts |
+| F18 `_` 접두사 일관성 | 하 | A4 ✅ 8a97815 | router.ts |
 | F19 isEmpty 중복 | 하 | A1 ✅ 2ec47f8 | builder/optional-param-defaults.ts |
 | F20 processor/ 단일 파일 | 하 | A1 ✅ 2ec47f8 | processor/decoder.ts → matcher/decoder.ts |
 | F21 charCode 매직 넘버 | 하 | A1 ✅ 2ec47f8 | builder/path-parser.ts, builder/constants.ts |
-| F22 segmentTrees freeze | 하 | A4 | router.ts (→ B2 후 pipeline/build) |
+| F22 segmentTrees freeze | 하 | A4 ✅ 8a97815 | router.ts (build-only tables — hot-path 제외) (→ B2 후 pipeline/build) |
 | F23 mergeStaticParts `//` 정규화 | 하 | A2 ✅ 41a9d25 (docstring only) | builder/route-expand.ts |
 | F24 MAX_PARAMS 상수 분산 | 중 | A1 ✅ 2ec47f8 | builder/constants.ts, builder/path-parser.ts, matcher/match-state.ts |
 | F25 Router class 명분 부재 | 상 | F1 | router.ts (createRouter 팩토리) |
