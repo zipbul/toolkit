@@ -391,8 +391,8 @@ git add bench/baseline && git commit -m "bench: capture baseline for refactor"
   동일한 tester 검사 + match 호출 + state.params 할당 로직 반복.
 - 평가: 단일-파람 fast path 는 의도된 분기 (커밋 abb90cd 의 1-2 ns 회복분).
   함수 추출이 이 회복분을 깨뜨리지 않는지 벤치로 검증 필요.
-- 처방: § 단계 D1 — 인라인 helper (V8 inlining 의존) 형태로 추출 후
-  bench 비교. 회귀 시 코멘트로 의도 명시 후 원복.
+- 처방: § 단계 D1 — 인라인 helper (JSC DFG/FTL 인라이닝 의존) 형태로
+  추출 후 bench 비교. 회귀 시 코멘트로 의도 명시 후 원복.
 
 ### F18 [하] private 필드 `_` 접두사 일관성 결여
 - 위치: `src/router.ts:95-102`
@@ -678,7 +678,7 @@ git add bench/baseline && git commit -m "bench: capture baseline for refactor"
   매칭 함수의 *바디 문자열* 은 byte-for-byte 동일해야 한다. PR 검증 시
   emit 출력을 baseline 과 diff 하여 동일성 확인 (`audit-repro.test`
   스냅샷 활용). 매칭 함수 내부에 layer 메서드 호출이 새로 끼어드는 변경은
-  금지 — V8 FTL 인라이닝이 깨지면 § 0.1 의 핫패스 회귀 즉시 발생.
+  금지 — JSC FTL 인라이닝이 깨지면 § 0.1 의 핫패스 회귀 즉시 발생.
 
 #### B4. Match 추출 → `src/pipeline/match.ts`
 - 책임: `match`, `allowedMethods`, `clearCache`, `normalizePathForLookup`.
@@ -731,7 +731,7 @@ git add bench/baseline && git commit -m "bench: capture baseline for refactor"
 #### D1. 단일-파람 fast path 보존 검증 (F17)
 - 후보 변경: 인라인 helper 추출. abb90cd 회복분 (~1-2 ns) 이 깨지는지
   micro-bench (`param match: /users/:id` 40.08 ns 기준) 비교.
-- 회귀 ≥ 1 ns 시 원복 + "intentional duplicate, V8 inlining 의존" 코멘트.
+- 회귀 ≥ 1 ns 시 원복 + "intentional duplicate, JSC inlining 의존" 코멘트.
 
 #### D2. 전체 벤치 회귀 검증 (baseline 디렉토리 대비 diff)
 - `packages/router/bench/baseline/*.txt` 의 § 0.5 캡처본과 *현재 측정값*

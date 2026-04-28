@@ -94,14 +94,14 @@ export class Router<T = unknown> {
   private pathParser: PathParser | null;
   private readonly methodRegistry = new MethodRegistry();
 
-  private _ignoreTrailingSlash = true;
-  private _caseSensitive = true;
-  private _maxPathLength = 2048;
-  private _maxSegmentLength = 256;
+  private ignoreTrailingSlash = true;
+  private caseSensitive = true;
+  private maxPathLength = 2048;
+  private maxSegmentLength = 256;
   /** Compiled at seal time from the same emit helpers used by compileMatchFn,
    *  so the cold `allowedMethods` lookup cannot drift from the hot match path.
    *  Identity normalizer (returns input unchanged) before build(). */
-  private _normalizePath: PathNormalizer = path => path;
+  private normalizePath: PathNormalizer = path => path;
   private hitCacheByMethod: Map<number, RouterCache<CacheEntry<T>>> | undefined;
   private missCacheByMethod: Map<number, Set<string>> | undefined;
   private cacheMaxSize: number = 1000;
@@ -191,56 +191,25 @@ export class Router<T = unknown> {
   }
 
   add(method: HttpMethod | HttpMethod[] | '*', path: string, value: T): void {
-    if (this.sealed) {
-      throw new RouterError({
-        kind: 'router-sealed',
-        message: 'Cannot add routes after build(). The router is sealed.',
-        path,
-        method: Array.isArray(method) ? method[0] : method,
-        suggestion: 'Create a new Router instance to add more routes',
-      });
-    }
+    this.assertNotSealed({ path, method: Array.isArray(method) ? method[0] : method });
 
     if (Array.isArray(method)) {
-      for (const m of method) {
-        const result = this.addOne(m, path, value);
-
-        if (isErr(result)) {
-          throw new RouterError(result.data);
-        }
-      }
+      for (const m of method) this.unwrapOrThrow(this.addOne(m, path, value));
 
       return;
     }
 
     if (method === '*') {
-      for (const m of ALL_METHODS) {
-        const result = this.addOne(m, path, value);
-
-        if (isErr(result)) {
-          throw new RouterError(result.data);
-        }
-      }
+      for (const m of ALL_METHODS) this.unwrapOrThrow(this.addOne(m, path, value));
 
       return;
     }
 
-    const result = this.addOne(method, path, value);
-
-    if (isErr(result)) {
-      throw new RouterError(result.data);
-    }
+    this.unwrapOrThrow(this.addOne(method, path, value));
   }
 
   addAll(entries: Array<[HttpMethod, string, T]>): void {
-    if (this.sealed) {
-      throw new RouterError({
-        kind: 'router-sealed',
-        message: 'Cannot add routes after build(). The router is sealed.',
-        registeredCount: 0,
-        suggestion: 'Create a new Router instance to add more routes',
-      });
-    }
+    this.assertNotSealed({ registeredCount: 0 });
 
     let registeredCount = 0;
 
@@ -248,14 +217,34 @@ export class Router<T = unknown> {
       const result = this.addOne(method, path, value);
 
       if (isErr(result)) {
-        throw new RouterError({
-          ...result.data,
-          registeredCount,
-        });
+        throw new RouterError({ ...result.data, registeredCount });
       }
 
       registeredCount++;
     }
+  }
+
+  /**
+   * Throw `router-sealed` when add()/addAll() is called after build().
+   * `ctx` lets the caller decorate the error with their request context
+   * (path/method) or the addAll() registeredCount=0 marker.
+   */
+  private assertNotSealed(
+    ctx: { path?: string; method?: string; registeredCount?: number },
+  ): void {
+    if (!this.sealed) return;
+
+    throw new RouterError({
+      kind: 'router-sealed',
+      message: 'Cannot add routes after build(). The router is sealed.',
+      suggestion: 'Create a new Router instance to add more routes',
+      ...ctx,
+    });
+  }
+
+  /** Convert an addOne() Err into a thrown RouterError; pass-through on Ok. */
+  private unwrapOrThrow(result: Result<void, RouterErrData>): void {
+    if (isErr(result)) throw new RouterError(result.data);
   }
 
   build(): this {
@@ -344,26 +333,45 @@ export class Router<T = unknown> {
 
     this.matchState = createMatchState();
 
-    this._ignoreTrailingSlash = this.options.ignoreTrailingSlash ?? true;
-    this._caseSensitive = this.options.caseSensitive ?? true;
-    this._maxPathLength = this.options.maxPathLength ?? 2048;
-    this._maxSegmentLength = this.options.maxSegmentLength ?? 256;
+    this.ignoreTrailingSlash = this.options.ignoreTrailingSlash ?? true;
+    this.caseSensitive = this.options.caseSensitive ?? true;
+    this.maxPathLength = this.options.maxPathLength ?? 2048;
+    this.maxSegmentLength = this.options.maxSegmentLength ?? 256;
 
     this.pathParser = null;
     // Tester cache held per-route insert during add(); release after seal so
     // dev-mode swap-and-rebuild scenarios start fresh.
     this.testerCache = new Map();
 
-    this._normalizePath = buildPathNormalizer({
-      checkPathLen: Number.isFinite(this._maxPathLength),
-      maxPathLen: this._maxPathLength,
-      trimSlash: this._ignoreTrailingSlash,
-      lowerCase: !this._caseSensitive,
-      checkSegLen: Number.isFinite(this._maxSegmentLength),
-      maxSegLen: this._maxSegmentLength,
+    this.normalizePath = buildPathNormalizer({
+      checkPathLen: Number.isFinite(this.maxPathLength),
+      maxPathLen: this.maxPathLength,
+      trimSlash: this.ignoreTrailingSlash,
+      lowerCase: !this.caseSensitive,
+      checkSegLen: Number.isFinite(this.maxSegmentLength),
+      maxSegLen: this.maxSegmentLength,
     });
 
     this.matchImpl = this.compileMatchFn();
+
+    // Freeze build-only tables so post-build add/mutate cannot silently
+    // drift state away from the compiled matchImpl. Hot-path tables
+    // (`handlers`, `trees`, `staticOutputsByMethod`, `methodCodes`) are
+    // *not* frozen — JSC inline caches degrade when match() reads from
+    // frozen closure-captured objects in tight loops, costing ~5-10 ns
+    // per dynamic match (verified via bench against bench/baseline).
+    // Notably the emitted matchImpl reads `handlers[state.handlerIndex]`
+    // on every dynamic hit. The hot-path tables are still protected
+    // indirectly: nothing mutates them after build() because `sealed`
+    // rejects every public code path that would.
+    //
+    // Cache containers (hit/missCacheByMethod) and matchState are
+    // intentionally also excluded — they mutate per match().
+    Object.freeze(this.segmentTrees);
+    Object.freeze(this.wildSpecs);
+    Object.freeze(this.staticMap);
+    Object.freeze(this.staticRegistered);
+    Object.freeze(this.activeMethodCodes);
 
     return this;
   }
@@ -401,12 +409,12 @@ export class Router<T = unknown> {
 
     return {
       useCache,
-      trimSlash: this._ignoreTrailingSlash,
-      lowerCase: !this._caseSensitive,
-      maxPathLen: this._maxPathLength,
-      maxSegLen: this._maxSegmentLength,
-      checkPathLen: Number.isFinite(this._maxPathLength),
-      checkSegLen: Number.isFinite(this._maxSegmentLength),
+      trimSlash: this.ignoreTrailingSlash,
+      lowerCase: !this.caseSensitive,
+      maxPathLen: this.maxPathLength,
+      maxSegLen: this.maxSegmentLength,
+      checkPathLen: Number.isFinite(this.maxPathLength),
+      checkSegLen: Number.isFinite(this.maxSegmentLength),
       hasAnyTree: this.trees.some(t => t != null),
       hasOptDefaults: this.optionalParamDefaults !== undefined
         && !this.optionalParamDefaults.isEmpty(),
@@ -798,7 +806,7 @@ export class Router<T = unknown> {
    * even if option handling changes. See `matcher/path-normalize.ts`.
    */
   private normalizePathForLookup(path: string): string | null {
-    return this._normalizePath(path);
+    return this.normalizePath(path);
   }
 
   private checkWildcardNameConflict(

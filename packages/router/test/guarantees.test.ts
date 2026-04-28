@@ -253,6 +253,48 @@ describe('sealed state', () => {
 
     expect(r.match('GET', '/x')!.value).toBe('x');
   });
+
+  it('freezes build-only tables so post-build mutation throws (F22)', () => {
+    const r = new Router<string>();
+    r.add('GET', '/x', 'x');
+    r.build();
+
+    // Internal-state-inspection pattern (already used across this file).
+    // Only build-only tables are frozen; hot-path tables (`trees`,
+    // `staticOutputsByMethod`, `methodCodes`) intentionally stay mutable
+    // — freezing them costs ~5-10 ns per dynamic match in JSC due to
+    // inline-cache degradation on closure-captured frozen objects.
+    const internal = r as unknown as {
+      segmentTrees: unknown[];
+      handlers: unknown[];
+      wildSpecs: unknown[];
+      staticMap: Record<string, unknown>;
+      staticRegistered: Record<string, unknown>;
+      activeMethodCodes: ReadonlyArray<readonly [string, number]>;
+      trees: unknown[];
+      staticOutputsByMethod: unknown[];
+      methodCodes: Record<string, unknown>;
+    };
+
+    expect(Object.isFrozen(internal.segmentTrees)).toBe(true);
+    expect(Object.isFrozen(internal.wildSpecs)).toBe(true);
+    expect(Object.isFrozen(internal.staticMap)).toBe(true);
+    expect(Object.isFrozen(internal.staticRegistered)).toBe(true);
+    expect(Object.isFrozen(internal.activeMethodCodes)).toBe(true);
+
+    // Hot-path tables: kept mutable for JSC IC perf — but the `sealed` flag
+    // rejects every public mutation path, so the lack of freeze is not
+    // a real-world hazard. `handlers` is here because the emitted matchImpl
+    // reads `handlers[state.handlerIndex]` on every dynamic match.
+    expect(Object.isFrozen(internal.handlers)).toBe(false);
+    expect(Object.isFrozen(internal.trees)).toBe(false);
+    expect(Object.isFrozen(internal.staticOutputsByMethod)).toBe(false);
+    expect(Object.isFrozen(internal.methodCodes)).toBe(false);
+
+    // Frozen object/array mutation throws TypeError in strict mode (ESM = strict).
+    expect(() => internal.segmentTrees.push(null)).toThrow(TypeError);
+    expect(() => { internal.staticMap['/y'] = []; }).toThrow(TypeError);
+  });
 });
 
 // ── Radix-walk fallback paths ────────────────────────────────────────────
