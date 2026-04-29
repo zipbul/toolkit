@@ -119,13 +119,17 @@ export function createSegmentWalker(
    * returning false in the timeout branch but does not abort the
    * caller's loop on its own.
    *
-   * Closure-captured: `match`, `decoder`, `decodeParams`. Used by
-   * both the head-fast-path and the sibling-backtracking loop in
-   * `match` so the two paths share one definition; pre-D1 each had
-   * its own copy because abb90cd worried about JSC not inlining a
-   * helper. D1's bench against `param /users/:id` shows JSC FTL
-   * inlines this cleanly — extraction is 3-6 ns *faster* than the
-   * duplicated form, not slower.
+   * Closure-captured: `match` only. The `decoded` value is supplied
+   * by the caller (the outer `match` runs the decoder + decodeParams
+   * gate before this helper is called), so this helper neither
+   * captures nor invokes the decoder.
+   *
+   * Used by both the head-fast-path and the sibling-backtracking
+   * loop in `match` so the two paths share one definition; pre-D1
+   * each had its own copy because abb90cd worried about JSC
+   * declining to inline a helper. D1's bench against `param
+   * /users/:id` shows JSC FTL inlines this cleanly — extraction is
+   * 3-6 ns *faster* than the duplicated form, not slower.
    */
   function tryMatchParam(
     param: ParamSegment,
