@@ -1156,13 +1156,15 @@ packages/router/test/               ★ 신규 파일 (F단계)
 | #14 | `4db5e89` | C2 | F12 (부분) | walker-strategy.ts 신설. detectWildCodegenSpec + detectSingleMethodWildSpec + WildCodegenEntry 통합. consumers (emitter/build/segment-walk) re-export 없이 직접 import. hasWideFanout(file-local) / hasAmbiguousNode(tree predicate) 는 원위치 — 단순 heuristic 이라 이동 비용 무가치. createSegmentWalker cascade 유지 — strategy 선결정은 codegen ctx.bail 의존성 때문에 불가 |
 | — | `469425f` | C2-fix | — | WalkerStrategy enum 코드 사용 0건 → JSDoc 주석으로 강등. emitter.ts import 순서 정렬 (type×5 → value×4) |
 | #15 | `5ecbe14` | D1 | F17 | tryMatchParam 헬퍼 추출 — head fast path + sibling loop 의 tester/match/params 중복 제거. doc 의 1-2 ns 회귀 우려와 반대로 모든 dynamic match 가 baseline 대비 *3-6 ns 빠름* (JSC FTL 인라이닝 효과). segment-walk.ts -18 lines |
+| — | `df662e7` | D1-fix | — | tryMatchParam JSDoc 추가 (다른 helper 와 일관성) |
+| — | `3edcdd4` | D1-fix2 | — | tryMatchParam JSDoc closure 사실 오류 정정 (decoder/decodeParams 미캡처 명시) |
+| #16 | `19c49ed` | D2 | (회귀 가드) | 4종 baseline diff 검증 산출물 `bench/baseline/diff.md`. 핫패스 ±2 ns / 캐시 ±1 ns / 경쟁사 6 카테고리 ±5% / complex-shapes 6 카테고리 / percent-gate 모두 통과. 핫패스 모두 baseline 대비 *faster*; build-time 5-15% slower (의도된 trade-off) |
 
 ### 7.2 미완료 단계
 
 | 단계 | Findings 잔여 | 의존 |
 |---|---|---|
-| D1~D2 | F17 + 회귀 검증 | C |
-| E1~E2 | F6 | D |
+| E1~E2 | F6 | D ✅ 완료 |
 | F1~F12 | F25~F33 | E (선택) |
 | C1~C2 | F12, F14, F16 | B3 |
 | D1~D2 | F17 + 회귀 검증 | C |
