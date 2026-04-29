@@ -24,11 +24,11 @@ import { Router } from '../src/router';
  *  selected. Codegen functions are named `compiledWildWalk` /
  *  `compiledSegmentWalk`; iterative is `walk` exported by createIterativeWalker;
  *  the recursive fallback also exports `walk` but contains a nested `match`. */
-function pickedWalkerName(router: Router<unknown>): string | null {
-  // After B5, per-method walkers live on matchLayer.
+function pickedWalkerName(router: Router<string>): string | null {
+  // After B5, per-method walkers live on matchLayer (exposed via _internals).
   const trees = (router as unknown as {
-    matchLayer: { trees: Array<((u: string, s: unknown) => boolean) | null> };
-  }).matchLayer.trees;
+    _internals: { matchLayer: { trees: Array<((u: string, s: unknown) => boolean) | null> } };
+  })._internals.matchLayer.trees;
   const tree = trees.find(t => t != null);
 
   return tree ? tree.name : null;
@@ -145,7 +145,7 @@ describe('recursive walker (ambiguous tree)', () => {
 
   it('selects the recursive walker for ambiguous trees', () => {
     const r = makeAmbiguousRouter();
-    const trees = (r as unknown as { matchLayer: { trees: Array<unknown> } }).matchLayer.trees;
+    const trees = (r as unknown as { _internals: { matchLayer: { trees: Array<unknown> } } })._internals.matchLayer.trees;
     const tree = trees.find(t => t != null) as { name: string };
 
     expect(tree.name).toBe('walk');
@@ -434,7 +434,7 @@ describe('shape specialization gating', () => {
     r.add('POST', '/upload/*filepath', 2);
     r.build();
 
-    const impl = (r as unknown as { matchImpl: { toString: () => string } }).matchImpl;
+    const impl = (r as unknown as { _internals: { matchImpl: { toString: () => string } } })._internals.matchImpl;
 
     // Generic path uses `methodCodes[method]` lookup; specialized path uses
     // `method !== "GET"` literal. The presence of the lookup confirms generic
@@ -449,7 +449,7 @@ describe('shape specialization gating', () => {
     r.add('GET', '/static/*path', 1);
     r.build();
 
-    const impl = (r as unknown as { matchImpl: { toString: () => string } }).matchImpl;
+    const impl = (r as unknown as { _internals: { matchImpl: { toString: () => string } } })._internals.matchImpl;
 
     expect(impl.toString()).toContain('hitCacheByMethod');
   });
@@ -460,7 +460,7 @@ describe('shape specialization gating', () => {
     r.add('GET', '/health', 2); // static, lives in staticMap
     r.build();
 
-    const impl = (r as unknown as { matchImpl: { toString: () => string } }).matchImpl;
+    const impl = (r as unknown as { _internals: { matchImpl: { toString: () => string } } })._internals.matchImpl;
 
     expect(impl.toString()).toContain('activeBucket');
   });

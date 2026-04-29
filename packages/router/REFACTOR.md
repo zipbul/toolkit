@@ -1160,16 +1160,17 @@ packages/router/test/               ★ 신규 파일 (F단계)
 | — | `3edcdd4` | D1-fix2 | — | tryMatchParam JSDoc closure 사실 오류 정정 (decoder/decodeParams 미캡처 명시) |
 | #16 | `19c49ed` | D2 | (회귀 가드) | 4종 baseline diff 검증 산출물 `bench/baseline/diff.md`. 핫패스 ±2 ns / 캐시 ±1 ns / 경쟁사 6 카테고리 ±5% / complex-shapes 6 카테고리 / percent-gate 모두 통과. 핫패스 모두 baseline 대비 *faster*; build-time 5-15% slower (의도된 trade-off) |
 | #17 | (this) | E1+E2 | F6 | `PatternTesterFn` 을 `src/types.ts` → `src/matcher/pattern-tester.ts` 로 이동 (types→matcher 레이어 역전 해소). public surface 그대로 (index.ts re-export 무변경). `test/public-api.contract.test.ts` 신설 — 3 spec: value-side export 정확히 `[Router, RouterError]`, Router constructable, RouterError 가 throw 타입. 573→576 tests, tsc 0 err, 외부 `import { PatternTesterFn }` 시뮬레이션 차단 확인 |
+| #18 | (this) | F-1 | (직접 라인 5건) | Router 라인 단위 결함 5건 중 3건 근본 해결 + 2건 양보. ① 화살표 메서드 + closure 캡처로 `this` 의존 0 (detached 호출 안전, 6/6 public 메서드 실증) ② `Object.freeze(this)` 로 instance own property 변조 차단 (`(r as any).match = junk` 시 strict TypeError) ③ constructor 58줄 → 4 helper (`normalizeRegexSafety`, `createCacheContainers`, `createPathParser`, `performBuild`) ④ `clearCache` 폐기 — bounded LRU + miss-set bound 으로 운영 명분 0 (사용처 자체검증 spec 5개 외 0) ⑤ internal regression spec 들의 `(r as any).matchLayer` 패턴은 hidden non-enumerable `_internals` 객체로 격리 (외부 사용자 `Object.keys` 미노출). 양보: 상속 차단 (class 자연 패턴 + freeze 가 기능 확장은 차단), 라이프사이클 컴파일 차단 (런타임 `router-sealed` throw 유지 — 인터페이스 분리 시 사용자 멘탈 모델 (라우터 1개) 깨짐). 576→571 tests (clearCache spec 5건 제거), 핫패스 ±0.5 ns 이내 (baseline 대비 무회귀) |
 
 ### 7.2 미완료 단계
 
 | 단계 | Findings 잔여 | 의존 |
 |---|---|---|
-| F1~F12 | F25~F33 | E ✅ 완료 (선택) |
+| F2~F12 | F25 (양보), F26 (양보), F27~F33 | F-1 ✅ 완료 (선택) |
 
 ### 7.3 검증 baseline (현 시점)
 
-- `bun test`: **576 pass / 0 fail** (PR#1 시점 561 → A1 후 556 → A2 후 566 → A3 유지 → A4 후 567 → A5 후 569 → A6 후 573 → E2 후 576 public-api.contract spec 3건 추가)
+- `bun test`: **571 pass / 0 fail** (PR#1 시점 561 → A1 후 556 → A2 후 566 → A3 유지 → A4 후 567 → A5 후 569 → A6 후 573 → E2 후 576 → F-1 후 571 clearCache 자체검증 spec 5건 폐기)
 - `bun run build`: clean
 - `tsc --noEmit -p tsconfig.json`: **0 errors** (A3 의 F7 discriminated
   union 화로 pre-existing 2건 자연 해소).

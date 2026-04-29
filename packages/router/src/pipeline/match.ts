@@ -1,7 +1,5 @@
 import type { HttpMethod } from '@zipbul/shared';
 
-import type { MatchCacheEntry } from '../codegen/emitter';
-import type { RouterCache } from '../cache';
 import type { MatchFn, MatchState } from '../matcher/match-state';
 import type { PathNormalizer } from '../matcher/path-normalize';
 import type { MatchOutput } from '../types';
@@ -22,13 +20,11 @@ interface MatchLayerDeps<T> {
   activeMethodCodes: ReadonlyArray<readonly [string, number]>;
   staticOutputsByMethod: Array<Record<string, MatchOutput<T>> | undefined>;
   trees: Array<MatchFn | null>;
-  hitCacheByMethod: Map<number, RouterCache<MatchCacheEntry<T>>> | undefined;
-  missCacheByMethod: Map<number, Set<string>> | undefined;
 }
 
 /**
- * Cold-path runtime concerns: `allowedMethods()` (404 vs 405
- * disambiguation) and `clearCache()` (cache reset).
+ * Cold-path runtime concern: `allowedMethods()` (404 vs 405
+ * disambiguation).
  *
  * **Hot-path `match()` is *not* here.** Routing it through this layer
  * adds a method-dispatch hop that breaks JSC's monomorphic IC on the
@@ -46,8 +42,6 @@ export class MatchLayer<T> {
   private readonly activeMethodCodes: ReadonlyArray<readonly [string, number]>;
   private readonly staticOutputsByMethod: Array<Record<string, MatchOutput<T>> | undefined>;
   private readonly trees: Array<MatchFn | null>;
-  private readonly hitCacheByMethod: Map<number, RouterCache<MatchCacheEntry<T>>> | undefined;
-  private readonly missCacheByMethod: Map<number, Set<string>> | undefined;
 
   constructor(deps: MatchLayerDeps<T>) {
     this.normalizePath = deps.normalizePath;
@@ -55,8 +49,6 @@ export class MatchLayer<T> {
     this.activeMethodCodes = deps.activeMethodCodes;
     this.staticOutputsByMethod = deps.staticOutputsByMethod;
     this.trees = deps.trees;
-    this.hitCacheByMethod = deps.hitCacheByMethod;
-    this.missCacheByMethod = deps.missCacheByMethod;
   }
 
   /**
@@ -119,19 +111,5 @@ export class MatchLayer<T> {
     }
 
     return out;
-  }
-
-  clearCache(): void {
-    if (this.hitCacheByMethod !== undefined) {
-      for (const cache of this.hitCacheByMethod.values()) {
-        cache.clear();
-      }
-    }
-
-    if (this.missCacheByMethod !== undefined) {
-      for (const set of this.missCacheByMethod.values()) {
-        set.clear();
-      }
-    }
   }
 }

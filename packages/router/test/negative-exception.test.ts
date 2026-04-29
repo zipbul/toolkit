@@ -282,20 +282,3 @@ describe('misuse rejection', () => {
   });
 });
 
-// ── Cache misuse ─────────────────────────────────────────────────────────
-
-describe('cache misuse', () => {
-  it('clearCache when cache disabled is a no-op (does not throw)', () => {
-    const r = new Router<string>({ enableCache: false });
-    r.add('GET', '/users/:id', 'u');
-    r.build();
-
-    expect(() => r.clearCache()).not.toThrow();
-  });
-
-  it('clearCache before build is a no-op (does not throw)', () => {
-    const r = new Router<string>({ enableCache: true });
-
-    expect(() => r.clearCache()).not.toThrow();
-  });
-});

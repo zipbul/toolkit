@@ -266,20 +266,22 @@ describe('sealed state', () => {
     // wildcardNamesByMethod) and `matchLayer` (activeMethodCodes,
     // staticOutputsByMethod, trees). Hot-path tables stay mutable for
     // JSC IC perf — freezing them costs 5-10 ns per dynamic match.
-    const internal = r as unknown as {
-      registration: {
-        segmentTrees: unknown[];
-        handlers: unknown[];
-        staticMap: Record<string, unknown>;
-        staticRegistered: Record<string, unknown>;
-        wildcardNamesByMethod: Map<number, Map<string, string>>;
+    const internal = (r as unknown as {
+      _internals: {
+        registration: {
+          segmentTrees: unknown[];
+          handlers: unknown[];
+          staticMap: Record<string, unknown>;
+          staticRegistered: Record<string, unknown>;
+          wildcardNamesByMethod: Map<number, Map<string, string>>;
+        };
+        matchLayer: {
+          activeMethodCodes: ReadonlyArray<readonly [string, number]>;
+          trees: unknown[];
+          staticOutputsByMethod: unknown[];
+        };
       };
-      matchLayer: {
-        activeMethodCodes: ReadonlyArray<readonly [string, number]>;
-        trees: unknown[];
-        staticOutputsByMethod: unknown[];
-      };
-    };
+    })._internals;
 
     // Build-only tables must be frozen.
     expect(Object.isFrozen(internal.registration.segmentTrees)).toBe(true);
@@ -326,7 +328,7 @@ describe('sibling-param expansion (multi-optional)', () => {
   it('builds a single segment tree (no fallback walker required)', () => {
     const r = makeOptionalRouter();
     // After B5, the per-method walker array lives on matchLayer.
-    const trees = (r as unknown as { matchLayer: { trees: Array<unknown> } }).matchLayer.trees;
+    const trees = (r as unknown as { _internals: { matchLayer: { trees: Array<unknown> } } })._internals.matchLayer.trees;
     const built = trees.filter(t => t != null);
 
     expect(built.length).toBe(1);
@@ -552,19 +554,6 @@ describe('cache stress', () => {
     expect(a.params).toEqual(b.params);
   });
 
-  it('clearCache wipes hits and misses', () => {
-    const r = new Router<string>({ enableCache: true });
-    r.add('GET', '/users/:id', 'u');
-    r.build();
-
-    r.match('GET', '/users/42');
-    r.match('GET', '/missing');
-    r.clearCache();
-
-    // After clear, second match for /users/42 should report meta.source
-    // = 'dynamic' (not 'cache') because the cache was wiped.
-    expect(r.match('GET', '/users/42')!.meta.source).toBe('dynamic');
-  });
 });
 
 // ── Method registry boundary ─────────────────────────────────────────────

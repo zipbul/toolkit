@@ -11,194 +11,201 @@ import { buildFromRegistration } from './pipeline/build';
 import { MatchLayer } from './pipeline/match';
 import { Registration } from './pipeline/registration';
 
-export class Router<T = unknown> {
-  private readonly options: RouterOptions;
-  private readonly methodRegistry = new MethodRegistry();
-  /** Owns the registration phase (add/addAll, conflict detection,
-   *  segment-tree population). `seal()` returns the build snapshot. */
-  private readonly registration: Registration<T>;
-  private readonly optionalParamDefaults: OptionalParamDefaults;
-  /** Cache containers — created in the constructor when
-   *  `enableCache: true`. Lifetime spans add()/build()/match(), and the
-   *  references are passed to both the codegen (closure capture) and
-   *  MatchLayer (clearCache). */
-  private hitCacheByMethod: Map<number, RouterCache<MatchCacheEntry<T>>> | undefined;
-  private missCacheByMethod: Map<number, Set<string>> | undefined;
-  private cacheMaxSize: number = 1000;
+interface CacheContainers<T> {
+  hit: Map<number, RouterCache<MatchCacheEntry<T>>>;
+  miss: Map<number, Set<string>>;
+  maxSize: number;
+}
 
-  /** Compiled match closure assembled by compileMatchFn() at build
-   *  time. Read directly by `match()` — no MatchLayer indirection on
-   *  the hot path (see B4 deviation note in REFACTOR.md). */
-  private matchImpl!: (method: string, path: string) => MatchOutput<T> | null;
-  /** Cold-path runtime layer — instantiated only when build() succeeds.
-   *  Its `undefined` state doubles as the "router is built" sentinel
-   *  for `match()` / `allowedMethods()` / `clearCache()`. */
-  private matchLayer: MatchLayer<T> | undefined;
+function normalizeRegexSafety(opts: RegexSafetyOptions | undefined): RegexSafetyOptions {
+  const out: RegexSafetyOptions = {
+    mode: opts?.mode ?? 'error',
+    maxLength: opts?.maxLength ?? 256,
+    forbidBacktrackingTokens: opts?.forbidBacktrackingTokens ?? true,
+    forbidBackreferences: opts?.forbidBackreferences ?? true,
+  };
+
+  if (opts?.maxExecutionMs !== undefined) out.maxExecutionMs = opts.maxExecutionMs;
+  if (opts?.validator !== undefined) out.validator = opts.validator;
+
+  return out;
+}
+
+function createCacheContainers<T>(options: RouterOptions): CacheContainers<T> | undefined {
+  if (options.enableCache !== true) return undefined;
+
+  return {
+    hit: new Map(),
+    miss: new Map(),
+    maxSize: options.cacheSize ?? 1000,
+  };
+}
+
+function createPathParser(options: RouterOptions, regexSafety: RegexSafetyOptions): PathParser {
+  return new PathParser({
+    caseSensitive: options.caseSensitive ?? true,
+    ignoreTrailingSlash: options.ignoreTrailingSlash ?? true,
+    maxSegmentLength: options.maxSegmentLength ?? 256,
+    regexSafety,
+    regexAnchorPolicy: options.regexAnchorPolicy,
+    onWarn: options.onWarn,
+  });
+}
+
+/**
+ * HTTP router with build-once / match-many semantics. Methods are
+ * declared as arrow-function fields rather than prototype methods so
+ * detached calls (`const m = router.match; m(...)`) work without
+ * `bind()` — every method closes over the constructor's locals and
+ * never reads `this`. The instance is `Object.freeze`d at the end of
+ * the constructor; the caches and other build-time state live in the
+ * closure scope where external code cannot reach them.
+ */
+export class Router<T = unknown> {
+  readonly add: (
+    method: HttpMethod | HttpMethod[] | '*',
+    path: string,
+    value: T,
+  ) => void;
+  readonly addAll: (entries: Array<[HttpMethod, string, T]>) => void;
+  readonly build: () => this;
+  readonly match: (method: HttpMethod, path: string) => MatchOutput<T> | null;
+  readonly allowedMethods: (path: string) => HttpMethod[];
+
+  /**
+   * Inspection hatch for internal regression guards (walker tier
+   * detection, handler rollback, etc). Not part of the public API —
+   * external code must not depend on the shape. Defined non-enumerable
+   * so `Object.keys(router)` does not surface it. The wrapper object
+   * itself is unfrozen so build() can populate it; the instance is
+   * frozen, which prevents callers from substituting a different
+   * wrapper.
+   */
+  declare readonly _internals: {
+    matchImpl: ((method: string, path: string) => MatchOutput<T> | null) | undefined;
+    matchLayer: MatchLayer<T> | undefined;
+    registration: Registration<T>;
+  };
 
   constructor(options: RouterOptions = {}) {
-    this.options = options;
-
-    if (options.enableCache === true) {
-      this.hitCacheByMethod = new Map();
-      this.missCacheByMethod = new Map();
-      this.cacheMaxSize = options.cacheSize ?? 1000;
-    }
-
-    const regexSafety: RegexSafetyOptions = {
-      mode: options.regexSafety?.mode ?? 'error',
-      maxLength: options.regexSafety?.maxLength ?? 256,
-      forbidBacktrackingTokens: options.regexSafety?.forbidBacktrackingTokens ?? true,
-      forbidBackreferences: options.regexSafety?.forbidBackreferences ?? true,
-    };
-
-    if (options.regexSafety?.maxExecutionMs !== undefined) {
-      regexSafety.maxExecutionMs = options.regexSafety.maxExecutionMs;
-    }
-
-    if (options.regexSafety?.validator !== undefined) {
-      regexSafety.validator = options.regexSafety.validator;
-    }
-
-    this.optionalParamDefaults = new OptionalParamDefaults(options.optionalParamBehavior);
-
-    const pathParser = new PathParser({
-      caseSensitive: options.caseSensitive ?? true,
-      ignoreTrailingSlash: options.ignoreTrailingSlash ?? true,
-      maxSegmentLength: options.maxSegmentLength ?? 256,
+    const regexSafety = normalizeRegexSafety(options.regexSafety);
+    const optionalParamDefaults = new OptionalParamDefaults(options.optionalParamBehavior);
+    const methodRegistry = new MethodRegistry();
+    const pathParser = createPathParser(options, regexSafety);
+    const registration = new Registration<T>(
       regexSafety,
-      regexAnchorPolicy: options.regexAnchorPolicy,
-      onWarn: options.onWarn,
-    });
-
-    this.registration = new Registration<T>(
-      regexSafety,
-      this.methodRegistry,
+      methodRegistry,
       pathParser,
-      this.optionalParamDefaults,
+      optionalParamDefaults,
     );
-  }
+    const cache = createCacheContainers<T>(options);
 
-  add(method: HttpMethod | HttpMethod[] | '*', path: string, value: T): void {
-    this.registration.add(method, path, value);
-  }
+    let matchImpl: ((method: string, path: string) => MatchOutput<T> | null) | undefined;
+    let matchLayer: MatchLayer<T> | undefined;
 
-  addAll(entries: Array<[HttpMethod, string, T]>): void {
-    this.registration.addAll(entries);
-  }
-
-  build(): this {
-    if (this.registration.isSealed()) {
-      return this;
-    }
-
-    // Pipeline: seal registration → compile build outputs → assemble
-    // codegen cfg → emit matchImpl → spin up cold-path MatchLayer.
-    // None of the intermediate values need to live as Router fields:
-    // the compiled matchImpl closure-captures every table it reads,
-    // and MatchLayer holds its own refs. Router only retains the two
-    // call-time entry points (`matchImpl`, `matchLayer`) plus what's
-    // needed to reconstruct or guard add/build (`registration`,
-    // `optionalParamDefaults`, the cache containers).
-    const snapshot = this.registration.seal();
-    const r = buildFromRegistration<T>(snapshot, this.options, this.methodRegistry);
-
-    let hasAnyStatic = false;
-
-    for (const bucket of r.staticOutputsByMethod) {
-      if (bucket !== undefined) { hasAnyStatic = true; break; }
-    }
-
-    const cfg: MatchConfig<T> = {
-      useCache: this.hitCacheByMethod !== undefined,
-      trimSlash: r.ignoreTrailingSlash,
-      lowerCase: !r.caseSensitive,
-      maxPathLen: r.maxPathLength,
-      maxSegLen: r.maxSegmentLength,
-      checkPathLen: Number.isFinite(r.maxPathLength),
-      checkSegLen: Number.isFinite(r.maxSegmentLength),
-      hasAnyTree: r.trees.some(t => t != null),
-      hasOptDefaults: !this.optionalParamDefaults.isEmpty(),
-      anyTester: r.anyTester,
-      hasAnyStatic,
-      staticOutputsByMethod: r.staticOutputsByMethod,
-      staticMap: snapshot.staticMap,
-      methodCodes: r.methodCodes,
-      trees: r.trees,
-      matchState: r.matchState,
-      handlers: snapshot.handlers,
-      optDefaults: this.optionalParamDefaults,
-      hitCacheByMethod: this.hitCacheByMethod,
-      missCacheByMethod: this.missCacheByMethod,
-      cacheMaxSize: this.cacheMaxSize,
-      activeMethodCodes: r.activeMethodCodes,
-      wildSpecs: r.wildSpecs,
+    const internals: Router<T>['_internals'] = {
+      matchImpl: undefined,
+      matchLayer: undefined,
+      registration,
     };
 
-    this.matchImpl = compileMatchFn<T>(cfg);
-
-    this.matchLayer = new MatchLayer<T>({
-      normalizePath: r.normalizePath,
-      matchState: r.matchState,
-      activeMethodCodes: r.activeMethodCodes,
-      staticOutputsByMethod: r.staticOutputsByMethod,
-      trees: r.trees,
-      hitCacheByMethod: this.hitCacheByMethod,
-      missCacheByMethod: this.missCacheByMethod,
+    Object.defineProperty(this, '_internals', {
+      value: internals,
+      writable: false,
+      enumerable: false,
+      configurable: false,
     });
 
-    // Freeze build-only tables so post-build add/mutate cannot silently
-    // drift state away from the compiled matchImpl. Hot-path tables
-    // (`handlers`, `trees`, `staticOutputsByMethod`, `methodCodes`) are
-    // *not* frozen — JSC inline caches degrade when match() reads from
-    // frozen closure-captured objects in tight loops, costing ~5-10 ns
-    // per dynamic match (verified via bench against bench/baseline).
-    // The hot-path tables are still protected indirectly: nothing
-    // mutates them after build() because `sealed` rejects every public
-    // code path that would.
-    //
-    // Cache containers (hit/missCacheByMethod) and matchState are
-    // intentionally also excluded — they mutate per match().
-    Object.freeze(snapshot.segmentTrees);
-    Object.freeze(snapshot.staticMap);
-    Object.freeze(snapshot.staticRegistered);
-    Object.freeze(r.wildSpecs);
-    Object.freeze(r.activeMethodCodes);
-    // wildcardNamesByMethod is owned by Registration and frozen there
-    // at seal() time.
+    const performBuild = (): void => {
+      const snapshot = registration.seal();
+      const r = buildFromRegistration<T>(snapshot, options, methodRegistry);
 
-    return this;
-  }
+      let hasAnyStatic = false;
 
+      for (const bucket of r.staticOutputsByMethod) {
+        if (bucket !== undefined) { hasAnyStatic = true; break; }
+      }
 
-  /**
-   * Hot-path: dispatch the compiled matchImpl. Returns null when called
-   * before build() (matchImpl not yet compiled).
-   *
-   * **Important — kept on Router**: routing through `this.matchLayer.
-   * match` adds a method-dispatch hop that breaks JSC's monomorphic IC
-   * on the hot path (verified end-to-end against bench/baseline:
-   * static match 300ps → 13ns, param match +5ns). MatchLayer owns the
-   * cold-path concerns (allowedMethods + clearCache) only.
-   */
-  match(method: HttpMethod, path: string): MatchOutput<T> | null {
-    if (this.matchLayer === undefined) return null;
+      const cfg: MatchConfig<T> = {
+        useCache: cache !== undefined,
+        trimSlash: r.ignoreTrailingSlash,
+        lowerCase: !r.caseSensitive,
+        maxPathLen: r.maxPathLength,
+        maxSegLen: r.maxSegmentLength,
+        checkPathLen: Number.isFinite(r.maxPathLength),
+        checkSegLen: Number.isFinite(r.maxSegmentLength),
+        hasAnyTree: r.trees.some(t => t != null),
+        hasOptDefaults: !optionalParamDefaults.isEmpty(),
+        anyTester: r.anyTester,
+        hasAnyStatic,
+        staticOutputsByMethod: r.staticOutputsByMethod,
+        staticMap: snapshot.staticMap,
+        methodCodes: r.methodCodes,
+        trees: r.trees,
+        matchState: r.matchState,
+        handlers: snapshot.handlers,
+        optDefaults: optionalParamDefaults,
+        hitCacheByMethod: cache?.hit,
+        missCacheByMethod: cache?.miss,
+        cacheMaxSize: cache?.maxSize ?? 1000,
+        activeMethodCodes: r.activeMethodCodes,
+        wildSpecs: r.wildSpecs,
+      };
 
-    return this.matchImpl(method, path);
-  }
+      matchImpl = compileMatchFn<T>(cfg);
+      matchLayer = new MatchLayer<T>({
+        normalizePath: r.normalizePath,
+        matchState: r.matchState,
+        activeMethodCodes: r.activeMethodCodes,
+        staticOutputsByMethod: r.staticOutputsByMethod,
+        trees: r.trees,
+      });
 
-  /**
-   * Cold-path: returns the HTTP methods registered for `path`. Used by
-   * HTTP adapters to disambiguate 404 vs 405 after match() returns null.
-   * See `MatchLayer.allowedMethods` for the cost profile.
-   */
-  allowedMethods(path: string): HttpMethod[] {
-    if (this.matchLayer === undefined) return [];
+      // Build-only tables are frozen as a partition. Hot-path tables
+      // (`handlers`, `trees`, `staticOutputsByMethod`, `methodCodes`)
+      // are intentionally *not* frozen — JSC inline caches degrade when
+      // match() reads from frozen closure-captured objects in tight
+      // loops, costing ~5-10 ns per dynamic match (verified via bench
+      // against bench/baseline). Hot-path tables are still protected
+      // indirectly: nothing mutates them after build() because `sealed`
+      // rejects every public code path that would.
+      Object.freeze(snapshot.segmentTrees);
+      Object.freeze(snapshot.staticMap);
+      Object.freeze(snapshot.staticRegistered);
+      Object.freeze(r.wildSpecs);
+      Object.freeze(r.activeMethodCodes);
 
-    return this.matchLayer.allowedMethods(path);
-  }
+      internals.matchImpl = matchImpl;
+      internals.matchLayer = matchLayer;
+    };
 
-  /** Clear hit + miss caches. No-op before build(). */
-  clearCache(): void {
-    this.matchLayer?.clearCache();
+    this.add = (method, path, value) => {
+      registration.add(method, path, value);
+    };
+
+    this.addAll = (entries) => {
+      registration.addAll(entries);
+    };
+
+    this.build = () => {
+      if (!registration.isSealed()) performBuild();
+      return this;
+    };
+
+    // Hot-path: dispatch the compiled matchImpl directly. Routing
+    // through `matchLayer.match` would add a method-dispatch hop that
+    // breaks JSC's monomorphic IC (verified: static match 300 ps → 13 ns,
+    // param match +5 ns). MatchLayer owns cold-path concerns only.
+    this.match = (method, path) => {
+      if (matchImpl === undefined) return null;
+      return matchImpl(method, path);
+    };
+
+    this.allowedMethods = (path) => {
+      if (matchLayer === undefined) return [];
+      return matchLayer.allowedMethods(path);
+    };
+
+    Object.freeze(this);
   }
 }

@@ -7,7 +7,7 @@ import { Router, RouterError } from '../index';
 // phase owns it until seal(). Tests targeting the rollback semantics of
 // the *registration* path read through `registration.handlers`.
 const peekHandlers = (r: Router<string>): unknown[] =>
-  (r as unknown as { registration: { handlers: unknown[] } }).registration.handlers;
+  (r as unknown as { _internals: { registration: { handlers: unknown[] } } })._internals.registration.handlers;
 
 // insertOne 실패 경로에서 handlers 슬롯이 누수되지 않는지 확인
 test('handlers slot is rolled back when insert fails (route-conflict)', () => {
