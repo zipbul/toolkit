@@ -13,6 +13,7 @@ import { compileMatchFn } from './codegen/emitter';
 import { NullProtoObj } from './internal/null-proto-obj';
 import { MethodRegistry } from './method-registry';
 import { buildFromRegistration } from './pipeline/build';
+import { MatchLayer } from './pipeline/match';
 import { Registration } from './pipeline/registration';
 
 export class Router<T = unknown> {
@@ -76,6 +77,10 @@ export class Router<T = unknown> {
    *  call per invocation. Tuple form keeps name+code together for the
    *  tight loop in allowedMethods. */
   private activeMethodCodes: ReadonlyArray<readonly [string, number]> = [];
+  /** Runtime match layer — instantiated at the end of build() once
+   *  matchImpl is compiled. `undefined` before build() means
+   *  match()/allowedMethods() / clearCache() return null/[]/no-op. */
+  private matchLayer: MatchLayer<T> | undefined;
 
   constructor(options: RouterOptions = {}) {
     this.options = options;
@@ -164,6 +169,16 @@ export class Router<T = unknown> {
 
     this.matchImpl = compileMatchFn<T>(this.collectMatchConfig());
 
+    this.matchLayer = new MatchLayer<T>({
+      normalizePath: this.normalizePath,
+      matchState: this.matchState,
+      activeMethodCodes: this.activeMethodCodes,
+      staticOutputsByMethod: this.staticOutputsByMethod,
+      trees: this.trees,
+      hitCacheByMethod: this.hitCacheByMethod,
+      missCacheByMethod: this.missCacheByMethod,
+    });
+
     // Freeze build-only tables so post-build add/mutate cannot silently
     // drift state away from the compiled matchImpl. Hot-path tables
     // (`handlers`, `trees`, `staticOutputsByMethod`, `methodCodes`) are
@@ -229,99 +244,35 @@ export class Router<T = unknown> {
   }
 
 
-  clearCache(): void {
-    if (this.hitCacheByMethod) {
-      for (const cache of this.hitCacheByMethod.values()) {
-        cache.clear();
-      }
-    }
-
-    if (this.missCacheByMethod) {
-      for (const set of this.missCacheByMethod.values()) {
-        set.clear();
-      }
-    }
-  }
-
+  /**
+   * Hot-path: dispatch the compiled matchImpl. Returns null when called
+   * before build() (matchImpl not yet compiled).
+   *
+   * **Important — kept on Router**: routing through `this.matchLayer.
+   * match` adds a method-dispatch hop that breaks JSC's monomorphic IC
+   * on the hot path (verified end-to-end against bench/baseline:
+   * static match 300ps → 13ns, param match +5ns). MatchLayer owns the
+   * cold-path concerns (allowedMethods + clearCache) only.
+   */
   match(method: HttpMethod, path: string): MatchOutput<T> | null {
-    if (!this.registration.isSealed()) return null;
+    if (this.matchLayer === undefined) return null;
 
     return this.matchImpl(method, path);
   }
 
   /**
-   * Returns the HTTP methods registered for `path`. Cold-path companion to
-   * `match()` — HTTP adapters call this only after `match()` returns null
-   * to disambiguate "no route at all" from "wrong method on existing path".
-   *
-   *   const out = router.match(method, path);
-   *   if (out !== null) return respond(out);
-   *   const allowed = router.allowedMethods(path);
-   *   if (allowed.length === 0) return respond404();
-   *   return respond405(allowed);   // adapter shapes the 405/Allow header
-   *
-   * Cost profile:
-   *   - Preprocessing (path-length / query strip / slash trim / case fold /
-   *     seg-length scan) runs once via `normalizePathForLookup`.
-   *   - Iteration is over `activeMethodCodes` only — the six pre-registered
-   *     but unused default HTTP verbs are excluded at build time.
-   *   - Per active method: O(1) static-map lookup; only when no static hit
-   *     does the method's tree walker run (one call), reusing a single
-   *     pre-allocated `state.params` across iterations.
-   *   - matchImpl is never invoked — no duplicated preprocessing.
+   * Cold-path: returns the HTTP methods registered for `path`. Used by
+   * HTTP adapters to disambiguate 404 vs 405 after match() returns null.
+   * See `MatchLayer.allowedMethods` for the cost profile.
    */
   allowedMethods(path: string): HttpMethod[] {
-    if (!this.registration.isSealed()) return [];
+    if (this.matchLayer === undefined) return [];
 
-    const sp = this.normalizePathForLookup(path);
-
-    if (sp === null) return [];
-
-    const out: HttpMethod[] = [];
-    const state = this.matchState;
-    // Tree walkers write into `state.params` on success. We never read the
-    // params here — only the boolean return — so a single shared container
-    // is enough. The next match() call reassigns state.params anyway.
-    const sharedParams = new NullProtoObj() as Record<string, string | undefined>;
-
-    state.params = sharedParams;
-
-    const active = this.activeMethodCodes;
-
-    for (let i = 0; i < active.length; i++) {
-      const entry = active[i]!;
-      const methodCode = entry[1];
-      const bucket = this.staticOutputsByMethod[methodCode];
-
-      if (bucket !== undefined && bucket[sp] !== undefined) {
-        out.push(entry[0] as HttpMethod);
-        continue;
-      }
-
-      const tr = this.trees[methodCode];
-
-      if (tr === null || tr === undefined) continue;
-
-      if (tr(sp, state)) {
-        out.push(entry[0] as HttpMethod);
-      }
-    }
-
-    return out;
+    return this.matchLayer.allowedMethods(path);
   }
 
-  /**
-   * Path normalization for the cold-path `allowedMethods()` lookup. Returns
-   * the normalized `sp` string for downstream lookup, or `null` when the
-   * path violates `maxPathLength` or any segment exceeds `maxSegmentLength`.
-   *
-   * The normalizer body is compiled once at seal time from the *same* emit
-   * helpers (`emitPathLenCheck` + `emitQueryStrip` + …) used by the hot
-   * `compileMatchFn` codegen — so the two paths cannot drift in semantics
-   * even if option handling changes. See `matcher/path-normalize.ts`.
-   */
-  private normalizePathForLookup(path: string): string | null {
-    return this.normalizePath(path);
+  /** Clear hit + miss caches. No-op before build(). */
+  clearCache(): void {
+    this.matchLayer?.clearCache();
   }
-
 }
