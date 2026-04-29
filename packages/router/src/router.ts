@@ -1,6 +1,5 @@
 import type { HttpMethod } from '@zipbul/shared';
 import type {
-  MatchMeta,
   MatchOutput,
   RegexSafetyOptions,
   RouteParams,
@@ -12,11 +11,15 @@ import type { MatchState } from './matcher/match-state';
 import { OptionalParamDefaults } from './builder/optional-param-defaults';
 import { PathParser } from './builder/path-parser';
 import { RouterCache } from './cache';
-import { MethodRegistry } from './method-registry';
-import { buildDecoder } from './matcher/decoder';
-import { createMatchState } from './matcher/match-state';
 import {
-  buildPathNormalizer,
+  CACHE_META,
+  DYNAMIC_META,
+  EMPTY_PARAMS,
+  NullProtoObj,
+  STATIC_META,
+} from './internal/null-proto-obj';
+import { MethodRegistry } from './method-registry';
+import {
   emitLowerCase,
   emitPathLenCheck,
   emitQueryStrip,
@@ -25,24 +28,9 @@ import {
 } from './matcher/path-normalize';
 import type { NormalizeCfg, PathNormalizer } from './matcher/path-normalize';
 import type { SegmentNode } from './matcher/segment-tree';
-import { createSegmentWalker, detectWildCodegenSpec } from './matcher/segment-walk';
 import type { WildCodegenEntry } from './matcher/segment-walk';
+import { Build } from './pipeline/build';
 import { Registration } from './pipeline/registration';
-import type { PatternTesterFn } from './types';
-
-// Prototype-less object constructor — `new NullProtoObj()` produces an object
-// without Object.prototype lookups (~10-20% faster property access than {}).
-// Pattern borrowed from rou3/unjs.
-const NullProtoObj: { new (): Record<string, unknown> } = (() => {
-  const F = function () {} as unknown as { new (): Record<string, unknown> };
-  (F as unknown as { prototype: object }).prototype = Object.freeze(Object.create(null));
-  return F;
-})();
-
-const EMPTY_PARAMS: RouteParams = Object.freeze(new NullProtoObj()) as RouteParams;
-const STATIC_META: MatchMeta = Object.freeze({ source: 'static' } as const);
-const CACHE_META: MatchMeta = Object.freeze({ source: 'cache' } as const);
-const DYNAMIC_META: MatchMeta = Object.freeze({ source: 'dynamic' } as const);
 
 // Cache stores only the value/params pair — meta is attached at lookup time
 // (see CACHE_META). File-local; not part of the public surface.
@@ -120,9 +108,6 @@ export class Router<T = unknown> {
    *  TIMEOUT signalling path is dead — match() can skip errorKind reset. */
   private anyTester = false;
   private segmentTrees: Array<SegmentNode | null> = [];
-  /** Tester cache shared across registrations so identical regex patterns
-   *  compile only once. Reset to empty after build() releases parser state. */
-  private testerCache: Map<string, PatternTesterFn> = new Map();
   /** Specialized match closure assembled by compileMatchFn() at build time. */
   private matchImpl!: (method: string, path: string) => MatchOutput<T> | null;
   private matchState!: MatchState;
@@ -202,111 +187,33 @@ export class Router<T = unknown> {
     }
 
     // Closing the registration phase transfers the accumulated state
-    // (handlers / trees / static lookup tables / wildcard index) to this
-    // Router so the compiled matchImpl can closure-capture them directly.
+    // (handlers / trees / static lookup tables) to this Router so the
+    // compiled matchImpl can closure-capture them directly.
     const snapshot = this.registration.seal();
     this.handlers = snapshot.handlers;
     this.segmentTrees = snapshot.segmentTrees;
     this.staticMap = snapshot.staticMap;
     this.staticRegistered = snapshot.staticRegistered;
-    this.testerCache = snapshot.testerCache;
 
-    const allCodes = this.methodRegistry.getAllCodes();
-    // `getCodeMap()` returns a prototype-less Record kept up to date by the
-    // registry itself, so the previous build-time conversion loop is gone.
-    this.methodCodes = this.methodRegistry.getCodeMap() as Record<string, number>;
+    // Compile the snapshot into runtime-ready tables (trees / static
+    // outputs / activeMethodCodes / methodCodes / matchState /
+    // normalizePath). The Build layer is a pure factory: it owns no
+    // instance state, so its result is just a struct of references that
+    // we transfer to this Router for closure capture by the matchImpl.
+    const r = Build.fromRegistration<T>(snapshot, this.options, this.methodRegistry);
 
-    const decoder = buildDecoder();
-    const decodeParams = this.options.decodeParams ?? true;
-
-    // Per-method segment trees were built incrementally during add(); here we
-    // just wire up walkers and detect specialized shapes per method.
-    for (const [, code] of allCodes) {
-      const segRoot = this.segmentTrees[code];
-
-      if (segRoot !== undefined && segRoot !== null) {
-        // Detect static-prefix wildcard shape — when the entire router shape
-        // satisfies certain conditions (single method, no statics, etc.),
-        // compileMatchFn will inline these probes directly into matchImpl.
-        this.wildSpecs[code] = detectWildCodegenSpec(segRoot);
-        this.trees[code] = createSegmentWalker(segRoot, decoder, decodeParams);
-        continue;
-      }
-
-      this.wildSpecs[code] = null;
-      this.trees[code] = null;
-    }
-
-    this.anyTester = this.testerCache.size > 0;
-
-    // Pre-build the static MatchOutput objects so match() can return them
-    // directly without allocating { value, params, meta } per hit.
-    //
-    // Layout: staticOutputs[methodCode] → NullProtoObj { path → MatchOutput }.
-    // The compiled matchImpl indexes by methodCode first (constant under the
-    // single-method optimization, so the outer access folds away at JIT
-    // time) then by path. This is one fewer indirection than the previous
-    // `staticOutputs[path][methodCode]` layout for routers that register
-    // most paths under one verb (typical REST shapes).
-    const staticOutputsByMethod: Array<Record<string, MatchOutput<T>> | undefined> = [];
-
-    for (const path in this.staticMap) {
-      const arr = this.staticMap[path]!;
-      const registered = this.staticRegistered[path]!;
-
-      for (let mc = 0; mc < arr.length; mc++) {
-        if (!registered[mc]) continue;
-
-        let bucket = staticOutputsByMethod[mc];
-
-        if (bucket === undefined) {
-          bucket = new NullProtoObj() as Record<string, MatchOutput<T>>;
-          staticOutputsByMethod[mc] = bucket;
-        }
-
-        bucket[path] = Object.freeze({
-          value: arr[mc] as T,
-          params: EMPTY_PARAMS,
-          meta: STATIC_META,
-        }) as MatchOutput<T>;
-      }
-    }
-
-    this.staticOutputsByMethod = staticOutputsByMethod;
-
-    // Cache the methods that actually received routes — `allowedMethods()`
-    // iterates this instead of Object.entries(methodCodes) to skip the
-    // six unused default HTTP verbs without per-call allocation.
-    const active: Array<readonly [string, number]> = [];
-
-    for (const [name, code] of allCodes) {
-      if (this.trees[code] != null || staticOutputsByMethod[code] !== undefined) {
-        active.push([name, code]);
-      }
-    }
-
-    this.activeMethodCodes = active;
-
-    this.matchState = createMatchState();
-
-    this.ignoreTrailingSlash = this.options.ignoreTrailingSlash ?? true;
-    this.caseSensitive = this.options.caseSensitive ?? true;
-    this.maxPathLength = this.options.maxPathLength ?? 2048;
-    this.maxSegmentLength = this.options.maxSegmentLength ?? 256;
-
-    // Tester cache held per-route insert during add(); release after seal so
-    // dev-mode swap-and-rebuild scenarios start fresh. Registration owns
-    // the parser; this Router does not need to null its own ref.
-    this.testerCache = new Map();
-
-    this.normalizePath = buildPathNormalizer({
-      checkPathLen: Number.isFinite(this.maxPathLength),
-      maxPathLen: this.maxPathLength,
-      trimSlash: this.ignoreTrailingSlash,
-      lowerCase: !this.caseSensitive,
-      checkSegLen: Number.isFinite(this.maxSegmentLength),
-      maxSegLen: this.maxSegmentLength,
-    });
+    this.trees = r.trees;
+    this.wildSpecs = r.wildSpecs;
+    this.anyTester = r.anyTester;
+    this.staticOutputsByMethod = r.staticOutputsByMethod;
+    this.activeMethodCodes = r.activeMethodCodes;
+    this.methodCodes = r.methodCodes;
+    this.matchState = r.matchState;
+    this.normalizePath = r.normalizePath;
+    this.ignoreTrailingSlash = r.ignoreTrailingSlash;
+    this.caseSensitive = r.caseSensitive;
+    this.maxPathLength = r.maxPathLength;
+    this.maxSegmentLength = r.maxSegmentLength;
 
     this.matchImpl = this.compileMatchFn();
 
