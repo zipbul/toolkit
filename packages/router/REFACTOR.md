@@ -1154,6 +1154,8 @@ packages/router/test/               ★ 신규 파일 (F단계)
 | — | `5f3a652` | C1-fix | — | 4 gratuitous indirection 제거: escapeJsString alias (33 lines + 18 sites), RegistrationConfig (단일 필드 wrapper), `RouterCache as RouterCacheCtor` rename, `CacheEntry` 이름 충돌 (cache.ts vs emitter.ts → 후자 MatchCacheEntry 로 rename) |
 | — | `e91ff1c` | C1-fix2 | — | MatchLayerDeps export 제거 (외부 미사용 → file-local) + REFACTOR.md 의 stale escapeJsString 참조 3건 정정 |
 | #14 | `4db5e89` | C2 | F12 (부분) | walker-strategy.ts 신설. detectWildCodegenSpec + detectSingleMethodWildSpec + WildCodegenEntry 통합. consumers (emitter/build/segment-walk) re-export 없이 직접 import. hasWideFanout(file-local) / hasAmbiguousNode(tree predicate) 는 원위치 — 단순 heuristic 이라 이동 비용 무가치. createSegmentWalker cascade 유지 — strategy 선결정은 codegen ctx.bail 의존성 때문에 불가 |
+| — | `469425f` | C2-fix | — | WalkerStrategy enum 코드 사용 0건 → JSDoc 주석으로 강등. emitter.ts import 순서 정렬 (type×5 → value×4) |
+| #15 | `5ecbe14` | D1 | F17 | tryMatchParam 헬퍼 추출 — head fast path + sibling loop 의 tester/match/params 중복 제거. doc 의 1-2 ns 회귀 우려와 반대로 모든 dynamic match 가 baseline 대비 *3-6 ns 빠름* (JSC FTL 인라이닝 효과). segment-walk.ts -18 lines |
 
 ### 7.2 미완료 단계
 
@@ -1200,7 +1202,7 @@ packages/router/test/               ★ 신규 파일 (F단계)
 | F14 codegen escape 미문서화 | 중 | C1 ✅ 35f480c → 5f3a652 (alias 제거, 정책 주석 1블록으로 통합) | codegen/segment-compile.ts 상단 정책 주석 |
 | F15 normalizeParamPatternSource 암묵 반환 | 중 | A2 ✅ 41a9d25 | builder/pattern-utils.ts |
 | F16 emit 변수명 하드코딩 (qi/len/mc) | 중 | C1 ✅ 35f480c (qi 만; len 등 single-scope 는 미적용) | matcher/path-normalize.ts |
-| F17 segment-walk fast path 중복 | 중 | D1 | matcher/segment-walk.ts |
+| F17 segment-walk fast path 중복 | 중 | D1 ✅ 5ecbe14 (추출 후 baseline 대비 3-6 ns *faster*) | matcher/segment-walk.ts |
 | F18 `_` 접두사 일관성 | 하 | A4 ✅ 8a97815 | router.ts |
 | F19 isEmpty 중복 | 하 | A1 ✅ 2ec47f8 | builder/optional-param-defaults.ts |
 | F20 processor/ 단일 파일 | 하 | A1 ✅ 2ec47f8 | processor/decoder.ts → matcher/decoder.ts |
