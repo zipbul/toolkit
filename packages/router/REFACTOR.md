@@ -699,11 +699,17 @@ git add bench/baseline && git commit -m "bench: capture baseline for refactor"
   금지 — JSC FTL 인라이닝이 깨지면 § 0.1 의 핫패스 회귀 즉시 발생.
 
 #### B4. Match 추출 → `src/pipeline/match.ts`
-- 책임: `match`, `allowedMethods`, `clearCache`, `normalizePathForLookup`.
+- 책임: **cold path 만** — `allowedMethods` + `clearCache`. `match`
+  는 의도적으로 *Router 에 남긴다* — `Router.match → MatchLayer.match
+  → matchImpl` 의 3 단 dispatch 가 JSC 의 monomorphic IC 를 깨고
+  핫패스 *25-40 배* 회귀시킴 (실측: static match 317 ps → 13 ns).
+  doc 의 § B3 가드 ("매칭 함수 내부에 layer 메서드 호출 금지") 가
+  본 단계에도 적용됨.
 - 캐시 컨테이너는 본 레이어가 보유. `enableCache=false` 일 때 노드
   자체가 생성되지 않도록 분기.
-- F8 not-built 가드: `assertBuilt()` private 메서드 보유 (registration
-  측 `assertNotSealed` 와 다른 kind 이므로 분리).
+- F8 not-built 가드: `matchLayer === undefined` 자체가 "built 아님"
+  신호. 별도 assertBuilt 플래그 불필요. `match` / `allowedMethods` /
+  `clearCache` 모두 matchLayer 없으면 silent null/[] / no-op.
 
 #### B5. Router facade 재조립 → `src/router.ts` (~120 lines)
 - Router 는 3 파이프라인 레이어 (registration / build / match) +
@@ -1136,12 +1142,14 @@ packages/router/test/               ★ 신규 파일 (F단계)
 | #9 | `01686c6` | B2 | F1 (부분) | Build 추출 → `pipeline/build.ts` (pure factory). build() 의 트리 컴파일 + staticOutputs 사전빌드 + activeMethodCodes + normalizePath 가 Build.fromRegistration 으로 이전. NullProtoObj/META 상수를 `internal/null-proto-obj.ts` 공유 모듈로 분리. Router 770→677 lines |
 | — | `8648b64` | B2-fix | — | class Build → function (state 0/generic 0 = namespace), § 5 + § B2 step 에 internal/ 디렉토리 누락 보완 |
 | #10 | `f0fd139` | B3 | F1, F2 | Codegen 추출 → `codegen/emitter.ts`. compileMatchFn + detectSingleMethodWildSpec + emitSpecializedWildMatchImpl + emitGenericMatchImpl + MatchConfig + CacheEntry 모두 emitter.ts 로 이전. emit 바디 byte-diff 0 (audit-repro 스냅샷 유지). Router 677→325 lines. **모든 핫패스 baseline 보다 1-4 ns 빠름** — 클래스 shape 축소 부수효과 |
+| — | `e734e63` | B3-fix | — | normalizePath identity 화살표 dead code 제거 (`!:` definite-assignment). router.ts func coverage 90.91 → 100% |
+| #11 | `02fddc6` | B4 | F1 | MatchLayer 추출 → `pipeline/match.ts` (cold path 만 — allowedMethods + clearCache). **`match()` 는 Router 에 유지** — layer dispatch 가 JSC IC 깨고 25-40배 회귀시켜 doc 의 prescribed scope 에서 의도적 축소. matchLayer === undefined 가 "built 아님" 신호. Router 325→273 lines. 핫패스 baseline 대비 모두 빠름 |
 
 ### 7.2 미완료 단계
 
 | 단계 | Findings 잔여 | 의존 |
 |---|---|---|
-| B4~B5 | F1 (잔여), F8(match) | B3 ✅ 완료 |
+| B5 | F1 (잔여 — facade 정리) | B4 ✅ 완료. F8(match) 는 silent-return 으로 통합 — 별도 assertBuilt 미적용 |
 | C1~C2 | F12, F14, F16 | B3 |
 | D1~D2 | F17 + 회귀 검증 | C |
 | E1~E2 | F6 | D |
@@ -1163,7 +1171,7 @@ packages/router/test/               ★ 신규 파일 (F단계)
 
 | Finding | 심각 | 단계 | 파일 |
 |---|---|---|---|
-| F1 Router SRP | 상 | B1-B5 (B1·B2·B3 ✅) | router.ts → pipeline/* + codegen/* |
+| F1 Router SRP | 상 | B1-B5 (B1·B2·B3·B4 ✅) | router.ts → pipeline/* + codegen/* |
 | F2 emitGenericMatchImpl 159 lines | 상 | B3 ✅ f0fd139 (이동만; 12-step 분해는 deferred) | codegen/emitter.ts |
 | F3 path-parser SRP | 상 | A2 ✅ 41a9d25 | builder/path-parser.ts |
 | F4 route-expand 가드+조합 결합 | 상 | A2 ✅ 41a9d25 | builder/route-expand.ts |
@@ -1171,7 +1179,7 @@ packages/router/test/               ★ 신규 파일 (F단계)
 | F6 export 경계 (PathPart 누수) | 상 | E1, E2 | index.ts, router.ts, types.ts |
 | F7 RouterErrData (kind/message만 필수) | 중 | A3 ✅ 5ffdb44+77bce9e | types.ts |
 | F8 sealed/isErr 중복 (registration) | 중 | A4 ✅ 8a97815 | router.ts → pipeline/registration.ts |
-| F8 not-built 가드 (match) | 중 | B4 | router.ts → pipeline/match.ts |
+| F8 not-built 가드 (match) | 중 | B4 ✅ 02fddc6 | matchLayer === undefined 자체가 신호 (별도 헬퍼 미도입) |
 | F9 wildcardNames cross-method | 중 | A5 ✅ dc4683c | router.ts (→ B1 후 pipeline/registration) |
 | F10 MatchOutput/CachedMatchEntry 중복 | 중 | A3 ✅ 5ffdb44+77bce9e | types.ts (MatchOutput), router.ts (file-local CacheEntry) |
 | F11 getAllCodes 변환 | 중 | A6 ✅ d64863f | method-registry.ts |
