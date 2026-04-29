@@ -260,45 +260,45 @@ describe('sealed state', () => {
     r.build();
 
     // Internal-state-inspection pattern (already used across this file).
-    // Only build-only tables are frozen; hot-path tables (`trees`,
-    // `staticOutputsByMethod`, `methodCodes`) intentionally stay mutable
-    // — freezing them costs ~5-10 ns per dynamic match in JSC due to
-    // inline-cache degradation on closure-captured frozen objects.
+    // After B5, Router itself only retains the matchImpl + matchLayer
+    // entry points. Frozen build-only tables now live on `registration`
+    // (segmentTrees / handlers / staticMap / staticRegistered /
+    // wildcardNamesByMethod) and `matchLayer` (activeMethodCodes,
+    // staticOutputsByMethod, trees). Hot-path tables stay mutable for
+    // JSC IC perf — freezing them costs 5-10 ns per dynamic match.
     const internal = r as unknown as {
-      segmentTrees: unknown[];
-      handlers: unknown[];
-      wildSpecs: unknown[];
-      staticMap: Record<string, unknown>;
-      staticRegistered: Record<string, unknown>;
-      activeMethodCodes: ReadonlyArray<readonly [string, number]>;
-      registration: { wildcardNamesByMethod: Map<number, Map<string, string>> };
-      trees: unknown[];
-      staticOutputsByMethod: unknown[];
-      methodCodes: Record<string, unknown>;
+      registration: {
+        segmentTrees: unknown[];
+        handlers: unknown[];
+        staticMap: Record<string, unknown>;
+        staticRegistered: Record<string, unknown>;
+        wildcardNamesByMethod: Map<number, Map<string, string>>;
+      };
+      matchLayer: {
+        activeMethodCodes: ReadonlyArray<readonly [string, number]>;
+        trees: unknown[];
+        staticOutputsByMethod: unknown[];
+      };
     };
 
-    expect(Object.isFrozen(internal.segmentTrees)).toBe(true);
-    expect(Object.isFrozen(internal.wildSpecs)).toBe(true);
-    expect(Object.isFrozen(internal.staticMap)).toBe(true);
-    expect(Object.isFrozen(internal.staticRegistered)).toBe(true);
-    expect(Object.isFrozen(internal.activeMethodCodes)).toBe(true);
-    // wildcardNamesByMethod moved to Registration in B1 and is frozen
-    // there at seal() time. Reach through the registration to verify.
+    // Build-only tables must be frozen.
+    expect(Object.isFrozen(internal.registration.segmentTrees)).toBe(true);
+    expect(Object.isFrozen(internal.registration.staticMap)).toBe(true);
+    expect(Object.isFrozen(internal.registration.staticRegistered)).toBe(true);
+    expect(Object.isFrozen(internal.matchLayer.activeMethodCodes)).toBe(true);
     expect(internal.registration.wildcardNamesByMethod).toBeInstanceOf(Map);
     expect(Object.isFrozen(internal.registration.wildcardNamesByMethod)).toBe(true);
 
-    // Hot-path tables: kept mutable for JSC IC perf — but the `sealed` flag
-    // rejects every public mutation path, so the lack of freeze is not
-    // a real-world hazard. `handlers` is here because the emitted matchImpl
-    // reads `handlers[state.handlerIndex]` on every dynamic match.
-    expect(Object.isFrozen(internal.handlers)).toBe(false);
-    expect(Object.isFrozen(internal.trees)).toBe(false);
-    expect(Object.isFrozen(internal.staticOutputsByMethod)).toBe(false);
-    expect(Object.isFrozen(internal.methodCodes)).toBe(false);
+    // Hot-path tables stay mutable. `handlers` is read by the emitted
+    // matchImpl as `handlers[state.handlerIndex]` on every dynamic
+    // match — freezing it cost 5-10 ns/match in earlier bench runs.
+    expect(Object.isFrozen(internal.registration.handlers)).toBe(false);
+    expect(Object.isFrozen(internal.matchLayer.trees)).toBe(false);
+    expect(Object.isFrozen(internal.matchLayer.staticOutputsByMethod)).toBe(false);
 
     // Frozen object/array mutation throws TypeError in strict mode (ESM = strict).
-    expect(() => internal.segmentTrees.push(null)).toThrow(TypeError);
-    expect(() => { internal.staticMap['/y'] = []; }).toThrow(TypeError);
+    expect(() => internal.registration.segmentTrees.push(null)).toThrow(TypeError);
+    expect(() => { internal.registration.staticMap['/y'] = []; }).toThrow(TypeError);
   });
 });
 
@@ -325,7 +325,8 @@ describe('sibling-param expansion (multi-optional)', () => {
 
   it('builds a single segment tree (no fallback walker required)', () => {
     const r = makeOptionalRouter();
-    const trees = (r as unknown as { trees: Array<unknown> }).trees;
+    // After B5, the per-method walker array lives on matchLayer.
+    const trees = (r as unknown as { matchLayer: { trees: Array<unknown> } }).matchLayer.trees;
     const built = trees.filter(t => t != null);
 
     expect(built.length).toBe(1);

@@ -25,7 +25,10 @@ import { Router } from '../src/router';
  *  `compiledSegmentWalk`; iterative is `walk` exported by createIterativeWalker;
  *  the recursive fallback also exports `walk` but contains a nested `match`. */
 function pickedWalkerName(router: Router<unknown>): string | null {
-  const trees = (router as unknown as { trees: Array<((u: string, s: unknown) => boolean) | null> }).trees;
+  // After B5, per-method walkers live on matchLayer.
+  const trees = (router as unknown as {
+    matchLayer: { trees: Array<((u: string, s: unknown) => boolean) | null> };
+  }).matchLayer.trees;
   const tree = trees.find(t => t != null);
 
   return tree ? tree.name : null;
@@ -142,7 +145,7 @@ describe('recursive walker (ambiguous tree)', () => {
 
   it('selects the recursive walker for ambiguous trees', () => {
     const r = makeAmbiguousRouter();
-    const trees = (r as unknown as { trees: Array<unknown> }).trees;
+    const trees = (r as unknown as { matchLayer: { trees: Array<unknown> } }).matchLayer.trees;
     const tree = trees.find(t => t != null) as { name: string };
 
     expect(tree.name).toBe('walk');
