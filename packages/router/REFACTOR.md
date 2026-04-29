@@ -1117,12 +1117,14 @@ packages/router/test/               ★ 신규 파일 (F단계)
 | #6 | `dc4683c` | A5 | F9 | wildcardNames → wildcardNamesByMethod (methodCode 키). 메서드 횡단 충돌 검출 제거 — GET /files/*path + POST /files/*upload 공존 가능. F22 freeze 목록 추가 |
 | — | `51aed28` | A5-fix | — | cross-method static/wildcard 공존 spec 추가 — A5 의 신규 동작 중 wildcard/wildcard 만 커버하고 static/wildcard 쌍을 빠뜨림 |
 | #7 | `d64863f` | A6 | F11 | MethodRegistry 가 codeMap (NullProtoObj-equiv via Object.create(null)) 자체 보유 + getCodeMap() 노출. router.build() 의 변환 loop 제거. method-registry.spec 에 4 spec 추가 |
+| — | `b5c7198` | A6-fix | — | wildcardNamesByMethod freeze assertion 추가 (A5 에서 freeze 했으나 lock-in 테스트는 갱신 안 함) |
+| #8 | `e533620` | B1 | F1 (부분) | Registration 추출 → `pipeline/registration.ts`. add/addAll/addOne/충돌 검사/sealed flag 와 staticMap/segmentTrees/handlers/wildcardNamesByMethod/testerCache 를 Registration 으로 이전. Router.build() 가 seal() 의 snapshot 을 자기 필드로 복사 (closure capture). 핫패스 baseline 보다 빠름 — Router 클래스 shape 감소 부수효과 |
 
 ### 7.2 미완료 단계
 
 | 단계 | Findings 잔여 | 의존 |
 |---|---|---|
-| B1~B5 | F1, F2 (codegen) | A 단계 전체 ✅ A 완료 |
+| B2~B5 | F1 (잔여), F2 (codegen) | B1 ✅ 완료 |
 | C1~C2 | F12, F14, F16 | B3 |
 | D1~D2 | F17 + 회귀 검증 | C |
 | E1~E2 | F6 | D |
