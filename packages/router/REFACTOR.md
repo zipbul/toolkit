@@ -995,7 +995,7 @@ packages/router/src/
 ├── pipeline/                  ─── Router 파이프라인 3 단계 (★ 신규 디렉토리)
 │   ├── registration.ts             ★ Registration<T> + assertNotSealed (B1, F8)
 │   ├── build.ts                    ★ buildFromRegistration<T> (B2 — 순수 함수)
-│   └── match.ts                    ★ MatchLayer<T> + assertBuilt (B4, F8)
+│   └── match.ts                    ★ MatchLayer<T> — allowedMethods + clearCache 만 (B4). match() 는 Router 에 유지 — JSC IC 보호
 │
 ├── internal/                  ─── 공유 유틸 (★ 신규 디렉토리, B2 단계)
 │   └── null-proto-obj.ts           NullProtoObj + EMPTY_PARAMS + STATIC/CACHE/DYNAMIC_META 단일 정의
