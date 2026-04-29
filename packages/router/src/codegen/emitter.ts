@@ -1,7 +1,9 @@
 import type { OptionalParamDefaults } from '../builder/optional-param-defaults';
 import type { MatchFn, MatchState } from '../matcher/match-state';
 import type { NormalizeCfg } from '../matcher/path-normalize';
-import type { WildCodegenEntry } from '../matcher/segment-walk';
+import type { WildCodegenEntry } from './walker-strategy';
+
+import { detectSingleMethodWildSpec } from './walker-strategy';
 import type { MatchOutput, RouteParams } from '../types';
 
 import { RouterCache } from '../cache';
@@ -82,8 +84,9 @@ type CompiledMatch<T> = (method: string, path: string) => MatchOutput<T> | null;
  * helpers used by the hot path are closure-captured, not
  * `this.*`-dispatched.
  *
- * Public entry. Internal step functions (`detectSingleMethodWildSpec`,
- * `emitSpecializedWildMatchImpl`, `emitGenericMatchImpl`) stay file-local.
+ * Public entry. Strategy detection lives in `walker-strategy.ts`;
+ * the per-shape emit functions (`emitSpecializedWildMatchImpl`,
+ * `emitGenericMatchImpl`) stay file-local.
  */
 export function compileMatchFn<T>(cfg: MatchConfig<T>): CompiledMatch<T> {
   const wild = detectSingleMethodWildSpec(cfg);
@@ -93,37 +96,6 @@ export function compileMatchFn<T>(cfg: MatchConfig<T>): CompiledMatch<T> {
   }
 
   return emitGenericMatchImpl(cfg);
-}
-
-/**
- * Shape-specialization gate: returns the wild entry list when this
- * router qualifies for the inline static-prefix wildcard fast path;
- * null otherwise. Conditions: single active method, no statics, no
- * cache, no opt-defaults, no testers, no case-fold, that method's tree
- * IS a static-prefix wildcard, prefix count ≤ 8.
- */
-function detectSingleMethodWildSpec<T>(cfg: MatchConfig<T>): WildCodegenEntry[] | null {
-  if (cfg.hasAnyStatic) return null;
-  if (cfg.useCache) return null;
-  if (cfg.hasOptDefaults) return null;
-  if (cfg.anyTester) return null;
-  if (cfg.lowerCase) return null;
-  if (cfg.activeMethodCodes.length !== 1) return null;
-
-  const [, activeCode] = cfg.activeMethodCodes[0]!;
-
-  if (cfg.trees[activeCode] == null) return null;
-
-  const wild = cfg.wildSpecs[activeCode];
-
-  if (wild === null || wild === undefined) return null;
-  // Past ~8 prefixes, the inline `startsWith` chain loses to the
-  // segment-tree walker's NullProtoObj keying (5× slower at 50 prefixes
-  // measured). Cap so file-server style routers (≤8 prefixes) still
-  // get the inline win.
-  if (wild.length > 8) return null;
-
-  return wild;
 }
 
 /**

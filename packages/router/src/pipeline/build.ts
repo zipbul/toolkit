@@ -1,6 +1,6 @@
 import type { MatchFn, MatchState } from '../matcher/match-state';
 import type { PathNormalizer } from '../matcher/path-normalize';
-import type { WildCodegenEntry } from '../matcher/segment-walk';
+import type { WildCodegenEntry } from '../codegen/walker-strategy';
 import type { MatchOutput, RouterOptions } from '../types';
 import type { RegistrationSnapshot } from './registration';
 
@@ -8,7 +8,8 @@ import { EMPTY_PARAMS, NullProtoObj, STATIC_META } from '../internal/null-proto-
 import { buildDecoder } from '../matcher/decoder';
 import { createMatchState } from '../matcher/match-state';
 import { buildPathNormalizer } from '../matcher/path-normalize';
-import { createSegmentWalker, detectWildCodegenSpec } from '../matcher/segment-walk';
+import { createSegmentWalker } from '../matcher/segment-walk';
+import { detectWildCodegenSpec } from '../codegen/walker-strategy';
 import { MethodRegistry } from '../method-registry';
 
 /**
