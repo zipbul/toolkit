@@ -30,8 +30,10 @@ export class Router<T = unknown> {
   private maxSegmentLength = 256;
   /** Compiled at seal time from the same emit helpers used by compileMatchFn,
    *  so the cold `allowedMethods` lookup cannot drift from the hot match path.
-   *  Identity normalizer (returns input unchanged) before build(). */
-  private normalizePath: PathNormalizer = path => path;
+   *  Definite-assignment: pre-build access is blocked by `match()` /
+   *  `allowedMethods()` checking `registration.isSealed()` first, so an
+   *  identity-arrow fallback would be unreachable. */
+  private normalizePath!: PathNormalizer;
   private hitCacheByMethod: Map<number, RouterCache<CacheEntry<T>>> | undefined;
   private missCacheByMethod: Map<number, Set<string>> | undefined;
   private cacheMaxSize: number = 1000;
