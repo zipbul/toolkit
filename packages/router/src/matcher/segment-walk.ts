@@ -5,7 +5,6 @@ import type { ParamSegment, SegmentNode } from './segment-tree';
 import { TESTER_PASS, TESTER_TIMEOUT } from './pattern-tester';
 import { hasAmbiguousNode } from './segment-tree';
 import { compileSegmentTree } from '../codegen/segment-compile';
-import { escapeJsString } from '../codegen/escape';
 
 export interface WildCodegenEntry {
   prefix: string;
@@ -85,8 +84,8 @@ function tryCodegenStaticPrefixWildcard(root: SegmentNode): MatchFn | null {
     const sliceStart = prefixLen + 1; // after '/' + prefix + '/'
 
     body += `
-      if (len >= ${minLen + 1} && url.startsWith(${escapeJsString(prefixWithSlash)}, 1)) {
-        state.params[${escapeJsString(e.wildcardName)}] = url.substring(${sliceStart});
+      if (len >= ${minLen + 1} && url.startsWith(${JSON.stringify(prefixWithSlash)}, 1)) {
+        state.params[${JSON.stringify(e.wildcardName)}] = url.substring(${sliceStart});
         state.handlerIndex = ${e.wildcardStore};
         return true;
       }`;
@@ -94,8 +93,8 @@ function tryCodegenStaticPrefixWildcard(root: SegmentNode): MatchFn | null {
     if (e.wildcardOrigin === 'star') {
       // Allow URL to be exactly '/prefix' (no trailing slash) — empty capture
       body += `
-      if (len === ${e.prefix.length + 1} && url.startsWith(${escapeJsString(e.prefix)}, 1)) {
-        state.params[${escapeJsString(e.wildcardName)}] = '';
+      if (len === ${e.prefix.length + 1} && url.startsWith(${JSON.stringify(e.prefix)}, 1)) {
+        state.params[${JSON.stringify(e.wildcardName)}] = '';
         state.handlerIndex = ${e.wildcardStore};
         return true;
       }`;

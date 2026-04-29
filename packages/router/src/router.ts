@@ -1,6 +1,6 @@
 import type { HttpMethod } from '@zipbul/shared';
 import type { MatchOutput, RegexSafetyOptions, RouterOptions } from './types';
-import type { CacheEntry, MatchConfig } from './codegen/emitter';
+import type { MatchCacheEntry, MatchConfig } from './codegen/emitter';
 import type { RouterCache } from './cache';
 
 import { OptionalParamDefaults } from './builder/optional-param-defaults';
@@ -22,7 +22,7 @@ export class Router<T = unknown> {
    *  `enableCache: true`. Lifetime spans add()/build()/match(), and the
    *  references are passed to both the codegen (closure capture) and
    *  MatchLayer (clearCache). */
-  private hitCacheByMethod: Map<number, RouterCache<CacheEntry<T>>> | undefined;
+  private hitCacheByMethod: Map<number, RouterCache<MatchCacheEntry<T>>> | undefined;
   private missCacheByMethod: Map<number, Set<string>> | undefined;
   private cacheMaxSize: number = 1000;
 
@@ -71,7 +71,7 @@ export class Router<T = unknown> {
     });
 
     this.registration = new Registration<T>(
-      { regexSafety },
+      regexSafety,
       this.methodRegistry,
       pathParser,
       this.optionalParamDefaults,

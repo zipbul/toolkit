@@ -32,10 +32,6 @@ export interface RegistrationSnapshot<T> {
   wildcardNamesByMethod: Map<number, Map<string, string>>;
 }
 
-export interface RegistrationConfig {
-  regexSafety?: RegexSafetyOptions;
-}
-
 /**
  * Owns the mutable state and validators that accumulate as the user
  * calls `add()` / `addAll()`. Closes via `seal()`, which transfers the
@@ -46,7 +42,7 @@ export interface RegistrationConfig {
  * separable from build-time codegen and runtime match dispatch.
  */
 export class Registration<T> {
-  private readonly config: RegistrationConfig;
+  private readonly regexSafety: RegexSafetyOptions | undefined;
   private readonly methodRegistry: MethodRegistry;
   private readonly pathParser: PathParser;
   private readonly optionalParamDefaults: OptionalParamDefaults;
@@ -79,12 +75,12 @@ export class Registration<T> {
   private sealed = false;
 
   constructor(
-    config: RegistrationConfig,
+    regexSafety: RegexSafetyOptions | undefined,
     methodRegistry: MethodRegistry,
     pathParser: PathParser,
     optionalParamDefaults: OptionalParamDefaults,
   ) {
-    this.config = config;
+    this.regexSafety = regexSafety;
     this.methodRegistry = methodRegistry;
     this.pathParser = pathParser;
     this.optionalParamDefaults = optionalParamDefaults;
@@ -261,7 +257,7 @@ export class Registration<T> {
         root,
         expParts,
         hIdx,
-        this.config.regexSafety,
+        this.regexSafety,
         this.testerCache,
       );
 

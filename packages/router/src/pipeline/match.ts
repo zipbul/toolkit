@@ -1,6 +1,6 @@
 import type { HttpMethod } from '@zipbul/shared';
 
-import type { CacheEntry } from '../codegen/emitter';
+import type { MatchCacheEntry } from '../codegen/emitter';
 import type { RouterCache } from '../cache';
 import type { MatchFn, MatchState } from '../matcher/match-state';
 import type { PathNormalizer } from '../matcher/path-normalize';
@@ -19,7 +19,7 @@ export interface MatchLayerDeps<T> {
   activeMethodCodes: ReadonlyArray<readonly [string, number]>;
   staticOutputsByMethod: Array<Record<string, MatchOutput<T>> | undefined>;
   trees: Array<MatchFn | null>;
-  hitCacheByMethod: Map<number, RouterCache<CacheEntry<T>>> | undefined;
+  hitCacheByMethod: Map<number, RouterCache<MatchCacheEntry<T>>> | undefined;
   missCacheByMethod: Map<number, Set<string>> | undefined;
 }
 
@@ -43,7 +43,7 @@ export class MatchLayer<T> {
   private readonly activeMethodCodes: ReadonlyArray<readonly [string, number]>;
   private readonly staticOutputsByMethod: Array<Record<string, MatchOutput<T>> | undefined>;
   private readonly trees: Array<MatchFn | null>;
-  private readonly hitCacheByMethod: Map<number, RouterCache<CacheEntry<T>>> | undefined;
+  private readonly hitCacheByMethod: Map<number, RouterCache<MatchCacheEntry<T>>> | undefined;
   private readonly missCacheByMethod: Map<number, Set<string>> | undefined;
 
   constructor(deps: MatchLayerDeps<T>) {

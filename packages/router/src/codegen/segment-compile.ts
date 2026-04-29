@@ -1,7 +1,21 @@
 import type { SegmentNode } from '../matcher/segment-tree';
 import type { MatchFn } from '../matcher/match-state';
 
-import { escapeJsString } from './escape';
+/*
+ * ─── Codegen escape policy ──────────────────────────────────────────
+ * Every `JSON.stringify(...)` call in this file, `emitter.ts`, and
+ * `matcher/segment-walk.ts` embeds a path-parser-validated string into
+ * emitted JS source. Param names + wildcard names are checked by
+ * `validateParamName` (`builder/path-parser.ts`) and cannot contain
+ * router metacharacters (`:` `*` `?` `+` `/` `(` `)`); static prefixes
+ * come from already-normalized paths; method literals come from the
+ * registered HttpMethod set. Anything else `JSON.stringify` would be
+ * asked to handle (Unicode, control chars, quotes, backslashes) it
+ * escapes correctly into a valid JS string literal.
+ *
+ * F28 (stage F's F4 — typed emit IR) replaces this hand-rolled policy
+ * with a structural guarantee.
+ */
 
 /**
  * Compile a segment tree into a flat match function via `new Function()`.
@@ -128,7 +142,7 @@ function emitRootSlashTerminal(root: SegmentNode): string {
   // Use state.params directly — the `params` local var is declared further
   // down, after this root-slash branch.
   if (root.wildcardStore !== null && root.wildcardOrigin === 'star') {
-    return `      state.params[${escapeJsString(root.wildcardName!)}] = '';\n      state.handlerIndex = ${root.wildcardStore};\n      return true;`;
+    return `      state.params[${JSON.stringify(root.wildcardName!)}] = '';\n      state.handlerIndex = ${root.wildcardStore};\n      return true;`;
   }
 
   return '      return false;';
@@ -216,7 +230,7 @@ function emitNode(ctx: Ctx, node: SegmentNode, posVar: string, depth: number, ju
           if (ctx.bail) return '';
 
           code += `
-      if (url.startsWith(${escapeJsString(prefixWithSlash)}, ${posVar})) {
+      if (url.startsWith(${JSON.stringify(prefixWithSlash)}, ${posVar})) {
         var ${childPos} = ${posVar} + ${prefixWithSlash.length};
 ${inner}
       }`;
@@ -225,7 +239,7 @@ ${inner}
 
           if (exactBody !== '') {
             code += `
-      if (len === ${posVar} + ${key.length} && url.startsWith(${escapeJsString(key)}, ${posVar})) {
+      if (len === ${posVar} + ${key.length} && url.startsWith(${JSON.stringify(key)}, ${posVar})) {
 ${exactBody}
       }`;
           }
@@ -250,7 +264,7 @@ ${exactBody}
         if (ctx.bail) return '';
 
         code += `
-  if (url.startsWith(${escapeJsString(prefixWithSlash)}, ${posVar})) {
+  if (url.startsWith(${JSON.stringify(prefixWithSlash)}, ${posVar})) {
     var ${childPos} = ${posVar} + ${prefixWithSlash.length};
 ${inner}
   }`;
@@ -259,7 +273,7 @@ ${inner}
 
         if (exactBody !== '') {
           code += `
-  if (len === ${posVar} + ${key.length} && url.startsWith(${escapeJsString(key)}, ${posVar})) {
+  if (len === ${posVar} + ${key.length} && url.startsWith(${JSON.stringify(key)}, ${posVar})) {
 ${exactBody}
   }`;
         }
@@ -303,7 +317,7 @@ ${exactBody}
       code += `
     if (${slashVar} === -1 && ${posVar} < len) {
       var ${valVar} = url.substring(${posVar});${decodeBlock(ctx, valVar)}${testerBlock(ctx, valVar, testerIdx, '          ')}
-      params[${escapeJsString(param.name)}] = ${valVar};
+      params[${JSON.stringify(param.name)}] = ${valVar};
       state.handlerIndex = ${next.store};
       return true;
     }`;
@@ -312,8 +326,8 @@ ${exactBody}
       code += `
     if (${slashVar} !== -1 && ${slashVar} > ${posVar} && ${slashVar} + 1 < len) {
       var ${valVar} = url.substring(${posVar}, ${slashVar});${decodeBlock(ctx, valVar)}${testerBlock(ctx, valVar, testerIdx, '          ')}
-      params[${escapeJsString(param.name)}] = ${valVar};
-      params[${escapeJsString(next.wildcardName!)}] = url.substring(${slashVar} + 1);
+      params[${JSON.stringify(param.name)}] = ${valVar};
+      params[${JSON.stringify(next.wildcardName!)}] = url.substring(${slashVar} + 1);
       state.handlerIndex = ${next.wildcardStore};
       return true;
     }`;
@@ -334,7 +348,7 @@ ${exactBody}
     if (${slashVar} !== -1 && ${slashVar} > ${posVar}) {
       var ${valVar} = url.substring(${posVar}, ${slashVar});${decodeBlock(ctx, valVar)}${testerBlock(ctx, valVar, testerIdx, '        ')}
       var ${innerPos} = ${slashVar} + 1;
-      params[${escapeJsString(param.name)}] = ${valVar};
+      params[${JSON.stringify(param.name)}] = ${valVar};
 ${inner}
     }`;
 
@@ -343,7 +357,7 @@ ${inner}
         code += `
     if (${slashVar} === -1 && ${posVar} < len) {
       var ${valVar}_t = url.substring(${posVar});${decodeBlock(ctx, valVar + '_t')}${testerBlock(ctx, valVar + '_t', testerIdx, '          ')}
-      params[${escapeJsString(param.name)}] = ${valVar}_t;
+      params[${JSON.stringify(param.name)}] = ${valVar}_t;
       state.handlerIndex = ${next.store};
       return true;
     }`;
@@ -359,7 +373,7 @@ ${inner}
     if (node.wildcardOrigin === 'star') {
       code += `
   if (${posVar} <= len) {
-    state.params[${escapeJsString(node.wildcardName!)}] = ${posVar} === len ? '' : url.substring(${posVar});
+    state.params[${JSON.stringify(node.wildcardName!)}] = ${posVar} === len ? '' : url.substring(${posVar});
     state.handlerIndex = ${node.wildcardStore};
     return true;
   }`;
@@ -367,7 +381,7 @@ ${inner}
       // multi: must have at least one char of suffix
       code += `
   if (${posVar} < len) {
-    state.params[${escapeJsString(node.wildcardName!)}] = url.substring(${posVar});
+    state.params[${JSON.stringify(node.wildcardName!)}] = url.substring(${posVar});
     state.handlerIndex = ${node.wildcardStore};
     return true;
   }`;
@@ -406,7 +420,7 @@ function emitTerminalAt(node: SegmentNode): string {
   }
 
   if (node.wildcardStore !== null && node.wildcardOrigin === 'star') {
-    return `    state.params[${escapeJsString(node.wildcardName!)}] = '';\n    state.handlerIndex = ${node.wildcardStore};\n    return true;`;
+    return `    state.params[${JSON.stringify(node.wildcardName!)}] = '';\n    state.handlerIndex = ${node.wildcardStore};\n    return true;`;
   }
 
   return '';

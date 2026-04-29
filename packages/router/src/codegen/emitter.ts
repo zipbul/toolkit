@@ -1,11 +1,10 @@
 import type { OptionalParamDefaults } from '../builder/optional-param-defaults';
-import type { RouterCache } from '../cache';
 import type { MatchFn, MatchState } from '../matcher/match-state';
 import type { NormalizeCfg } from '../matcher/path-normalize';
 import type { WildCodegenEntry } from '../matcher/segment-walk';
 import type { MatchOutput, RouteParams } from '../types';
-import { escapeJsString } from './escape';
 
+import { RouterCache } from '../cache';
 import {
   CACHE_META,
   DYNAMIC_META,
@@ -13,7 +12,6 @@ import {
   NullProtoObj,
   STATIC_META,
 } from '../internal/null-proto-obj';
-import { RouterCache as RouterCacheCtor } from '../cache';
 import {
   emitLowerCase,
   emitPathLenCheck,
@@ -30,7 +28,7 @@ import {
  * File-local to codegen because MatchConfig consumes it; not part of the
  * public API.
  */
-export interface CacheEntry<T> {
+export interface MatchCacheEntry<T> {
   value: T;
   params: RouteParams;
 }
@@ -62,7 +60,7 @@ export interface MatchConfig<T> {
   readonly matchState: MatchState;
   readonly handlers: T[];
   readonly optDefaults: OptionalParamDefaults | undefined;
-  readonly hitCacheByMethod: Map<number, RouterCache<CacheEntry<T>>> | undefined;
+  readonly hitCacheByMethod: Map<number, RouterCache<MatchCacheEntry<T>>> | undefined;
   readonly missCacheByMethod: Map<number, Set<string>> | undefined;
   readonly cacheMaxSize: number;
   // Build-output extras consumed only by codegen — not part of the closure
@@ -147,7 +145,7 @@ function emitSpecializedWildMatchImpl<T>(
   const lines: string[] = [];
 
   if (cfg.checkPathLen) lines.push(`if (path.length > ${cfg.maxPathLen}) return null;`);
-  lines.push(`if (method !== ${escapeJsString(theMethod)}) return null;`);
+  lines.push(`if (method !== ${JSON.stringify(theMethod)}) return null;`);
   lines.push(`var sp = path;`);
   lines.push(`var qi = sp.indexOf('?'); if (qi !== -1) sp = sp.substring(0, qi);`);
 
@@ -176,10 +174,10 @@ function emitSpecializedWildMatchImpl<T>(
     const fullPrefixSlashLen = fullPrefixSlash.length;
     const minLen = e.wildcardOrigin === 'multi' ? fullPrefixSlashLen + 1 : fullPrefixSlashLen;
     const sliceStart = fullPrefixSlashLen;
-    const nameKey = escapeJsString(e.wildcardName);
+    const nameKey = JSON.stringify(e.wildcardName);
 
     lines.push(`
-      if (sp.length >= ${minLen} && sp.startsWith(${escapeJsString(fullPrefixSlash)}, 0)) {
+      if (sp.length >= ${minLen} && sp.startsWith(${JSON.stringify(fullPrefixSlash)}, 0)) {
         return { value: handlers[${e.wildcardStore}], params: { ${nameKey}: sp.substring(${sliceStart}) }, meta: DYNAMIC_META };
       }`);
 
@@ -187,7 +185,7 @@ function emitSpecializedWildMatchImpl<T>(
       const fullPrefix = '/' + e.prefix;
 
       lines.push(`
-      if (sp.length === ${fullPrefix.length} && sp === ${escapeJsString(fullPrefix)}) {
+      if (sp.length === ${fullPrefix.length} && sp === ${JSON.stringify(fullPrefix)}) {
         return { value: handlers[${e.wildcardStore}], params: { ${nameKey}: '' }, meta: DYNAMIC_META };
       }`);
     }
@@ -244,7 +242,7 @@ function emitGenericMatchImpl<T>(cfg: MatchConfig<T>): CompiledMatch<T> {
   if (pathLenJs !== '') src.push(pathLenJs);
 
   if (activeMethodCount === 1 && activeMethodLiteral !== null) {
-    src.push(`if (method !== ${escapeJsString(activeMethodLiteral)}) return null;`);
+    src.push(`if (method !== ${JSON.stringify(activeMethodLiteral)}) return null;`);
     src.push(`var mc = ${activeMethodCode};`);
   } else {
     src.push(`var mc = methodCodes[method]; if (mc === undefined) return null;`);
@@ -340,7 +338,7 @@ function emitGenericMatchImpl<T>(cfg: MatchConfig<T>): CompiledMatch<T> {
       src.push(`
         var hc = hitCacheByMethod.get(mc);
         if (hc === undefined) {
-          hc = new RouterCacheCtor(${cacheMaxSize});
+          hc = new RouterCache(${cacheMaxSize});
           hitCacheByMethod.set(mc, hc);
         }
         var cachedParams;
@@ -366,14 +364,14 @@ function emitGenericMatchImpl<T>(cfg: MatchConfig<T>): CompiledMatch<T> {
   const body = src.join('\n');
   const factory = new Function(
     'staticOutputsByMethod', 'activeBucket', 'staticMap', 'methodCodes', 'trees', 'matchState', 'handlers',
-    'optDefaults', 'hitCacheByMethod', 'missCacheByMethod', 'RouterCacheCtor',
+    'optDefaults', 'hitCacheByMethod', 'missCacheByMethod', 'RouterCache',
     'EMPTY_PARAMS', 'STATIC_META', 'CACHE_META', 'DYNAMIC_META', 'ParamsCtor',
     `return function match(method, path) {\n${body}\n};`,
   );
 
   return factory(
     cfg.staticOutputsByMethod, activeBucket, cfg.staticMap, cfg.methodCodes, cfg.trees, cfg.matchState, cfg.handlers,
-    cfg.optDefaults, cfg.hitCacheByMethod, cfg.missCacheByMethod, RouterCacheCtor,
+    cfg.optDefaults, cfg.hitCacheByMethod, cfg.missCacheByMethod, RouterCache,
     EMPTY_PARAMS, STATIC_META, CACHE_META, DYNAMIC_META, NullProtoObj,
   ) as CompiledMatch<T>;
 }
