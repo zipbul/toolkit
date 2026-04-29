@@ -1121,12 +1121,14 @@ packages/router/test/               ★ 신규 파일 (F단계)
 | #7 | `d64863f` | A6 | F11 | MethodRegistry 가 codeMap (NullProtoObj-equiv via Object.create(null)) 자체 보유 + getCodeMap() 노출. router.build() 의 변환 loop 제거. method-registry.spec 에 4 spec 추가 |
 | — | `b5c7198` | A6-fix | — | wildcardNamesByMethod freeze assertion 추가 (A5 에서 freeze 했으나 lock-in 테스트는 갱신 안 함) |
 | #8 | `e533620` | B1 | F1 (부분) | Registration 추출 → `pipeline/registration.ts`. add/addAll/addOne/충돌 검사/sealed flag 와 staticMap/segmentTrees/handlers/wildcardNamesByMethod/testerCache 를 Registration 으로 이전. Router.build() 가 seal() 의 snapshot 을 자기 필드로 복사 (closure capture). 핫패스 baseline 보다 빠름 — Router 클래스 shape 감소 부수효과 |
+| — | `ea9e587` | B1-fix | — | guarantees.test 의 wildcardNamesByMethod freeze 검증 vacuous 문제 정정 (registration 으로 path 갱신) |
+| #9 | `01686c6` | B2 | F1 (부분) | Build 추출 → `pipeline/build.ts` (pure factory). build() 의 트리 컴파일 + staticOutputs 사전빌드 + activeMethodCodes + normalizePath 가 Build.fromRegistration 으로 이전. NullProtoObj/META 상수를 `internal/null-proto-obj.ts` 공유 모듈로 분리. Router 770→677 lines |
 
 ### 7.2 미완료 단계
 
 | 단계 | Findings 잔여 | 의존 |
 |---|---|---|
-| B2~B5 | F1 (잔여), F2 (codegen) | B1 ✅ 완료 |
+| B3~B5 | F1 (잔여), F2 (codegen) | B2 ✅ 완료 |
 | C1~C2 | F12, F14, F16 | B3 |
 | D1~D2 | F17 + 회귀 검증 | C |
 | E1~E2 | F6 | D |
