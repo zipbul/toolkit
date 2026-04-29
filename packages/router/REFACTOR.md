@@ -1134,12 +1134,14 @@ packages/router/test/               ★ 신규 파일 (F단계)
 | #8 | `e533620` | B1 | F1 (부분) | Registration 추출 → `pipeline/registration.ts`. add/addAll/addOne/충돌 검사/sealed flag 와 staticMap/segmentTrees/handlers/wildcardNamesByMethod/testerCache 를 Registration 으로 이전. Router.build() 가 seal() 의 snapshot 을 자기 필드로 복사 (closure capture). 핫패스 baseline 보다 빠름 — Router 클래스 shape 감소 부수효과 |
 | — | `ea9e587` | B1-fix | — | guarantees.test 의 wildcardNamesByMethod freeze 검증 vacuous 문제 정정 (registration 으로 path 갱신) |
 | #9 | `01686c6` | B2 | F1 (부분) | Build 추출 → `pipeline/build.ts` (pure factory). build() 의 트리 컴파일 + staticOutputs 사전빌드 + activeMethodCodes + normalizePath 가 Build.fromRegistration 으로 이전. NullProtoObj/META 상수를 `internal/null-proto-obj.ts` 공유 모듈로 분리. Router 770→677 lines |
+| — | `8648b64` | B2-fix | — | class Build → function (state 0/generic 0 = namespace), § 5 + § B2 step 에 internal/ 디렉토리 누락 보완 |
+| #10 | `f0fd139` | B3 | F1, F2 | Codegen 추출 → `codegen/emitter.ts`. compileMatchFn + detectSingleMethodWildSpec + emitSpecializedWildMatchImpl + emitGenericMatchImpl + MatchConfig + CacheEntry 모두 emitter.ts 로 이전. emit 바디 byte-diff 0 (audit-repro 스냅샷 유지). Router 677→325 lines. **모든 핫패스 baseline 보다 1-4 ns 빠름** — 클래스 shape 축소 부수효과 |
 
 ### 7.2 미완료 단계
 
 | 단계 | Findings 잔여 | 의존 |
 |---|---|---|
-| B3~B5 | F1 (잔여), F2 (codegen) | B2 ✅ 완료 |
+| B4~B5 | F1 (잔여), F8(match) | B3 ✅ 완료 |
 | C1~C2 | F12, F14, F16 | B3 |
 | D1~D2 | F17 + 회귀 검증 | C |
 | E1~E2 | F6 | D |
@@ -1161,8 +1163,8 @@ packages/router/test/               ★ 신규 파일 (F단계)
 
 | Finding | 심각 | 단계 | 파일 |
 |---|---|---|---|
-| F1 Router SRP | 상 | B1-B5 | router.ts → pipeline/* + codegen/* |
-| F2 emitGenericMatchImpl 159 lines | 상 | B3 | router.ts → codegen/emitter.ts |
+| F1 Router SRP | 상 | B1-B5 (B1·B2·B3 ✅) | router.ts → pipeline/* + codegen/* |
+| F2 emitGenericMatchImpl 159 lines | 상 | B3 ✅ f0fd139 (이동만; 12-step 분해는 deferred) | codegen/emitter.ts |
 | F3 path-parser SRP | 상 | A2 ✅ 41a9d25 | builder/path-parser.ts |
 | F4 route-expand 가드+조합 결합 | 상 | A2 ✅ 41a9d25 | builder/route-expand.ts |
 | F5 acquireCompiledPattern dead | 상 | A1 ✅ 2ec47f8 | builder/pattern-utils.ts |
