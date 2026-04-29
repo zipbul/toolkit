@@ -981,8 +981,8 @@ packages/router/src/
 │   ├── emitter.ts                  MatchFunctionEmitter (F2 분해, B3)
 │   ├── segment-compile.ts          ← matcher/ 에서 이동 (C1)
 │   ├── walker-strategy.ts          ★ WalkerStrategy + selectWalker (F12, C2)
-│   ├── escape.ts                   ★ escapeJsString + 정책 docstring (F14, C1)
-│   └── ir.ts                       ★ EmitNode + serialize (F28, F4 단계)
+│   └── ir.ts                       ★ EmitNode + serialize (F28, stage F's F4)
+│   (escape 정책은 segment-compile.ts 상단 주석 1블록 — 별도 alias 불필요)
 │
 ├── matcher/                   ─── 순수 런타임 (핫패스, build 산출물)
 │   ├── decoder.ts                  ← processor/ 에서 이동 (F20, A1)
@@ -1066,7 +1066,7 @@ packages/router/test/               ★ 신규 파일 (F단계)
 | 분류 | 카운트 | 항목 |
 |---|---:|---|
 | 신규 디렉토리 | 2 | `codegen/`, `pipeline/` |
-| 신규 파일 | 7 | `codegen/emitter.ts`, `codegen/walker-strategy.ts`, `codegen/escape.ts`, `pipeline/registration.ts`, `pipeline/build.ts`, `pipeline/match.ts`, `matcher/decoder.ts` (이동) |
+| 신규 파일 | 6 | `codegen/emitter.ts`, `codegen/walker-strategy.ts`, `pipeline/registration.ts`, `pipeline/build.ts`, `pipeline/match.ts`, `matcher/decoder.ts` (이동) |
 | 이동 파일 | 2 | `processor/decoder.ts` → `matcher/`, `matcher/segment-compile.ts` → `codegen/` |
 | 삭제 디렉토리 | 1 | `processor/` |
 | 수정 파일 | 11 | builder/* 5, matcher/* 3, router.ts, types.ts, method-registry.ts |
@@ -1145,7 +1145,8 @@ packages/router/test/               ★ 신규 파일 (F단계)
 | — | `e734e63` | B3-fix | — | normalizePath identity 화살표 dead code 제거 (`!:` definite-assignment). router.ts func coverage 90.91 → 100% |
 | #11 | `02fddc6` | B4 | F1 | MatchLayer 추출 → `pipeline/match.ts` (cold path 만 — allowedMethods + clearCache). **`match()` 는 Router 에 유지** — layer dispatch 가 JSC IC 깨고 25-40배 회귀시켜 doc 의 prescribed scope 에서 의도적 축소. matchLayer === undefined 가 "built 아님" 신호. Router 325→273 lines. 핫패스 baseline 대비 모두 빠름 |
 | #12 | `553bc42` | B5 | F1 (완료) | Router thin facade. 16+ build-time 필드 제거 (handlers/trees/staticMap/normalizePath/matchState/etc.) — closure capture 가 이미 reference 보유. cfg literal 을 build() 안에 인라인. freeze 는 snapshot/r 객체에 직접. test 의 internal-state inspection 경로 갱신 (registration.X / matchLayer.X). **Router 273→204 lines, 9 fields, 7 methods**. 핫패스 ±2 ns 이내 |
-| #13 | `35f480c` | C1 | F14, F16 | segment-compile.ts 가 matcher/→codegen/ 으로 이동 (build-time 격리). codegen/escape.ts 신설 + escapeJsString alias 로 user-input JSON.stringify 사이트 일괄 교체. emitQueryStrip 가 qiName 옵션 인자 받음 (default 'qi'). segment-compile 의 top-level `var len` 은 fresh() 미적용 — single-scope 라 collision 없음 (pragmatic deviation) |
+| #13 | `35f480c` | C1 | F14, F16 | segment-compile.ts 가 matcher/→codegen/ 으로 이동 (build-time 격리). emitQueryStrip 가 qiName 옵션 인자 받음 (default 'qi'). segment-compile 의 top-level `var len` 은 fresh() 미적용 — single-scope 라 collision 없음 (pragmatic deviation) |
+| — | `5f3a652` | C1-fix | — | 4 gratuitous indirection 제거: escapeJsString alias (33 lines + 18 sites), RegistrationConfig (단일 필드 wrapper), `RouterCache as RouterCacheCtor` rename, `CacheEntry` 이름 충돌 (cache.ts vs emitter.ts → 후자 MatchCacheEntry 로 rename) |
 
 ### 7.2 미완료 단계
 
@@ -1190,7 +1191,7 @@ packages/router/test/               ★ 신규 파일 (F단계)
 | F11 getAllCodes 변환 | 중 | A6 ✅ d64863f | method-registry.ts |
 | F12 워커 dispatch 분산 | 중 | C2 | matcher/segment-walk.ts, codegen/segment-compile.ts → codegen/walker-strategy.ts |
 | F13 path-parser 파람 검증 4 회 | 중 | A2 ✅ 41a9d25 | builder/path-parser.ts |
-| F14 codegen escape 미문서화 | 중 | C1 ✅ 35f480c | codegen/escape.ts (신규) + emitter/segment-compile 교체 |
+| F14 codegen escape 미문서화 | 중 | C1 ✅ 35f480c → 5f3a652 (alias 제거, 정책 주석 1블록으로 통합) | codegen/segment-compile.ts 상단 정책 주석 |
 | F15 normalizeParamPatternSource 암묵 반환 | 중 | A2 ✅ 41a9d25 | builder/pattern-utils.ts |
 | F16 emit 변수명 하드코딩 (qi/len/mc) | 중 | C1 ✅ 35f480c (qi 만; len 등 single-scope 는 미적용) | matcher/path-normalize.ts |
 | F17 segment-walk fast path 중복 | 중 | D1 | matcher/segment-walk.ts |
