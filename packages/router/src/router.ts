@@ -1,21 +1,16 @@
 import type { HttpMethod } from '@zipbul/shared';
-import type { Result } from '@zipbul/result';
 import type {
   MatchMeta,
   MatchOutput,
   RegexSafetyOptions,
   RouteParams,
-  RouterErrData,
   RouterOptions,
 } from './types';
 import type { MatchFn } from './matcher/match-state';
 import type { MatchState } from './matcher/match-state';
 
-import { err, isErr } from '@zipbul/result';
-import { RouterError } from './error';
-import { PathParser } from './builder/path-parser';
 import { OptionalParamDefaults } from './builder/optional-param-defaults';
-import { expandOptional } from './builder/route-expand';
+import { PathParser } from './builder/path-parser';
 import { RouterCache } from './cache';
 import { MethodRegistry } from './method-registry';
 import { buildDecoder } from './matcher/decoder';
@@ -29,13 +24,11 @@ import {
   emitTrailingSlashTrim,
 } from './matcher/path-normalize';
 import type { NormalizeCfg, PathNormalizer } from './matcher/path-normalize';
-import { createSegmentNode, insertIntoSegmentTree } from './matcher/segment-tree';
 import type { SegmentNode } from './matcher/segment-tree';
 import { createSegmentWalker, detectWildCodegenSpec } from './matcher/segment-walk';
 import type { WildCodegenEntry } from './matcher/segment-walk';
+import { Registration } from './pipeline/registration';
 import type { PatternTesterFn } from './types';
-
-const ALL_METHODS: readonly HttpMethod[] = ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS', 'HEAD'];
 
 // Prototype-less object constructor — `new NullProtoObj()` produces an object
 // without Object.prototype lookups (~10-20% faster property access than {}).
@@ -91,8 +84,12 @@ interface MatchConfig<T> {
 
 export class Router<T = unknown> {
   private readonly options: RouterOptions;
-  private pathParser: PathParser | null;
   private readonly methodRegistry = new MethodRegistry();
+  /** Owns the registration phase (add/addAll, conflict detection,
+   *  segment-tree population). After build() seals it, the snapshot
+   *  references are transferred to this Router for closure capture by
+   *  the compiled matchImpl. */
+  private readonly registration: Registration<T>;
 
   private ignoreTrailingSlash = true;
   private caseSensitive = true;
@@ -105,10 +102,13 @@ export class Router<T = unknown> {
   private hitCacheByMethod: Map<number, RouterCache<CacheEntry<T>>> | undefined;
   private missCacheByMethod: Map<number, Set<string>> | undefined;
   private cacheMaxSize: number = 1000;
-  private sealed = false;
 
+  /** Snapshot fields populated from `registration.seal()` at build() time.
+   *  They are kept on Router so the compiled matchImpl can closure-capture
+   *  them directly — closures cannot reach through `this.registration.x`
+   *  without paying a property-access tax on every match. */
   private handlers: T[] = [];
-  private optionalParamDefaults: OptionalParamDefaults;
+  private readonly optionalParamDefaults: OptionalParamDefaults;
   private trees: Array<MatchFn | null> = [];
   /** Per-method wildcard codegen entries when the segment tree is a pure
    *  static-prefix wildcard pattern (e.g. file-server style). When all
@@ -119,8 +119,7 @@ export class Router<T = unknown> {
   /** True when at least one route has a regex pattern. When false, the
    *  TIMEOUT signalling path is dead — match() can skip errorKind reset. */
   private anyTester = false;
-  /** Per-method segment-tree root, populated incrementally as add() is called. */
-  private readonly segmentTrees: Array<SegmentNode | null> = [];
+  private segmentTrees: Array<SegmentNode | null> = [];
   /** Tester cache shared across registrations so identical regex patterns
    *  compile only once. Reset to empty after build() releases parser state. */
   private testerCache: Map<string, PatternTesterFn> = new Map();
@@ -128,15 +127,9 @@ export class Router<T = unknown> {
   private matchImpl!: (method: string, path: string) => MatchOutput<T> | null;
   private matchState!: MatchState;
 
-  /** Path → per-methodCode handler array. NullProtoObj for proto-free O(1) lookup.
-   *  Slot value alone cannot distinguish "registered with undefined" from
-   *  "not registered" — `staticRegistered` tracks the latter explicitly so
-   *  callers can register `undefined` (or any value where T includes it)
-   *  without it being silently treated as an empty slot. */
+  /** Path → per-methodCode handler array. Owned by Registration during
+   *  add(), transferred here at seal() time. */
   private staticMap: Record<string, Array<T | undefined>> = new NullProtoObj() as Record<string, Array<T | undefined>>;
-  /** Path → method codes that have actually been registered. Parallel to
-   *  `staticMap`. Without this, `arr[mc] === undefined` ambiguously means
-   *  either "not registered" or "registered with undefined value". */
   private staticRegistered: Record<string, boolean[]> = new NullProtoObj() as Record<string, boolean[]>;
   /** Pre-built MatchOutput indexed by [methodCode][path]. Layout chosen so
    *  the single-method-optimized matchImpl can closure-capture the inner
@@ -151,13 +144,6 @@ export class Router<T = unknown> {
    *  call per invocation. Tuple form keeps name+code together for the
    *  tight loop in allowedMethods. */
   private activeMethodCodes: ReadonlyArray<readonly [string, number]> = [];
-  /** Per-method wildcard-name index: methodCode → (prefix → wildcardName).
-   *  Conflict detection is *scoped to a single method* — `GET /api/*file`
-   *  and `POST /api/*name` are independent registrations and may coexist.
-   *  This matches users' mental model: one HTTP method's routing table is
-   *  unrelated to another's. The previous cross-method scoping was an
-   *  over-restriction with no design rationale on record. */
-  private wildcardNamesByMethod: Map<number, Map<string, string>> = new Map();
 
   constructor(options: RouterOptions = {}) {
     this.options = options;
@@ -185,7 +171,7 @@ export class Router<T = unknown> {
 
     this.optionalParamDefaults = new OptionalParamDefaults(options.optionalParamBehavior);
 
-    this.pathParser = new PathParser({
+    const pathParser = new PathParser({
       caseSensitive: options.caseSensitive ?? true,
       ignoreTrailingSlash: options.ignoreTrailingSlash ?? true,
       maxSegmentLength: options.maxSegmentLength ?? 256,
@@ -193,71 +179,37 @@ export class Router<T = unknown> {
       regexAnchorPolicy: options.regexAnchorPolicy,
       onWarn: options.onWarn,
     });
+
+    this.registration = new Registration<T>(
+      { regexSafety },
+      this.methodRegistry,
+      pathParser,
+      this.optionalParamDefaults,
+    );
   }
 
   add(method: HttpMethod | HttpMethod[] | '*', path: string, value: T): void {
-    this.assertNotSealed({ path, method: Array.isArray(method) ? method[0] : method });
-
-    if (Array.isArray(method)) {
-      for (const m of method) this.unwrapOrThrow(this.addOne(m, path, value));
-
-      return;
-    }
-
-    if (method === '*') {
-      for (const m of ALL_METHODS) this.unwrapOrThrow(this.addOne(m, path, value));
-
-      return;
-    }
-
-    this.unwrapOrThrow(this.addOne(method, path, value));
+    this.registration.add(method, path, value);
   }
 
   addAll(entries: Array<[HttpMethod, string, T]>): void {
-    this.assertNotSealed({ registeredCount: 0 });
-
-    let registeredCount = 0;
-
-    for (const [method, path, value] of entries) {
-      const result = this.addOne(method, path, value);
-
-      if (isErr(result)) {
-        throw new RouterError({ ...result.data, registeredCount });
-      }
-
-      registeredCount++;
-    }
-  }
-
-  /**
-   * Throw `router-sealed` when add()/addAll() is called after build().
-   * `ctx` lets the caller decorate the error with their request context
-   * (path/method) or the addAll() registeredCount=0 marker.
-   */
-  private assertNotSealed(
-    ctx: { path?: string; method?: string; registeredCount?: number },
-  ): void {
-    if (!this.sealed) return;
-
-    throw new RouterError({
-      kind: 'router-sealed',
-      message: 'Cannot add routes after build(). The router is sealed.',
-      suggestion: 'Create a new Router instance to add more routes',
-      ...ctx,
-    });
-  }
-
-  /** Convert an addOne() Err into a thrown RouterError; pass-through on Ok. */
-  private unwrapOrThrow(result: Result<void, RouterErrData>): void {
-    if (isErr(result)) throw new RouterError(result.data);
+    this.registration.addAll(entries);
   }
 
   build(): this {
-    if (this.sealed) {
+    if (this.registration.isSealed()) {
       return this;
     }
 
-    this.sealed = true;
+    // Closing the registration phase transfers the accumulated state
+    // (handlers / trees / static lookup tables / wildcard index) to this
+    // Router so the compiled matchImpl can closure-capture them directly.
+    const snapshot = this.registration.seal();
+    this.handlers = snapshot.handlers;
+    this.segmentTrees = snapshot.segmentTrees;
+    this.staticMap = snapshot.staticMap;
+    this.staticRegistered = snapshot.staticRegistered;
+    this.testerCache = snapshot.testerCache;
 
     const allCodes = this.methodRegistry.getAllCodes();
     // `getCodeMap()` returns a prototype-less Record kept up to date by the
@@ -342,9 +294,9 @@ export class Router<T = unknown> {
     this.maxPathLength = this.options.maxPathLength ?? 2048;
     this.maxSegmentLength = this.options.maxSegmentLength ?? 256;
 
-    this.pathParser = null;
     // Tester cache held per-route insert during add(); release after seal so
-    // dev-mode swap-and-rebuild scenarios start fresh.
+    // dev-mode swap-and-rebuild scenarios start fresh. Registration owns
+    // the parser; this Router does not need to null its own ref.
     this.testerCache = new Map();
 
     this.normalizePath = buildPathNormalizer({
@@ -376,7 +328,8 @@ export class Router<T = unknown> {
     Object.freeze(this.staticMap);
     Object.freeze(this.staticRegistered);
     Object.freeze(this.activeMethodCodes);
-    Object.freeze(this.wildcardNamesByMethod);
+    // wildcardNamesByMethod is owned by Registration and frozen there at
+    // seal() time — this Router never reads it post-build.
 
     return this;
   }
@@ -734,7 +687,7 @@ export class Router<T = unknown> {
   }
 
   match(method: HttpMethod, path: string): MatchOutput<T> | null {
-    if (!this.sealed) return null;
+    if (!this.registration.isSealed()) return null;
 
     return this.matchImpl(method, path);
   }
@@ -761,7 +714,7 @@ export class Router<T = unknown> {
    *   - matchImpl is never invoked — no duplicated preprocessing.
    */
   allowedMethods(path: string): HttpMethod[] {
-    if (!this.sealed) return [];
+    if (!this.registration.isSealed()) return [];
 
     const sp = this.normalizePathForLookup(path);
 
@@ -814,156 +767,4 @@ export class Router<T = unknown> {
     return this.normalizePath(path);
   }
 
-  private checkWildcardNameConflict(
-    parts: import('./builder/path-parser').PathPart[],
-    normalized: string,
-    methodCode: number,
-    method: string,
-  ): Result<void, RouterErrData> {
-    let scope = this.wildcardNamesByMethod.get(methodCode);
-
-    for (const part of parts) {
-      if (part.type === 'wildcard') {
-        // Build prefix key (path without wildcard)
-        const prefix = normalized.replace(/\/[*:].*$/, '');
-        const existing = scope?.get(prefix);
-
-        if (existing !== undefined && existing !== part.name) {
-          return err<RouterErrData>({
-            kind: 'route-conflict',
-            message: `Wildcard '*${part.name}' conflicts with existing wildcard '*${existing}' at path prefix '${prefix}' for method ${method}`,
-            segment: part.name,
-            conflictsWith: existing,
-            method,
-          });
-        }
-
-        if (scope === undefined) {
-          scope = new Map();
-          this.wildcardNamesByMethod.set(methodCode, scope);
-        }
-
-        scope.set(prefix, part.name);
-        break;
-      }
-    }
-  }
-
-  private checkStaticWildcardConflict(
-    normalized: string,
-    methodCode: number,
-    method: string,
-  ): Result<void, RouterErrData> {
-    const scope = this.wildcardNamesByMethod.get(methodCode);
-
-    if (scope === undefined) return;
-
-    // Check if any wildcard prefix in this method is a parent of this static route
-    for (const [prefix] of scope) {
-      if (normalized.startsWith(prefix + '/') || normalized === prefix) {
-        return err<RouterErrData>({
-          kind: 'route-conflict',
-          message: `Static route '${normalized}' conflicts with existing wildcard at '${prefix}/*' for method ${method}`,
-          segment: normalized,
-          method,
-        });
-      }
-    }
-  }
-
-  private addOne(method: HttpMethod, path: string, value: T): Result<void, RouterErrData> {
-    const offsetResult = this.methodRegistry.getOrCreate(method);
-
-    if (isErr(offsetResult)) {
-      return err<RouterErrData>({
-        ...offsetResult.data,
-        path,
-      });
-    }
-
-    const parseResult = this.pathParser!.parse(path);
-
-    if (isErr(parseResult)) {
-      return err<RouterErrData>({
-        ...parseResult.data,
-        path,
-        method,
-      });
-    }
-
-    const { parts, normalized, isDynamic } = parseResult;
-
-    // Per-method wildcard-name conflict (cross-method coexistence allowed)
-    const wcConflict = this.checkWildcardNameConflict(parts, normalized, offsetResult, method);
-
-    if (isErr(wcConflict)) {
-      return wcConflict;
-    }
-
-    // Check for static route conflicting with existing wildcard *within the same method*
-    if (!isDynamic) {
-      const wcBlockConflict = this.checkStaticWildcardConflict(normalized, offsetResult, method);
-
-      if (isErr(wcBlockConflict)) {
-        return wcBlockConflict;
-      }
-
-      let arr = this.staticMap[normalized];
-      let registered = this.staticRegistered[normalized];
-
-      if (!arr) {
-        arr = [];
-        registered = [];
-        this.staticMap[normalized] = arr;
-        this.staticRegistered[normalized] = registered;
-      }
-
-      if (registered![offsetResult]) {
-        return err<RouterErrData>({
-          kind: 'route-duplicate',
-          message: `Route already exists for ${method} ${normalized}`,
-          path,
-          method,
-          suggestion: 'Use a different path or HTTP method',
-        });
-      }
-
-      arr[offsetResult] = value;
-      registered![offsetResult] = true;
-      return;
-    }
-
-    const handlerIndex = this.handlers.length;
-    this.handlers.push(value);
-
-    const expansion = expandOptional(parts, handlerIndex, this.optionalParamDefaults);
-
-    if (isErr(expansion)) {
-      this.handlers.pop();
-
-      return err<RouterErrData>({ ...expansion.data, path, method });
-    }
-
-    if (this.segmentTrees[offsetResult] === undefined || this.segmentTrees[offsetResult] === null) {
-      this.segmentTrees[offsetResult] = createSegmentNode();
-    }
-
-    const root = this.segmentTrees[offsetResult]!;
-
-    for (const { parts: expParts, handlerIndex: hIdx } of expansion) {
-      const insertResult = insertIntoSegmentTree(
-        root,
-        expParts,
-        hIdx,
-        this.options.regexSafety,
-        this.testerCache,
-      );
-
-      if (isErr(insertResult)) {
-        this.handlers.pop();
-
-        return err<RouterErrData>({ ...insertResult.data, path, method });
-      }
-    }
-  }
 }
