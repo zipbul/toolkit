@@ -29,7 +29,7 @@ import {
 import type { NormalizeCfg, PathNormalizer } from './matcher/path-normalize';
 import type { SegmentNode } from './matcher/segment-tree';
 import type { WildCodegenEntry } from './matcher/segment-walk';
-import { Build } from './pipeline/build';
+import { buildFromRegistration } from './pipeline/build';
 import { Registration } from './pipeline/registration';
 
 // Cache stores only the value/params pair — meta is attached at lookup time
@@ -200,7 +200,7 @@ export class Router<T = unknown> {
     // normalizePath). The Build layer is a pure factory: it owns no
     // instance state, so its result is just a struct of references that
     // we transfer to this Router for closure capture by the matchImpl.
-    const r = Build.fromRegistration<T>(snapshot, this.options, this.methodRegistry);
+    const r = buildFromRegistration<T>(snapshot, this.options, this.methodRegistry);
 
     this.trees = r.trees;
     this.wildSpecs = r.wildSpecs;

@@ -672,13 +672,18 @@ git add bench/baseline && git commit -m "bench: capture baseline for refactor"
 
 #### B2. Build 추출 → `src/pipeline/build.ts`
 - 책임: build() 의 트리 컴파일 (`createSegmentWalker`), normalizer
-  생성 (`buildPathNormalizer`), MatchConfig 조립. Codegen 호출 진입점.
+  생성 (`buildPathNormalizer`), staticOutputsByMethod 사전빌드,
+  activeMethodCodes 계산.
 - 시그니처:
   ```ts
-  class Build<T> {
-    static fromRegistration(snapshot: RegistrationSnapshot<T>, opts: RouterOptions): MatchConfig<T>;
-  }
+  export function buildFromRegistration<T>(
+    snapshot: RegistrationSnapshot<T>,
+    options: RouterOptions,
+    methodRegistry: MethodRegistry,
+  ): BuildResult<T>;
   ```
+  순수 함수 — 인스턴스 상태 0. 원안의 `class Build` (static-only) 는
+  generic 미사용 + 상태 0 의 가짜 클래스라 함수로 변경.
 
 #### B3. Codegen 추출 → `src/codegen/emitter.ts` (F2 처방 포함)
 - **디렉토리 신설**: `src/codegen/` 을 별도 도입 (단계 C 에서 채워짐).
@@ -951,6 +956,9 @@ A1 → A2 → A3 → A4 → A5 → A6
 본 리팩토링이 완료되면 `src/` 는 *시점 (build-time vs runtime)* 으로
 디렉토리 경계가 정렬된다. 핫패스 (런타임) 는 `matcher/` 만 의존,
 build-time 작업은 `builder/` + `codegen/` + `pipeline/` 에 격리된다.
+`internal/` 는 시점 경계를 가로지르는 *공유 유틸* (예: `NullProtoObj`
+constructor, frozen meta singletons) 의 단일 정의 — 별도 디렉토리로
+두어 build/match 양쪽에서 동일 hidden-class 인스턴스를 import 한다.
 
 ```
 packages/router/src/
@@ -980,8 +988,11 @@ packages/router/src/
 │
 ├── pipeline/                  ─── Router 파이프라인 3 단계 (★ 신규 디렉토리)
 │   ├── registration.ts             ★ Registration<T> + assertNotSealed (B1, F8)
-│   ├── build.ts                    ★ Build<T>.fromRegistration (B2)
+│   ├── build.ts                    ★ buildFromRegistration<T> (B2 — 순수 함수)
 │   └── match.ts                    ★ MatchLayer<T> + assertBuilt (B4, F8)
+│
+├── internal/                  ─── 공유 유틸 (★ 신규 디렉토리, B2 단계)
+│   └── null-proto-obj.ts           NullProtoObj + EMPTY_PARAMS + STATIC/CACHE/DYNAMIC_META 단일 정의
 │
 ├── cache.ts
 ├── error.ts

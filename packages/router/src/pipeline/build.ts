@@ -54,120 +54,120 @@ export interface BuildResult<T> {
 }
 
 /**
- * The Build layer compiles a `RegistrationSnapshot` into the
- * runtime-ready tables and walker functions used by Match.
+ * Compile a `RegistrationSnapshot` into the runtime-ready tables and
+ * walker functions consumed by the codegen layer (B3) and the match
+ * dispatch (B4).
  *
- * Pure factory (single static method) — no instance state. Stage B3
- * (codegen) consumes this output via `MatchConfig`; stage B4 (match)
- * uses the lookup tables directly.
+ * Pure function — no shared state across calls. Output is a struct of
+ * references that Router transfers to its own fields so the compiled
+ * matchImpl can closure-capture them without paying a property-access
+ * tax through `this.X` on every match.
  */
-export class Build {
-  static fromRegistration<T>(
-    snapshot: RegistrationSnapshot<T>,
-    options: RouterOptions,
-    methodRegistry: MethodRegistry,
-  ): BuildResult<T> {
-    const allCodes = methodRegistry.getAllCodes();
-    const methodCodes = methodRegistry.getCodeMap() as Record<string, number>;
+export function buildFromRegistration<T>(
+  snapshot: RegistrationSnapshot<T>,
+  options: RouterOptions,
+  methodRegistry: MethodRegistry,
+): BuildResult<T> {
+  const allCodes = methodRegistry.getAllCodes();
+  const methodCodes = methodRegistry.getCodeMap() as Record<string, number>;
 
-    const decoder = buildDecoder();
-    const decodeParams = options.decodeParams ?? true;
+  const decoder = buildDecoder();
+  const decodeParams = options.decodeParams ?? true;
 
-    const trees: Array<MatchFn | null> = [];
-    const wildSpecs: Array<WildCodegenEntry[] | null> = [];
+  const trees: Array<MatchFn | null> = [];
+  const wildSpecs: Array<WildCodegenEntry[] | null> = [];
 
-    // Per-method segment trees were built incrementally during add(); here
-    // we just wire up walkers and detect specialized shapes per method.
-    for (const [, code] of allCodes) {
-      const segRoot = snapshot.segmentTrees[code];
+  // Per-method segment trees were built incrementally during add(); here
+  // we just wire up walkers and detect specialized shapes per method.
+  for (const [, code] of allCodes) {
+    const segRoot = snapshot.segmentTrees[code];
 
-      if (segRoot !== undefined && segRoot !== null) {
-        // Detect static-prefix wildcard shape — when the entire router
-        // shape satisfies certain conditions (single method, no statics,
-        // etc.), compileMatchFn will inline these probes directly into
-        // matchImpl.
-        wildSpecs[code] = detectWildCodegenSpec(segRoot);
-        trees[code] = createSegmentWalker(segRoot, decoder, decodeParams);
-        continue;
-      }
-
-      wildSpecs[code] = null;
-      trees[code] = null;
+    if (segRoot !== undefined && segRoot !== null) {
+      // Detect static-prefix wildcard shape — when the entire router
+      // shape satisfies certain conditions (single method, no statics,
+      // etc.), compileMatchFn will inline these probes directly into
+      // matchImpl.
+      wildSpecs[code] = detectWildCodegenSpec(segRoot);
+      trees[code] = createSegmentWalker(segRoot, decoder, decodeParams);
+      continue;
     }
 
-    const anyTester = snapshot.testerCache.size > 0;
-
-    // Pre-build the static MatchOutput objects so match() can return them
-    // directly without allocating { value, params, meta } per hit.
-    //
-    // Layout: staticOutputs[methodCode] → NullProtoObj { path → MatchOutput }.
-    // The compiled matchImpl indexes by methodCode first (constant under
-    // the single-method optimization, so the outer access folds away at
-    // JIT time) then by path. This is one fewer indirection than the
-    // previous `staticOutputs[path][methodCode]` layout for routers that
-    // register most paths under one verb (typical REST shapes).
-    const staticOutputsByMethod: Array<Record<string, MatchOutput<T>> | undefined> = [];
-
-    for (const path in snapshot.staticMap) {
-      const arr = snapshot.staticMap[path]!;
-      const registered = snapshot.staticRegistered[path]!;
-
-      for (let mc = 0; mc < arr.length; mc++) {
-        if (!registered[mc]) continue;
-
-        let bucket = staticOutputsByMethod[mc];
-
-        if (bucket === undefined) {
-          bucket = new NullProtoObj() as Record<string, MatchOutput<T>>;
-          staticOutputsByMethod[mc] = bucket;
-        }
-
-        bucket[path] = Object.freeze({
-          value: arr[mc] as T,
-          params: EMPTY_PARAMS,
-          meta: STATIC_META,
-        }) as MatchOutput<T>;
-      }
-    }
-
-    // Cache the methods that actually received routes — `allowedMethods()`
-    // iterates this instead of Object.entries(methodCodes) to skip the
-    // six unused default HTTP verbs without per-call allocation.
-    const activeMethodCodes: Array<readonly [string, number]> = [];
-
-    for (const [name, code] of allCodes) {
-      if (trees[code] != null || staticOutputsByMethod[code] !== undefined) {
-        activeMethodCodes.push([name, code]);
-      }
-    }
-
-    const ignoreTrailingSlash = options.ignoreTrailingSlash ?? true;
-    const caseSensitive = options.caseSensitive ?? true;
-    const maxPathLength = options.maxPathLength ?? 2048;
-    const maxSegmentLength = options.maxSegmentLength ?? 256;
-
-    const normalizePath = buildPathNormalizer({
-      checkPathLen: Number.isFinite(maxPathLength),
-      maxPathLen: maxPathLength,
-      trimSlash: ignoreTrailingSlash,
-      lowerCase: !caseSensitive,
-      checkSegLen: Number.isFinite(maxSegmentLength),
-      maxSegLen: maxSegmentLength,
-    });
-
-    return {
-      trees,
-      wildSpecs,
-      anyTester,
-      staticOutputsByMethod,
-      activeMethodCodes,
-      methodCodes,
-      matchState: createMatchState(),
-      normalizePath,
-      ignoreTrailingSlash,
-      caseSensitive,
-      maxPathLength,
-      maxSegmentLength,
-    };
+    wildSpecs[code] = null;
+    trees[code] = null;
   }
+
+  const anyTester = snapshot.testerCache.size > 0;
+
+  // Pre-build the static MatchOutput objects so match() can return them
+  // directly without allocating { value, params, meta } per hit.
+  //
+  // Layout: staticOutputs[methodCode] → NullProtoObj { path → MatchOutput }.
+  // The compiled matchImpl indexes by methodCode first (constant under
+  // the single-method optimization, so the outer access folds away at
+  // JIT time) then by path. This is one fewer indirection than the
+  // previous `staticOutputs[path][methodCode]` layout for routers that
+  // register most paths under one verb (typical REST shapes).
+  const staticOutputsByMethod: Array<Record<string, MatchOutput<T>> | undefined> = [];
+
+  for (const path in snapshot.staticMap) {
+    const arr = snapshot.staticMap[path]!;
+    const registered = snapshot.staticRegistered[path]!;
+
+    for (let mc = 0; mc < arr.length; mc++) {
+      if (!registered[mc]) continue;
+
+      let bucket = staticOutputsByMethod[mc];
+
+      if (bucket === undefined) {
+        bucket = new NullProtoObj() as Record<string, MatchOutput<T>>;
+        staticOutputsByMethod[mc] = bucket;
+      }
+
+      bucket[path] = Object.freeze({
+        value: arr[mc] as T,
+        params: EMPTY_PARAMS,
+        meta: STATIC_META,
+      }) as MatchOutput<T>;
+    }
+  }
+
+  // Cache the methods that actually received routes — `allowedMethods()`
+  // iterates this instead of Object.entries(methodCodes) to skip the
+  // six unused default HTTP verbs without per-call allocation.
+  const activeMethodCodes: Array<readonly [string, number]> = [];
+
+  for (const [name, code] of allCodes) {
+    if (trees[code] != null || staticOutputsByMethod[code] !== undefined) {
+      activeMethodCodes.push([name, code]);
+    }
+  }
+
+  const ignoreTrailingSlash = options.ignoreTrailingSlash ?? true;
+  const caseSensitive = options.caseSensitive ?? true;
+  const maxPathLength = options.maxPathLength ?? 2048;
+  const maxSegmentLength = options.maxSegmentLength ?? 256;
+
+  const normalizePath = buildPathNormalizer({
+    checkPathLen: Number.isFinite(maxPathLength),
+    maxPathLen: maxPathLength,
+    trimSlash: ignoreTrailingSlash,
+    lowerCase: !caseSensitive,
+    checkSegLen: Number.isFinite(maxSegmentLength),
+    maxSegLen: maxSegmentLength,
+  });
+
+  return {
+    trees,
+    wildSpecs,
+    anyTester,
+    staticOutputsByMethod,
+    activeMethodCodes,
+    methodCodes,
+    matchState: createMatchState(),
+    normalizePath,
+    ignoreTrailingSlash,
+    caseSensitive,
+    maxPathLength,
+    maxSegmentLength,
+  };
 }
