@@ -359,8 +359,10 @@ git add bench/baseline && git commit -m "bench: capture baseline for refactor"
   `JSON.stringify(...)` 로 감싸 JS 문자열 리터럴화. 안전성은 path-parser
   의 `validateParamName` 메타문자 차단 (`builder/path-parser.ts:437-468`)
   으로 보장됨. 단, 이 보장이 codegen 측에 명시적 코멘트로 표현되지 않음.
-- 처방: § 단계 C1 — `segment-compile.ts` 상단에 escape 정책 코멘트.
-  `escapeJsString(s)` 어휘 별칭 도입 (의도 명시, 동작 동일).
+- 처방: § 단계 C1 — `codegen/segment-compile.ts` 상단에 escape 정책
+  주석 1블록 (codegen/* + matcher/segment-walk 공통). 별도 alias 함수
+  미도입 — 단순 `JSON.stringify` 1-line wrapper 는 추가 안전 보장 없이
+  indirection 만 늘림 (커밋 5f3a652 의 cleanup 이력 참고).
 
 ### F15 [중] `pattern-utils.normalizeParamPatternSource` 의 암묵 반환
 - 위치: `src/builder/pattern-utils.ts:41-84`
@@ -496,9 +498,9 @@ git add bench/baseline && git commit -m "bench: capture baseline for refactor"
 - 위치: `src/codegen/segment-compile.ts` 전반 (C1 후 위치), `src/codegen/
   emitter.ts` (B3 후 위치).
 - 사실: emit 이 `\`...\${JSON.stringify(name)}...\`` 같은 raw 문자열 합성.
-  `escapeJsString` alias (F14, C1) 로 안전성은 명시되지만, *식별자 충돌*
-  (F16) / *escape 누락* / *변수 누수* 는 여전히 *런타임 가드* (fresh()
-  + audit-repro.test 스냅샷) 에만 의존.
+  `codegen/segment-compile.ts` 상단의 escape 정책 주석 (F14) 으로
+  안전성은 명시되지만, *식별자 충돌* (F16) / *escape 누락* / *변수 누수*
+  는 여전히 *런타임 가드* (fresh() + audit-repro.test 스냅샷) 에만 의존.
 - 처방: § 단계 F4 — typed emit IR 도입.
   ```ts
   type EmitNode =
@@ -730,9 +732,12 @@ git add bench/baseline && git commit -m "bench: capture baseline for refactor"
 #### C1. emit 헬퍼 정합 / fresh 카운터 / escape 정책 (F14, F16)
 - 이동: `src/matcher/segment-compile.ts` → `src/codegen/segment-compile.ts`
   (build-time 전용이므로 codegen/ 가 적정 위치).
-- 신규: `src/codegen/escape.ts` — `escapeJsString(s)` alias + escape 정책
-  docstring (메타문자 차단은 `builder/path-parser.ts:437-468` 의
-  `validateParamName` 에서 보장됨을 명시).
+- 신규: `src/codegen/segment-compile.ts` 상단에 escape 정책 주석 1블록
+  (codegen/* + matcher/segment-walk 공통; 메타문자 차단은
+  `builder/path-parser.ts:437-468` 의 `validateParamName` 에서 보장됨).
+  *최초 시도였던 `escapeJsString(s)` alias (33 lines + 18 사이트) 는
+  안전성 추가 0 인 indirection 으로 판명되어 cleanup 커밋 (5f3a652)
+  에서 제거됨.*
 - 수정: `src/matcher/path-normalize.ts:emitQueryStrip(...)` fresh 카운터
   받도록 시그니처 변경. `src/codegen/segment-compile.ts` 의 `var len`,
   `var mc` 등 하드코딩 식별자를 fresh() 로 일괄 교체.

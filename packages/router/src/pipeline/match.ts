@@ -12,8 +12,11 @@ import { NullProtoObj } from '../internal/null-proto-obj';
  * Dependencies the MatchLayer requires from the build pipeline. Every
  * field is closure-captured by the layer's methods — no shared mutable
  * state with Router beyond what is enumerated here.
+ *
+ * File-local: only `MatchLayer`'s constructor consumes it; not part of
+ * the public surface.
  */
-export interface MatchLayerDeps<T> {
+interface MatchLayerDeps<T> {
   normalizePath: PathNormalizer;
   matchState: MatchState;
   activeMethodCodes: ReadonlyArray<readonly [string, number]>;
