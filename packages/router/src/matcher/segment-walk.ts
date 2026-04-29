@@ -108,6 +108,36 @@ export function createSegmentWalker(
     return createIterativeWalker(root, decoder, decodeParams);
   }
 
+  function tryMatchParam(
+    param: ParamSegment,
+    decoded: string,
+    path: string,
+    segs: string[],
+    nextIdx: number,
+    state: MatchStateWithParams,
+  ): boolean {
+    if (param.tester !== null) {
+      const r = param.tester(decoded);
+
+      if (r === TESTER_TIMEOUT) {
+        state.errorKind = 'regex-timeout';
+        state.errorMessage = 'Route parameter regex exceeded time limit';
+
+        return false;
+      }
+
+      if (r !== TESTER_PASS) return false;
+    }
+
+    if (match(param.next, path, segs, nextIdx, state)) {
+      state.params[param.name] = decoded;
+
+      return true;
+    }
+
+    return false;
+  }
+
   function match(
     node: SegmentNode,
     path: string,
@@ -166,64 +196,16 @@ export function createSegmentWalker(
     if (head !== null && seg.length > 0) {
       const decoded = decodeParams ? decoder(seg) : seg;
 
-      // Single-param fast path (the >95% case). Sibling chains only arise
-      // from optional-param expansion or tester+catchall ordering, so the
-      // common shape skips the loop bookkeeping entirely.
-      let pass = true;
-
-      if (head.tester !== null) {
-        const r = head.tester(decoded);
-
-        if (r === TESTER_TIMEOUT) {
-          state.errorKind = 'regex-timeout';
-          state.errorMessage = 'Route parameter regex exceeded time limit';
-
-          return false;
-        }
-
-        pass = r === TESTER_PASS;
-      }
-
-      if (pass) {
-        if (match(head.next, path, segs, idx + 1, state)) {
-          state.params[head.name] = decoded;
-
-          return true;
-        }
-
-        if (state.errorKind !== null) return false;
-      }
+      if (tryMatchParam(head, decoded, path, segs, idx + 1, state)) return true;
+      if (state.errorKind !== null) return false;
 
       // Sibling backtracking — runs only when nextSibling is set, so the
       // single-param case never enters this loop.
       let p: ParamSegment | null = head.nextSibling;
 
       while (p !== null) {
-        pass = true;
-
-        if (p.tester !== null) {
-          const r = p.tester(decoded);
-
-          if (r === TESTER_TIMEOUT) {
-            state.errorKind = 'regex-timeout';
-            state.errorMessage = 'Route parameter regex exceeded time limit';
-
-            return false;
-          }
-
-          pass = r === TESTER_PASS;
-        }
-
-        if (pass) {
-          if (match(p.next, path, segs, idx + 1, state)) {
-            state.params[p.name] = decoded;
-
-            return true;
-          }
-
-          if (state.errorKind !== null) return false;
-        }
-
+        if (tryMatchParam(p, decoded, path, segs, idx + 1, state)) return true;
+        if (state.errorKind !== null) return false;
         p = p.nextSibling;
       }
     }
