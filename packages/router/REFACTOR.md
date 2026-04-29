@@ -1144,12 +1144,16 @@ packages/router/test/               ★ 신규 파일 (F단계)
 | #10 | `f0fd139` | B3 | F1, F2 | Codegen 추출 → `codegen/emitter.ts`. compileMatchFn + detectSingleMethodWildSpec + emitSpecializedWildMatchImpl + emitGenericMatchImpl + MatchConfig + CacheEntry 모두 emitter.ts 로 이전. emit 바디 byte-diff 0 (audit-repro 스냅샷 유지). Router 677→325 lines. **모든 핫패스 baseline 보다 1-4 ns 빠름** — 클래스 shape 축소 부수효과 |
 | — | `e734e63` | B3-fix | — | normalizePath identity 화살표 dead code 제거 (`!:` definite-assignment). router.ts func coverage 90.91 → 100% |
 | #11 | `02fddc6` | B4 | F1 | MatchLayer 추출 → `pipeline/match.ts` (cold path 만 — allowedMethods + clearCache). **`match()` 는 Router 에 유지** — layer dispatch 가 JSC IC 깨고 25-40배 회귀시켜 doc 의 prescribed scope 에서 의도적 축소. matchLayer === undefined 가 "built 아님" 신호. Router 325→273 lines. 핫패스 baseline 대비 모두 빠름 |
+| #12 | `553bc42` | B5 | F1 (완료) | Router thin facade. 16+ build-time 필드 제거 (handlers/trees/staticMap/normalizePath/matchState/etc.) — closure capture 가 이미 reference 보유. cfg literal 을 build() 안에 인라인. freeze 는 snapshot/r 객체에 직접. test 의 internal-state inspection 경로 갱신 (registration.X / matchLayer.X). **Router 273→204 lines, 9 fields, 7 methods**. 핫패스 ±2 ns 이내 |
 
 ### 7.2 미완료 단계
 
 | 단계 | Findings 잔여 | 의존 |
 |---|---|---|
-| B5 | F1 (잔여 — facade 정리) | B4 ✅ 완료. F8(match) 는 silent-return 으로 통합 — 별도 assertBuilt 미적용 |
+| C1~C2 | F12, F14, F16 | B 단계 전체 ✅ 완료 |
+| D1~D2 | F17 + 회귀 검증 | C |
+| E1~E2 | F6 | D |
+| F1~F12 | F25~F33 | E (선택) |
 | C1~C2 | F12, F14, F16 | B3 |
 | D1~D2 | F17 + 회귀 검증 | C |
 | E1~E2 | F6 | D |
@@ -1171,7 +1175,7 @@ packages/router/test/               ★ 신규 파일 (F단계)
 
 | Finding | 심각 | 단계 | 파일 |
 |---|---|---|---|
-| F1 Router SRP | 상 | B1-B5 (B1·B2·B3·B4 ✅) | router.ts → pipeline/* + codegen/* |
+| F1 Router SRP | 상 | B1-B5 ✅ 553bc42 | router.ts (204줄 facade) → pipeline/* + codegen/* |
 | F2 emitGenericMatchImpl 159 lines | 상 | B3 ✅ f0fd139 (이동만; 12-step 분해는 deferred) | codegen/emitter.ts |
 | F3 path-parser SRP | 상 | A2 ✅ 41a9d25 | builder/path-parser.ts |
 | F4 route-expand 가드+조합 결합 | 상 | A2 ✅ 41a9d25 | builder/route-expand.ts |
