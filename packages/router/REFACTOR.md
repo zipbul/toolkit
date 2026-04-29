@@ -430,12 +430,14 @@ git add bench/baseline && git commit -m "bench: capture baseline for refactor"
   가능성은 없으나 명시적 immutable 표현 부재.
 - 처방: § 단계 A4 — build() 종료 시 *build-only* 테이블에만
   `Object.freeze` 적용 (`segmentTrees`, `wildSpecs`, `staticMap`,
-  `staticRegistered`, `activeMethodCodes`). **핫패스 lookup 테이블
-  (`handlers`, `trees`, `staticOutputsByMethod`, `methodCodes`) 은 의도적
-  비-동결** — 컴파일된 matchImpl 이 closure-capture 한 frozen 객체를
-  매 dynamic match 시 인덱싱하면 JSC inline cache 가 degrade 되어
-  5-10 ns/match 회귀 (bench 검증 결과). `sealed` 가 모든 외부 변형
-  경로를 거부하므로 비-동결로 인한 실질적 위험은 0.
+  `staticRegistered`, `activeMethodCodes`). 단계 B1 이후
+  `wildcardNamesByMethod` 는 `Registration.seal()` 에서 freeze 된다
+  (Registration 이 owner). **핫패스 lookup 테이블 (`handlers`, `trees`,
+  `staticOutputsByMethod`, `methodCodes`) 은 의도적 비-동결** —
+  컴파일된 matchImpl 이 closure-capture 한 frozen 객체를 매 dynamic
+  match 시 인덱싱하면 JSC inline cache 가 degrade 되어 5-10 ns/match
+  회귀 (bench 검증 결과). `sealed` 가 모든 외부 변형 경로를 거부하므로
+  비-동결로 인한 실질적 위험은 0.
 
 ### F24 [중] `MAX_PARAMS = 32` 상수 분산 (path-parser ↔ match-state)
 - 위치: `src/builder/path-parser.ts:85, 88` (`> 32`, 메시지 `"the maximum
