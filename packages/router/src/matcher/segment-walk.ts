@@ -4,7 +4,7 @@ import type { ParamSegment, SegmentNode } from './segment-tree';
 
 import { TESTER_PASS, TESTER_TIMEOUT } from './pattern-tester';
 import { hasAmbiguousNode } from './segment-tree';
-import { compileSegmentTree } from './segment-compile';
+import { compileSegmentTree } from '../codegen/segment-compile';
 
 export interface WildCodegenEntry {
   prefix: string;

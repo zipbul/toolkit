@@ -28,9 +28,18 @@ export function emitPathLenCheck(cfg: NormalizeCfg, inVar: string, bailReturn: s
   return `if (${inVar}.length > ${cfg.maxPathLen}) ${bailReturn}`;
 }
 
-/** Strip query string. Always emitted — query removal is unconditional. */
-export function emitQueryStrip(inVar: string, outVar: string): string {
-  return `var ${outVar} = ${inVar}; var qi = ${outVar}.indexOf('?'); if (qi !== -1) ${outVar} = ${outVar}.substring(0, qi);`;
+/**
+ * Strip query string. Always emitted — query removal is unconditional.
+ *
+ * Optional `qiName` lets the caller supply a fresh identifier when the
+ * helper is composed inside a larger emit scope that already declares
+ * `var qi`. Default keeps the historical name so an isolated emit
+ * (the only caller today) produces byte-identical output to pre-C1.
+ * F16: any future call site that emits multiple normalizers in one
+ * scope must pass distinct `qiName`s to avoid strict-mode redeclaration.
+ */
+export function emitQueryStrip(inVar: string, outVar: string, qiName: string = 'qi'): string {
+  return `var ${outVar} = ${inVar}; var ${qiName} = ${outVar}.indexOf('?'); if (${qiName} !== -1) ${outVar} = ${outVar}.substring(0, ${qiName});`;
 }
 
 /** Trim a single trailing slash. */

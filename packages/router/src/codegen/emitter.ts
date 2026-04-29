@@ -4,6 +4,7 @@ import type { MatchFn, MatchState } from '../matcher/match-state';
 import type { NormalizeCfg } from '../matcher/path-normalize';
 import type { WildCodegenEntry } from '../matcher/segment-walk';
 import type { MatchOutput, RouteParams } from '../types';
+import { escapeJsString } from './escape';
 
 import {
   CACHE_META,
@@ -146,7 +147,7 @@ function emitSpecializedWildMatchImpl<T>(
   const lines: string[] = [];
 
   if (cfg.checkPathLen) lines.push(`if (path.length > ${cfg.maxPathLen}) return null;`);
-  lines.push(`if (method !== ${JSON.stringify(theMethod)}) return null;`);
+  lines.push(`if (method !== ${escapeJsString(theMethod)}) return null;`);
   lines.push(`var sp = path;`);
   lines.push(`var qi = sp.indexOf('?'); if (qi !== -1) sp = sp.substring(0, qi);`);
 
@@ -175,10 +176,10 @@ function emitSpecializedWildMatchImpl<T>(
     const fullPrefixSlashLen = fullPrefixSlash.length;
     const minLen = e.wildcardOrigin === 'multi' ? fullPrefixSlashLen + 1 : fullPrefixSlashLen;
     const sliceStart = fullPrefixSlashLen;
-    const nameKey = JSON.stringify(e.wildcardName);
+    const nameKey = escapeJsString(e.wildcardName);
 
     lines.push(`
-      if (sp.length >= ${minLen} && sp.startsWith(${JSON.stringify(fullPrefixSlash)}, 0)) {
+      if (sp.length >= ${minLen} && sp.startsWith(${escapeJsString(fullPrefixSlash)}, 0)) {
         return { value: handlers[${e.wildcardStore}], params: { ${nameKey}: sp.substring(${sliceStart}) }, meta: DYNAMIC_META };
       }`);
 
@@ -186,7 +187,7 @@ function emitSpecializedWildMatchImpl<T>(
       const fullPrefix = '/' + e.prefix;
 
       lines.push(`
-      if (sp.length === ${fullPrefix.length} && sp === ${JSON.stringify(fullPrefix)}) {
+      if (sp.length === ${fullPrefix.length} && sp === ${escapeJsString(fullPrefix)}) {
         return { value: handlers[${e.wildcardStore}], params: { ${nameKey}: '' }, meta: DYNAMIC_META };
       }`);
     }
@@ -243,7 +244,7 @@ function emitGenericMatchImpl<T>(cfg: MatchConfig<T>): CompiledMatch<T> {
   if (pathLenJs !== '') src.push(pathLenJs);
 
   if (activeMethodCount === 1 && activeMethodLiteral !== null) {
-    src.push(`if (method !== ${JSON.stringify(activeMethodLiteral)}) return null;`);
+    src.push(`if (method !== ${escapeJsString(activeMethodLiteral)}) return null;`);
     src.push(`var mc = ${activeMethodCode};`);
   } else {
     src.push(`var mc = methodCodes[method]; if (mc === undefined) return null;`);
