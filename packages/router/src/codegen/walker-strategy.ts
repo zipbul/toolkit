@@ -1,47 +1,40 @@
 import type { SegmentNode } from '../matcher/segment-tree';
 import type { MatchConfig } from './emitter';
 
-/**
- * Per-method walker strategy chosen at build time.
+/*
+ * ─── Walker-strategy decisions ──────────────────────────────────────
  *
- * The router's match path can take one of four shapes; the choice
- * depends on tree topology, registered options, and route count:
+ * The router's match path can take one of four shapes:
  *
- *   SpecializedWild — router-shape fast path. compileMatchFn emits a
- *     tiny matchImpl that inlines the static-prefix wildcard probes
- *     directly, skipping method-code dispatch / static lookup / tree
- *     walk altogether. Eligible only when a router has exactly one
- *     active method, no statics, no cache, no opt-defaults, no testers,
- *     no case-fold, and the method's tree IS a static-prefix wildcard
- *     with ≤ 8 entries.
+ *   1. SpecializedWild — router-shape fast path. `compileMatchFn`
+ *      emits a tiny matchImpl that inlines the static-prefix wildcard
+ *      probes directly, skipping method-code dispatch / static lookup
+ *      / tree walk altogether. Eligible only when a router has exactly
+ *      one active method, no statics, no cache, no opt-defaults, no
+ *      testers, no case-fold, and the method's tree IS a static-prefix
+ *      wildcard with ≤ 8 entries.
  *
- *   Generic — emitter generic codegen. The default matchImpl shape:
- *     method dispatch + path preprocess + static lookup + cache +
- *     dynamic walk + cache write.
+ *   2. Generic — emitter generic codegen. The default matchImpl shape:
+ *      method dispatch + path preprocess + static lookup + cache +
+ *      dynamic walk + cache write.
  *
- *   Iterative — segment-walk's `createIterativeWalker`. Used by
- *     createSegmentWalker when codegen bails (size budget, fanout) and
- *     the tree is *not* ambiguous (no static + param/wildcard
- *     alternation at the same node).
+ *   3. Iterative — segment-walk's `createIterativeWalker`. Used by
+ *      `createSegmentWalker` when codegen bails (size budget, fanout)
+ *      and the tree is *not* ambiguous (no static + param/wildcard
+ *      alternation at the same node).
  *
- *   Recursive — segment-walk's recursive backtracking walker. Last
- *     resort for ambiguous trees that need backtracking the iterative
- *     walker doesn't generate.
+ *   4. Recursive — segment-walk's recursive backtracking walker. Last
+ *      resort for ambiguous trees that need backtracking the iterative
+ *      walker doesn't generate.
  *
- * The decision points are staged: `createSegmentWalker` chooses among
+ * Decisions are staged: `createSegmentWalker` chooses among
  * codegen / Iterative / Recursive per method via a try-cascade;
  * `compileMatchFn` then chooses SpecializedWild or Generic for the
- * matchImpl shape via `detectSingleMethodWildSpec`. Trying to merge
- * these into one upfront `selectWalker` call would require predicting
- * codegen success (which depends on ctx.bail during emit) — the
+ * matchImpl shape via `detectSingleMethodWildSpec` (below). Merging
+ * the two into one upfront `selectWalker` call would require predicting
+ * codegen success (which depends on `ctx.bail` during emit) — the
  * cascade is cheaper and equivalent in outcome.
  */
-export enum WalkerStrategy {
-  SpecializedWild = 'SpecializedWild',
-  Generic = 'Generic',
-  Iterative = 'Iterative',
-  Recursive = 'Recursive',
-}
 
 /**
  * Static-prefix wildcard codegen entry. Built when a method's tree

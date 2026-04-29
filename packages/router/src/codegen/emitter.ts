@@ -1,12 +1,11 @@
 import type { OptionalParamDefaults } from '../builder/optional-param-defaults';
 import type { MatchFn, MatchState } from '../matcher/match-state';
 import type { NormalizeCfg } from '../matcher/path-normalize';
+import type { MatchOutput, RouteParams } from '../types';
 import type { WildCodegenEntry } from './walker-strategy';
 
-import { detectSingleMethodWildSpec } from './walker-strategy';
-import type { MatchOutput, RouteParams } from '../types';
-
 import { RouterCache } from '../cache';
+import { detectSingleMethodWildSpec } from './walker-strategy';
 import {
   CACHE_META,
   DYNAMIC_META,
