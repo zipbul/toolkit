@@ -108,6 +108,25 @@ export function createSegmentWalker(
     return createIterativeWalker(root, decoder, decodeParams);
   }
 
+  /**
+   * Try matching a single param segment: run the tester (if any),
+   * recurse into `match` on success, and assign `state.params[name]
+   * = decoded` after the recursion returns true.
+   *
+   * Returns true on full match; false otherwise. The caller MUST
+   * check `state.errorKind` after a false return to propagate
+   * regex-timeout — the helper sets `state.errorKind` before
+   * returning false in the timeout branch but does not abort the
+   * caller's loop on its own.
+   *
+   * Closure-captured: `match`, `decoder`, `decodeParams`. Used by
+   * both the head-fast-path and the sibling-backtracking loop in
+   * `match` so the two paths share one definition; pre-D1 each had
+   * its own copy because abb90cd worried about JSC not inlining a
+   * helper. D1's bench against `param /users/:id` shows JSC FTL
+   * inlines this cleanly — extraction is 3-6 ns *faster* than the
+   * duplicated form, not slower.
+   */
   function tryMatchParam(
     param: ParamSegment,
     decoded: string,
