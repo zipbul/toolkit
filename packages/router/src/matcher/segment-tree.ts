@@ -1,5 +1,6 @@
 import type { Result } from '@zipbul/result';
-import type { PatternTesterFn, RegexSafetyOptions, RouterErrData } from '../types';
+import type { RegexSafetyOptions, RouterErrData } from '../types';
+import type { PatternTesterFn } from './pattern-tester';
 import type { PathPart } from '../builder/path-parser';
 
 import { err } from '@zipbul/result';

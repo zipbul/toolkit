@@ -4,6 +4,16 @@ export const TESTER_TIMEOUT = 2 as const;
 
 export type TesterResult = typeof TESTER_FAIL | typeof TESTER_PASS | typeof TESTER_TIMEOUT;
 
+/**
+ * Pattern tester closure. Hot-path matcher invokes this to validate a
+ * captured param against its compiled regex.
+ *
+ * Lives in matcher/ rather than src/types.ts so the types module
+ * stays at the *bottom* of the dependency graph (no `types →
+ * matcher` edge).
+ */
+export type PatternTesterFn = (value: string) => TesterResult;
+
 export interface PatternTesterOptions {
   readonly maxExecutionMs?: number;
 }

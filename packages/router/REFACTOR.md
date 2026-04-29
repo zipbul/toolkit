@@ -1159,17 +1159,13 @@ packages/router/test/               ★ 신규 파일 (F단계)
 | — | `df662e7` | D1-fix | — | tryMatchParam JSDoc 추가 (다른 helper 와 일관성) |
 | — | `3edcdd4` | D1-fix2 | — | tryMatchParam JSDoc closure 사실 오류 정정 (decoder/decodeParams 미캡처 명시) |
 | #16 | `19c49ed` | D2 | (회귀 가드) | 4종 baseline diff 검증 산출물 `bench/baseline/diff.md`. 핫패스 ±2 ns / 캐시 ±1 ns / 경쟁사 6 카테고리 ±5% / complex-shapes 6 카테고리 / percent-gate 모두 통과. 핫패스 모두 baseline 대비 *faster*; build-time 5-15% slower (의도된 trade-off) |
+| #17 | (this) | E1+E2 | F6 | `PatternTesterFn` 을 `src/types.ts` → `src/matcher/pattern-tester.ts` 로 이동 (types→matcher 레이어 역전 해소). public surface 그대로 (index.ts re-export 무변경). `test/public-api.contract.test.ts` 신설 — 3 spec: value-side export 정확히 `[Router, RouterError]`, Router constructable, RouterError 가 throw 타입. 576→579 tests, tsc 0 err |
 
 ### 7.2 미완료 단계
 
 | 단계 | Findings 잔여 | 의존 |
 |---|---|---|
-| E1~E2 | F6 | D ✅ 완료 |
-| F1~F12 | F25~F33 | E (선택) |
-| C1~C2 | F12, F14, F16 | B3 |
-| D1~D2 | F17 + 회귀 검증 | C |
-| E1~E2 | F6 | D |
-| F1~F12 | F25~F33 | E |
+| F1~F12 | F25~F33 | E ✅ 완료 (선택) |
 
 ### 7.3 검증 baseline (현 시점)
 
@@ -1192,7 +1188,7 @@ packages/router/test/               ★ 신규 파일 (F단계)
 | F3 path-parser SRP | 상 | A2 ✅ 41a9d25 | builder/path-parser.ts |
 | F4 route-expand 가드+조합 결합 | 상 | A2 ✅ 41a9d25 | builder/route-expand.ts |
 | F5 acquireCompiledPattern dead | 상 | A1 ✅ 2ec47f8 | builder/pattern-utils.ts |
-| F6 export 경계 (PathPart 누수) | 상 | E1, E2 | index.ts, router.ts, types.ts |
+| F6 export 경계 (PathPart 누수) | 상 | E1, E2 ✅ (this) | matcher/pattern-tester.ts (PatternTesterFn 이전), test/public-api.contract.test.ts |
 | F7 RouterErrData (kind/message만 필수) | 중 | A3 ✅ 5ffdb44+77bce9e | types.ts |
 | F8 sealed/isErr 중복 (registration) | 중 | A4 ✅ 8a97815 | router.ts → pipeline/registration.ts |
 | F8 not-built 가드 (match) | 중 | B4 ✅ 02fddc6 | matchLayer === undefined 자체가 신호 (별도 헬퍼 미도입) |

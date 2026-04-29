@@ -2,7 +2,8 @@ import type { HttpMethod } from '@zipbul/shared';
 import type { Result } from '@zipbul/result';
 import type { PathPart } from '../builder/path-parser';
 import type { SegmentNode } from '../matcher/segment-tree';
-import type { PatternTesterFn, RegexSafetyOptions, RouterErrData } from '../types';
+import type { RegexSafetyOptions, RouterErrData } from '../types';
+import type { PatternTesterFn } from '../matcher/pattern-tester';
 
 import { err, isErr } from '@zipbul/result';
 import { OptionalParamDefaults } from '../builder/optional-param-defaults';

@@ -25,11 +25,6 @@ export interface RegexSafetyOptions {
   validator?: (pattern: string) => void;
 }
 
-
-import type { TesterResult } from './matcher/pattern-tester';
-
-export type PatternTesterFn = (value: string) => TesterResult;
-
 export type RouteParams = Record<string, string | undefined>;
 
 // ── Error types ──
