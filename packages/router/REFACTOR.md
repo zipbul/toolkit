@@ -1159,7 +1159,7 @@ packages/router/test/               ★ 신규 파일 (F단계)
 | — | `df662e7` | D1-fix | — | tryMatchParam JSDoc 추가 (다른 helper 와 일관성) |
 | — | `3edcdd4` | D1-fix2 | — | tryMatchParam JSDoc closure 사실 오류 정정 (decoder/decodeParams 미캡처 명시) |
 | #16 | `19c49ed` | D2 | (회귀 가드) | 4종 baseline diff 검증 산출물 `bench/baseline/diff.md`. 핫패스 ±2 ns / 캐시 ±1 ns / 경쟁사 6 카테고리 ±5% / complex-shapes 6 카테고리 / percent-gate 모두 통과. 핫패스 모두 baseline 대비 *faster*; build-time 5-15% slower (의도된 trade-off) |
-| #17 | (this) | E1+E2 | F6 | `PatternTesterFn` 을 `src/types.ts` → `src/matcher/pattern-tester.ts` 로 이동 (types→matcher 레이어 역전 해소). public surface 그대로 (index.ts re-export 무변경). `test/public-api.contract.test.ts` 신설 — 3 spec: value-side export 정확히 `[Router, RouterError]`, Router constructable, RouterError 가 throw 타입. 576→579 tests, tsc 0 err |
+| #17 | (this) | E1+E2 | F6 | `PatternTesterFn` 을 `src/types.ts` → `src/matcher/pattern-tester.ts` 로 이동 (types→matcher 레이어 역전 해소). public surface 그대로 (index.ts re-export 무변경). `test/public-api.contract.test.ts` 신설 — 3 spec: value-side export 정확히 `[Router, RouterError]`, Router constructable, RouterError 가 throw 타입. 573→576 tests, tsc 0 err, 외부 `import { PatternTesterFn }` 시뮬레이션 차단 확인 |
 
 ### 7.2 미완료 단계
 
@@ -1169,7 +1169,7 @@ packages/router/test/               ★ 신규 파일 (F단계)
 
 ### 7.3 검증 baseline (현 시점)
 
-- `bun test`: **573 pass / 0 fail** (PR#1 시점 561 → A1 후 556 → A2 후 566 → A3 유지 → A4 후 567 → A5 후 569 → A6 후 573 getCodeMap spec 4건 추가)
+- `bun test`: **576 pass / 0 fail** (PR#1 시점 561 → A1 후 556 → A2 후 566 → A3 유지 → A4 후 567 → A5 후 569 → A6 후 573 → E2 후 576 public-api.contract spec 3건 추가)
 - `bun run build`: clean
 - `tsc --noEmit -p tsconfig.json`: **0 errors** (A3 의 F7 discriminated
   union 화로 pre-existing 2건 자연 해소).
