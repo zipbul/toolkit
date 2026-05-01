@@ -100,6 +100,17 @@ export class PathParser {
       }
     }
 
+    for (const seg of segments) {
+      if (seg === '') {
+        return err({
+          kind: 'route-parse',
+          message: `Path must not contain empty segments: ${path}`,
+          path,
+          suggestion: 'Collapse repeated slashes or register a single canonical path.',
+        });
+      }
+    }
+
     // Case fold (static segments only — dynamic ones keep original case for param names)
     if (!this.config.caseSensitive) {
       for (let i = 0; i < segments.length; i++) {
@@ -259,6 +270,18 @@ export class PathParser {
 
     // Check trailing decorators
     if (core.endsWith('?')) {
+      const beforeOptional = core.charCodeAt(core.length - 2);
+
+      if (beforeOptional === CC_PLUS || beforeOptional === CC_STAR) {
+        return err({
+          kind: 'route-parse',
+          message: `Invalid decorator combination in parameter '${seg}': ${path}`,
+          path,
+          segment: seg,
+          suggestion: 'Use either optional params (:name?) or wildcard params (:name+ / :name*), not both.',
+        });
+      }
+
       isOptional = true;
       core = core.slice(0, -1);
     }
@@ -312,7 +335,7 @@ export class PathParser {
       // `()` shape — the matcher would otherwise compile a literal-whitespace
       // regex which is almost certainly a typo.
       const rawPattern = core.slice(parenIdx + 1, -1);
-      pattern = rawPattern.trim() === '' ? null : rawPattern;
+      pattern = rawPattern.trim() === '' ? null : normalizeParamPatternSource(rawPattern);
     }
 
     const nameValidation = validateParamName(name, ':', path);
@@ -407,8 +430,7 @@ export class PathParser {
    * `regex-unsafe` with the specific reason.
    */
   private validatePattern(pattern: string): Result<void, RouterErrorData> {
-    const normalized = normalizeParamPatternSource(pattern);
-    const assessment = assessRegexSafety(normalized);
+    const assessment = assessRegexSafety(pattern);
 
     if (!assessment.safe) {
       return err<RouterErrorData>({

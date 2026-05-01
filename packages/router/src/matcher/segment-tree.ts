@@ -43,6 +43,8 @@ export interface ParamSegment {
   nextSibling: ParamSegment | null;
 }
 
+export type SegmentTreeUndoLog = Array<() => void>;
+
 export function createSegmentNode(): SegmentNode {
   return {
     store: null,
@@ -106,8 +108,20 @@ export function insertIntoSegmentTree(
   parts: PathPart[],
   handlerIndex: number,
   testerCache: Map<string, PatternTesterFn>,
+  undoLog?: SegmentTreeUndoLog,
 ): Result<void, RouterErrorData> {
   let node = root;
+  const undo = undoLog ?? [];
+  const undoStart = undo.length;
+
+  const fail = (data: RouterErrorData): Result<void, RouterErrorData> => {
+    for (let i = undo.length - 1; i >= undoStart; i--) {
+      undo[i]!();
+    }
+    undo.length = undoStart;
+
+    return err(data);
+  };
 
   for (let i = 0; i < parts.length; i++) {
     const part = parts[i]!;
@@ -117,7 +131,7 @@ export function insertIntoSegmentTree(
 
       for (const seg of segs) {
         if (node.wildcardStore !== null) {
-          return err({
+          return fail({
             kind: 'route-conflict',
             message: `Static route conflicts with existing wildcard '*${node.wildcardName}' at the same position`,
             segment: seg,
@@ -126,21 +140,25 @@ export function insertIntoSegmentTree(
         }
 
         if (node.staticChildren === null) {
+          const owner = node;
           node.staticChildren = Object.create(null) as Record<string, SegmentNode>;
+          undo.push(() => { owner.staticChildren = null; });
         }
 
         let child = node.staticChildren[seg];
 
         if (child === undefined) {
+          const children = node.staticChildren;
           child = createSegmentNode();
           node.staticChildren[seg] = child;
+          undo.push(() => { delete children[seg]; });
         }
 
         node = child;
       }
     } else if (part.type === 'param') {
       if (node.wildcardStore !== null) {
-        return err({
+        return fail({
           kind: 'route-conflict',
           message: `Parameter ':${part.name}' conflicts with existing wildcard '*${node.wildcardName}' at the same position`,
           segment: part.name,
@@ -161,8 +179,9 @@ export function insertIntoSegmentTree(
 
             tester = buildPatternTester(part.pattern, compiled);
             testerCache.set(part.pattern, tester);
+            undo.push(() => { testerCache.delete(part.pattern!); });
           } catch (e) {
-            return err({
+            return fail({
               kind: 'route-parse',
               message: `Invalid regex pattern in parameter ':${part.name}': ${e instanceof Error ? e.message : String(e)}`,
               segment: part.name,
@@ -173,6 +192,7 @@ export function insertIntoSegmentTree(
       }
 
       if (node.paramChild === null) {
+        const owner = node;
         node.paramChild = {
           name: part.name,
           tester,
@@ -181,6 +201,7 @@ export function insertIntoSegmentTree(
           next: createSegmentNode(),
           nextSibling: null,
         };
+        undo.push(() => { owner.paramChild = null; });
         node = node.paramChild.next;
       } else {
         // Walk the sibling chain. Three outcomes:
@@ -201,7 +222,7 @@ export function insertIntoSegmentTree(
           }
 
           if (p.name === part.name && p.patternSource !== part.pattern) {
-            return err({
+            return fail({
               kind: 'route-conflict',
               message: `Parameter ':${part.name}' has conflicting regex patterns`,
               segment: part.name,
@@ -210,7 +231,7 @@ export function insertIntoSegmentTree(
           }
 
           if (p.patternSource === null && p.ownerHandler !== handlerIndex) {
-            return err({
+            return fail({
               kind: 'route-conflict',
               message: `Parameter ':${part.name}' is unreachable — earlier sibling ':${p.name}' (registered by a different route) has no regex pattern and matches every value at this position. Add a regex pattern to disambiguate, or remove this route.`,
               segment: part.name,
@@ -234,6 +255,7 @@ export function insertIntoSegmentTree(
           // prev is non-null — paramChild was not null and we walked to the
           // end of the chain without matching.
           prev!.nextSibling = fresh;
+          undo.push(() => { prev!.nextSibling = null; });
           node = fresh.next;
         } else {
           node = matched.next;
@@ -243,7 +265,7 @@ export function insertIntoSegmentTree(
       // wildcard — terminal
       if (node.wildcardStore !== null) {
         if (node.wildcardName !== part.name) {
-          return err({
+          return fail({
             kind: 'route-conflict',
             message: `Wildcard '*${part.name}' conflicts with existing wildcard '*${node.wildcardName}'`,
             segment: part.name,
@@ -251,7 +273,7 @@ export function insertIntoSegmentTree(
           });
         }
 
-        return err({
+        return fail({
           kind: 'route-duplicate',
           message: `Wildcard route already exists at this position`,
           suggestion: 'Use a different path or HTTP method',
@@ -259,7 +281,7 @@ export function insertIntoSegmentTree(
       }
 
       if (node.paramChild !== null) {
-        return err({
+        return fail({
           kind: 'route-conflict',
           message: `Wildcard '*${part.name}' conflicts with existing parameter at the same position`,
           segment: part.name,
@@ -270,13 +292,18 @@ export function insertIntoSegmentTree(
       node.wildcardStore = handlerIndex;
       node.wildcardName = part.name;
       node.wildcardOrigin = part.origin;
+      undo.push(() => {
+        node.wildcardStore = null;
+        node.wildcardName = null;
+        node.wildcardOrigin = null;
+      });
 
       return;
     }
   }
 
   if (node.store !== null) {
-    return err({
+    return fail({
       kind: 'route-duplicate',
       message: 'Route already exists',
       suggestion: 'Use a different path or HTTP method',
@@ -284,6 +311,7 @@ export function insertIntoSegmentTree(
   }
 
   node.store = handlerIndex;
+  undo.push(() => { node.store = null; });
 }
 
 function extractSegments(staticLabel: string): string[] {

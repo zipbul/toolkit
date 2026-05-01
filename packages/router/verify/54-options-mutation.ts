@@ -14,10 +14,14 @@ r.add('GET', '/Hello', 'h');
 opts.caseSensitive = false;
 r.build();
 
-console.log('match /Hello:', r.match('GET', '/Hello'));
-console.log('match /hello:', r.match('GET', '/hello'));
+const upper = r.match('GET', '/Hello');
+const lower = r.match('GET', '/hello');
+console.log('match /Hello:', upper);
+console.log('match /hello:', lower);
 // If consistent: only /Hello matches.
 // If divergence: path-parser stored /Hello case-sensitively, matchImpl
 // lowercases input → /hello → looks for /hello in staticMap → null. Both null.
 
-console.log('VERDICT: REPRODUCED — options mutation makes registered routes unreachable');
+console.log('VERDICT:', upper?.value === 'h' && lower === null
+  ? 'REFUTED — constructor snapshots options before later user mutation'
+  : 'REPRODUCED — options mutation makes registered routes unreachable');

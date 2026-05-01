@@ -22,10 +22,13 @@ const parser = new PathParser({
 });
 
 const cases = ['/api//users', '/api/v1//', '//', '/users//:id', '/a///b'];
+let parserRejected = 0;
+let routerRejected = 0;
 
 for (const path of cases) {
   const r = parser.parse(path);
   if ('data' in r) {
+    parserRejected++;
     console.log(path, '→ rejected:', r.data.kind, '|', r.data.message?.slice(0, 60));
   } else {
     console.log(path, '→ parts:', JSON.stringify(r.parts));
@@ -33,13 +36,19 @@ for (const path of cases) {
 }
 
 // Now register through Router and observe behavior.
-console.log('--- via Router.add ---');
+console.log('--- via Router.build ---');
 for (const path of cases) {
   const router = new Router<string>();
   let kind: string | undefined;
-  try { router.add('GET', path, 'h'); }
+  try {
+    router.add('GET', path, 'h');
+    router.build();
+  }
   catch (e: any) { kind = e?.data?.kind; }
-  console.log(path, '→ add() rejection:', kind ?? '(accepted)');
+  if (kind !== undefined) routerRejected++;
+  console.log(path, '→ build() rejection:', kind ?? '(accepted)');
 }
 
-console.log('VERDICT: REPRODUCED — path-parser does not collapse // (impacts dynamic routes)');
+console.log('VERDICT:', parserRejected === cases.length && routerRejected === cases.length
+  ? 'REFUTED — path-parser rejects repeated slashes before segment-tree insertion'
+  : 'REPRODUCED — path-parser does not collapse // (impacts dynamic routes)');

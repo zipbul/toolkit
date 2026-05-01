@@ -111,13 +111,15 @@ describe('param-name validation', () => {
   it('rejects `:a:b` (colon inside name) — usually means two consecutive params', () => {
     const r = new Router<string>();
 
-    expect(() => r.add('GET', '/:a:b', 'x')).toThrow(RouterError);
+    r.add('GET', '/:a:b', 'x');
+    expect(() => r.build()).toThrow(RouterError);
   });
 
   it('rejects asterisk in param name', () => {
     const r = new Router<string>();
 
-    expect(() => r.add('GET', '/:a*x', 'x')).toThrow(RouterError);
+    r.add('GET', '/:a*x', 'x');
+    expect(() => r.build()).toThrow(RouterError);
   });
 
   it('rejects slash in param name', () => {
@@ -155,19 +157,22 @@ describe('param-name validation', () => {
     // surfaced as a parse error.
     const r = new Router<string>();
 
-    expect(() => r.add('GET', '/files/*p{\\w+}', 'wreg')).toThrow(RouterError);
+    r.add('GET', '/files/*p{\\w+}', 'wreg');
+    expect(() => r.build()).toThrow(RouterError);
   });
 
   it('rejects metacharacters in :name+ multi-wildcard form', () => {
     const r = new Router<string>();
 
-    expect(() => r.add('GET', '/files/:p(*+', 'invalid')).toThrow(RouterError);
+    r.add('GET', '/files/:p(*+', 'invalid');
+    expect(() => r.build()).toThrow(RouterError);
   });
 
   it('rejects metacharacters in :name* star-wildcard form', () => {
     const r = new Router<string>();
 
-    expect(() => r.add('GET', '/files/:p:other*', 'invalid')).toThrow(RouterError);
+    r.add('GET', '/files/:p:other*', 'invalid');
+    expect(() => r.build()).toThrow(RouterError);
   });
 });
 
@@ -203,8 +208,9 @@ describe('handler value with falsy/undefined values', () => {
     // undefined — silently allowing re-registration.
     const r = new Router<string | undefined>();
     r.add('GET', '/x', undefined);
+    r.add('GET', '/x', 'something');
 
-    expect(() => r.add('GET', '/x', 'something')).toThrow(RouterError);
+    expect(() => r.build()).toThrow(RouterError);
   });
 
   it('handler value === false / 0 / "" all preserved via static MatchOutput', () => {

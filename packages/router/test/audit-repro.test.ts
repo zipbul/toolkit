@@ -1,6 +1,6 @@
 import { test, expect } from 'bun:test';
 
-import { Router } from '../index';
+import { Router, RouterError } from '../index';
 
 // ─── Strict contract: match() always returns MatchOutput<T> | null (no throws) ───
 
@@ -54,24 +54,18 @@ test('AUDIT different-method query returns null', () => {
   expect(r.match('MKCOL' as any, '/a')).toBeNull();
 });
 
-// ─── add() array partial failure state ───
+// ─── add() array failure atomicity ───
 
-test('AUDIT add() array partial failure: earlier methods registered before throw', () => {
+test('AUDIT add() array validation is reported during build without publishing partial state', () => {
   const r = new Router<string>();
   for (let i = 0; i < 25; i++) {
     r.add(`M${i}` as any, '/warm', 'x');
   }
 
-  let threw: unknown = null;
-  try {
-    r.add(['GET' as any, 'NEWMETHOD' as any], '/a', 'y');
-  } catch (e) {
-    threw = e;
-  }
-  expect(threw).not.toBeNull();
+  r.add(['GET' as any, 'NEWMETHOD' as any], '/a', 'y');
 
-  r.build();
-  expect(r.match('GET', '/a')).not.toBeNull();
+  expect(() => r.build()).toThrow(RouterError);
+  expect(r.match('GET', '/a')).toBeNull();
 });
 
 // ─── Optional param expansion ───

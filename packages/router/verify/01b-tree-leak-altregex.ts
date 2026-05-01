@@ -18,13 +18,14 @@ const r = new Router<string>();
 let kind: string | undefined;
 try {
   r.add('GET', `/alt/two/three/:p(${candidate})`, 'h');
+  r.build();
 } catch (e: any) { kind = e?.data?.kind; }
 console.log('reject kind:', kind);
 
 const reg = (getRouterInternals(r).registration as unknown as {
-  segmentTrees: any[];
+  segmentTrees?: any[];
 }) ;
-const root = reg.segmentTrees[0];
+const root = reg.segmentTrees?.[0];
 
 const orphan = (n: any) =>
   n.store === null && n.staticChildren === null

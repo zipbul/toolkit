@@ -11,13 +11,17 @@ const r = new Router<string>();
 const N = 10;
 let failures = 0;
 for (let i = 0; i < N; i++) {
-  try { r.add('GET', `/leak${i}/sub/:p([z-a])`, 'h'); }
-  catch { failures++; }
+  r.add('GET', `/leak${i}/sub/:p([z-a])`, 'h');
+}
+try {
+  r.build();
+} catch (e: any) {
+  failures = e?.data?.errors?.length ?? 0;
 }
 console.log('failures:', failures, '/ attempts:', N);
 
-const reg = (getRouterInternals(r).registration as unknown as { segmentTrees: any[] }) ;
-const root = reg.segmentTrees[0];
+const reg = (getRouterInternals(r).registration as unknown as { segmentTrees?: any[] }) ;
+const root = reg.segmentTrees?.[0];
 if (!root) { console.log('VERDICT: REFUTED — no tree.'); process.exit(0); }
 
 let leakCount = 0;

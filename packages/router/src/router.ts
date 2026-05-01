@@ -86,15 +86,16 @@ export class Router<T = unknown> {
   readonly allowedMethods: (path: string) => HttpMethod[];
 
   constructor(options: RouterOptions = {}) {
-    const optionalParamDefaults = new OptionalParamDefaults(options.optionalParamBehavior);
+    const routerOptions: RouterOptions = { ...options };
+    const optionalParamDefaults = new OptionalParamDefaults(routerOptions.optionalParamBehavior);
     const methodRegistry = new MethodRegistry();
-    const pathParser = createPathParser(options);
+    const pathParser = createPathParser(routerOptions);
     const registration = new Registration<T>(
       methodRegistry,
       pathParser,
       optionalParamDefaults,
     );
-    const cache = createCacheContainers<T>(options);
+    const cache = createCacheContainers<T>(routerOptions);
 
     let matchImpl: ((method: string, path: string) => MatchOutput<T> | null) | undefined;
     let matchLayer: MatchLayer<T> | undefined;
@@ -121,7 +122,7 @@ export class Router<T = unknown> {
 
     const performBuild = (): void => {
       const snapshot = registration.seal();
-      const r = buildFromRegistration<T>(snapshot, options, methodRegistry);
+      const r = buildFromRegistration<T>(snapshot, routerOptions, methodRegistry);
 
       let hasAnyStatic = false;
 

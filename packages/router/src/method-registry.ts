@@ -14,6 +14,11 @@ const DEFAULT_METHODS: ReadonlyArray<readonly [string, number]> = [
 
 const MAX_METHODS = 32;
 
+interface MethodRegistrySnapshot {
+  entries: Array<readonly [string, number]>;
+  nextOffset: number;
+}
+
 export class MethodRegistry {
   /** Insertion-ordered map — fed to callers that need to iterate `[name, code]`
    *  pairs (router build() walks this for activeMethodCodes). */
@@ -78,5 +83,27 @@ export class MethodRegistry {
    */
   getCodeMap(): Readonly<Record<string, number>> {
     return this.codeMap;
+  }
+
+  snapshot(): MethodRegistrySnapshot {
+    return {
+      entries: [...this.methodToOffset],
+      nextOffset: this.nextOffset,
+    };
+  }
+
+  restore(snapshot: MethodRegistrySnapshot): void {
+    this.methodToOffset.clear();
+
+    for (const key in this.codeMap) {
+      delete this.codeMap[key];
+    }
+
+    for (const [method, offset] of snapshot.entries) {
+      this.methodToOffset.set(method, offset);
+      this.codeMap[method] = offset;
+    }
+
+    this.nextOffset = snapshot.nextOffset;
   }
 }

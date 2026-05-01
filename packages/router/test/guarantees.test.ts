@@ -205,16 +205,15 @@ describe('method specs', () => {
     expect(r.match('DELETE', '/c')!.value).toBe('c');
   });
 
-  it('addAll fail-fast on first error — preserves partial registrations as success', () => {
+  it('addAll defers duplicate validation to build()', () => {
     const r = new Router<string>();
 
-    expect(() => r.addAll([
+    r.addAll([
       ['GET', '/ok', '1'],
-      ['GET', '/ok', '2'], // duplicate → throws
-    ])).toThrow(RouterError);
+      ['GET', '/ok', '2'],
+    ]);
 
-    // Router not sealed after error — recovery via new instance
-    expect(() => r.add('POST', '/another', 'p')).not.toThrow();
+    expect(() => r.build()).toThrow(RouterError);
   });
 });
 
@@ -572,6 +571,7 @@ describe('method registry', () => {
       r.add(m, `/route${i}`, i);
     }
 
-    expect(() => r.add('OVERFLOW' as unknown as 'GET', '/r33', 33)).toThrow(RouterError);
+    r.add('OVERFLOW' as unknown as 'GET', '/r33', 33);
+    expect(() => r.build()).toThrow(RouterError);
   });
 });

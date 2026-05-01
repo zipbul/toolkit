@@ -44,11 +44,12 @@ let threw = false;
 let kind: string | undefined;
 try {
   r.add('GET', '/leak/path/:bad([z-a])', 'h');
+  r.build();
 } catch (e: any) {
   threw = true;
   kind = e?.data?.kind;
 }
-console.log('add() threw:', threw, '| kind:', kind);
+console.log('build() threw:', threw, '| kind:', kind);
 
 // Inspect the GET segment tree.
 const reg = (getRouterInternals(r).registration as unknown as {
@@ -60,7 +61,7 @@ const reg = (getRouterInternals(r).registration as unknown as {
   }>;
 }) ;
 
-const root = reg.segmentTrees[0]; // GET = method code 0
+const root = reg.segmentTrees?.[0]; // GET = method code 0
 const orphan = (n: any) =>
   n.store === null && n.staticChildren === null
   && n.paramChild === null && n.wildcardStore === null;

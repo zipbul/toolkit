@@ -7,11 +7,17 @@ import { Router } from '../index';
 import { getRouterInternals } from '../internal';
 
 const r = new Router<string>();
-r.add('GET', '/api//users/:id', 'h');
-r.build();
+let rejected = false;
+try {
+  r.add('GET', '/api//users/:id', 'h');
+  r.build();
+} catch {
+  rejected = true;
+}
 
 const trees = (getRouterInternals(r).registration as any).segmentTrees;
-const root = trees[0];
+const root = trees?.[0];
+console.log('register /api//users/:id rejected:', rejected);
 
 function dump(node: any, depth = 0): void {
   const pad = '  '.repeat(depth);
@@ -29,10 +35,12 @@ function dump(node: any, depth = 0): void {
     dump(node.paramChild.next, depth + 2);
   }
 }
-dump(root);
+if (root) dump(root);
 
 // Test matches:
 console.log('match /api//users/42:', r.match('GET', '/api//users/42')?.value ?? null);
 console.log('match /api/users/42:',  r.match('GET', '/api/users/42')?.value ?? null);
 
-console.log('VERDICT: REPRODUCED — // in dynamic route silently mapped to single /; semantic mismatch');
+console.log('VERDICT:', rejected && root === undefined
+  ? 'REFUTED — // in dynamic route is rejected before tree insertion'
+  : 'REPRODUCED — // in dynamic route silently mapped to single /; semantic mismatch');

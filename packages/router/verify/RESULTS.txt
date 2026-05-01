@@ -2,28 +2,21 @@
 RUN: verify/01-tree-leak.ts
 =========================================
 preflight: RegExp ctor rejects [z-a]: true
-add() threw: true | kind: route-parse
-  root has "leak" child: true
-  "leak" has "path" child: true
-  "path" node fully orphan: true
-    store: null | staticChildren: null | paramChild: null | wildcardStore: null
-VERDICT: REPRODUCED — orphan static node left after partial-failure.
+build() threw: true | kind: route-validation
+VERDICT: REFUTED — no GET tree allocated; nothing leaked.
 
 =========================================
 RUN: verify/01b-tree-leak-altregex.ts
 =========================================
 preflight: RegExp rejects (?<>x) : true
-reject kind: route-parse
-alt: true two: true three: true
-three orphan: true
-VERDICT: REPRODUCED
+reject kind: route-validation
+VERDICT: REFUTED — no tree allocated.
 
 =========================================
 RUN: verify/01c-tree-leak-accumulation.ts
 =========================================
 failures: 10 / attempts: 10
-orphan leak* keys at root: 10
-VERDICT: REPRODUCED — accumulates linearly
+VERDICT: REFUTED — no tree.
 
 =========================================
 RUN: verify/01d-tree-leak-matchsafety.ts
@@ -34,7 +27,8 @@ match /leak1: null
 match /leak1/x: null
 match /leak1/x/abc: null
 match /leak1/x/anything: null
-VERDICT: REPRODUCED — orphans are inert (no match impact)
+invalid rejected: true | orphan prefixes present: false
+VERDICT: REFUTED — failed registrations leave no inert orphan paths
 
 =========================================
 RUN: verify/02-double-split.ts
@@ -59,8 +53,8 @@ VERDICT: REPRODUCED — static parts are joined then re-split.
 =========================================
 RUN: verify/02b-double-split-perf.ts
 =========================================
-depth=2  100 routes build avg: 0.29 ms
-depth=10 100 routes build avg: 0.44 ms
+depth=2  100 routes build avg: 0.38 ms
+depth=10 100 routes build avg: 0.58 ms
 5x deeper → time should grow ~5x if double-split contributes.
 ratio (depth10 / depth2): 1.53
 VERDICT: REPRODUCED — observed redundant work scales linearly with depth.
@@ -68,42 +62,37 @@ VERDICT: REPRODUCED — observed redundant work scales linearly with depth.
 =========================================
 RUN: verify/03-empty-segment.ts
 =========================================
-/api//users → parts: [{"type":"static","value":"/api//users"}]
-/api/v1// → parts: [{"type":"static","value":"/api/v1/"}]
-// → parts: [{"type":"static","value":"/"}]
-/users//:id → parts: [{"type":"static","value":"/users//"},{"type":"param","name":"id","pattern":null,"optional":false}]
-/a///b → parts: [{"type":"static","value":"/a///b"}]
---- via Router.add ---
-/api//users → add() rejection: (accepted)
-/api/v1// → add() rejection: (accepted)
-// → add() rejection: (accepted)
-/users//:id → add() rejection: (accepted)
-/a///b → add() rejection: (accepted)
-VERDICT: REPRODUCED — path-parser does not collapse // (impacts dynamic routes)
+/api//users → rejected: route-parse | Path must not contain empty segments: /api//users
+/api/v1// → rejected: route-parse | Path must not contain empty segments: /api/v1//
+// → rejected: route-parse | Path must not contain empty segments: //
+/users//:id → rejected: route-parse | Path must not contain empty segments: /users//:id
+/a///b → rejected: route-parse | Path must not contain empty segments: /a///b
+--- via Router.build ---
+/api//users → build() rejection: route-validation
+/api/v1// → build() rejection: route-validation
+// → build() rejection: route-validation
+/users//:id → build() rejection: route-validation
+/a///b → build() rejection: route-validation
+VERDICT: REFUTED — path-parser rejects repeated slashes before segment-tree insertion
 
 =========================================
 RUN: verify/03b-empty-segment-match.ts
 =========================================
-match /api//users: double
+register /api//users rejected: true
+match /api//users: null
 match /api/users: null
 match /api///users: null
 match /items: single-only
 match /items/: single-only
-VERDICT: REPRODUCED — static `//` route is registered as raw key
+VERDICT: REFUTED — static `//` route is rejected at registration
 
 =========================================
 RUN: verify/03c-empty-segment-dynamic.ts
 =========================================
-node store= null staticKeys= [ "api" ] param= undefined wild= null
- static["api"]:
-    node store= null staticKeys= [ "users" ] param= undefined wild= null
-     static["users"]:
-        node store= null staticKeys= null param= id wild= null
-         param[id]:
-            node store= 0 staticKeys= null param= undefined wild= null
+register /api//users/:id rejected: true
 match /api//users/42: null
-match /api/users/42: h
-VERDICT: REPRODUCED — // in dynamic route silently mapped to single /; semantic mismatch
+match /api/users/42: null
+VERDICT: REFUTED — // in dynamic route is rejected before tree insertion
 
 =========================================
 RUN: verify/04-prev-nonnull.ts
@@ -117,13 +106,13 @@ VERDICT: REFUTED — prev! invariant held after appending three siblings.
 =========================================
 RUN: verify/05-anchor-drift.ts
 =========================================
-(A) testerCache keys: [ "\\d+", "^\\d+$" ]
-   expected normalized: 1 entry; actual: 2
-(B) registering equivalent regex at same path → kind: route-conflict
+(A) testerCache keys: [ "\\d+" ]
+   expected normalized: 1 entry; actual: 1
+(B) registering equivalent regex at same path → kind: route-duplicate
 (C) /users/42 (anchored regex): h
 (C) /users/abc: null
-(A) tester impls: [ "anon", "anon" ]
-VERDICT: REPRODUCED — anchor stripping not propagated; spurious conflict + dup cache keys
+(A) tester impls: [ "anon" ]
+VERDICT: REFUTED — anchor stripping is propagated to route shape and tester cache
 
 =========================================
 RUN: verify/06-route-duplicate-msgs.ts
@@ -447,35 +436,35 @@ VERDICT: REPRODUCED — fresh per dynamic match (intentional)
 =========================================
 RUN: verify/35-addall-leak.ts
 =========================================
-registeredCount: 1
-orphan /leak present: true
-orphan /leak/path present: true
-static /ok/first kept: true
-VERDICT: REPRODUCED — addAll partial failure leaves orphan tree nodes
+build error count: 1
+orphan /leak present: false
+orphan /leak/path present: false
+compiled staticMap published: false
+VERDICT: REFUTED — failed addAll build publishes no partial compiled state
 
 =========================================
 RUN: verify/36-star-partial.ts
 =========================================
 kind: route-conflict
-GET      /files/static: star
-POST     /files/static: star
-PUT      /files/static: put-wild
+GET      /files/static: null
+POST     /files/static: null
+PUT      /files/static: null
 PATCH    /files/static: null
 DELETE   /files/static: null
 OPTIONS  /files/static: null
 HEAD     /files/static: null
-VERDICT: REPRODUCED — * registers GET/POST then fails at PUT, partial state
+VERDICT: REFUTED — failed * expansion build publishes no partial compiled methods
 
 =========================================
 RUN: verify/37-handler-reuse.ts
 =========================================
 after 1st add:
-  a.paramChild.name: x
-  a.paramChild.ownerHandler: 0
-  handlers.length: 0
+  a.paramChild.name: undefined
+  a.paramChild.ownerHandler: undefined
+  handlers.length: undefined
 2nd add throws: false
 match /a/something: second
-VERDICT: REPRODUCED — handlerIndex reuse bypasses unreachable check
+VERDICT: REFUTED — failed dynamic add rolls back leaked ownerHandler state
 
 =========================================
 RUN: verify/38-prefix-regex.ts
@@ -514,8 +503,8 @@ VERDICT: REPRODUCED — outer frozen, inner Map mutable (Object.freeze does not 
 RUN: verify/42-tester-cache.ts
 =========================================
 after 1st (success): [ "\\d+" ]
-after 2nd (fail):   [ "\\d+", "\\w+" ]
-VERDICT: REPRODUCED — \w+ retained even though registration failed
+failed build cache published:   []
+VERDICT: REFUTED — failed build publishes no testerCache entries
 
 =========================================
 RUN: verify/43-detectwildcodegen-dup.ts
@@ -567,9 +556,9 @@ RUN: verify/49-decorator-combo.ts
 =========================================
 /:a?+ → rejected: route-parse
 /:a?* → rejected: route-parse
-/:a+? → parts: [{"type":"static","value":"/"},{"type":"wildcard","name":"a","origin":"multi"}]
-/:a*? → parts: [{"type":"static","value":"/"},{"type":"wildcard","name":"a","origin":"star"}]
-VERDICT: PARTIAL — :a+? silently parsed; :a?+ rejected
+/:a+? → rejected: route-parse
+/:a*? → rejected: route-parse
+VERDICT: REFUTED — mixed optional/wildcard decorators are rejected consistently
 
 =========================================
 RUN: verify/50-parsewildcard-dup.ts
@@ -603,9 +592,15 @@ VERDICT: REFUTED — validation correct
 =========================================
 RUN: verify/54-options-mutation.ts
 =========================================
-match /Hello: null
+match /Hello: {
+  value: "h",
+  params: {},
+  meta: {
+    source: "static",
+  },
+}
 match /hello: null
-VERDICT: REPRODUCED — options mutation makes registered routes unreachable
+VERDICT: REFUTED — constructor snapshots options before later user mutation
 
 =========================================
 RUN: verify/55-build-stuck.ts

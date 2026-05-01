@@ -2,6 +2,7 @@ import { describe, it, expect } from 'bun:test';
 
 import { Router } from '../src/router';
 import { RouterError } from '../src/error';
+import type { RouterErrorData } from '../src/types';
 
 // ── Helpers ──
 
@@ -19,6 +20,13 @@ function fillMethodsToLimit(router: Router<string>): void {
   for (let i = 0; i < 25; i++) {
     router.add(`CUSTOM_${i}` as any, `/limit-${i}`, `limit-${i}`);
   }
+}
+
+function firstBuildIssue(router: Router<string>): RouterErrorData {
+  const err = catchRouterError(() => router.build());
+  expect(err.data.kind).toBe('route-validation');
+  if (err.data.kind !== 'route-validation') throw err;
+  return err.data.errors[0]!.error;
 }
 
 describe('Router<T> errors', () => {
@@ -43,41 +51,47 @@ describe('Router<T> errors', () => {
   it('should throw for duplicate method+path (route-duplicate)', () => {
     const router = new Router<string>();
     router.add('GET', '/x', 'first');
+    router.add('GET', '/x', 'second');
 
-    const err = catchRouterError(() => router.add('GET', '/x', 'second'));
-    expect(err.data.kind).toBe('route-duplicate');
+    const issue = firstBuildIssue(router);
+    expect(issue.kind).toBe('route-duplicate');
   });
 
   it('should throw for conflicting wildcard after param (route-conflict)', () => {
     const router = new Router<string>();
     router.add('GET', '/users/:id', 'by-id');
+    router.add('GET', '/users/*', 'by-wildcard');
 
-    const err = catchRouterError(() => router.add('GET', '/users/*', 'by-wildcard'));
-    expect(err.data.kind).toBe('route-conflict');
+    const issue = firstBuildIssue(router);
+    expect(issue.kind).toBe('route-conflict');
   });
 
-  it('should throw with registeredCount on addAll fail-fast', () => {
+  it('should report addAll duplicate during build validation', () => {
     const router = new Router<string>();
     router.add('GET', '/existing', 'existing');
-
-    const err = catchRouterError(() => router.addAll([
+    router.addAll([
       ['POST', '/new', 'new'],
       ['GET', '/existing', 'duplicate'],
-    ]));
+    ]);
 
-    expect(err.data.registeredCount).toBe(1);
+    const err = catchRouterError(() => router.build());
+    expect(err.data.kind).toBe('route-validation');
+    expect(err.data.errors[0]?.index).toBe(2);
+    expect(err.data.errors[0]?.error.kind).toBe('route-duplicate');
   });
 
-  it('should throw with registeredCount=0 when addAll first entry fails', () => {
+  it('should report first addAll entry failure during build validation', () => {
     const router = new Router<string>();
     router.add('GET', '/existing', 'existing');
-
-    const err = catchRouterError(() => router.addAll([
+    router.addAll([
       ['GET', '/existing', 'duplicate'],
       ['POST', '/other', 'other'],
-    ]));
+    ]);
 
-    expect(err.data.registeredCount).toBe(0);
+    const err = catchRouterError(() => router.build());
+    expect(err.data.kind).toBe('route-validation');
+    expect(err.data.errors[0]?.index).toBe(1);
+    expect(err.data.errors[0]?.error.kind).toBe('route-duplicate');
   });
 
   it('should throw kind=\'router-sealed\' when addAll called after build', () => {
@@ -93,9 +107,10 @@ describe('Router<T> errors', () => {
   it('should throw kind=\'method-limit\' when exceeding 32 methods', () => {
     const router = new Router<string>();
     fillMethodsToLimit(router);
+    router.add('OVERFLOW_METHOD' as any, '/overflow', 'overflow');
 
-    const err = catchRouterError(() => router.add('OVERFLOW_METHOD' as any, '/overflow', 'overflow'));
-    expect(err.data.kind).toBe('method-limit');
+    const issue = firstBuildIssue(router);
+    expect(issue.kind).toBe('method-limit');
   });
 
   it('should still match existing routes after sealed add-error', () => {
@@ -113,8 +128,9 @@ describe('Router<T> errors', () => {
   it('should throw for unclosed regex pattern (route-parse)', () => {
     const router = new Router<string>();
 
-    const err = catchRouterError(() => router.add('GET', '/users/:id(\\d+', 'invalid-regex'));
-    expect(err.data.kind).toBe('route-parse');
+    router.add('GET', '/users/:id(\\d+', 'invalid-regex');
+    const issue = firstBuildIssue(router);
+    expect(issue.kind).toBe('route-parse');
   });
 
   it('should return null for oversized segment during match', () => {
@@ -149,15 +165,15 @@ describe('Router<T> errors', () => {
   it('should throw for param-duplicate in same path', () => {
     const router = new Router<string>();
 
-    const err = catchRouterError(() => router.add('GET', '/users/:id/posts/:id', 'dup-param'));
-    expect(err.data.kind).toBe('param-duplicate');
+    router.add('GET', '/users/:id/posts/:id', 'dup-param');
+    expect(firstBuildIssue(router).kind).toBe('param-duplicate');
   });
 
   it('should throw for wildcard not in last position (route-parse)', () => {
     const router = new Router<string>();
 
-    const err = catchRouterError(() => router.add('GET', '/files/*/extra', 'bad'));
-    expect(err.data.kind).toBe('route-parse');
+    router.add('GET', '/files/*/extra', 'bad');
+    expect(firstBuildIssue(router).kind).toBe('route-parse');
   });
 
   it('should include suggestion field for mutation error kinds', () => {
@@ -173,19 +189,21 @@ describe('Router<T> errors', () => {
     // route-duplicate
     const r3 = new Router<string>();
     r3.add('GET', '/x', 'x');
-    const dup = catchRouterError(() => r3.add('GET', '/x', 'x2'));
-    expect(dup.data.kind).toBe('route-duplicate');
-    if (dup.data.kind === 'route-duplicate') {
-      expect(typeof dup.data.suggestion).toBe('string');
+    r3.add('GET', '/x', 'x2');
+    const dup = firstBuildIssue(r3);
+    expect(dup.kind).toBe('route-duplicate');
+    if (dup.kind === 'route-duplicate') {
+      expect(typeof dup.suggestion).toBe('string');
     }
   });
 
   it('should throw for conflicting wildcard names at same node within the same method (F9 — method-scoped)', () => {
     const router = new Router<string>();
     router.add('GET', '/files/*path', 'files-get');
+    router.add('GET', '/files/*other', 'files-get-2');
 
-    const err = catchRouterError(() => router.add('GET', '/files/*other', 'files-get-2'));
-    expect(err.data.kind).toBe('route-conflict');
+    const issue = firstBuildIssue(router);
+    expect(issue.kind).toBe('route-conflict');
   });
 
   it('should allow the same wildcard prefix with different names across distinct methods (F9 — cross-method coexistence)', () => {
@@ -235,9 +253,10 @@ describe('Router<T> errors', () => {
   it('should throw for route-conflict when static after wildcard', () => {
     const router = new Router<string>();
     router.add('GET', '/api/*', 'wildcard');
+    router.add('GET', '/api/specific', 'specific');
 
-    const err = catchRouterError(() => router.add('GET', '/api/specific', 'specific'));
-    expect(err.data.kind).toBe('route-conflict');
+    const issue = firstBuildIssue(router);
+    expect(issue.kind).toBe('route-conflict');
   });
 
   it('should include method field in add error data', () => {
@@ -254,9 +273,10 @@ describe('Router<T> errors', () => {
   it('should throw regex-unsafe error when pattern contains backreference (always-on guard)', () => {
     const router = new Router<string>();
 
-    const err = catchRouterError(() => router.add('GET', '/users/:id(([a-z])\\1)', 'handler'));
-    expect(err.data.kind).toBe('regex-unsafe');
-    expect(err.data.message).toContain('Backreferences');
+    router.add('GET', '/users/:id(([a-z])\\1)', 'handler');
+    const issue = firstBuildIssue(router);
+    expect(issue.kind).toBe('regex-unsafe');
+    expect(issue.message).toContain('Backreferences');
   });
 
   it('should silently strip ^/$ anchors and accept the pattern', () => {
@@ -274,8 +294,9 @@ describe('Router<T> errors', () => {
     const router = new Router<string>();
     const path = '/' + Array.from({ length: 65 }, (_, i) => `s${i}`).join('/');
 
-    const err = catchRouterError(() => router.add('GET', path, 'deep'));
-    expect(err.data.kind).toBe('segment-limit');
+    router.add('GET', path, 'deep');
+    const issue = firstBuildIssue(router);
+    expect(issue.kind).toBe('segment-limit');
   });
 
   it('should not throw when path has exactly 64 segments', () => {
@@ -289,7 +310,8 @@ describe('Router<T> errors', () => {
     const router = new Router<string>();
     const path = '/' + Array.from({ length: 33 }, (_, i) => `:p${i}`).join('/');
 
-    expect(() => router.add('GET', path, 'many-params')).toThrow(RouterError);
+    router.add('GET', path, 'many-params');
+    expect(firstBuildIssue(router).kind).toBe('segment-limit');
   });
 
   it('should not throw when path has exactly 32 unique param segments', () => {

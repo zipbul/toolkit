@@ -195,24 +195,28 @@ describe('Router', () => {
       expect(result).toBeNull();
     });
 
-    it('should throw RouterError with registeredCount from addAll on duplicate', () => {
+    it('should report duplicate addAll entries during build validation', () => {
       const r = makeRouter<number>();
       r.add('GET', '/a', 1);
-
-      const e = catchRouterError(() => r.addAll([
+      r.addAll([
         ['POST', '/b', 2],
-        ['GET', '/a', 3], // duplicate → should fail
-      ]));
+        ['GET', '/a', 3],
+      ]);
 
-      expect(e.data.registeredCount).toBe(1);
+      const e = catchRouterError(() => r.build());
+      expect(e.data.kind).toBe('route-validation');
+      expect(e.data.errors[0]?.index).toBe(2);
+      expect(e.data.errors[0]?.error.kind).toBe('route-duplicate');
     });
 
-    it('should throw RouterError when method array add has failure', () => {
+    it('should report method array duplicate during build validation', () => {
       const r = makeRouter<number>();
       r.add('GET', '/x', 1);
+      r.add(['GET', 'POST'], '/x', 2);
 
-      // Adding ['GET', 'POST'] to same path — GET will duplicate
-      expect(() => r.add(['GET', 'POST'], '/x', 2)).toThrow(RouterError);
+      const e = catchRouterError(() => r.build());
+      expect(e.data.kind).toBe('route-validation');
+      expect(e.data.errors.some(issue => issue.method === 'GET' && issue.error.kind === 'route-duplicate')).toBe(true);
     });
 
   });
@@ -466,18 +470,16 @@ describe('Router', () => {
       expect(cachedResult!.meta.source).toBe('cache');
     });
 
-    it('should stop method array iteration at first error', () => {
+    it('should validate all expanded method array entries at build time', () => {
       const r = makeRouter<number>();
       r.add('GET', '/x', 1);
+      r.add(['GET', 'POST'], '/x', 2);
 
-      // ['GET', 'POST'] where GET is duplicate → error on first (GET)
-      expect(() => r.add(['GET', 'POST'], '/x', 2)).toThrow(RouterError);
-
-      // POST was NOT registered because GET failed first
-      r.build();
-      const postResult = r.match('POST', '/x');
-
-      expect(postResult).toBeNull();
+      const e = catchRouterError(() => r.build());
+      expect(e.data.kind).toBe('route-validation');
+      expect(e.data.errors).toHaveLength(1);
+      expect(e.data.errors[0]?.method).toBe('GET');
+      expect(r.match('POST', '/x')).toBeNull();
     });
   });
 });

@@ -1,5 +1,9 @@
 import type { OptionalParamBehavior, RouteParams } from '../types';
 
+interface OptionalParamDefaultsSnapshot {
+  entries: Array<readonly [number, readonly string[]]>;
+}
+
 export class OptionalParamDefaults {
   private readonly behavior: OptionalParamBehavior;
   private readonly defaults = new Map<number, readonly string[]>();
@@ -52,6 +56,20 @@ export class OptionalParamDefaults {
       if (typeof name === 'string' && name.length > 0 && !(name in params)) {
         params[name] = undefined;
       }
+    }
+  }
+
+  snapshot(): OptionalParamDefaultsSnapshot {
+    return {
+      entries: [...this.defaults],
+    };
+  }
+
+  restore(snapshot: OptionalParamDefaultsSnapshot): void {
+    this.defaults.clear();
+
+    for (const [key, names] of snapshot.entries) {
+      this.defaults.set(key, names);
     }
   }
 }

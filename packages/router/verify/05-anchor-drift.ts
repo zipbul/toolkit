@@ -21,6 +21,7 @@ import { getRouterInternals } from '../internal';
 const r1 = new Router<string>();
 r1.add('GET', '/a/:id(\\d+)', 'A');
 r1.add('GET', '/b/:id(^\\d+$)', 'B');
+r1.build();
 const cache1 = (getRouterInternals(r1).registration as any).testerCache as Map<string, unknown>;
 console.log('(A) testerCache keys:', [...cache1.keys()]);
 console.log('   expected normalized: 1 entry; actual:', cache1.size);
@@ -29,8 +30,12 @@ console.log('   expected normalized: 1 entry; actual:', cache1.size);
 const r2 = new Router<string>();
 r2.add('GET', '/a/:id(\\d+)', 'first');
 let kind: string | undefined;
-try { r2.add('GET', '/a/:id(^\\d+$)', 'second'); }
-catch (e: any) { kind = e?.data?.kind; }
+try {
+  r2.add('GET', '/a/:id(^\\d+$)', 'second');
+  r2.build();
+} catch (e: any) {
+  kind = e?.data?.errors?.[0]?.error?.kind ?? e?.data?.kind;
+}
 console.log('(B) registering equivalent regex at same path → kind:', kind);
 
 // (C) matcher works by RegExp anchor idempotency.
@@ -46,4 +51,6 @@ console.log('(C) /users/abc:', r3.match('GET', '/users/abc'));
 // currently miss because the cache keys diverge.
 console.log('(A) tester impls:', [...cache1.values()].map((t: any) => t.name || 'anon'));
 
-console.log('VERDICT: REPRODUCED — anchor stripping not propagated; spurious conflict + dup cache keys');
+console.log('VERDICT:', cache1.size === 1 && kind === 'route-duplicate'
+  ? 'REFUTED — anchor stripping is propagated to route shape and tester cache'
+  : 'REPRODUCED — anchor stripping not propagated; spurious conflict + dup cache keys');

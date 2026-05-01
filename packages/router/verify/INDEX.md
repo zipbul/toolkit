@@ -5,11 +5,11 @@ Reproducer files cover *every* item. `run-all.sh` runs them and writes
 
 | # | 영역 | reproducer files | 상태 |
 |---|---|---|---|
-| 1 | static path partial-failure tree leak | 01,01b,01c,01d | REPRODUCED |
+| 1 | static path partial-failure tree leak | 01,01b,01c,01d | REFUTED |
 | 2 | path-parser→segment-tree double splitting | 02,02b | REPRODUCED |
-| 3 | extractSegments empty-segment skip → semantic mismatch | 03,03b,03c | REPRODUCED (severe) |
+| 3 | extractSegments empty-segment skip → semantic mismatch | 03,03b,03c | REFUTED |
 | 4 | sibling chain prev! invariant | 04 | REFUTED |
-| 5 | anchor stripping not propagated | 05 | REPRODUCED |
+| 5 | anchor stripping not propagated | 05 | REFUTED |
 | 6 | route-duplicate message inconsistency | 06 | REPRODUCED |
 | 7 | for…in usage | 07 | REFUTED (style only) |
 | 8 | sibling backtracking params pollution | 08 | REFUTED |
@@ -39,26 +39,26 @@ Reproducer files cover *every* item. `run-all.sh` runs them and writes
 | 32 | missCacheByMethod fallthrough | 32 | REFUTED |
 | 33 | EMPTY_PARAMS cache-write dead | 33 | REPRODUCED |
 | 34 | per-match params alloc | 34 | REPRODUCED (intentional) |
-| 35 | addAll partial failure leak | 35 | REPRODUCED |
-| 36 | star method partial application | 36 | REPRODUCED |
-| 37 | handlerIndex reuse unreachable check | 37 | REPRODUCED |
+| 35 | addAll partial failure leak | 35 | REFUTED |
+| 36 | star method partial application | 36 | REFUTED |
+| 37 | handlerIndex reuse unreachable check | 37 | REFUTED |
 | 38 | checkWildcard prefix regex inefficiency | 38 | REFUTED |
 | 39 | first-wildcard break unnecessary | 39 | REFUTED |
 | 40 | static-wildcard empty prefix edge | 40 | REFUTED |
 | 41 | snapshot freeze depth | 41 | REPRODUCED (internal only) |
-| 42 | testerCache failed-registration leak | 42 | REPRODUCED |
+| 42 | testerCache failed-registration leak | 42 | REFUTED |
 | 43 | detectWildCodegenSpec duplicate calls | 43 | REPRODUCED |
 | 44 | for…in proto-less ordering | 44 | REFUTED |
 | 45 | sparse array iteration | 45 | REFUTED |
 | 46 | option default SSoT | 46 | CODE-VERIFIED |
 | 47 | path-parser pattern raw (==#5) | 47 | DUP-#5 |
 | 48 | tokenize empty body | 48 | REFUTED |
-| 49 | decorator combo silent parse | 49 | PARTIAL |
+| 49 | decorator combo silent parse | 49 | REFUTED |
 | 50 | parseWildcard duplicate check | 50 | REFUTED |
 | 51 | activeParams.clear timing | 51 | REFUTED |
 | 52 | validatePattern normalize unused | 52 | DUP-#5 |
 | 53 | validateParamName empty | 53 | REFUTED |
-| 54 | options object mutation | 54 | REPRODUCED |
+| 54 | options object mutation | 54 | REFUTED |
 | 55 | performBuild throw stuck | 55 | REFUTED (no trigger path) |
 | 56 | closure vs internals dual tracking | 56 | REPRODUCED (intentional) |
 | 57 | hasAnyStatic recompute | 57 | REPRODUCED |
@@ -82,32 +82,35 @@ Reproducer files cover *every* item. `run-all.sh` runs them and writes
 
 | verdict | count |
 |---|---|
-| REPRODUCED (real defect/dead code) | 18 |
-| REPRODUCED (intentional design) | 6 |
-| REFUTED | 32 |
+| REPRODUCED | 22 |
+| REFUTED | 51 |
 | CODE-VERIFIED | 3 |
 | DUP-#5 | 2 |
-| PARTIAL | 1 (item #49) |
+| PARTIAL | 0 |
 
-## Real-defect items (수정 필요)
+## Fixed by current implementation
+
+| # | 항목 | 수정 방식 |
+|---|---|---|
+| 1, 35, 37, 42 | failed-registration leaks | 실패한 삽입의 tree/tester/handler/owner state rollback |
+| 3 | `//` semantic mismatch | repeated slash registration reject |
+| 5, 47, 52 | anchor not propagated | parser stores normalized regex source |
+| 36 | star expansion atomic | `*`/method-array registration failure rollback |
+| 49 | decorator combo `:a+?` | optional+wildcard decorator 조합 reject |
+| 54 | options mutation | constructor-time options snapshot |
+
+## Remaining reproduced items (수정/정리 후보)
 
 | # | 항목 | 영향 |
 |---|---|---|
-| 1, 35, 37 | tree leak / addAll leak / handlerIndex reuse | 트리 mutation 트랜잭션 미적용 |
 | 2 | double splitting | 빌드 시간 미세 |
-| 3 | `//` semantic mismatch | dynamic 라우트 사용자 영향 |
-| 5, 47, 52 | anchor not propagated | spurious conflict (사용자 영향) |
 | 6 | route-duplicate message | 메시지 일관성 |
 | 14 | 8-prefix SSoT split | 유지보수 |
 | 26 | F28 stale comment | cleanup |
 | 27, 64 | useCache dead + specialized dead | dead code |
 | 33 | EMPTY_PARAMS dead branch | dead branch |
-| 36 | star expansion atomic | API 일관성 (사용자 영향) |
 | 41 | snapshot inner Map mutable | internal-only |
-| 42 | testerCache failed leak | 메모리 미세 |
 | 46 | option default SSoT | 유지보수 |
-| 49 | decorator combo `:a+?` | 입력 검증 (사용자 영향) |
-| 54 | options mutation | unreachable router |
 | 57 | hasAnyStatic recompute | 코드 정리 |
 | 59 | cache T\|null dead | dead code |
 | 66 | paramNames/paramValues dead state | 코드 정리 |

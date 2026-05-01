@@ -11,13 +11,17 @@ const parser = new PathParser({
 });
 
 const cases = ['/:a?+', '/:a?*', '/:a+?', '/:a*?'];
+let rejected = 0;
 for (const path of cases) {
   const r = parser.parse(path);
   if ('data' in r) {
+    rejected++;
     console.log(path, '→ rejected:', r.data.kind);
   } else {
     console.log(path, '→ parts:', JSON.stringify(r.parts));
   }
 }
 
-console.log('VERDICT: PARTIAL — :a+? silently parsed; :a?+ rejected');
+console.log('VERDICT:', rejected === cases.length
+  ? 'REFUTED — mixed optional/wildcard decorators are rejected consistently'
+  : 'PARTIAL — some mixed decorator combinations still parse silently');

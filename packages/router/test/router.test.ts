@@ -375,35 +375,30 @@ describe('Router<T>', () => {
       expect(() => router.add('POST', '/y', 'y')).toThrow(RouterError);
     });
 
-    it('should allow adding valid route after previous add error', () => {
+    it('should report invalid and valid deferred routes together at build time', () => {
       const router = new Router<string>();
       router.add('GET', '/users/:id', 'user');
-
-      // Conflict
-      expect(() => router.add('GET', '/users/*', 'wildcard')).toThrow(RouterError);
-
-      // Should not be sealed
+      router.add('GET', '/users/*', 'wildcard');
       router.add('POST', '/posts', 'posts');
 
-      router.build();
-      const postsMatch = router.match('POST', '/posts');
-      expect(postsMatch).not.toBeNull();
+      expect(() => router.build()).toThrow(RouterError);
+      expect(router.match('POST', '/posts')).toBeNull();
     });
 
-    it('should allow multiple valid adds between invalid ones', () => {
+    it('should aggregate duplicates found between valid deferred routes', () => {
       const router = new Router<string>();
 
       router.add('GET', '/a', 'a');
-      expect(() => router.add('GET', '/a', 'dup')).toThrow(RouterError);
+      router.add('GET', '/a', 'dup');
       router.add('GET', '/b', 'b');
-      expect(() => router.add('GET', '/b', 'dup2')).toThrow(RouterError);
+      router.add('GET', '/b', 'dup2');
       router.add('GET', '/c', 'c');
 
-      router.build();
-
-      expect(router.match('GET', '/a')).not.toBeNull();
-      expect(router.match('GET', '/b')).not.toBeNull();
-      expect(router.match('GET', '/c')).not.toBeNull();
+      const err = catchRouterError(() => router.build());
+      expect(err.data.kind).toBe('route-validation');
+      if (err.data.kind === 'route-validation') {
+        expect(err.data.errors).toHaveLength(2);
+      }
     });
 
     it('should succeed match after calling match before build (returns null, not error)', () => {
@@ -482,26 +477,19 @@ describe('Router<T>', () => {
       expect(result).toBeNull();
     });
 
-    it('should work after addAll partial success then add then build', () => {
+    it('should report addAll duplicate during build and publish no partial snapshot', () => {
       const router = new Router<string>();
       router.add('GET', '/base', 'base');
 
-      const err = catchRouterError(() => router.addAll([
+      router.addAll([
         ['POST', '/ok', 'ok'],
         ['GET', '/base', 'dup'],
-      ]));
-      expect(err.data.registeredCount).toBe(1);
-
-      // Router not sealed after addAll error
+      ]);
       router.add('PUT', '/another', 'another');
-      router.build();
 
-      const base = router.match('GET', '/base');
-      const ok = router.match('POST', '/ok');
-      const another = router.match('PUT', '/another');
-      expect(base).not.toBeNull();
-      expect(ok).not.toBeNull();
-      expect(another).not.toBeNull();
+      expect(() => router.build()).toThrow(RouterError);
+      expect(router.match('POST', '/ok')).toBeNull();
+      expect(router.match('PUT', '/another')).toBeNull();
     });
 
     it('should reject add after build even for new methods', () => {
@@ -555,11 +543,12 @@ describe('Router<T>', () => {
       expect(r2).toBeNull();
     });
 
-    it('should not be idempotent for add: first ok second throws on duplicate', () => {
+    it('should allow duplicate add calls but reject them during build', () => {
       const router = new Router<string>();
 
       router.add('GET', '/x', 'x');
-      expect(() => router.add('GET', '/x', 'x')).toThrow(RouterError);
+      router.add('GET', '/x', 'x');
+      expect(() => router.build()).toThrow(RouterError);
     });
 
     it('should consistently throw sealed error across repeated add attempts', () => {
@@ -621,14 +610,17 @@ describe('Router<T>', () => {
       }
     });
 
-    it('should return identical err kind for same invalid operation repeated', () => {
+    it('should aggregate repeated duplicate operations with identical issue kinds', () => {
       const router = new Router<string>();
       router.add('GET', '/a', 'a');
+      router.add('GET', '/a', 'dup1');
+      router.add('GET', '/a', 'dup2');
 
-      const e1 = catchRouterError(() => router.add('GET', '/a', 'dup1'));
-      const e2 = catchRouterError(() => router.add('GET', '/a', 'dup2'));
-
-      expect(e1.data.kind).toBe(e2.data.kind);
+      const err = catchRouterError(() => router.build());
+      expect(err.data.kind).toBe('route-validation');
+      if (err.data.kind === 'route-validation') {
+        expect(err.data.errors[0]?.error.kind).toBe(err.data.errors[1]?.error.kind);
+      }
     });
 
     it('should return stable null for different non-existent paths', () => {
@@ -711,23 +703,22 @@ describe('Router<T>', () => {
       expect(get!.value).toBe('get-val');
     });
 
-    it('should process addAll entries sequentially respecting fail-fast', () => {
+    it('should process addAll entries sequentially and aggregate duplicate validation', () => {
       const router = new Router<string>();
       router.add('GET', '/dup', 'original');
 
-      const err = catchRouterError(() => router.addAll([
+      router.addAll([
         ['POST', '/first', 'first'],
         ['PUT', '/second', 'second'],
         ['GET', '/dup', 'duplicate'],
         ['DELETE', '/third', 'third'],
-      ]));
+      ]);
 
-      expect(err.data.registeredCount).toBe(2);
-
-      router.build();
-      expect(router.match('POST', '/first')).not.toBeNull();
-      expect(router.match('PUT', '/second')).not.toBeNull();
-      // DELETE has no routes but is a standard method → null (not throw)
+      const err = catchRouterError(() => router.build());
+      expect(err.data.kind).toBe('route-validation');
+      if (err.data.kind === 'route-validation') {
+        expect(err.data.errors[0]?.index).toBe(3);
+      }
       expect(router.match('DELETE', '/third')).toBeNull();
     });
 
@@ -834,17 +825,13 @@ describe('Router<T>', () => {
       expect(r3!.params.b).toBe('99');
     });
 
-    it('should leave dead handler in array when add fails after handler push', () => {
+    it('should not publish dead handler when duplicate dynamic route fails build validation', () => {
       const router = new Router<string>();
       router.add('GET', '/users/:id', 'valid-handler');
+      router.add('GET', '/users/:id', 'dead-handler');
 
-      const err = catchRouterError(() => router.add('GET', '/users/:id', 'dead-handler'));
-      expect(err.data.kind).toBe('route-duplicate');
-
-      router.build();
-      const match = router.match('GET', '/users/42');
-      expect(match).not.toBeNull();
-      expect(match!.value).toBe('valid-handler');
+      expect(() => router.build()).toThrow(RouterError);
+      expect(router.match('GET', '/users/42')).toBeNull();
     });
 
     it('should overwrite cached null entry when same path later matches a real route value', () => {

@@ -23,7 +23,7 @@ describe('optional-param expansion guard', () => {
     expect(r.match('GET', '/x/a/b/c')!.value).toBe(1);
   });
 
-  it('rejects 11 optionals at registration time', () => {
+  it('rejects 11 optionals at build validation time', () => {
     const r = new Router<number>();
     let path = '/x';
     for (let i = 0; i < 11; i++) path += `/:p${i}?`;
@@ -31,13 +31,15 @@ describe('optional-param expansion guard', () => {
     let err: RouterError | undefined;
     try {
       r.add('GET', path, 1);
+      r.build();
     } catch (e) {
       err = e as RouterError;
     }
 
     expect(err).toBeInstanceOf(RouterError);
-    expect(err!.data.kind).toBe('segment-limit');
-    expect(err!.data.message).toContain('optional');
+    expect(err!.data.kind).toBe('route-validation');
+    expect(err!.data.errors[0]?.error.kind).toBe('segment-limit');
+    expect(err!.data.errors[0]?.error.message).toContain('optional');
   });
 
   it('rejects 20 optionals quickly (no 5-second hang)', () => {
@@ -49,6 +51,7 @@ describe('optional-param expansion guard', () => {
     let threw = false;
     try {
       r.add('GET', path, 1);
+      r.build();
     } catch {
       threw = true;
     }

@@ -97,8 +97,10 @@ describe('Router<T> options', () => {
   it('should reject unsafe patterns (always-on regex safety guard)', () => {
     const router = new Router<string>();
 
-    const err = catchRouterError(() => router.add('GET', '/test/:val((a+)+)', 'test'));
-    expect(err.data.kind).toBe('regex-unsafe');
+    router.add('GET', '/test/:val((a+)+)', 'test');
+    const err = catchRouterError(() => router.build());
+    expect(err.data.kind).toBe('route-validation');
+    expect(err.data.errors[0]?.error.kind).toBe('regex-unsafe');
   });
 
   it('should pass through malformed encoding as-is in param values', () => {

@@ -86,32 +86,36 @@ describe('match() never throws on bad input', () => {
   });
 });
 
-// ── add() rejects malformed registration input ────────────────────────────
+// ── build() rejects malformed registration input ──────────────────────────
 
-describe('add() rejects malformed registration input', () => {
+describe('build() rejects malformed registration input', () => {
   it('throws RouterError on duplicate route', () => {
     const r = new Router<string>();
     r.add('GET', '/x', 'first');
+    r.add('GET', '/x', 'second');
 
-    expect(() => r.add('GET', '/x', 'second')).toThrow(RouterError);
+    expect(() => r.build()).toThrow(RouterError);
   });
 
   it('throws RouterError on empty param name (e.g. "/:")', () => {
     const r = new Router<string>();
 
-    expect(() => r.add('GET', '/users/:', 'u')).toThrow(RouterError);
+    r.add('GET', '/users/:', 'u');
+    expect(() => r.build()).toThrow(RouterError);
   });
 
   it('throws RouterError on duplicate param names within one route', () => {
     const r = new Router<string>();
 
-    expect(() => r.add('GET', '/users/:x/posts/:x', 'u')).toThrow(RouterError);
+    r.add('GET', '/users/:x/posts/:x', 'u');
+    expect(() => r.build()).toThrow(RouterError);
   });
 
   it('throws RouterError on wildcard not at end', () => {
     const r = new Router<string>();
 
-    expect(() => r.add('GET', '/files/*p/middle', 'f')).toThrow(RouterError);
+    r.add('GET', '/files/*p/middle', 'f');
+    expect(() => r.build()).toThrow(RouterError);
   });
 
   // Mislabeled pre-A5 ("cross-method"): both ops are GET. After A5 (F9)
@@ -120,15 +124,17 @@ describe('add() rejects malformed registration input', () => {
   it('throws RouterError on same-method conflicting wildcard names', () => {
     const r = new Router<string>();
     r.add('GET', '/files/*p', 'f');
+    r.add('GET', '/files/*q', 'f2');
 
-    expect(() => r.add('GET', '/files/*q', 'f2')).toThrow(RouterError);
+    expect(() => r.build()).toThrow(RouterError);
   });
 
   it('throws RouterError on static route conflicting with existing wildcard prefix', () => {
     const r = new Router<string>();
     r.add('GET', '/files/*p', 'f');
+    r.add('GET', '/files/static', 'sf');
 
-    expect(() => r.add('GET', '/files/static', 'sf')).toThrow(RouterError);
+    expect(() => r.build()).toThrow(RouterError);
   });
 });
 
@@ -138,13 +144,15 @@ describe('regex safety', () => {
   it('throws RouterError on backreference patterns', () => {
     const r = new Router<string>();
 
-    expect(() => r.add('GET', '/x/:id((a)\\1)', 'x')).toThrow(RouterError);
+    r.add('GET', '/x/:id((a)\\1)', 'x');
+    expect(() => r.build()).toThrow(RouterError);
   });
 
   it('rejects nested unlimited quantifiers (catastrophic-backtracking)', () => {
     const r = new Router<string>();
 
-    expect(() => r.add('GET', '/x/:id((a+)+)', 'x')).toThrow(RouterError);
+    r.add('GET', '/x/:id((a+)+)', 'x');
+    expect(() => r.build()).toThrow(RouterError);
   });
 
   it('strips ^/$ anchors silently (always-on)', () => {
@@ -195,12 +203,13 @@ describe('misuse rejection', () => {
     // Two routes registered separately landing at the same param position
     // with different names — the second is unreachable because the first
     // has no regex tester and matches every value. We surface this at
-    // registration time (route-conflict) instead of silently accepting
+    // build time (route-conflict) instead of silently accepting
     // a dead route.
     const r = new Router<string>();
     r.add('GET', '/users/:id', 'first');
+    r.add('GET', '/users/:slug', 'second');
 
-    expect(() => r.add('GET', '/users/:slug', 'second')).toThrow(RouterError);
+    expect(() => r.build()).toThrow(RouterError);
   });
 
   it('still allows siblings from the same route via optional-param expansion', () => {
@@ -235,7 +244,7 @@ describe('misuse rejection', () => {
   it('rejects empty path (must start with "/")', () => {
     const r = new Router<string>();
 
-    expect(() => r.add('GET', '', 'r')).toThrow(RouterError);
+    r.add('GET', '', 'r');
+    expect(() => r.build()).toThrow(RouterError);
   });
 });
-

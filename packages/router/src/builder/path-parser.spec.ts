@@ -62,6 +62,14 @@ describe('PathParser', () => {
         expect(result.parts).toEqual([{ type: 'static', value: '/api/v1/users' }]);
       }
     });
+
+    it('should reject repeated slashes that create empty segments', () => {
+      for (const path of ['/api//users', '//', '/a///b']) {
+        const result = parse(path);
+        expect(isErr(result)).toBe(true);
+        if (isErr(result)) expect(result.data.kind).toBe('route-parse');
+      }
+    });
   });
 
   describe('param paths', () => {
@@ -95,6 +103,15 @@ describe('PathParser', () => {
         expect(result.isDynamic).toBe(true);
         const paramPart = result.parts.find(p => p.type === 'param') as Extract<PathPart, { type: 'param' }>;
         expect(paramPart.name).toBe('id');
+        expect(paramPart.pattern).toBe('\\d+');
+      }
+    });
+
+    it('should store normalized regex pattern sources after anchor stripping', () => {
+      const result = parse('/users/:id(^\\d+$)');
+      expect(isErr(result)).toBe(false);
+      if (!isErr(result)) {
+        const paramPart = result.parts.find(p => p.type === 'param') as Extract<PathPart, { type: 'param' }>;
         expect(paramPart.pattern).toBe('\\d+');
       }
     });
@@ -202,6 +219,14 @@ describe('PathParser', () => {
       const result = parse('/files/:path+/extra');
       expect(isErr(result)).toBe(true);
       if (isErr(result)) expect(result.data.kind).toBe('route-parse');
+    });
+
+    it('should reject mixed optional and wildcard decorators', () => {
+      for (const path of ['/:a+?', '/:a*?', '/:a?+', '/:a?*']) {
+        const result = parse(path);
+        expect(isErr(result)).toBe(true);
+        if (isErr(result)) expect(result.data.kind).toBe('route-parse');
+      }
     });
   });
 

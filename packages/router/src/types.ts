@@ -34,7 +34,15 @@ export type RouterErrorKind =
   | 'param-duplicate'    // 같은 경로 내 동일 이름 파라미터
   | 'regex-unsafe'       // regex safety 검사 실패 (length / nested-quantifier / backreference)
   | 'method-limit'       // 32개 메서드 초과 (MethodRegistry)
-  | 'segment-limit';     // 빌드 시 세그먼트 길이/수/파라미터 수 상한 초과
+  | 'segment-limit'      // 빌드 시 세그먼트 길이/수/파라미터 수 상한 초과
+  | 'route-validation';  // build()/seal() 일괄 검증 실패
+
+export interface RouteValidationIssue {
+  index: number;
+  method: string;
+  path: string;
+  error: RouterErrorData;
+}
 
 /**
  * `RouterError.data` 에 첨부되는 데이터 — kind 별 discriminated union.
@@ -63,6 +71,7 @@ export type RouterErrorData = {
   | { kind: 'regex-unsafe'; message: string; segment: string; suggestion: string }
   | { kind: 'method-limit'; message: string; method: string; suggestion: string }
   | { kind: 'segment-limit'; message: string; segment?: string; suggestion?: string }
+  | { kind: 'route-validation'; message: string; errors: RouteValidationIssue[] }
 );
 
 // ── Match output types ──
