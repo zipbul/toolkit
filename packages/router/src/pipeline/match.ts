@@ -81,14 +81,6 @@ export class MatchLayer<T> {
 
     const out: HttpMethod[] = [];
     const state = this.matchState;
-    // Tree walkers write into `state.params` on success. We never read
-    // the params here — only the boolean return — so a single shared
-    // container is enough. The next match() call reassigns
-    // state.params anyway.
-    const sharedParams = new NullProtoObj() as Record<string, string | undefined>;
-
-    state.params = sharedParams;
-
     const active = this.activeMethodCodes;
 
     for (let i = 0; i < active.length; i++) {

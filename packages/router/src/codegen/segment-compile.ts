@@ -72,8 +72,8 @@ ${emitRootSlashTerminal(root)}
     }
     return false;
   }
-  var params = state.params;
   var pos0 = 1;
+  state.paramCount = 0;
 ${body}
   return false;
 };`;
@@ -133,10 +133,8 @@ function emitRootSlashTerminal(root: SegmentNode): string {
 
   // A star-wildcard at the root captures the empty suffix when URL is just
   // `/`. Multi-wildcards explicitly require ≥1 char so they don't match.
-  // Use state.params directly — the `params` local var is declared further
-  // down, after this root-slash branch.
   if (root.wildcardStore !== null && root.wildcardOrigin === 'star') {
-    return `      state.params[${JSON.stringify(root.wildcardName!)}] = '';\n      state.handlerIndex = ${root.wildcardStore};\n      return true;`;
+    return `      state.paramValues[0] = '';\n      state.paramCount = 1;\n      state.handlerIndex = ${root.wildcardStore};\n      return true;`;
   }
 
   return '      return false;';
@@ -311,7 +309,7 @@ ${exactBody}
       code += `
     if (${slashVar} === -1 && ${posVar} < len) {
       var ${valVar} = url.substring(${posVar});${decodeBlock(valVar)}${testerBlock(valVar, testerIdx)}
-      params[${JSON.stringify(param.name)}] = ${valVar};
+      state.paramValues[state.paramCount++] = ${valVar};
       state.handlerIndex = ${next.store};
       return true;
     }`;
@@ -320,8 +318,8 @@ ${exactBody}
       code += `
     if (${slashVar} !== -1 && ${slashVar} > ${posVar} && ${slashVar} + 1 < len) {
       var ${valVar} = url.substring(${posVar}, ${slashVar});${decodeBlock(valVar)}${testerBlock(valVar, testerIdx)}
-      params[${JSON.stringify(param.name)}] = ${valVar};
-      params[${JSON.stringify(next.wildcardName!)}] = url.substring(${slashVar} + 1);
+      state.paramValues[state.paramCount++] = ${valVar};
+      state.paramValues[state.paramCount++] = url.substring(${slashVar} + 1);
       state.handlerIndex = ${next.wildcardStore};
       return true;
     }`;
@@ -342,7 +340,7 @@ ${exactBody}
     if (${slashVar} !== -1 && ${slashVar} > ${posVar}) {
       var ${valVar} = url.substring(${posVar}, ${slashVar});${decodeBlock(valVar)}${testerBlock(valVar, testerIdx)}
       var ${innerPos} = ${slashVar} + 1;
-      params[${JSON.stringify(param.name)}] = ${valVar};
+      state.paramValues[state.paramCount++] = ${valVar};
 ${inner}
     }`;
 
@@ -351,7 +349,7 @@ ${inner}
         code += `
     if (${slashVar} === -1 && ${posVar} < len) {
       var ${valVar}_t = url.substring(${posVar});${decodeBlock(valVar + '_t')}${testerBlock(valVar + '_t', testerIdx)}
-      params[${JSON.stringify(param.name)}] = ${valVar}_t;
+      state.paramValues[state.paramCount++] = ${valVar}_t;
       state.handlerIndex = ${next.store};
       return true;
     }`;
@@ -367,7 +365,7 @@ ${inner}
     if (node.wildcardOrigin === 'star') {
       code += `
   if (${posVar} <= len) {
-    state.params[${JSON.stringify(node.wildcardName!)}] = ${posVar} === len ? '' : url.substring(${posVar});
+    state.paramValues[state.paramCount++] = ${posVar} === len ? '' : url.substring(${posVar});
     state.handlerIndex = ${node.wildcardStore};
     return true;
   }`;
@@ -375,7 +373,7 @@ ${inner}
       // multi: must have at least one char of suffix
       code += `
   if (${posVar} < len) {
-    state.params[${JSON.stringify(node.wildcardName!)}] = url.substring(${posVar});
+    state.paramValues[state.paramCount++] = url.substring(${posVar});
     state.handlerIndex = ${node.wildcardStore};
     return true;
   }`;
@@ -406,7 +404,7 @@ function emitTerminalAt(node: SegmentNode): string {
   }
 
   if (node.wildcardStore !== null && node.wildcardOrigin === 'star') {
-    return `    state.params[${JSON.stringify(node.wildcardName!)}] = '';\n    state.handlerIndex = ${node.wildcardStore};\n    return true;`;
+    return `    state.paramValues[state.paramCount++] = '';\n    state.handlerIndex = ${node.wildcardStore};\n    return true;`;
   }
 
   return '';

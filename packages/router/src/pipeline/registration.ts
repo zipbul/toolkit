@@ -21,13 +21,27 @@ interface PendingRoute<T> {
   value: T;
 }
 
+export interface ParamMetadata {
+  /** Parameters present in this specific expansion. */
+  present: string[];
+  /** Every parameter name declared by the original route (for set-undefined behavior). */
+  original: string[];
+}
+
+export interface TerminalMetadata {
+  handlerIndex: number;
+  paramMeta: ParamMetadata;
+}
+
 interface BuildState<T> {
   staticMap: Record<string, Array<T | undefined>>;
   staticRegistered: Record<string, boolean[]>;
   segmentTrees: Array<SegmentNode | null>;
   handlers: T[];
+  terminals: TerminalMetadata[];
   testerCache: Map<string, PatternTesterFn>;
   wildcardNamesByMethod: Map<number, Map<string, string>>;
+  routeCounter: number;
 }
 
 /**
@@ -40,6 +54,7 @@ export interface RegistrationSnapshot<T> {
   staticRegistered: Record<string, boolean[]>;
   segmentTrees: Array<SegmentNode | null>;
   handlers: T[];
+  terminals: TerminalMetadata[];
   testerCache: Map<string, PatternTesterFn>;
   wildcardNamesByMethod: Map<number, Map<string, string>>;
 }
@@ -139,13 +154,17 @@ export class Registration<T> {
       const route = this.pendingRoutes[i]!;
       const mark = undo.length;
       const handlerMark = state.handlers.length;
+      const terminalMark = state.terminals.length;
       const optionalMark = this.optionalParamDefaults.snapshot();
-      const result = this.compileRoute(route, state, undo);
+      const routeID = state.routeCounter++;
+      const result = this.compileRoute(route, state, undo, routeID);
 
       if (isErr(result)) {
         rollback(undo, mark);
         state.handlers.length = handlerMark;
+        state.terminals.length = terminalMark;
         this.optionalParamDefaults.restore(optionalMark);
+        state.routeCounter--;
         issues.push({
           index: i,
           method: route.method,
@@ -170,18 +189,21 @@ export class Registration<T> {
     this.sealed = true;
     Object.freeze(state.wildcardNamesByMethod);
 
-    this.snapshot = {
+    const snapshot: RegistrationSnapshot<T> = {
       staticMap: Object.freeze({ ...state.staticMap }),
       staticRegistered: Object.freeze({ ...state.staticRegistered }),
-      segmentTrees: Object.freeze([...state.segmentTrees]),
+      segmentTrees: Object.freeze([...state.segmentTrees]) as Array<SegmentNode | null>,
       handlers: state.handlers, // intentional: handlers stay mutable for JIT IC
+      terminals: state.terminals,
       testerCache: state.testerCache,
       wildcardNamesByMethod: Object.freeze(new Map(
         [...state.wildcardNamesByMethod].map(([mc, names]) => [mc, Object.freeze(new Map(names))]),
       )),
     };
 
-    return this.snapshot;
+    this.snapshot = snapshot;
+
+    return snapshot;
   }
 
   private assertNotSealed(
@@ -201,6 +223,7 @@ export class Registration<T> {
     route: PendingRoute<T>,
     state: BuildState<T>,
     undo: SegmentTreeUndoLog,
+    routeID: number,
   ): Result<void, RouterErrorData> {
     const offsetResult = this.methodRegistry.getOrCreate(route.method);
 
@@ -235,7 +258,7 @@ export class Registration<T> {
       return this.compileStaticRoute(route, normalized, methodCode, state, undo);
     }
 
-    return this.compileDynamicRoute(route, parts, methodCode, state, undo);
+    return this.compileDynamicRoute(route, parts, methodCode, state, undo, routeID);
   }
 
   private compileStaticRoute(
@@ -294,15 +317,20 @@ export class Registration<T> {
     methodCode: number,
     state: BuildState<T>,
     undo: SegmentTreeUndoLog,
+    routeID: number,
   ): Result<void, RouterErrorData> {
-    const handlerIndex = state.handlers.length;
-    state.handlers.push(route.value);
-    undo.push(() => { state.handlers.length = handlerIndex; });
-
-    const expansion = expandOptional(parts, handlerIndex, this.optionalParamDefaults);
+    const expansion = expandOptional(parts, -1, this.optionalParamDefaults);
 
     if (isErr(expansion)) {
       return err<RouterErrorData>({ ...expansion.data, path: route.path, method: route.method });
+    }
+
+    const originalNames: string[] = [];
+
+    for (const p of parts) {
+      if (p.type === 'param' || p.type === 'wildcard') {
+        originalNames.push(p.name);
+      }
     }
 
     let root = state.segmentTrees[methodCode];
@@ -313,12 +341,33 @@ export class Registration<T> {
       undo.push(() => { delete state.segmentTrees[methodCode]; });
     }
 
-    for (const { parts: expParts, handlerIndex: hIdx } of expansion) {
+    const handlerIndex = state.handlers.length;
+    state.handlers.push(route.value);
+    undo.push(() => { state.handlers.length = handlerIndex; });
+
+    for (const { parts: expParts } of expansion) {
+      const presentNames: string[] = [];
+
+      for (const p of expParts) {
+        if (p.type === 'param' || p.type === 'wildcard') presentNames.push(p.name);
+      }
+
+      const terminalIndex = state.terminals.length;
+      state.terminals.push({
+        handlerIndex,
+        paramMeta: {
+          present: presentNames,
+          original: originalNames,
+        },
+      });
+      undo.push(() => { state.terminals.length = terminalIndex; });
+
       const insertResult = insertIntoSegmentTree(
         root,
         expParts,
-        hIdx,
+        terminalIndex,
         state.testerCache,
+        routeID,
         undo,
       );
 
@@ -409,8 +458,10 @@ function createBuildState<T>(): BuildState<T> {
     staticRegistered: Object.create(null) as Record<string, boolean[]>,
     segmentTrees: [],
     handlers: [],
+    terminals: [],
     testerCache: new Map(),
     wildcardNamesByMethod: new Map(),
+    routeCounter: 0,
   };
 }
 

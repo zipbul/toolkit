@@ -32,11 +32,11 @@ export interface ParamSegment {
    *  same-name conflicts at registration time without comparing compiled
    *  tester object identity. */
   patternSource: string | null;
-  /** First handlerIndex that introduced this param. Two siblings sharing the
-   *  same ownerHandler come from one route's optional-param expansion (e.g.
+  /** First routeID that introduced this param. Two siblings sharing the
+   *  same ownerRouteID come from one route's optional-param expansion (e.g.
    *  `/users/:a?/:b?` deliberately creates `:a` and `:b` siblings under the
-   *  same handler) and bypass the unreachable-sibling check below. */
-  ownerHandler: number;
+   *  same route) and bypass the unreachable-sibling check below. */
+  ownerRouteID: number;
   /** Subtree rooted at this param. */
   next: SegmentNode;
   /** Linked-list pointer to the next param alternative at the same position. */
@@ -94,20 +94,13 @@ export function hasAmbiguousNode(root: SegmentNode): boolean {
 
 /**
  * Insert one expanded route (no optional markers) into the segment tree.
- * Validates conflicts against the current tree state and returns an error
- * `Result` for any of:
- *   - `route-conflict`: static-vs-wildcard, param-vs-wildcard, conflicting
- *     wildcard name, wildcard after sibling param, same-name param with a
- *     different regex, or unreachable sibling.
- *   - `route-duplicate`: terminal node already has a store, or a same-name
- *     wildcard already registered at this position.
- *   - `regex-unsafe`-ish bail when the regex source fails to compile.
  */
 export function insertIntoSegmentTree(
   root: SegmentNode,
   parts: PathPart[],
   handlerIndex: number,
   testerCache: Map<string, PatternTesterFn>,
+  routeID: number,
   undoLog?: SegmentTreeUndoLog,
 ): Result<void, RouterErrorData> {
   let node = root;
@@ -197,20 +190,13 @@ export function insertIntoSegmentTree(
           name: part.name,
           tester,
           patternSource: part.pattern,
-          ownerHandler: handlerIndex,
+          ownerRouteID: routeID,
           next: createSegmentNode(),
           nextSibling: null,
         };
         undo.push(() => { owner.paramChild = null; });
         node = node.paramChild.next;
       } else {
-        // Walk the sibling chain. Three outcomes:
-        //   1. Exact match (same name, same patternSource) → reuse subtree.
-        //   2. Same name but different patternSource → conflict.
-        //   3. Earlier sibling has no tester and was registered by a different
-        //      route → unreachable-sibling conflict (the catchall consumes
-        //      every value at this position so the new sibling never tests).
-        //   4. Otherwise → append as new sibling, descend its empty subtree.
         let p: ParamSegment | null = node.paramChild;
         let prev: ParamSegment | null = null;
         let matched: ParamSegment | null = null;
@@ -230,7 +216,7 @@ export function insertIntoSegmentTree(
             });
           }
 
-          if (p.patternSource === null && p.ownerHandler !== handlerIndex) {
+          if (p.patternSource === null && p.ownerRouteID !== routeID) {
             return fail({
               kind: 'route-conflict',
               message: `Parameter ':${part.name}' is unreachable — earlier sibling ':${p.name}' (registered by a different route) has no regex pattern and matches every value at this position. Add a regex pattern to disambiguate, or remove this route.`,
@@ -248,12 +234,10 @@ export function insertIntoSegmentTree(
             name: part.name,
             tester,
             patternSource: part.pattern,
-            ownerHandler: handlerIndex,
+            ownerRouteID: routeID,
             next: createSegmentNode(),
             nextSibling: null,
           };
-          // prev is non-null — paramChild was not null and we walked to the
-          // end of the chain without matching.
           prev!.nextSibling = fresh;
           undo.push(() => { prev!.nextSibling = null; });
           node = fresh.next;

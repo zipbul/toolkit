@@ -14,11 +14,6 @@ describe('MatchState', () => {
       expect(state.paramCount).toBe(0);
     });
 
-    it('should pre-allocate paramNames array with 32 slots', () => {
-      const state = createMatchState();
-      expect(state.paramNames.length).toBe(32);
-    });
-
     it('should pre-allocate paramValues array with 32 slots', () => {
       const state = createMatchState();
       expect(state.paramValues.length).toBe(32);

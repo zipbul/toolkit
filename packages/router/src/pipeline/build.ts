@@ -1,7 +1,7 @@
 import type { MatchFn, MatchState } from '../matcher/match-state';
 import type { PathNormalizer } from '../matcher/path-normalize';
 import type { WildCodegenEntry } from '../codegen/walker-strategy';
-import type { MatchOutput, RouterOptions } from '../types';
+import type { MatchOutput, RouteParams, RouterOptions } from '../types';
 import type { RegistrationSnapshot } from './registration';
 
 import { EMPTY_PARAMS, NullProtoObj, STATIC_META } from '../internal/null-proto-obj';
@@ -25,9 +25,7 @@ export interface BuildResult<T> {
   /** Per-method walker function (or `null` for methods with no dynamic
    *  routes). Indexed by methodCode. */
   trees: Array<MatchFn | null>;
-  /** True when at least one route registered a regex tester. Used by
-   *  `detectSingleMethodWildSpec` to disqualify the inline static-prefix
-   *  wildcard fast path when any tester would need to run. */
+  /** True when at least one route registered a regex tester. */
   anyTester: boolean;
   /** Pre-built MatchOutput indexed by [methodCode][path] — frozen objects
    *  shared across all hits to a static route, no per-match allocation. */
@@ -44,6 +42,10 @@ export interface BuildResult<T> {
   /** Compiled path normalizer — same emit helpers feed compileMatchFn so
    *  the cold allowedMethods path cannot drift from the hot match path. */
   normalizePath: PathNormalizer;
+  /** Terminal index -> handler index. Optional expansions share handler entries. */
+  terminalHandlers: number[];
+  /** Per-terminal parameter object factory. Monomorphic for IC stability. */
+  paramsFactories: Array<((v: string[]) => RouteParams) | null>;
   // Resolved options cached for closure capture by emit code.
   ignoreTrailingSlash: boolean;
   caseSensitive: boolean;
@@ -88,7 +90,44 @@ export function buildFromRegistration<T>(
 
   const anyTester = snapshot.testerCache.size > 0;
 
-  // Pre-build the static MatchOutput objects so match() can return them
+  // Generate Monomorphic Parameter Factories
+  const terminalHandlers: number[] = [];
+  const paramsFactories: Array<((v: string[]) => RouteParams) | null> = [];
+  const omitBehavior = options.optionalParamBehavior === 'omit';
+
+  for (let i = 0; i < snapshot.terminals.length; i++) {
+    const terminal = snapshot.terminals[i]!;
+    const meta = terminal.paramMeta;
+    terminalHandlers[i] = terminal.handlerIndex;
+
+    if (!meta || (meta.present.length === 0 && (omitBehavior || meta.original.length === 0))) {
+      paramsFactories[i] = null;
+    } else {
+      let body: string;
+
+      if (omitBehavior) {
+        // 'omit' behavior: only include matched keys.
+        // We still use a literal structure where possible, but if 
+        // keys are missing we must use dynamic assignment.
+        let body = 'var p = { __proto__: null };\n';
+        for (let j = 0; j < meta.present.length; j++) {
+          body += `p[${JSON.stringify(meta.present[j])}] = v[${j}];\n`;
+        }
+        body += 'return p;';
+        paramsFactories[i] = new Function('v', body) as (v: string[]) => RouteParams;
+      } else {
+        // 'set-undefined' behavior: monomorphic literal with all original keys.
+        const entries: string[] = ['__proto__: null'];
+        for (const name of meta.original) {
+          const idx = meta.present.indexOf(name);
+          entries.push(`${JSON.stringify(name)}: ${idx !== -1 ? `v[${idx}]` : 'undefined'}`);
+        }
+        paramsFactories[i] = new Function('v', `return { ${entries.join(', ')} };`) as (v: string[]) => RouteParams;
+      }
+    }
+  }
+
+  // Pre-build the static MatchOutput objects
   // directly without allocating { value, params, meta } per hit.
   //
   // Layout: staticOutputs[methodCode] → NullProtoObj { path → MatchOutput }.
@@ -154,6 +193,8 @@ export function buildFromRegistration<T>(
     methodCodes,
     matchState: createMatchState(),
     normalizePath,
+    terminalHandlers,
+    paramsFactories,
     ignoreTrailingSlash,
     caseSensitive,
     maxPathLength,

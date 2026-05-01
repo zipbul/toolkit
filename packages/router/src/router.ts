@@ -138,7 +138,6 @@ export class Router<T = unknown> {
         checkPathLen: Number.isFinite(r.maxPathLength),
         checkSegLen: Number.isFinite(r.maxSegmentLength),
         hasAnyTree: r.trees.some(t => t != null),
-        hasOptDefaults: !optionalParamDefaults.isEmpty(),
         anyTester: r.anyTester,
         hasAnyStatic,
         staticOutputsByMethod: r.staticOutputsByMethod,
@@ -147,11 +146,12 @@ export class Router<T = unknown> {
         trees: r.trees,
         matchState: r.matchState,
         handlers: snapshot.handlers,
-        optDefaults: optionalParamDefaults,
         hitCacheByMethod: cache.hit,
         missCacheByMethod: cache.miss,
         cacheMaxSize: cache.maxSize,
         activeMethodCodes: r.activeMethodCodes,
+        terminalHandlers: r.terminalHandlers,
+        paramsFactories: r.paramsFactories,
       };
 
       matchImpl = compileMatchFn<T>(cfg);

@@ -53,10 +53,10 @@ VERDICT: REPRODUCED — static parts are joined then re-split.
 =========================================
 RUN: verify/02b-double-split-perf.ts
 =========================================
-depth=2  100 routes build avg: 0.38 ms
-depth=10 100 routes build avg: 0.67 ms
+depth=2  100 routes build avg: 0.55 ms
+depth=10 100 routes build avg: 0.53 ms
 5x deeper → time should grow ~5x if double-split contributes.
-ratio (depth10 / depth2): 1.76
+ratio (depth10 / depth2): 0.97
 VERDICT: REPRODUCED — observed redundant work scales linearly with depth.
 
 =========================================
@@ -119,17 +119,17 @@ RUN: verify/06-route-duplicate-msgs.ts
 =========================================
 Site 1 (wildcard duplicate, same name): {
   kind: "route-duplicate",
-  message: "Wildcard route already exists at this position",
+  message: "Route already exists: GET /files/*p",
   suggestion: "Use a different path or HTTP method",
 }
 Site 2 (param-route terminal duplicate): {
   kind: "route-duplicate",
-  message: "Route already exists",
+  message: "Route already exists: GET /users/:id",
   suggestion: "Use a different path or HTTP method",
 }
 Site 3 (static duplicate): {
   kind: "route-duplicate",
-  message: "Route already exists for GET /health",
+  message: "Route already exists: GET /health",
   suggestion: "Use a different path or HTTP method",
 }
 VERDICT: REPRODUCED — three different message formats for same kind
@@ -146,7 +146,7 @@ RUN: verify/08-params-pollution.ts
 =========================================
 Test 1 (sibling regex with first failing): {
   value: "B",
-  params: {
+  params: [Object: null prototype] {
     slug: "foo",
   },
   meta: {
@@ -157,7 +157,7 @@ Test 1 (sibling regex with first failing): {
   → expected: { value: B, params: {slug: foo} }
 Test 2 (deeper sibling backtrack): {
   value: "alpha",
-  params: {
+  params: [Object: null prototype] {
     b: "abc",
   },
   meta: {
@@ -172,10 +172,10 @@ VERDICT: REFUTED — no params pollution observed
 =========================================
 RUN: verify/09-root-params-typing.ts
 =========================================
-emitter sets matchState.params before walker: true
-emitter creates fresh ParamsCtor: true
-match.ts sets state.params before walker: true
-VERDICT: REFUTED — type contract enforced at every call site
+emitter sets matchState.params before walker: false
+emitter creates fresh ParamsCtor: false
+match.ts sets state.params before walker: false
+VERDICT: PARTIAL
 
 =========================================
 RUN: verify/10-pos-tracking.ts
@@ -195,19 +195,19 @@ RUN: verify/11-multi-empty-suffix.ts
 =========================================
 /files:     null
 /files/:    null
-/files/a:   {
+/files/a:   [Object: null prototype] {
   p: "a",
 }
-/files/a/b: {
+/files/a/b: [Object: null prototype] {
   p: "a/b",
 }
-star /files:     {
+star /files:     [Object: null prototype] {
   p: "",
 }
-star /files/:    {
+star /files/:    [Object: null prototype] {
   p: "",
 }
-star /files/a:   {
+star /files/a:   [Object: null prototype] {
   p: "a",
 }
 VERDICT: REFUTED — multi rejects empty suffix; star captures empty correctly
@@ -215,13 +215,13 @@ VERDICT: REFUTED — multi rejects empty suffix; star captures empty correctly
 =========================================
 RUN: verify/12-wildcard-fastpath-duplication.ts
 =========================================
-fast-path match: {
+fast-path match: [Object: null prototype] {
   p: "abc/def",
 }
-match /files:     {
+match /files:     [Object: null prototype] {
   p: "",
 }
-match /files/x:   {
+match /files/x:   [Object: null prototype] {
   p: "x",
 }
 VERDICT: REFUTED — fast-path and general path produce identical results
@@ -246,7 +246,7 @@ RUN: verify/15-decoder-reuse.ts
 =========================================
 source decodes once before head attempt: true
 source reuses decoded for siblings: true
-decoded captured value: {
+decoded captured value: [Object: null prototype] {
   b: "hello_world",
 }
 VERDICT: REFUTED — decoder is invoked once before sibling attempts and decoded value is reused
@@ -309,11 +309,11 @@ RUN: verify/21-wildcard-terminal-multi.ts
 =========================================
 /u/1/files:         null
 /u/1/files/:        null
-/u/1/files/a:       {
+/u/1/files/a:       [Object: null prototype] {
   id: "1",
   p: "a",
 }
-/u/1/files/a/b/c:   {
+/u/1/files/a/b/c:   [Object: null prototype] {
   id: "1",
   p: "a/b/c",
 }
@@ -343,16 +343,23 @@ emit contains "posN <= len": false
 matchImpl preview: function match(method, path) {
 if (path.length > 2048) return null;
 var mc = methodCodes[method]; if (mc === undefined) return null;
-var sp = path; var qi = sp.indexOf('?'); if (qi !== -1) sp = sp.substring(0, qi);
-if (sp.length > 1 && sp.charCodeAt(sp.length - 1) === 47) sp = sp.substring(0, sp.length - 1);
 
-    var ms = missCacheByMethod.get(mc);
-    if (ms !== undefined && ms.has(sp)) return null;
-    var hc = hitCacheByMethod.get(mc);
-    if (hc !== undefined) {
-      var cached = hc.get(sp);
-      if (cached !== undefined) {
-        return { value: cached.value, params: cached.params, met
+    var len = path.length;
+    var end = len;
+    var hasPercent = false;
+    var needsFold = false;
+    var sl = 0;
+    for (var i = 0; i < len; i++) {
+      var c = path.charCodeAt(i);
+      if (c === 63) { end = i; break; } // '?'
+      if (c === 37) hasPercent = true;
+      if (c >= 65 && c <= 90) needsFold = true;
+      
+      if (c === 47) { sl = 0; }
+      else { sl++; if (sl > 1024) return null; }
+    }
+    var actualEnd = end;
+    if (true && actualEnd 
 VERDICT: REFUTED — guard not emitted in this shape
 
 =========================================
@@ -365,8 +372,8 @@ VERDICT: CODE-VERIFIED — value 8000 hardcoded with no measurement citation
 =========================================
 RUN: verify/26-f28-stale-comment.ts
 =========================================
-contains "F28": true
-VERDICT: REPRODUCED — stale comment present
+contains "F28": false
+VERDICT: REFUTED
 
 =========================================
 RUN: verify/27-useCache-hardcoded.ts
@@ -419,7 +426,7 @@ RUN: verify/33-empty-params-deadbranch.ts
 =========================================
 contains "=== EMPTY_PARAMS": false
 match params identity ≠ EMPTY_PARAMS: (always true since fresh alloc per match)
-match params: {
+match params: [Object: null prototype] {
   id: "42",
 }
 VERDICT: REPRODUCED — EMPTY_PARAMS comparison emitted but always false
@@ -494,7 +501,7 @@ staticMap frozen: true
 staticRegistered frozen: true
 wildcardNamesByMethod (outer Map) frozen: true
 handlers frozen: false
-inner Map frozen: false
+inner Map frozen: true
 inner.set worked, size: 2
 VERDICT: REPRODUCED — outer frozen, inner Map mutable (Object.freeze does not block Map.set)
 
@@ -546,9 +553,9 @@ VERDICT: DUP-#5 — see verify/05-anchor-drift.ts
 =========================================
 RUN: verify/48-tokenize-empty-body.ts
 =========================================
-/ → [{"type":"static","value":"/"}] ✓
-/x → [{"type":"static","value":"/x"}] ✓
-VERDICT: REFUTED — empty body handled correctly
+/ → [{"type":"static","value":"/","segments":[]}] ✗
+/x → [{"type":"static","value":"/x","segments":["x"]}] ✗
+VERDICT: PARTIAL
 
 =========================================
 RUN: verify/49-decorator-combo.ts
@@ -691,10 +698,18 @@ VERDICT: REFUTED — JSC preserves insertion order in walker-strategy traversal
 =========================================
 RUN: verify/66-paramarrays-dead.ts
 =========================================
-paramNames[0..3]: "" "" "" ""
-paramValues[0..3]: "" "" "" ""
-paramCount: 0
-VERDICT: REPRODUCED — paramNames/paramValues remain unused after dynamic match
+12 | r.match('GET', '/u/42/posts/abc');
+13 | 
+14 | const ml = (getRouterInternals(r) as any).matchLayer;
+15 | const state = ml?.matchState;
+16 | console.log('paramNames[0..3]:',
+17 |   JSON.stringify(state.paramNames[0]), JSON.stringify(state.paramNames[1]),
+                            ^
+TypeError: undefined is not an object (evaluating 'state.paramNames[0]')
+      at /home/revil/projects/zipbul/toolkit/.claude/worktrees/router/packages/router/verify/66-paramarrays-dead.ts:17:24
+      at loadAndEvaluateModule (2:1)
+
+Bun v1.3.13 (Linux x64)
 
 =========================================
 RUN: verify/67-resetmatchstate-unused.ts
@@ -712,13 +727,13 @@ VERDICT: REFUTED — sharedParams pollution does not affect boolean result
 =========================================
 RUN: verify/69-matchstate-reuse.ts
 =========================================
-m1: {
+m1: [Object: null prototype] {
   id: "42",
 }
-m2: {
+m2: [Object: null prototype] {
   slug: "hello",
 }
-m3: {
+m3: [Object: null prototype] {
   id: "99",
 }
 VERDICT: REFUTED — shared matchState reassigned per call; no leakage
@@ -746,7 +761,7 @@ VERDICT: REPRODUCED — Bun-specific trick verified for current runtime; portabi
 RUN: verify/72-routererror-data.ts
 =========================================
 kind: route-duplicate
-message: Route already exists for GET /x
+message: Route already exists: GET /x
 suggestion: Use a different path or HTTP method
 path: /x
 VERDICT: REFUTED — discriminated union narrowing works as designed

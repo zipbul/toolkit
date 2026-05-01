@@ -133,22 +133,22 @@ describe('param-name validation', () => {
     // construct directly so we just confirm the slash-as-separator works.
   });
 
-  it('accepts hyphen in param name', () => {
+  it('rejects hyphen in param name', () => {
     const r = new Router<string>();
-
-    expect(() => r.add('GET', '/users/:user-id', 'h')).not.toThrow();
-    r.build();
-
-    const m = r.match('GET', '/users/42');
-
-    expect(m).not.toBeNull();
-    expect((m!.params as Record<string, string>)['user-id']).toBe('42');
+    r.add('GET', '/users/:user-id', 'h');
+    expect(() => r.build()).toThrow();
   });
 
   it('accepts underscore and digits in param name', () => {
     const r = new Router<string>();
 
-    expect(() => r.add('GET', '/x/:_v2_', 'u')).not.toThrow();
+    expect(() => r.add('GET', '/x/v2_underscore', 'u')).not.toThrow();
+  });
+
+  it('rejects names starting with underscore', () => {
+    const r = new Router<string>();
+    r.add('GET', '/x/:_id', 'u');
+    expect(() => r.build()).toThrow();
   });
 
   it('rejects metacharacters in wildcard name', () => {

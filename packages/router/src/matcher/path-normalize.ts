@@ -22,22 +22,48 @@ export interface NormalizeCfg {
   maxSegLen: number;
 }
 
+export type PathNormalizer = (path: string) => string | null;
+
+/**
+ * Combined single-pass scanner for path normalization.
+ * Finds query index, detects percent encoding, checks segment lengths,
+ * and identifies if case-folding is needed in one loop.
+ *
+ * Returns a JS string that performs the scan and populates sp, hasPercent, and qi.
+ */
+export function emitSinglePassScan(cfg: NormalizeCfg, inVar: string, bailReturn: string): string {
+  const checkSegLen = cfg.checkSegLen;
+  const maxSegLen = cfg.maxSegLen;
+
+  return `
+    var len = ${inVar}.length;
+    var end = len;
+    var hasPercent = false;
+    var needsFold = false;
+    var sl = 0;
+    for (var i = 0; i < len; i++) {
+      var c = ${inVar}.charCodeAt(i);
+      if (c === 63) { end = i; break; } // '?'
+      if (c === 37) hasPercent = true;
+      if (c >= 65 && c <= 90) needsFold = true;
+      ${checkSegLen ? `
+      if (c === 47) { sl = 0; }
+      else { sl++; if (sl > ${maxSegLen}) ${bailReturn} }` : ''}
+    }
+    var actualEnd = end;
+    if (${cfg.trimSlash} && actualEnd > 1 && ${inVar}.charCodeAt(actualEnd - 1) === 47) actualEnd--;
+    var sp = actualEnd === len ? ${inVar} : ${inVar}.substring(0, actualEnd);
+    if (needsFold && ${cfg.lowerCase}) sp = sp.toLowerCase();
+  `;
+}
+
 /** Initial path-length guard. Emits nothing when not configured. */
 export function emitPathLenCheck(cfg: NormalizeCfg, inVar: string, bailReturn: string): string {
   if (!cfg.checkPathLen) return '';
   return `if (${inVar}.length > ${cfg.maxPathLen}) ${bailReturn}`;
 }
 
-/**
- * Strip query string. Always emitted — query removal is unconditional.
- *
- * Optional `qiName` lets the caller supply a fresh identifier when the
- * helper is composed inside a larger emit scope that already declares
- * `var qi`. Default keeps the historical name so an isolated emit
- * (the only caller today) produces byte-identical output to pre-C1.
- * F16: any future call site that emits multiple normalizers in one
- * scope must pass distinct `qiName`s to avoid strict-mode redeclaration.
- */
+/** Strip query string. Always emitted. */
 export function emitQueryStrip(inVar: string, outVar: string, qiName: string = 'qi'): string {
   return `var ${outVar} = ${inVar}; var ${qiName} = ${outVar}.indexOf('?'); if (${qiName} !== -1) ${outVar} = ${outVar}.substring(0, ${qiName});`;
 }
@@ -54,11 +80,7 @@ export function emitLowerCase(cfg: NormalizeCfg, outVar: string): string {
   return `${outVar} = ${outVar}.toLowerCase();`;
 }
 
-/**
- * Per-segment length scan. Skipped entirely when `outVar.length` cannot
- * exceed the limit (a path shorter than maxSegLen cannot have a segment
- * longer than it).
- */
+/** Per-segment length scan. */
 export function emitSegLenCheck(cfg: NormalizeCfg, outVar: string, bailReturn: string): string {
   if (!cfg.checkSegLen) return '';
   return `if (${outVar}.length > ${cfg.maxSegLen}) {
@@ -68,13 +90,6 @@ export function emitSegLenCheck(cfg: NormalizeCfg, outVar: string, bailReturn: s
     }
   }`;
 }
-
-/**
- * Build a standalone normalizer function used by `allowedMethods()` for the
- * 405 classification path. Returns `null` when the path violates either limit,
- * otherwise the normalized lookup key. Compiled once at seal time.
- */
-export type PathNormalizer = (path: string) => string | null;
 
 export function buildPathNormalizer(cfg: NormalizeCfg): PathNormalizer {
   const body = [

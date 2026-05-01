@@ -1,4 +1,3 @@
-import type { OptionalParamDefaults } from '../builder/optional-param-defaults';
 import type { MatchFn, MatchState } from '../matcher/match-state';
 import type { NormalizeCfg } from '../matcher/path-normalize';
 import type { MatchOutput, RouteParams } from '../types';
@@ -47,7 +46,6 @@ export interface MatchConfig<T> {
   readonly checkPathLen: boolean;
   readonly checkSegLen: boolean;
   readonly hasAnyTree: boolean;
-  readonly hasOptDefaults: boolean;
   readonly anyTester: boolean;
   readonly hasAnyStatic: boolean;
   readonly staticOutputsByMethod: Array<Record<string, MatchOutput<T>> | undefined>;
@@ -56,13 +54,14 @@ export interface MatchConfig<T> {
   readonly trees: Array<MatchFn | null>;
   readonly matchState: MatchState;
   readonly handlers: T[];
-  readonly optDefaults: OptionalParamDefaults | undefined;
   readonly hitCacheByMethod: Map<number, RouterCache<MatchCacheEntry<T>>> | undefined;
   readonly missCacheByMethod: Map<number, Set<string>> | undefined;
   readonly cacheMaxSize: number;
   // Build-output extras consumed only by codegen — not part of the closure
   // payload but needed to choose the emit shape.
   readonly activeMethodCodes: ReadonlyArray<readonly [string, number]>;
+  readonly terminalHandlers: number[];
+  readonly paramsFactories: Array<((v: string[]) => RouteParams) | null>;
 }
 
 type CompiledMatch<T> = (method: string, path: string) => MatchOutput<T> | null;
@@ -98,9 +97,7 @@ export function compileMatchFn<T>(cfg: MatchConfig<T>): CompiledMatch<T> {
  *   6. Miss cache write / Hit cache write on success.
  */
 function emitGenericMatchImpl<T>(cfg: MatchConfig<T>): CompiledMatch<T> {
-  const activeMethodCount = cfg.activeMethodCodes.length;
   const cacheMaxSize = cfg.cacheMaxSize;
-  const hasOptDefaults = cfg.hasOptDefaults;
 
   const src: string[] = [];
 
@@ -113,15 +110,10 @@ function emitGenericMatchImpl<T>(cfg: MatchConfig<T>): CompiledMatch<T> {
 
   src.push(emitQueryStrip('path', 'sp'));
 
-  const trimJs = emitTrailingSlashTrim(normCfg, 'sp');
+  if (cfg.trimSlash) src.push(emitTrailingSlashTrim(normCfg, 'sp'));
+  if (cfg.lowerCase) src.push(emitLowerCase(normCfg, 'sp'));
 
-  if (trimJs !== '') src.push(trimJs);
-
-  const lowerJs = emitLowerCase(normCfg, 'sp');
-
-  if (lowerJs !== '') src.push(lowerJs);
-
-  // 1. Static cache lookup (Always enabled)
+  // 1. Static cache lookup
   src.push(`
     var ms = missCacheByMethod.get(mc);
     if (ms !== undefined && ms.has(sp)) return null;
@@ -163,11 +155,7 @@ function emitGenericMatchImpl<T>(cfg: MatchConfig<T>): CompiledMatch<T> {
 
   // 3. Dynamic tree walk
   if (cfg.hasAnyTree) {
-    // Per-segment length scan, deferred until after static lookup so
-    // static cache hits skip it.
-    const segJs = emitSegLenCheck(normCfg, 'sp', 'return null;');
-
-    if (segJs !== '') src.push(segJs);
+    if (cfg.checkSegLen) src.push(emitSegLenCheck(normCfg, 'sp', 'return null;'));
 
     src.push(`
       var tr = trees[mc];
@@ -175,31 +163,33 @@ function emitGenericMatchImpl<T>(cfg: MatchConfig<T>): CompiledMatch<T> {
         ${emitMissCacheWrite()}
         return null;
       }
-      var params = new ParamsCtor();
-      matchState.params = params;
       var ok = tr(sp, matchState);
       if (!ok) {
         ${emitMissCacheWrite()}
         return null;
       }
-    `);
+      
+      var tIdx = matchState.handlerIndex;
+      var hIdx = terminalHandlers[tIdx];
+      var factory = paramsFactories[tIdx];
+      var params;
+      var cachedParams;
+      
+      if (factory !== undefined && factory !== null) {
+        params = factory(matchState.paramValues);
+        // Double factory call is currently the fastest way in JSC to get 
+        // two independent monomorphic objects with minimum code complexity.
+        cachedParams = factory(matchState.paramValues);
+      } else {
+        params = EMPTY_PARAMS;
+        cachedParams = EMPTY_PARAMS;
+      }
 
-    if (hasOptDefaults) {
-      src.push(`
-        if (optDefaults !== undefined && optDefaults.has(matchState.handlerIndex)) {
-          optDefaults.apply(matchState.handlerIndex, params);
-        }
-      `);
-    }
-
-    src.push(`
-      var val = handlers[matchState.handlerIndex];
+      var val = handlers[hIdx];
       if (hc === undefined) {
         hc = new RouterCache(${cacheMaxSize});
         hitCacheByMethod.set(mc, hc);
       }
-      var cachedParams = new ParamsCtor();
-      for (var cpk in params) cachedParams[cpk] = params[cpk];
       hc.set(sp, { value: val, params: cachedParams });
       return { value: val, params: params, meta: DYNAMIC_META };
     `);
@@ -211,14 +201,14 @@ function emitGenericMatchImpl<T>(cfg: MatchConfig<T>): CompiledMatch<T> {
   const body = src.join('\n');
   const factory = new Function(
     'staticOutputsByMethod', 'methodCodes', 'trees', 'matchState', 'handlers',
-    'optDefaults', 'hitCacheByMethod', 'missCacheByMethod', 'RouterCache',
-    'EMPTY_PARAMS', 'CACHE_META', 'DYNAMIC_META', 'ParamsCtor',
+    'hitCacheByMethod', 'missCacheByMethod', 'RouterCache',
+    'EMPTY_PARAMS', 'CACHE_META', 'DYNAMIC_META', 'terminalHandlers', 'paramsFactories',
     `return function match(method, path) {\n${body}\n};`,
   );
 
   return factory(
     cfg.staticOutputsByMethod, cfg.methodCodes, cfg.trees, cfg.matchState, cfg.handlers,
-    cfg.optDefaults, cfg.hitCacheByMethod, cfg.missCacheByMethod, RouterCache,
-    EMPTY_PARAMS, CACHE_META, DYNAMIC_META, NullProtoObj,
+    cfg.hitCacheByMethod, cfg.missCacheByMethod, RouterCache,
+    EMPTY_PARAMS, CACHE_META, DYNAMIC_META, cfg.terminalHandlers, cfg.paramsFactories,
   ) as CompiledMatch<T>;
 }
