@@ -171,12 +171,14 @@ export class Registration<T> {
     Object.freeze(state.wildcardNamesByMethod);
 
     this.snapshot = {
-      staticMap: state.staticMap,
-      staticRegistered: state.staticRegistered,
-      segmentTrees: state.segmentTrees,
-      handlers: state.handlers,
+      staticMap: Object.freeze({ ...state.staticMap }),
+      staticRegistered: Object.freeze({ ...state.staticRegistered }),
+      segmentTrees: Object.freeze([...state.segmentTrees]),
+      handlers: state.handlers, // intentional: handlers stay mutable for JIT IC
       testerCache: state.testerCache,
-      wildcardNamesByMethod: state.wildcardNamesByMethod,
+      wildcardNamesByMethod: Object.freeze(new Map(
+        [...state.wildcardNamesByMethod].map(([mc, names]) => [mc, Object.freeze(new Map(names))]),
+      )),
     };
 
     return this.snapshot;
@@ -269,7 +271,7 @@ export class Registration<T> {
     if (registered![methodCode]) {
       return err<RouterErrorData>({
         kind: 'route-duplicate',
-        message: `Route already exists for ${route.method} ${normalized}`,
+        message: `Route already exists: ${route.method} ${normalized}`,
         path: route.path,
         method: route.method,
         suggestion: 'Use a different path or HTTP method',
@@ -321,7 +323,13 @@ export class Registration<T> {
       );
 
       if (isErr(insertResult)) {
-        return err<RouterErrorData>({ ...insertResult.data, path: route.path, method: route.method });
+        const data = insertResult.data;
+
+        if (data.kind === 'route-duplicate') {
+          data.message = `Route already exists: ${route.method} ${route.path}`;
+        }
+
+        return err<RouterErrorData>({ ...data, path: route.path, method: route.method });
       }
     }
   }

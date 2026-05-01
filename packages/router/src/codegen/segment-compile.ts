@@ -12,9 +12,6 @@ import type { MatchFn } from '../matcher/match-state';
  * registered HttpMethod set. Anything else `JSON.stringify` would be
  * asked to handle (Unicode, control chars, quotes, backslashes) it
  * escapes correctly into a valid JS string literal.
- *
- * F28 (stage F's F4 — typed emit IR) replaces this hand-rolled policy
- * with a structural guarantee.
  */
 
 /**

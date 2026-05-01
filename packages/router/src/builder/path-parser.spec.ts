@@ -38,7 +38,7 @@ describe('PathParser', () => {
       if (!isErr(result)) {
         expect(result.normalized).toBe('/');
         expect(result.isDynamic).toBe(false);
-        expect(result.parts).toEqual([{ type: 'static', value: '/' }]);
+        expect(result.parts).toEqual([{ type: 'static', value: '/', segments: [] }]);
       }
     });
   });
@@ -50,7 +50,7 @@ describe('PathParser', () => {
       if (!isErr(result)) {
         expect(result.normalized).toBe('/users');
         expect(result.isDynamic).toBe(false);
-        expect(result.parts).toEqual([{ type: 'static', value: '/users' }]);
+        expect(result.parts).toEqual([{ type: 'static', value: '/users', segments: ['users'] }]);
       }
     });
 
@@ -59,7 +59,7 @@ describe('PathParser', () => {
       expect(isErr(result)).toBe(false);
       if (!isErr(result)) {
         expect(result.normalized).toBe('/api/v1/users');
-        expect(result.parts).toEqual([{ type: 'static', value: '/api/v1/users' }]);
+        expect(result.parts).toEqual([{ type: 'static', value: '/api/v1/users', segments: ['api', 'v1', 'users'] }]);
       }
     });
 
@@ -79,7 +79,7 @@ describe('PathParser', () => {
       if (!isErr(result)) {
         expect(result.isDynamic).toBe(true);
         expect(result.parts).toEqual([
-          { type: 'static', value: '/users/' },
+          { type: 'static', value: '/users/', segments: ['users'] },
           { type: 'param', name: 'id', pattern: null, optional: false },
         ]);
       }

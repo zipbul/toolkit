@@ -19,7 +19,7 @@ import { assessRegexSafety } from './regex-safety';
 // ── Types ──
 
 export type PathPart =
-  | { type: 'static'; value: string }
+  | { type: 'static'; value: string; segments: string[] }
   | { type: 'param'; name: string; pattern: string | null; optional: boolean }
   | { type: 'wildcard'; name: string; origin: 'star' | 'multi' };
 
@@ -190,6 +190,7 @@ export class PathParser {
     const parts: PathPart[] = [];
     let isDynamic = false;
     let staticBuf = '/';
+    let currentStaticSegments: string[] = [];
 
     for (let i = 0; i < segments.length; i++) {
       const seg = segments[i]!;
@@ -197,8 +198,9 @@ export class PathParser {
 
       if (firstChar === CC_COLON) {
         if (staticBuf.length > 0) {
-          parts.push({ type: 'static', value: staticBuf });
+          parts.push({ type: 'static', value: staticBuf, segments: currentStaticSegments });
           staticBuf = '';
+          currentStaticSegments = [];
         }
 
         isDynamic = true;
@@ -230,8 +232,9 @@ export class PathParser {
         }
       } else if (firstChar === CC_STAR) {
         if (staticBuf.length > 0) {
-          parts.push({ type: 'static', value: staticBuf });
+          parts.push({ type: 'static', value: staticBuf, segments: currentStaticSegments });
           staticBuf = '';
+          currentStaticSegments = [];
         }
 
         isDynamic = true;
@@ -245,6 +248,7 @@ export class PathParser {
         parts.push(wcResult);
       } else {
         staticBuf += seg;
+        currentStaticSegments.push(seg);
 
         if (i < segments.length - 1) {
           staticBuf += '/';
@@ -253,12 +257,12 @@ export class PathParser {
     }
 
     if (staticBuf.length > 0) {
-      parts.push({ type: 'static', value: staticBuf });
+      parts.push({ type: 'static', value: staticBuf, segments: currentStaticSegments });
     }
 
     // Root path `/` with no segments
     if (parts.length === 0) {
-      parts.push({ type: 'static', value: '/' });
+      parts.push({ type: 'static', value: '/', segments: [] });
     }
 
     return { parts, normalized, isDynamic };

@@ -12,7 +12,11 @@ const param = (name: string, optional = false): PathPart => ({
   optional,
 });
 
-const staticPart = (value: string): PathPart => ({ type: 'static', value });
+const staticPart = (value: string): PathPart => {
+  const body = value.length > 1 ? value.slice(1) : '';
+  const segments = body === '' ? [] : body.split('/');
+  return { type: 'static', value, segments };
+};
 
 describe('expandOptional', () => {
   describe('collectOptionalIndices (path with no optionals)', () => {
@@ -115,7 +119,7 @@ describe('expandOptional', () => {
       if (!isErr(result)) {
         // Variant 0: full path. Variant 1: dropped optional.
         const dropped = result[1]!.parts;
-        expect(dropped).toEqual([{ type: 'static', value: '/users' }]);
+        expect(dropped).toEqual([{ type: 'static', value: '/users', segments: ['users'] }]);
       }
     });
 
@@ -129,7 +133,7 @@ describe('expandOptional', () => {
       expect(isErr(result)).toBe(false);
       if (!isErr(result)) {
         // Falls back to the empty-result `/` recovery path.
-        expect(result[1]!.parts).toEqual([{ type: 'static', value: '/' }]);
+        expect(result[1]!.parts).toEqual([{ type: 'static', value: '/', segments: [] }]);
       }
     });
   });
@@ -145,7 +149,7 @@ describe('expandOptional', () => {
       expect(isErr(result)).toBe(false);
       if (!isErr(result)) {
         const dropped = result[1]!.parts;
-        expect(dropped).toEqual([{ type: 'static', value: '/a/b' }]);
+        expect(dropped).toEqual([{ type: 'static', value: '/a/b', segments: ['a', 'b'] }]);
       }
     });
   });

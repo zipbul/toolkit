@@ -127,7 +127,7 @@ export function insertIntoSegmentTree(
     const part = parts[i]!;
 
     if (part.type === 'static') {
-      const segs = extractSegments(part.value);
+      const segs = part.segments;
 
       for (const seg of segs) {
         if (node.wildcardStore !== null) {
@@ -275,7 +275,7 @@ export function insertIntoSegmentTree(
 
         return fail({
           kind: 'route-duplicate',
-          message: `Wildcard route already exists at this position`,
+          message: 'Wildcard route already exists at this position',
           suggestion: 'Use a different path or HTTP method',
         });
       }
@@ -305,33 +305,11 @@ export function insertIntoSegmentTree(
   if (node.store !== null) {
     return fail({
       kind: 'route-duplicate',
-      message: 'Route already exists',
+      message: 'Terminal route already exists at this position',
       suggestion: 'Use a different path or HTTP method',
     });
   }
 
   node.store = handlerIndex;
   undo.push(() => { node.store = null; });
-}
-
-function extractSegments(staticLabel: string): string[] {
-  const segs: string[] = [];
-  let current = '';
-
-  for (let i = 0; i < staticLabel.length; i++) {
-    const ch = staticLabel.charCodeAt(i);
-
-    if (ch === 47) {
-      if (current.length > 0) {
-        segs.push(current);
-        current = '';
-      }
-    } else {
-      current += staticLabel.charAt(i);
-    }
-  }
-
-  if (current.length > 0) segs.push(current);
-
-  return segs;
 }

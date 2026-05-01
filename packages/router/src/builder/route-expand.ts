@@ -82,6 +82,15 @@ function validateOptionalCount(
   return null;
 }
 
+function createStaticPart(value: string): PathPart {
+  // Re-calculate segments from the value. This ensures that even after
+  // slash-trimming or merging, the segments array remains accurate.
+  const body = value.length > 1 ? value.slice(1) : '';
+  const segments = body === '' ? [] : body.split('/');
+
+  return { type: 'static', value, segments };
+}
+
 /**
  * Emit one ExpandedRoute per subset of optionals to keep. Index 0 is the
  * "all-present" variant; subsequent indices iterate the 2^N - 1 non-empty
@@ -129,7 +138,7 @@ function enumerateExpansions(
             const trimmed = prev.value.slice(0, -1);
 
             if (trimmed.length > 0) {
-              filtered[filtered.length - 1] = { type: 'static', value: trimmed };
+              filtered[filtered.length - 1] = createStaticPart(trimmed);
             } else {
               filtered.pop();
             }
@@ -156,7 +165,7 @@ function enumerateExpansions(
       // Every required segment was an optional that got dropped (e.g. `/:id?`
       // with `:id` omitted). The intended URL is `/`, not nothing — registering
       // an empty parts list would silently fail-match `/`.
-      result.push({ parts: [{ type: 'static', value: '/' }], handlerIndex });
+      result.push({ parts: [createStaticPart('/')], handlerIndex });
     }
   }
 
@@ -185,7 +194,7 @@ function mergeStaticParts(parts: PathPart[]): PathPart[] {
         let merged = prev.value + part.value;
 
         merged = merged.replace(/\/\//g, '/');
-        result[result.length - 1] = { type: 'static', value: merged };
+        result[result.length - 1] = createStaticPart(merged);
 
         continue;
       }
