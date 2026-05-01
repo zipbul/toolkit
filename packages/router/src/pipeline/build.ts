@@ -28,9 +28,9 @@ export interface BuildResult<T> {
   /** Per-method specialized-wildcard codegen entries; `null` when the
    *  method's tree is not a pure static-prefix wildcard shape. */
   wildSpecs: Array<WildCodegenEntry[] | null>;
-  /** True when at least one route registered a regex tester. Lets match()
-   *  skip the per-call `state.errorKind = null` reset when no tester can
-   *  ever signal a regex timeout. */
+  /** True when at least one route registered a regex tester. Used by
+   *  `detectSingleMethodWildSpec` to disqualify the inline static-prefix
+   *  wildcard fast path when any tester would need to run. */
   anyTester: boolean;
   /** Pre-built MatchOutput indexed by [methodCode][path] — frozen objects
    *  shared across all hits to a static route, no per-match allocation. */
@@ -73,7 +73,6 @@ export function buildFromRegistration<T>(
   const methodCodes = methodRegistry.getCodeMap() as Record<string, number>;
 
   const decoder = buildDecoder();
-  const decodeParams = options.decodeParams ?? true;
 
   const trees: Array<MatchFn | null> = [];
   const wildSpecs: Array<WildCodegenEntry[] | null> = [];
@@ -89,7 +88,7 @@ export function buildFromRegistration<T>(
       // etc.), compileMatchFn will inline these probes directly into
       // matchImpl.
       wildSpecs[code] = detectWildCodegenSpec(segRoot);
-      trees[code] = createSegmentWalker(segRoot, decoder, decodeParams);
+      trees[code] = createSegmentWalker(segRoot, decoder);
       continue;
     }
 
@@ -146,7 +145,7 @@ export function buildFromRegistration<T>(
   const ignoreTrailingSlash = options.ignoreTrailingSlash ?? true;
   const caseSensitive = options.caseSensitive ?? true;
   const maxPathLength = options.maxPathLength ?? 2048;
-  const maxSegmentLength = options.maxSegmentLength ?? 256;
+  const maxSegmentLength = options.maxSegmentLength ?? 1024;
 
   const normalizePath = buildPathNormalizer({
     checkPathLen: Number.isFinite(maxPathLength),

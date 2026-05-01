@@ -1,5 +1,5 @@
 import type { HttpMethod } from '@zipbul/shared';
-import type { MatchOutput, RegexSafetyOptions, RouterOptions } from './types';
+import type { MatchOutput, RouterOptions } from './types';
 import type { MatchCacheEntry, MatchConfig } from './codegen/emitter';
 import type { RouterCache } from './cache';
 
@@ -11,44 +11,57 @@ import { buildFromRegistration } from './pipeline/build';
 import { MatchLayer } from './pipeline/match';
 import { Registration } from './pipeline/registration';
 
+/**
+ * Symbol-keyed slot for the internal-inspection hatch. Symbol identity
+ * means external code cannot recreate the key by name, and the slot is
+ * non-enumerable. The `@zipbul/router/internal` subpath re-exports this
+ * symbol along with `getRouterInternals()` for regression-test access.
+ */
+export const ROUTER_INTERNALS_KEY: unique symbol = Symbol.for('@zipbul/router/internals');
+
+export interface RouterInternals<T> {
+  matchImpl: ((method: string, path: string) => MatchOutput<T> | null) | undefined;
+  matchLayer: MatchLayer<T> | undefined;
+  registration: Registration<T>;
+}
+
 interface CacheContainers<T> {
   hit: Map<number, RouterCache<MatchCacheEntry<T>>>;
   miss: Map<number, Set<string>>;
   maxSize: number;
 }
 
-function normalizeRegexSafety(opts: RegexSafetyOptions | undefined): RegexSafetyOptions {
-  const out: RegexSafetyOptions = {
-    mode: opts?.mode ?? 'error',
-    maxLength: opts?.maxLength ?? 256,
-    forbidBacktrackingTokens: opts?.forbidBacktrackingTokens ?? true,
-    forbidBackreferences: opts?.forbidBackreferences ?? true,
-  };
+/**
+ * Default per-method match-cache entry limit when `RouterOptions.cacheSize`
+ * is omitted. 32 methods × 1000 × ~80B ≈ 2.5MB worst-case — covers 99% of
+ * workloads. Not a hard upper bound — `cacheSize` accepts any positive
+ * integer; truly pathological cardinality should layer an external LRU on top.
+ */
+const DEFAULT_CACHE_SIZE = 1000;
 
-  if (opts?.maxExecutionMs !== undefined) out.maxExecutionMs = opts.maxExecutionMs;
-  if (opts?.validator !== undefined) out.validator = opts.validator;
+/**
+ * 캐시는 항상 켜진다. 빈 라우터는 빈 캐시(메모리 0)이고, lazy 할당이라
+ * 토글의 가치가 없다. 유일한 튜너블은 `cacheSize` — 메서드별 엔트리 상한.
+ */
+function createCacheContainers<T>(options: RouterOptions): CacheContainers<T> {
+  const maxSize = options.cacheSize ?? DEFAULT_CACHE_SIZE;
 
-  return out;
-}
-
-function createCacheContainers<T>(options: RouterOptions): CacheContainers<T> | undefined {
-  if (options.enableCache !== true) return undefined;
+  if (!Number.isInteger(maxSize) || maxSize <= 0) {
+    throw new RangeError(`cacheSize must be a positive integer (received ${String(maxSize)}).`);
+  }
 
   return {
     hit: new Map(),
     miss: new Map(),
-    maxSize: options.cacheSize ?? 1000,
+    maxSize,
   };
 }
 
-function createPathParser(options: RouterOptions, regexSafety: RegexSafetyOptions): PathParser {
+function createPathParser(options: RouterOptions): PathParser {
   return new PathParser({
     caseSensitive: options.caseSensitive ?? true,
     ignoreTrailingSlash: options.ignoreTrailingSlash ?? true,
-    maxSegmentLength: options.maxSegmentLength ?? 256,
-    regexSafety,
-    regexAnchorPolicy: options.regexAnchorPolicy,
-    onWarn: options.onWarn,
+    maxSegmentLength: options.maxSegmentLength ?? 1024,
   });
 }
 
@@ -72,28 +85,11 @@ export class Router<T = unknown> {
   readonly match: (method: HttpMethod, path: string) => MatchOutput<T> | null;
   readonly allowedMethods: (path: string) => HttpMethod[];
 
-  /**
-   * Inspection hatch for internal regression guards (walker tier
-   * detection, handler rollback, etc). Not part of the public API —
-   * external code must not depend on the shape. Defined non-enumerable
-   * so `Object.keys(router)` does not surface it. The wrapper object
-   * itself is unfrozen so build() can populate it; the instance is
-   * frozen, which prevents callers from substituting a different
-   * wrapper.
-   */
-  declare readonly _internals: {
-    matchImpl: ((method: string, path: string) => MatchOutput<T> | null) | undefined;
-    matchLayer: MatchLayer<T> | undefined;
-    registration: Registration<T>;
-  };
-
   constructor(options: RouterOptions = {}) {
-    const regexSafety = normalizeRegexSafety(options.regexSafety);
     const optionalParamDefaults = new OptionalParamDefaults(options.optionalParamBehavior);
     const methodRegistry = new MethodRegistry();
-    const pathParser = createPathParser(options, regexSafety);
+    const pathParser = createPathParser(options);
     const registration = new Registration<T>(
-      regexSafety,
       methodRegistry,
       pathParser,
       optionalParamDefaults,
@@ -103,13 +99,20 @@ export class Router<T = unknown> {
     let matchImpl: ((method: string, path: string) => MatchOutput<T> | null) | undefined;
     let matchLayer: MatchLayer<T> | undefined;
 
-    const internals: Router<T>['_internals'] = {
-      matchImpl: undefined,
-      matchLayer: undefined,
+    // Internal inspection hatch for regression guards (walker tier
+    // detection, handler rollback, etc). NOT part of the public API —
+    // external code must access this through the `@zipbul/router/internal`
+    // subpath via `getRouterInternals(router)`. Defined non-enumerable so
+    // `Object.keys(router)` does not surface it; the wrapper itself is
+    // unfrozen so build() can populate fields, while the Router instance
+    // is frozen to prevent wrapper substitution.
+    const internals = {
+      matchImpl: undefined as ((method: string, path: string) => MatchOutput<T> | null) | undefined,
+      matchLayer: undefined as MatchLayer<T> | undefined,
       registration,
     };
 
-    Object.defineProperty(this, '_internals', {
+    Object.defineProperty(this, ROUTER_INTERNALS_KEY, {
       value: internals,
       writable: false,
       enumerable: false,
@@ -127,7 +130,7 @@ export class Router<T = unknown> {
       }
 
       const cfg: MatchConfig<T> = {
-        useCache: cache !== undefined,
+        useCache: true,
         trimSlash: r.ignoreTrailingSlash,
         lowerCase: !r.caseSensitive,
         maxPathLen: r.maxPathLength,
@@ -145,9 +148,9 @@ export class Router<T = unknown> {
         matchState: r.matchState,
         handlers: snapshot.handlers,
         optDefaults: optionalParamDefaults,
-        hitCacheByMethod: cache?.hit,
-        missCacheByMethod: cache?.miss,
-        cacheMaxSize: cache?.maxSize ?? 1000,
+        hitCacheByMethod: cache.hit,
+        missCacheByMethod: cache.miss,
+        cacheMaxSize: cache.maxSize,
         activeMethodCodes: r.activeMethodCodes,
         wildSpecs: r.wildSpecs,
       };

@@ -2,28 +2,19 @@
 export interface RouterOptions {
   ignoreTrailingSlash?: boolean;
   caseSensitive?: boolean;
-  decodeParams?: boolean;
-  enableCache?: boolean;
-  cacheSize?: number;
-  maxSegmentLength?: number;
-  optionalParamBehavior?: OptionalParamBehavior;
-  regexSafety?: RegexSafetyOptions;
-  regexAnchorPolicy?: 'warn' | 'error' | 'silent';
-  onWarn?: (warning: RouterWarning) => void;
   /** 경로 최대 길이. 기본값 2048. 초과 시 match() 는 null 을 반환한다. */
   maxPathLength?: number;
+  maxSegmentLength?: number;
+  /**
+   * 메서드별 매치 캐시 최대 엔트리 수. 기본값 1000. 캐시는 항상 켜져 있고
+   * 비활성화 옵션은 없다 — 빈 라우터는 빈 캐시(메모리 0)이며 lazy 할당이라
+   * 토글의 가치가 없다. 1000 이 모자란 고-카디널리티 워크로드는 늘리면 된다.
+   */
+  cacheSize?: number;
+  optionalParamBehavior?: OptionalParamBehavior;
 }
 
-export type OptionalParamBehavior = 'omit' | 'setUndefined' | 'setEmptyString';
-
-export interface RegexSafetyOptions {
-  mode?: 'error' | 'warn';
-  maxLength?: number;
-  forbidBacktrackingTokens?: boolean;
-  forbidBackreferences?: boolean;
-  maxExecutionMs?: number;
-  validator?: (pattern: string) => void;
-}
+export type OptionalParamBehavior = 'omit' | 'set-undefined';
 
 export type RouteParams = Record<string, string | undefined>;
 
@@ -31,9 +22,9 @@ export type RouteParams = Record<string, string | undefined>;
 
 /**
  * 라우터 에러 종류 (discriminant).
- * 총 9개 — 상태 전이 1, 빌드타임 8. match() 는 throw 하지 않으므로 매치타임 kind 는 없다.
+ * 총 8개 — 상태 전이 1, 빌드타임 7. match() 는 throw 하지 않으므로 매치타임 kind 는 없다.
  */
-export type RouterErrKind =
+export type RouterErrorKind =
   // 상태 전이
   | 'router-sealed'      // build() 후 add() 시도
   // 빌드타임 — 등록
@@ -41,52 +32,38 @@ export type RouterErrKind =
   | 'route-conflict'     // wildcard/param/static 구조적 충돌
   | 'route-parse'        // 패턴 문법 오류
   | 'param-duplicate'    // 같은 경로 내 동일 이름 파라미터
-  | 'regex-unsafe'       // regex safety 검사 실패
-  | 'regex-anchor'       // anchor policy=error 시 ^/$ 포함
+  | 'regex-unsafe'       // regex safety 검사 실패 (length / nested-quantifier / backreference)
   | 'method-limit'       // 32개 메서드 초과 (MethodRegistry)
   | 'segment-limit';     // 빌드 시 세그먼트 길이/수/파라미터 수 상한 초과
 
 /**
- * `Result` 에러에 첨부되는 데이터 — kind 별 discriminated union.
+ * `RouterError.data` 에 첨부되는 데이터 — kind 별 discriminated union.
  *
  * 각 `kind` 마다 *해당 케이스에서만 의미가 있는* 필드를 required 로 선언.
- * 유저는 `if (e.kind === 'route-conflict')` 로 좁힌 후 `e.segment` 를 안전
- * 접근. 필수/선택 분류는 모든 에러 생성 사이트의 *실제 채움 패턴* 을 audit
- * 하여 결정한다 — required 필드는 *모든* 호출 사이트가 채우고 있음을
- * TypeScript 가 강제하는 보장.
+ * 유저는 `if (e.kind === 'route-conflict')` 로 좁힌 후 `e.conflictsWith` 를
+ * 안전 접근. required/optional 분류는 모든 에러 생성 사이트의 *실제 채움
+ * 패턴* 을 audit 하여 결정한다 — required 필드는 *모든* 호출 사이트가
+ * 채우고 있음을 TypeScript 가 강제하는 보장이다.
  *
  * `path` / `method` / `registeredCount` 는 라우터 상위 레이어 (addOne,
  * addAll) 가 다운스트림 에러에 컨텍스트로 덧붙이는 값이라 모든 kind 에서
- * optional 로 접근 가능. 인라인 intersection 으로 9 개 멤버 각각에
- * 반복 선언하는 비용을 피하면서, 공개 표면은 RouterErrData 단일 타입에
- * 한정한다.
+ * optional 로 접근 가능.
  */
-export type RouterErrData = {
+export type RouterErrorData = {
   path?: string;
   method?: string;
   /** addAll() fail-fast 시 에러 전까지 성공한 등록 수 */
   registeredCount?: number;
 } & (
   | { kind: 'router-sealed'; message: string; suggestion: string }
-  | { kind: 'route-duplicate'; message: string; suggestion?: string }
-  | { kind: 'route-conflict'; message: string; segment: string; conflictsWith?: string }
-  | { kind: 'route-parse'; message: string; segment?: string }
-  | { kind: 'param-duplicate'; message: string; path: string; segment: string }
-  | { kind: 'regex-unsafe'; message: string; segment: string }
-  | { kind: 'regex-anchor'; message: string; segment: string; suggestion?: string }
-  | { kind: 'method-limit'; message: string; method: string }
+  | { kind: 'route-duplicate'; message: string; suggestion: string }
+  | { kind: 'route-conflict'; message: string; segment: string; conflictsWith: string }
+  | { kind: 'route-parse'; message: string; segment?: string; suggestion?: string }
+  | { kind: 'param-duplicate'; message: string; path: string; segment: string; suggestion: string }
+  | { kind: 'regex-unsafe'; message: string; segment: string; suggestion: string }
+  | { kind: 'method-limit'; message: string; method: string; suggestion: string }
   | { kind: 'segment-limit'; message: string; segment?: string; suggestion?: string }
 );
-
-/**
- * 라이브러리가 발행하는 경고 정보.
- * RouterOptions.onWarn 콜백으로 수신한다.
- */
-export interface RouterWarning {
-  kind: 'regex-unsafe' | 'regex-anchor';
-  message: string;
-  segment?: string;
-}
 
 // ── Match output types ──
 

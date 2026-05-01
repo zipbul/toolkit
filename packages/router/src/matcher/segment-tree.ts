@@ -1,5 +1,5 @@
 import type { Result } from '@zipbul/result';
-import type { RegexSafetyOptions, RouterErrData } from '../types';
+import type { RouterErrorData } from '../types';
 import type { PatternTesterFn } from './pattern-tester';
 import type { PathPart } from '../builder/path-parser';
 
@@ -105,9 +105,8 @@ export function insertIntoSegmentTree(
   root: SegmentNode,
   parts: PathPart[],
   handlerIndex: number,
-  regexSafety: RegexSafetyOptions | undefined,
   testerCache: Map<string, PatternTesterFn>,
-): Result<void, RouterErrData> {
+): Result<void, RouterErrorData> {
   let node = root;
 
   for (let i = 0; i < parts.length; i++) {
@@ -122,6 +121,7 @@ export function insertIntoSegmentTree(
             kind: 'route-conflict',
             message: `Static route conflicts with existing wildcard '*${node.wildcardName}' at the same position`,
             segment: seg,
+            conflictsWith: `*${node.wildcardName}`,
           });
         }
 
@@ -144,6 +144,7 @@ export function insertIntoSegmentTree(
           kind: 'route-conflict',
           message: `Parameter ':${part.name}' conflicts with existing wildcard '*${node.wildcardName}' at the same position`,
           segment: part.name,
+          conflictsWith: `*${node.wildcardName}`,
         });
       }
 
@@ -158,15 +159,14 @@ export function insertIntoSegmentTree(
           try {
             const compiled = new RegExp(`^(?:${part.pattern})$`);
 
-            tester = buildPatternTester(part.pattern, compiled, {
-              maxExecutionMs: regexSafety?.maxExecutionMs,
-            });
+            tester = buildPatternTester(part.pattern, compiled);
             testerCache.set(part.pattern, tester);
           } catch (e) {
             return err({
               kind: 'route-parse',
               message: `Invalid regex pattern in parameter ':${part.name}': ${e instanceof Error ? e.message : String(e)}`,
               segment: part.name,
+              suggestion: 'Fix the regex syntax. Anchors are stripped automatically; do not include ^ or $.',
             });
           }
         }
@@ -205,6 +205,7 @@ export function insertIntoSegmentTree(
               kind: 'route-conflict',
               message: `Parameter ':${part.name}' has conflicting regex patterns`,
               segment: part.name,
+              conflictsWith: `:${p.name}${p.patternSource !== null ? `(${p.patternSource})` : ''}`,
             });
           }
 
@@ -246,12 +247,14 @@ export function insertIntoSegmentTree(
             kind: 'route-conflict',
             message: `Wildcard '*${part.name}' conflicts with existing wildcard '*${node.wildcardName}'`,
             segment: part.name,
+            conflictsWith: `*${node.wildcardName}`,
           });
         }
 
         return err({
           kind: 'route-duplicate',
           message: `Wildcard route already exists at this position`,
+          suggestion: 'Use a different path or HTTP method',
         });
       }
 
@@ -260,6 +263,7 @@ export function insertIntoSegmentTree(
           kind: 'route-conflict',
           message: `Wildcard '*${part.name}' conflicts with existing parameter at the same position`,
           segment: part.name,
+          conflictsWith: `:${node.paramChild.name}`,
         });
       }
 

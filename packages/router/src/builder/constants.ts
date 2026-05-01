@@ -23,3 +23,7 @@ export const MAX_PARAMS = 32;
 // milliseconds-level build) — far above realistic APIs and below pathological
 // territory.
 export const MAX_OPTIONAL = 10;
+// Maximum segment count per registered path. 64 is double the param cap and
+// covers any realistic REST shape; rejection at registration prevents
+// pathological registrations from inflating the segment-tree.
+export const MAX_SEGMENTS = 64;

@@ -1,13 +1,14 @@
 import { test, expect } from 'bun:test';
 
 import { Router, RouterError } from '../index';
+import { getRouterInternals } from '../internal';
 
 // Internal-state inspection helper. Pre-B1 the handlers array lived on
 // Router itself; after B1 (Registration extraction) the registration
 // phase owns it until seal(). Tests targeting the rollback semantics of
 // the *registration* path read through `registration.handlers`.
 const peekHandlers = (r: Router<string>): unknown[] =>
-  (r as unknown as { _internals: { registration: { handlers: unknown[] } } })._internals.registration.handlers;
+  (getRouterInternals(r).registration as unknown as { handlers: unknown[] }).handlers;
 
 // insertOne 실패 경로에서 handlers 슬롯이 누수되지 않는지 확인
 test('handlers slot is rolled back when insert fails (route-conflict)', () => {

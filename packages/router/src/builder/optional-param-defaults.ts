@@ -3,11 +3,9 @@ import type { OptionalParamBehavior, RouteParams } from '../types';
 export class OptionalParamDefaults {
   private readonly behavior: OptionalParamBehavior;
   private readonly defaults = new Map<number, readonly string[]>();
-  private readonly defaultValue: string | undefined;
 
-  constructor(behavior: OptionalParamBehavior = 'setUndefined') {
+  constructor(behavior: OptionalParamBehavior = 'set-undefined') {
     this.behavior = behavior;
-    this.defaultValue = behavior === 'setEmptyString' ? '' : undefined;
   }
 
   record(key: number, names: readonly string[]): void {
@@ -46,14 +44,13 @@ export class OptionalParamDefaults {
       return;
     }
 
-    const val = this.defaultValue;
     const len = defaults.length;
 
     for (let i = 0; i < len; i++) {
       const name = defaults[i];
 
       if (typeof name === 'string' && name.length > 0 && !(name in params)) {
-        params[name] = val;
+        params[name] = undefined;
       }
     }
   }

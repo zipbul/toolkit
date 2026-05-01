@@ -125,7 +125,7 @@ describe('Router', () => {
     });
 
     it('should return cached result on second match of same dynamic path', () => {
-      const r = buildWith([['GET', '/users/:id', 10]], { enableCache: true });
+      const r = buildWith([['GET', '/users/:id', 10]], {});
 
       const first = r.match('GET', '/users/1');
       const second = r.match('GET', '/users/1');
@@ -137,7 +137,7 @@ describe('Router', () => {
     });
 
     it('should return meta.source="cache" on cache hit', () => {
-      const r = buildWith([['GET', '/users/:id', 10]], { enableCache: true });
+      const r = buildWith([['GET', '/users/:id', 10]], {});
 
       r.match('GET', '/users/1'); // first → dynamic
       const cached = r.match('GET', '/users/1'); // second → cache
@@ -147,7 +147,7 @@ describe('Router', () => {
     });
 
     it('should return null consistently for dynamic miss with cache', () => {
-      const r = buildWith([['GET', '/users/:id', 10]], { enableCache: true });
+      const r = buildWith([['GET', '/users/:id', 10]], {});
 
       const first = r.match('GET', '/posts/hello');
       const second = r.match('GET', '/posts/hello');
@@ -297,7 +297,7 @@ describe('Router', () => {
     });
 
     it('should return null from cache for previously missed path', () => {
-      const r = buildWith([['GET', '/users/:id', 1]], { enableCache: true });
+      const r = buildWith([['GET', '/users/:id', 1]], {});
 
       // First miss → null stored in cache
       const miss1 = r.match('GET', '/nope/1');
@@ -344,7 +344,7 @@ describe('Router', () => {
     });
 
     it('should write cache entry on dynamic match hit', () => {
-      const r = buildWith([['GET', '/items/:id', 5]], { enableCache: true });
+      const r = buildWith([['GET', '/items/:id', 5]], {});
 
       r.match('GET', '/items/42'); // dynamic → writes cache
 
@@ -355,7 +355,7 @@ describe('Router', () => {
     });
 
     it('should return null consistently on dynamic miss', () => {
-      const r = buildWith([['GET', '/items/:id', 5]], { enableCache: true });
+      const r = buildWith([['GET', '/items/:id', 5]], {});
 
       const miss1 = r.match('GET', '/nope/1');
       const miss2 = r.match('GET', '/nope/1');
@@ -444,7 +444,7 @@ describe('Router', () => {
           ['GET', '/static', 1],
           ['GET', '/dynamic/:id', 2],
         ],
-        { enableCache: true },
+        {},
       );
 
       // Static route → source: 'static'

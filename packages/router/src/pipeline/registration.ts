@@ -2,7 +2,7 @@ import type { HttpMethod } from '@zipbul/shared';
 import type { Result } from '@zipbul/result';
 import type { PathPart } from '../builder/path-parser';
 import type { SegmentNode } from '../matcher/segment-tree';
-import type { RegexSafetyOptions, RouterErrData } from '../types';
+import type { RouterErrorData } from '../types';
 import type { PatternTesterFn } from '../matcher/pattern-tester';
 
 import { err, isErr } from '@zipbul/result';
@@ -43,7 +43,6 @@ export interface RegistrationSnapshot<T> {
  * separable from build-time codegen and runtime match dispatch.
  */
 export class Registration<T> {
-  private readonly regexSafety: RegexSafetyOptions | undefined;
   private readonly methodRegistry: MethodRegistry;
   private readonly pathParser: PathParser;
   private readonly optionalParamDefaults: OptionalParamDefaults;
@@ -76,12 +75,10 @@ export class Registration<T> {
   private sealed = false;
 
   constructor(
-    regexSafety: RegexSafetyOptions | undefined,
     methodRegistry: MethodRegistry,
     pathParser: PathParser,
     optionalParamDefaults: OptionalParamDefaults,
   ) {
-    this.regexSafety = regexSafety;
     this.methodRegistry = methodRegistry;
     this.pathParser = pathParser;
     this.optionalParamDefaults = optionalParamDefaults;
@@ -170,15 +167,15 @@ export class Registration<T> {
   }
 
   /** Convert an addOne() Err into a thrown RouterError; pass-through on Ok. */
-  private unwrapOrThrow(result: Result<void, RouterErrData>): void {
+  private unwrapOrThrow(result: Result<void, RouterErrorData>): void {
     if (isErr(result)) throw new RouterError(result.data);
   }
 
-  private addOne(method: HttpMethod, path: string, value: T): Result<void, RouterErrData> {
+  private addOne(method: HttpMethod, path: string, value: T): Result<void, RouterErrorData> {
     const offsetResult = this.methodRegistry.getOrCreate(method);
 
     if (isErr(offsetResult)) {
-      return err<RouterErrData>({
+      return err<RouterErrorData>({
         ...offsetResult.data,
         path,
       });
@@ -187,7 +184,7 @@ export class Registration<T> {
     const parseResult = this.pathParser.parse(path);
 
     if (isErr(parseResult)) {
-      return err<RouterErrData>({
+      return err<RouterErrorData>({
         ...parseResult.data,
         path,
         method,
@@ -222,7 +219,7 @@ export class Registration<T> {
       }
 
       if (registered![offsetResult]) {
-        return err<RouterErrData>({
+        return err<RouterErrorData>({
           kind: 'route-duplicate',
           message: `Route already exists for ${method} ${normalized}`,
           path,
@@ -244,7 +241,7 @@ export class Registration<T> {
     if (isErr(expansion)) {
       this.handlers.pop();
 
-      return err<RouterErrData>({ ...expansion.data, path, method });
+      return err<RouterErrorData>({ ...expansion.data, path, method });
     }
 
     if (this.segmentTrees[offsetResult] === undefined || this.segmentTrees[offsetResult] === null) {
@@ -258,14 +255,13 @@ export class Registration<T> {
         root,
         expParts,
         hIdx,
-        this.regexSafety,
         this.testerCache,
       );
 
       if (isErr(insertResult)) {
         this.handlers.pop();
 
-        return err<RouterErrData>({ ...insertResult.data, path, method });
+        return err<RouterErrorData>({ ...insertResult.data, path, method });
       }
     }
   }
@@ -275,7 +271,7 @@ export class Registration<T> {
     normalized: string,
     methodCode: number,
     method: string,
-  ): Result<void, RouterErrData> {
+  ): Result<void, RouterErrorData> {
     let scope = this.wildcardNamesByMethod.get(methodCode);
 
     for (const part of parts) {
@@ -285,7 +281,7 @@ export class Registration<T> {
         const existing = scope?.get(prefix);
 
         if (existing !== undefined && existing !== part.name) {
-          return err<RouterErrData>({
+          return err<RouterErrorData>({
             kind: 'route-conflict',
             message: `Wildcard '*${part.name}' conflicts with existing wildcard '*${existing}' at path prefix '${prefix}' for method ${method}`,
             segment: part.name,
@@ -309,18 +305,19 @@ export class Registration<T> {
     normalized: string,
     methodCode: number,
     method: string,
-  ): Result<void, RouterErrData> {
+  ): Result<void, RouterErrorData> {
     const scope = this.wildcardNamesByMethod.get(methodCode);
 
     if (scope === undefined) return;
 
     // Check if any wildcard prefix in this method is a parent of this static route
-    for (const [prefix] of scope) {
+    for (const [prefix, wildcardName] of scope) {
       if (normalized.startsWith(prefix + '/') || normalized === prefix) {
-        return err<RouterErrData>({
+        return err<RouterErrorData>({
           kind: 'route-conflict',
           message: `Static route '${normalized}' conflicts with existing wildcard at '${prefix}/*' for method ${method}`,
           segment: normalized,
+          conflictsWith: `${prefix}/*${wildcardName}`,
           method,
         });
       }

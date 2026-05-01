@@ -1,9 +1,9 @@
-import type { RouterErrData } from './types';
+import type { RouterErrorData } from './types';
 
 export class RouterError extends Error {
-  readonly data: RouterErrData;
+  readonly data: RouterErrorData;
 
-  constructor(data: RouterErrData) {
+  constructor(data: RouterErrorData) {
     super(data.message);
     this.name = 'RouterError';
     this.data = data;

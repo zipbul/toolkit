@@ -2,7 +2,7 @@ import type { MatchFn, MatchState, MatchStateWithParams } from './match-state';
 import type { DecoderFn } from './decoder';
 import type { ParamSegment, SegmentNode } from './segment-tree';
 
-import { TESTER_PASS, TESTER_TIMEOUT } from './pattern-tester';
+import { TESTER_PASS } from './pattern-tester';
 import { hasAmbiguousNode } from './segment-tree';
 import { compileSegmentTree } from '../codegen/segment-compile';
 import { detectWildCodegenSpec } from '../codegen/walker-strategy';
@@ -84,7 +84,6 @@ function tryCodegenStaticPrefixWildcard(root: SegmentNode): MatchFn | null {
 export function createSegmentWalker(
   root: SegmentNode,
   decoder: DecoderFn,
-  decodeParams: boolean,
 ): MatchFn {
   // Codegen specialist for static-prefix wildcard trees (file servers).
   // Skips path.split + Map lookup — uses url.startsWith for prefix dispatch.
@@ -96,7 +95,7 @@ export function createSegmentWalker(
   // for static segments and inline indexOf+substring for params. Bails when
   // tree shape needs backtracking we don't generate (returns null) — caller
   // then falls through to the iterative or recursive walker below.
-  const compiledFull = compileSegmentTree(root, decodeParams);
+  const compiledFull = compileSegmentTree(root);
 
   if (compiledFull !== null) return compiledFull;
 
@@ -105,24 +104,19 @@ export function createSegmentWalker(
   // saves a function call per segment for the common case (REST routes
   // typically have unique winners at each tree level).
   if (!hasAmbiguousNode(root)) {
-    return createIterativeWalker(root, decoder, decodeParams);
+    return createIterativeWalker(root, decoder);
   }
 
   /**
    * Try matching a single param segment: run the tester (if any),
    * recurse into `match` on success, and assign `state.params[name]
-   * = decoded` after the recursion returns true.
-   *
-   * Returns true on full match; false otherwise. The caller MUST
-   * check `state.errorKind` after a false return to propagate
-   * regex-timeout — the helper sets `state.errorKind` before
-   * returning false in the timeout branch but does not abort the
-   * caller's loop on its own.
+   * = decoded` after the recursion returns true. Returns true on
+   * full match; false otherwise.
    *
    * Closure-captured: `match` only. The `decoded` value is supplied
-   * by the caller (the outer `match` runs the decoder + decodeParams
-   * gate before this helper is called), so this helper neither
-   * captures nor invokes the decoder.
+   * by the caller (the outer `match` runs the decoder before this
+   * helper is called), so this helper neither captures nor invokes
+   * the decoder.
    *
    * Used by both the head-fast-path and the sibling-backtracking
    * loop in `match` so the two paths share one definition; pre-D1
@@ -140,16 +134,7 @@ export function createSegmentWalker(
     state: MatchStateWithParams,
   ): boolean {
     if (param.tester !== null) {
-      const r = param.tester(decoded);
-
-      if (r === TESTER_TIMEOUT) {
-        state.errorKind = 'regex-timeout';
-        state.errorMessage = 'Route parameter regex exceeded time limit';
-
-        return false;
-      }
-
-      if (r !== TESTER_PASS) return false;
+      if (param.tester(decoded) !== TESTER_PASS) return false;
     }
 
     if (match(param.next, path, segs, nextIdx, state)) {
@@ -210,17 +195,15 @@ export function createSegmentWalker(
 
       if (child !== undefined) {
         if (match(child, path, segs, idx + 1, state)) return true;
-        if (state.errorKind !== null) return false;
       }
     }
 
     const head = node.paramChild;
 
     if (head !== null && seg.length > 0) {
-      const decoded = decodeParams ? decoder(seg) : seg;
+      const decoded = decoder(seg);
 
       if (tryMatchParam(head, decoded, path, segs, idx + 1, state)) return true;
-      if (state.errorKind !== null) return false;
 
       // Sibling backtracking — runs only when nextSibling is set, so the
       // single-param case never enters this loop.
@@ -228,7 +211,6 @@ export function createSegmentWalker(
 
       while (p !== null) {
         if (tryMatchParam(p, decoded, path, segs, idx + 1, state)) return true;
-        if (state.errorKind !== null) return false;
         p = p.nextSibling;
       }
     }
@@ -296,7 +278,6 @@ export function createSegmentWalker(
 function createIterativeWalker(
   root: SegmentNode,
   decoder: DecoderFn,
-  decodeParams: boolean,
 ): MatchFn {
   return function walk(url: string, state: MatchState): boolean {
     // See createSegmentWalker for the params-non-null invariant.
@@ -359,19 +340,10 @@ function createIterativeWalker(
       }
 
       if (node.paramChild !== null && seg.length > 0) {
-        const decoded = decodeParams ? decoder(seg) : seg;
+        const decoded = decoder(seg);
 
         if (node.paramChild.tester !== null) {
-          const r = node.paramChild.tester(decoded);
-
-          if (r === TESTER_TIMEOUT) {
-            stateP.errorKind = 'regex-timeout';
-            stateP.errorMessage = 'Route parameter regex exceeded time limit';
-
-            return false;
-          }
-
-          if (r !== TESTER_PASS) return false;
+          if (node.paramChild.tester(decoded) !== TESTER_PASS) return false;
         }
 
         params[node.paramChild.name] = decoded;

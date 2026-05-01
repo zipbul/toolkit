@@ -1,8 +1,7 @@
 export const TESTER_FAIL = 0 as const;
 export const TESTER_PASS = 1 as const;
-export const TESTER_TIMEOUT = 2 as const;
 
-export type TesterResult = typeof TESTER_FAIL | typeof TESTER_PASS | typeof TESTER_TIMEOUT;
+export type TesterResult = typeof TESTER_FAIL | typeof TESTER_PASS;
 
 /**
  * Pattern tester closure. Hot-path matcher invokes this to validate a
@@ -13,10 +12,6 @@ export type TesterResult = typeof TESTER_FAIL | typeof TESTER_PASS | typeof TEST
  * matcher` edge).
  */
 export type PatternTesterFn = (value: string) => TesterResult;
-
-export interface PatternTesterOptions {
-  readonly maxExecutionMs?: number;
-}
 
 const DIGIT_PATTERNS = new Set(['\\d+', '\\d{1,}', '[0-9]+', '[0-9]{1,}']);
 const ALPHA_PATTERNS = new Set(['[a-zA-Z]+', '[A-Za-z]+']);
@@ -30,54 +25,29 @@ const ALPHANUM_PATTERNS = new Set([
   '[\\w-]+', '[\\w\\-]+',
 ]);
 
-const now = (): number => Number(Bun.nanoseconds()) / 1e6;
-
 function buildPatternTester(
   source: string | undefined,
   compiled: RegExp,
-  options?: PatternTesterOptions,
-): (value: string) => TesterResult {
-  const wrap = (tester: (value: string) => boolean): ((value: string) => TesterResult) => {
-    const maxExecutionMs = options?.maxExecutionMs;
-
-    if (maxExecutionMs === undefined || maxExecutionMs <= 0) {
-      return value => (tester(value) ? TESTER_PASS : TESTER_FAIL);
+): PatternTesterFn {
+  if (source !== undefined && source.length > 0) {
+    if (DIGIT_PATTERNS.has(source)) {
+      return value => (isAllDigits(value) ? TESTER_PASS : TESTER_FAIL);
     }
 
-    const limit = maxExecutionMs;
+    if (ALPHA_PATTERNS.has(source)) {
+      return value => (isAlpha(value) ? TESTER_PASS : TESTER_FAIL);
+    }
 
-    return value => {
-      const start = now();
-      const result = tester(value);
-      const duration = now() - start;
+    if (ALPHANUM_PATTERNS.has(source)) {
+      return value => (isAlphaNumericDash(value) ? TESTER_PASS : TESTER_FAIL);
+    }
 
-      if (duration > limit) return TESTER_TIMEOUT;
-
-      return result ? TESTER_PASS : TESTER_FAIL;
-    };
-  };
-
-  if (source === undefined || source.length === 0) {
-    return wrap(value => compiled.test(value));
+    if (source === '[^/]+') {
+      return value => (value.length > 0 && !value.includes('/') ? TESTER_PASS : TESTER_FAIL);
+    }
   }
 
-  if (DIGIT_PATTERNS.has(source)) {
-    return wrap(isAllDigits);
-  }
-
-  if (ALPHA_PATTERNS.has(source)) {
-    return wrap(isAlpha);
-  }
-
-  if (ALPHANUM_PATTERNS.has(source)) {
-    return wrap(isAlphaNumericDash);
-  }
-
-  if (source === '[^/]+') {
-    return wrap(value => value.length > 0 && !value.includes('/'));
-  }
-
-  return wrap(value => compiled.test(value));
+  return value => (compiled.test(value) ? TESTER_PASS : TESTER_FAIL);
 }
 
 function isAllDigits(value: string): boolean {

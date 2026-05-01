@@ -11,7 +11,6 @@ import {
   DYNAMIC_META,
   EMPTY_PARAMS,
   NullProtoObj,
-  STATIC_META,
 } from '../internal/null-proto-obj';
 import {
   emitLowerCase,
@@ -192,7 +191,6 @@ function emitGenericMatchImpl<T>(cfg: MatchConfig<T>): CompiledMatch<T> {
   const activeMethodCode = activeMethodCount === 1 ? cfg.activeMethodCodes[0]![1] : -1;
   const cacheMaxSize = cfg.cacheMaxSize;
   const useCache = cfg.useCache;
-  const anyTester = cfg.anyTester;
   const hasOptDefaults = cfg.hasOptDefaults;
 
   const emitMissCacheWrite = (): string => `
@@ -276,21 +274,19 @@ function emitGenericMatchImpl<T>(cfg: MatchConfig<T>): CompiledMatch<T> {
     if (segJs !== '') src.push(segJs);
 
     // Segment walker writes params directly into matchState.params on the
-    // success-return path only (no commit/rollback). errorKind/errorMessage
-    // reset is skipped when no route has a regex pattern — TIMEOUT path is
-    // dead so the channel never gets dirty.
+    // success-return path only (no commit/rollback). Walkers signal failure
+    // by returning false — there is no out-of-band error channel.
     src.push(`
       var tr = trees[mc];
       if (!tr) {
         ${useCache ? emitMissCacheWrite() : ''}
         return null;
       }
-      ${anyTester ? 'matchState.errorKind = null; matchState.errorMessage = null;' : ''}
       var params = new ParamsCtor();
       matchState.params = params;
       var ok = tr(sp, matchState);
       if (!ok) {
-        ${useCache ? (anyTester ? `if (matchState.errorKind === null) { ${emitMissCacheWrite()} }` : emitMissCacheWrite()) : ''}
+        ${useCache ? emitMissCacheWrite() : ''}
         return null;
       }
     `);
@@ -334,15 +330,15 @@ function emitGenericMatchImpl<T>(cfg: MatchConfig<T>): CompiledMatch<T> {
 
   const body = src.join('\n');
   const factory = new Function(
-    'staticOutputsByMethod', 'activeBucket', 'staticMap', 'methodCodes', 'trees', 'matchState', 'handlers',
+    'staticOutputsByMethod', 'activeBucket', 'methodCodes', 'trees', 'matchState', 'handlers',
     'optDefaults', 'hitCacheByMethod', 'missCacheByMethod', 'RouterCache',
-    'EMPTY_PARAMS', 'STATIC_META', 'CACHE_META', 'DYNAMIC_META', 'ParamsCtor',
+    'EMPTY_PARAMS', 'CACHE_META', 'DYNAMIC_META', 'ParamsCtor',
     `return function match(method, path) {\n${body}\n};`,
   );
 
   return factory(
-    cfg.staticOutputsByMethod, activeBucket, cfg.staticMap, cfg.methodCodes, cfg.trees, cfg.matchState, cfg.handlers,
+    cfg.staticOutputsByMethod, activeBucket, cfg.methodCodes, cfg.trees, cfg.matchState, cfg.handlers,
     cfg.optDefaults, cfg.hitCacheByMethod, cfg.missCacheByMethod, RouterCache,
-    EMPTY_PARAMS, STATIC_META, CACHE_META, DYNAMIC_META, NullProtoObj,
+    EMPTY_PARAMS, CACHE_META, DYNAMIC_META, NullProtoObj,
   ) as CompiledMatch<T>;
 }

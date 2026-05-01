@@ -20,27 +20,27 @@ describe('RouterError', () => {
   });
 
   it('should preserve data object with all fields', () => {
-    // `regex-anchor` carries every public field shape (kind/message/segment/
+    // `regex-unsafe` carries every public field shape (kind/message/segment/
     // suggestion + context path/method). Narrow with `kind` first so we can
     // access kind-specific fields without `as any`.
     const data = {
-      kind: 'regex-anchor' as const,
-      message: 'anchor stripped',
-      path: '/users/:id(^\\d+$)',
+      kind: 'regex-unsafe' as const,
+      message: 'unsafe pattern',
+      path: '/users/:id((a+)+)',
       method: 'GET',
-      segment: '^\\d+$',
-      suggestion: 'Remove anchors',
+      segment: '(a+)+',
+      suggestion: 'Simplify the regex.',
     };
 
     const err = new RouterError(data);
     expect(err.data).toBe(data);
-    expect(err.data.kind).toBe('regex-anchor');
-    expect(err.data.path).toBe('/users/:id(^\\d+$)');
+    expect(err.data.kind).toBe('regex-unsafe');
+    expect(err.data.path).toBe('/users/:id((a+)+)');
     expect(err.data.method).toBe('GET');
 
-    if (err.data.kind === 'regex-anchor') {
-      expect(err.data.segment).toBe('^\\d+$');
-      expect(err.data.suggestion).toBe('Remove anchors');
+    if (err.data.kind === 'regex-unsafe') {
+      expect(err.data.segment).toBe('(a+)+');
+      expect(err.data.suggestion).toBe('Simplify the regex.');
     }
   });
 
@@ -48,6 +48,7 @@ describe('RouterError', () => {
     const err = new RouterError({
       kind: 'route-duplicate',
       message: 'duplicate',
+      suggestion: 'Use a different path or HTTP method',
       registeredCount: 3,
     });
 
@@ -66,16 +67,15 @@ describe('RouterError', () => {
     // for its kind. Aspirational kinds present in pre-A3 history
     // (regex-timeout / method-not-found / not-built / path-too-long) were
     // never produced anywhere in src and have been dropped — they belonged
-    // to a separate matcher-state error channel, not RouterErrData.
+    // to a separate matcher-state error channel, not RouterErrorData.
     const variants = [
       { kind: 'router-sealed' as const, message: 'sealed', suggestion: 'recreate' },
-      { kind: 'route-duplicate' as const, message: 'dup' },
-      { kind: 'route-conflict' as const, message: 'conflict', segment: 'x' },
+      { kind: 'route-duplicate' as const, message: 'dup', suggestion: 'use another' },
+      { kind: 'route-conflict' as const, message: 'conflict', segment: 'x', conflictsWith: 'y' },
       { kind: 'route-parse' as const, message: 'parse error' },
-      { kind: 'param-duplicate' as const, message: 'param dup', path: '/a', segment: 'p' },
-      { kind: 'regex-unsafe' as const, message: 'unsafe', segment: '\\d+' },
-      { kind: 'regex-anchor' as const, message: 'anchor', segment: '^x$' },
-      { kind: 'method-limit' as const, message: 'method limit', method: 'X' },
+      { kind: 'param-duplicate' as const, message: 'param dup', path: '/a', segment: 'p', suggestion: 'rename' },
+      { kind: 'regex-unsafe' as const, message: 'unsafe', segment: '\\d+', suggestion: 'simplify' },
+      { kind: 'method-limit' as const, message: 'method limit', method: 'X', suggestion: 'reduce' },
       { kind: 'segment-limit' as const, message: 'seg limit' },
     ];
 

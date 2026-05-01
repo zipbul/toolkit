@@ -1,5 +1,5 @@
 import type { Result } from '@zipbul/result';
-import type { RegexSafetyOptions, RouterErrData, RouterWarning } from '../types';
+import type { RouterErrorData } from '../types';
 
 import { err, isErr } from '@zipbul/result';
 import {
@@ -11,8 +11,9 @@ import {
   CC_SLASH,
   CC_STAR,
   MAX_PARAMS,
+  MAX_SEGMENTS,
 } from './constants';
-import { PatternUtils } from './pattern-utils';
+import { normalizeParamPatternSource } from './pattern-utils';
 import { assessRegexSafety } from './regex-safety';
 
 // ── Types ──
@@ -32,25 +33,16 @@ export interface PathParserConfig {
   caseSensitive: boolean;
   ignoreTrailingSlash: boolean;
   maxSegmentLength: number;
-  regexSafety?: RegexSafetyOptions;
-  regexAnchorPolicy?: 'warn' | 'error' | 'silent';
-  onWarn?: (warning: RouterWarning) => void;
 }
 
 // ── PathParser ──
 
 export class PathParser {
   private readonly config: PathParserConfig;
-  private readonly patternUtils: PatternUtils;
   private readonly activeParams = new Set<string>();
 
   constructor(config: PathParserConfig) {
     this.config = config;
-    this.patternUtils = new PatternUtils({
-      regexSafety: config.regexSafety,
-      regexAnchorPolicy: config.regexAnchorPolicy,
-      onWarn: config.onWarn,
-    });
   }
 
   /**
@@ -60,7 +52,7 @@ export class PathParser {
    *   3. parseTokens   — semantic parse into PathPart[].
    * Each stage is independently testable; failures short-circuit with `Err`.
    */
-  parse(path: string): Result<ParseResult, RouterErrData> {
+  parse(path: string): Result<ParseResult, RouterErrorData> {
     const validation = this.validatePath(path);
 
     if (validation !== null) return validation;
@@ -75,7 +67,7 @@ export class PathParser {
   }
 
   /** Stage 1 — structural sanity. Fails fast on `''`, missing `/`. */
-  private validatePath(path: string): Result<never, RouterErrData> | null {
+  private validatePath(path: string): Result<never, RouterErrorData> | null {
     if (path.length === 0 || path.charCodeAt(0) !== CC_SLASH) {
       return err({
         kind: 'route-parse',
@@ -96,7 +88,7 @@ export class PathParser {
    */
   private tokenize(
     path: string,
-  ): Result<{ segments: string[]; normalized: string }, RouterErrData> {
+  ): Result<{ segments: string[]; normalized: string }, RouterErrorData> {
     // Split by '/' (skip leading '/')
     const body = path.length > 1 ? path.slice(1) : '';
     const segments = body === '' ? [] : body.split('/');
@@ -137,11 +129,12 @@ export class PathParser {
     }
 
     // Validate segment count
-    if (segments.length > 64) {
+    if (segments.length > MAX_SEGMENTS) {
       return err({
         kind: 'segment-limit',
-        message: `Path has ${segments.length} segments, exceeding the maximum of 64: ${path}`,
+        message: `Path has ${segments.length} segments, exceeding the maximum of ${MAX_SEGMENTS}: ${path}`,
         path,
+        suggestion: `Split deeply nested routes into shorter sub-paths (limit is ${MAX_SEGMENTS}).`,
       });
     }
 
@@ -161,6 +154,7 @@ export class PathParser {
         kind: 'segment-limit',
         message: `Path has ${paramCount} parameters, exceeding the maximum of ${MAX_PARAMS}: ${path}`,
         path,
+        suggestion: `Reduce the number of named parameters in this path (limit is ${MAX_PARAMS}).`,
       });
     }
 
@@ -179,7 +173,7 @@ export class PathParser {
     segments: string[],
     normalized: string,
     path: string,
-  ): Result<ParseResult, RouterErrData> {
+  ): Result<ParseResult, RouterErrorData> {
     this.activeParams.clear();
 
     const parts: PathPart[] = [];
@@ -259,7 +253,7 @@ export class PathParser {
     return { parts, normalized, isDynamic };
   }
 
-  private parseParam(seg: string, path: string): Result<PathPart, RouterErrData> {
+  private parseParam(seg: string, path: string): Result<PathPart, RouterErrorData> {
     let core = seg;
     let isOptional = false;
 
@@ -346,7 +340,7 @@ export class PathParser {
     index: number,
     totalSegments: number,
     path: string,
-  ): Result<PathPart, RouterErrData> {
+  ): Result<PathPart, RouterErrorData> {
     // Determine origin
     let core = seg.slice(1); // skip '*'
     let origin: 'star' | 'multi' = 'star';
@@ -390,13 +384,14 @@ export class PathParser {
     name: string,
     prefix: ':' | '*',
     path: string,
-  ): Result<never, RouterErrData> | null {
+  ): Result<never, RouterErrorData> | null {
     if (this.activeParams.has(name)) {
       return err({
         kind: 'param-duplicate',
         message: `Duplicate parameter name '${prefix}${name}' in path: ${path}`,
         path,
         segment: name,
+        suggestion: `Rename one of the '${prefix}${name}' parameters so each name is unique within the path.`,
       });
     }
 
@@ -405,58 +400,23 @@ export class PathParser {
     return null;
   }
 
-  private validatePattern(pattern: string): Result<void, RouterErrData> {
-    const safety = this.config.regexSafety;
-
-    if (!safety) {
-      return;
-    }
-
-    // Normalize pattern (strip anchors)
-    const normResult = this.patternUtils.normalizeParamPatternSource(pattern);
-
-    if (isErr(normResult)) {
-      return normResult;
-    }
-
-    // Safety assessment
-    const assessment = assessRegexSafety(normResult, {
-      maxLength: safety.maxLength ?? 256,
-      forbidBacktrackingTokens: safety.forbidBacktrackingTokens ?? true,
-      forbidBackreferences: safety.forbidBackreferences ?? true,
-    });
+  /**
+   * Strip anchors and apply hardcoded ReDoS guards (length cap, nested
+   * unlimited quantifiers, backreferences). The guards are not user-tunable —
+   * weakening them is a security regression. Failure is reported as
+   * `regex-unsafe` with the specific reason.
+   */
+  private validatePattern(pattern: string): Result<void, RouterErrorData> {
+    const normalized = normalizeParamPatternSource(pattern);
+    const assessment = assessRegexSafety(normalized);
 
     if (!assessment.safe) {
-      const mode = safety.mode ?? 'error';
-
-      if (mode === 'error') {
-        return err({
-          kind: 'regex-unsafe',
-          message: `Unsafe regex pattern: ${assessment.reason}`,
-          segment: pattern,
-        });
-      }
-
-      if (mode === 'warn' && this.config.onWarn) {
-        this.config.onWarn({
-          kind: 'regex-unsafe',
-          message: `Unsafe regex pattern: ${assessment.reason}`,
-          segment: pattern,
-        });
-      }
-    }
-
-    // Custom validator — throws are converted to Err to honor the Result contract
-    if (safety.validator) {
-      try {
-        safety.validator(pattern);
-      } catch (e) {
-        return err({
-          kind: 'regex-unsafe',
-          message: e instanceof Error ? e.message : String(e),
-          segment: pattern,
-        });
-      }
+      return err<RouterErrorData>({
+        kind: 'regex-unsafe',
+        message: `Unsafe regex pattern: ${assessment.reason}`,
+        segment: pattern,
+        suggestion: 'Simplify the regex (avoid nested unlimited quantifiers and backreferences) or shorten its source.',
+      });
     }
   }
 }
@@ -476,7 +436,7 @@ function validateParamName(
   name: string,
   prefix: ':' | '*',
   path: string,
-): Result<never, RouterErrData> | null {
+): Result<never, RouterErrorData> | null {
   if (name === '') {
     return err({
       kind: 'route-parse',

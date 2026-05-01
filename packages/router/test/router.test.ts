@@ -648,7 +648,7 @@ describe('Router<T>', () => {
 
   describe('ordering', () => {
     it('should check static → cache → dynamic in match priority', () => {
-      const router = new Router<string>({ enableCache: true });
+      const router = new Router<string>({});
       router.add('GET', '/static', 'static-val');
       router.add('GET', '/users/:id', 'dynamic-val');
       router.build();
@@ -760,7 +760,7 @@ describe('Router<T>', () => {
     });
 
     it('should differentiate cache entries by method for same path', () => {
-      const router = new Router<string>({ enableCache: true });
+      const router = new Router<string>({});
       router.add('GET', '/users/:id', 'get-user');
       router.add('POST', '/users/:id', 'post-user');
       router.build();
@@ -801,7 +801,7 @@ describe('Router<T>', () => {
     });
 
     it('should single-decode %2520 to %20 without double decoding', () => {
-      const router = new Router<string>({ decodeParams: true });
+      const router = new Router<string>();
       router.add('GET', '/seg/:val', 'handler');
       router.build();
 
@@ -811,7 +811,7 @@ describe('Router<T>', () => {
     });
 
     it('should apply all defaults when multiple optional params are absent', () => {
-      const router = new Router<string>({ optionalParamBehavior: 'setUndefined' });
+      const router = new Router<string>({ optionalParamBehavior: 'set-undefined' });
       router.add('GET', '/items/:a?/:b?', 'handler');
       router.build();
 
@@ -848,7 +848,7 @@ describe('Router<T>', () => {
     });
 
     it('should overwrite cached null entry when same path later matches a real route value', () => {
-      const router = new Router<string>({ enableCache: true });
+      const router = new Router<string>({});
       router.add('GET', '/exists/:id', 'val');
       router.build();
 

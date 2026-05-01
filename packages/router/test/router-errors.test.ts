@@ -251,57 +251,21 @@ describe('Router<T> errors', () => {
 
   // ── NEW: NE additions (5 tests) ──
 
-  it('should throw regex-unsafe error when pattern contains backreference', () => {
-    const router = new Router<string>({
-      regexSafety: { mode: 'error', forbidBackreferences: true },
-    });
+  it('should throw regex-unsafe error when pattern contains backreference (always-on guard)', () => {
+    const router = new Router<string>();
 
     const err = catchRouterError(() => router.add('GET', '/users/:id(([a-z])\\1)', 'handler'));
     expect(err.data.kind).toBe('regex-unsafe');
     expect(err.data.message).toContain('Backreferences');
   });
 
-  it('should throw regex-unsafe error when pattern exceeds maxLength', () => {
-    const router = new Router<string>({
-      regexSafety: { mode: 'error', maxLength: 5 },
-    });
+  it('should silently strip ^/$ anchors and accept the pattern', () => {
+    const router = new Router<string>();
 
-    const err = catchRouterError(() => router.add('GET', '/users/:id([a-zA-Z0-9]+)', 'handler'));
-    expect(err.data.kind).toBe('regex-unsafe');
-    expect(err.data.message).toContain('exceeds limit');
-  });
+    expect(() => router.add('GET', '/users/:id(^\\d+$)', 'handler')).not.toThrow();
+    router.build();
 
-  it('should not throw when regexSafety mode=warn for unsafe pattern', () => {
-    const warnings: string[] = [];
-    const router = new Router<string>({
-      regexSafety: { mode: 'warn', forbidBackreferences: true },
-      onWarn: w => warnings.push(w.kind),
-    });
-    router.add('GET', '/users/:id(([a-z])\\1)', 'handler');
-    expect(warnings).toEqual(['regex-unsafe']);
-  });
-
-  it('should throw when regexSafety.validator throws during add()', () => {
-    const router = new Router<string>({
-      regexSafety: {
-        mode: 'warn',
-        validator: () => {
-          throw new Error('validator timeout simulation');
-        },
-      },
-    });
-
-    expect(() => router.add('GET', '/users/:id(\\d+)', 'handler')).toThrow(
-      'validator timeout simulation',
-    );
-  });
-
-  it('should throw error when regexAnchorPolicy=error and pattern contains anchor', () => {
-    const router = new Router<string>({ regexAnchorPolicy: 'error' });
-
-    const err = catchRouterError(() => router.add('GET', '/users/:id(^\\d+$)', 'handler'));
-    expect(err.data.kind).toBe('regex-anchor');
-    expect(err.data.message).toContain('anchors');
+    expect(router.match('GET', '/users/42')!.value).toBe('handler');
   });
 
   // ── 0-2: MAX_STACK_DEPTH / MAX_PARAMS guard ──

@@ -1,6 +1,6 @@
 import { test, expect } from 'bun:test';
 
-import { Router, RouterError } from '../index';
+import { Router } from '../index';
 
 // ─── Strict contract: match() always returns MatchOutput<T> | null (no throws) ───
 
@@ -41,27 +41,6 @@ test('AUDIT match() returns null when called before build', () => {
   r.add('GET', '/foo', 'x');
 
   expect(r.match('GET', '/foo')).toBeNull();
-});
-
-// ─── Validator throw: wrapped into RouterError via path-parser L421 ───
-
-test('AUDIT validator throw is wrapped into RouterError', () => {
-  const r = new Router<string>({
-    regexSafety: {
-      validator: () => { throw new Error('custom validator rejection'); },
-    },
-  });
-
-  let threw: unknown = null;
-  try {
-    r.add('GET', '/x/:id(\\d+)', 'x');
-  } catch (e) {
-    threw = e;
-  }
-
-  expect(threw).toBeInstanceOf(RouterError);
-  expect((threw as RouterError).data.kind).toBe('regex-unsafe');
-  expect((threw as RouterError).data.message).toContain('custom validator rejection');
 });
 
 // ─── L302-parity: never-registered method returns null (consistent) ───

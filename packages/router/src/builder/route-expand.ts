@@ -1,6 +1,6 @@
 import type { Result } from '@zipbul/result';
 import type { PathPart } from './path-parser';
-import type { RouterErrData } from '../types';
+import type { RouterErrorData } from '../types';
 
 import { err } from '@zipbul/result';
 import { MAX_OPTIONAL } from './constants';
@@ -31,7 +31,7 @@ export function expandOptional(
   parts: PathPart[],
   handlerIndex: number,
   optionalDefaults: OptionalParamDefaults,
-): Result<ExpandedRoute[], RouterErrData> {
+): Result<ExpandedRoute[], RouterErrorData> {
   const collection = collectOptionalIndices(parts);
 
   const guard = validateOptionalCount(collection.indices.length);
@@ -70,7 +70,7 @@ function collectOptionalIndices(parts: PathPart[]): OptionalCollection {
  */
 function validateOptionalCount(
   count: number,
-): Result<never, RouterErrData> | null {
+): Result<never, RouterErrorData> | null {
   if (count > MAX_OPTIONAL) {
     return err({
       kind: 'segment-limit',

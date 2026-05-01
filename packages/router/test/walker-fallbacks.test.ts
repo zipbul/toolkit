@@ -17,6 +17,7 @@
 import { describe, it, expect } from 'bun:test';
 
 import { Router } from '../src/router';
+import { getRouterInternals } from '../internal';
 
 // ── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -25,10 +26,10 @@ import { Router } from '../src/router';
  *  `compiledSegmentWalk`; iterative is `walk` exported by createIterativeWalker;
  *  the recursive fallback also exports `walk` but contains a nested `match`. */
 function pickedWalkerName(router: Router<string>): string | null {
-  // After B5, per-method walkers live on matchLayer (exposed via _internals).
-  const trees = (router as unknown as {
-    _internals: { matchLayer: { trees: Array<((u: string, s: unknown) => boolean) | null> } };
-  })._internals.matchLayer.trees;
+  // After B5, per-method walkers live on matchLayer (exposed via /internal).
+  const trees = (getRouterInternals(router) as unknown as {
+    matchLayer: { trees: Array<((u: string, s: unknown) => boolean) | null> };
+  }).matchLayer.trees;
   const tree = trees.find(t => t != null);
 
   return tree ? tree.name : null;
@@ -145,7 +146,7 @@ describe('recursive walker (ambiguous tree)', () => {
 
   it('selects the recursive walker for ambiguous trees', () => {
     const r = makeAmbiguousRouter();
-    const trees = (r as unknown as { _internals: { matchLayer: { trees: Array<unknown> } } })._internals.matchLayer.trees;
+    const trees = (getRouterInternals(r) as unknown as { matchLayer: { trees: Array<unknown> } }).matchLayer.trees;
     const tree = trees.find(t => t != null) as { name: string };
 
     expect(tree.name).toBe('walk');
@@ -245,7 +246,7 @@ describe('wildcard semantics under fallback walkers', () => {
 
 describe('decoding under fallback walkers', () => {
   it('decodes percent-encoded params', () => {
-    const r = new Router<string>({ decodeParams: true });
+    const r = new Router<string>();
     r.add('GET', '/api/v1/:user', 'v1');
     r.add('GET', '/api/:ver/users', 'pv');
     r.build();
@@ -256,20 +257,8 @@ describe('decoding under fallback walkers', () => {
     expect(m!.params).toEqual({ user: 'hello world' });
   });
 
-  it('does not decode when decodeParams=false', () => {
-    const r = new Router<string>({ decodeParams: false });
-    r.add('GET', '/api/v1/:user', 'v1');
-    r.add('GET', '/api/:ver/users', 'pv');
-    r.build();
-
-    const m = r.match('GET', '/api/v1/hello%20world');
-
-    expect(m).not.toBeNull();
-    expect(m!.params).toEqual({ user: 'hello%20world' });
-  });
-
   it('keeps raw value when decodeURIComponent throws (malformed %)', () => {
-    const r = new Router<string>({ decodeParams: true });
+    const r = new Router<string>();
     r.add('GET', '/api/v1/:user', 'v1');
     r.add('GET', '/api/:ver/users', 'pv');
     r.build();
@@ -434,7 +423,7 @@ describe('shape specialization gating', () => {
     r.add('POST', '/upload/*filepath', 2);
     r.build();
 
-    const impl = (r as unknown as { _internals: { matchImpl: { toString: () => string } } })._internals.matchImpl;
+    const impl = getRouterInternals(r).matchImpl as { toString: () => string };
 
     // Generic path uses `methodCodes[method]` lookup; specialized path uses
     // `method !== "GET"` literal. The presence of the lookup confirms generic
@@ -445,11 +434,11 @@ describe('shape specialization gating', () => {
   });
 
   it('disables specialization when cache is enabled', () => {
-    const r = new Router<number>({ enableCache: true });
+    const r = new Router<number>({});
     r.add('GET', '/static/*path', 1);
     r.build();
 
-    const impl = (r as unknown as { _internals: { matchImpl: { toString: () => string } } })._internals.matchImpl;
+    const impl = getRouterInternals(r).matchImpl as { toString: () => string };
 
     expect(impl.toString()).toContain('hitCacheByMethod');
   });
@@ -460,7 +449,7 @@ describe('shape specialization gating', () => {
     r.add('GET', '/health', 2); // static, lives in staticMap
     r.build();
 
-    const impl = (r as unknown as { _internals: { matchImpl: { toString: () => string } } })._internals.matchImpl;
+    const impl = getRouterInternals(r).matchImpl as { toString: () => string };
 
     expect(impl.toString()).toContain('activeBucket');
   });

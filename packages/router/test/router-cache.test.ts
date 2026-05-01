@@ -4,7 +4,7 @@ import { Router } from '../src/router';
 
 describe('Router<T> cache', () => {
   it('should use cache on second match when cache enabled (source=\'cache\')', () => {
-    const router = new Router<string>({ enableCache: true });
+    const router = new Router<string>({});
     router.add('GET', '/users/:id', 'user');
     router.build();
 
@@ -20,7 +20,7 @@ describe('Router<T> cache', () => {
   });
 
   it('should evict with cacheSize=1 and re-match as dynamic', () => {
-    const router = new Router<string>({ enableCache: true, cacheSize: 1 });
+    const router = new Router<string>({ cacheSize: 1 });
     router.add('GET', '/users/:id', 'user');
     router.build();
 
@@ -33,7 +33,7 @@ describe('Router<T> cache', () => {
   });
 
   it('should cache null on miss and return null from cache on next match', () => {
-    const router = new Router<string>({ enableCache: true });
+    const router = new Router<string>({});
     router.add('GET', '/exists', 'exists');
     router.build();
 
@@ -45,7 +45,7 @@ describe('Router<T> cache', () => {
   });
 
   it('should return cloned params from cache (not shared references)', () => {
-    const router = new Router<string>({ enableCache: true });
+    const router = new Router<string>({});
     router.add('GET', '/users/:id', 'user');
     router.build();
 
@@ -60,7 +60,7 @@ describe('Router<T> cache', () => {
   });
 
   it('should differentiate cache entries by method for same path', () => {
-    const router = new Router<string>({ enableCache: true });
+    const router = new Router<string>({});
     router.add('GET', '/users/:id', 'get-user');
     router.add('POST', '/users/:id', 'post-user');
     router.build();
@@ -80,7 +80,7 @@ describe('Router<T> cache', () => {
   });
 
   it('should populate cache in match call order', () => {
-    const router = new Router<string>({ enableCache: true });
+    const router = new Router<string>({});
     router.add('GET', '/users/:id', 'user');
     router.build();
 
@@ -94,7 +94,7 @@ describe('Router<T> cache', () => {
     expect(cached2!.meta.source).toBe('cache');
   });
 
-  it('should not cache when enableCache is not set (default)', () => {
+  it('should always cache dynamic matches (no toggle option)', () => {
     const router = new Router<string>();
     router.add('GET', '/users/:id', 'user');
     router.build();
@@ -103,11 +103,11 @@ describe('Router<T> cache', () => {
     expect(first!.meta.source).toBe('dynamic');
 
     const second = router.match('GET', '/users/42');
-    expect(second!.meta.source).toBe('dynamic');
+    expect(second!.meta.source).toBe('cache');
   });
 
   it('should bypass cache for static route matches (static fast-path)', () => {
-    const router = new Router<string>({ enableCache: true });
+    const router = new Router<string>({});
     router.add('GET', '/static', 'static-val');
     router.build();
 
@@ -119,7 +119,7 @@ describe('Router<T> cache', () => {
   });
 
   it('should evict entries via clock-sweep when cache is full', () => {
-    const router = new Router<string>({ enableCache: true, cacheSize: 2 });
+    const router = new Router<string>({ cacheSize: 2 });
     router.add('GET', '/users/:id', 'user');
     router.build();
 
@@ -139,7 +139,7 @@ describe('Router<T> cache', () => {
   });
 
   it('should cache results independently per custom method', () => {
-    const router = new Router<string>({ enableCache: true });
+    const router = new Router<string>({});
     router.add('GET', '/users/:id', 'get-user');
     router.add('PURGE' as any, '/users/:id', 'purge-user');
     router.build();
@@ -157,7 +157,7 @@ describe('Router<T> cache', () => {
   });
 
   it('should cache null miss entries independently per method', () => {
-    const router = new Router<string>({ enableCache: true });
+    const router = new Router<string>({});
     router.add('GET', '/exists', 'exists');
     router.add('POST', '/exists', 'exists-post');
     router.build();
@@ -175,7 +175,7 @@ describe('Router<T> cache', () => {
   });
 
   it('should maintain cache correctness after many evictions', () => {
-    const router = new Router<string>({ enableCache: true, cacheSize: 3 });
+    const router = new Router<string>({ cacheSize: 3 });
     router.add('GET', '/users/:id', 'user');
     router.build();
 

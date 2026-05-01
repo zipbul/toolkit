@@ -9,7 +9,6 @@ function defaultConfig(overrides: Partial<PathParserConfig> = {}): PathParserCon
     caseSensitive: true,
     ignoreTrailingSlash: true,
     maxSegmentLength: 256,
-    regexSafety: { mode: 'error', maxLength: 256, forbidBacktrackingTokens: true, forbidBackreferences: true },
     ...overrides,
   };
 }
@@ -246,19 +245,21 @@ describe('PathParser', () => {
     });
   });
 
-  describe('regex safety', () => {
-    it('should reject unsafe regex patterns with mode=error', () => {
-      const result = parse('/test/:val((a+)+)', {
-        regexSafety: { mode: 'error', maxLength: 256, forbidBacktrackingTokens: true, forbidBackreferences: true },
-      });
+  describe('regex safety (always-on hardcoded guards)', () => {
+    it('should reject unsafe regex patterns (nested unlimited quantifiers)', () => {
+      const result = parse('/test/:val((a+)+)');
+      expect(isErr(result)).toBe(true);
+      if (isErr(result)) expect(result.data.kind).toBe('regex-unsafe');
+    });
+
+    it('should reject backreferences', () => {
+      const result = parse('/test/:val((\\w+)\\1)');
       expect(isErr(result)).toBe(true);
       if (isErr(result)) expect(result.data.kind).toBe('regex-unsafe');
     });
 
     it('should allow safe regex patterns', () => {
-      const result = parse('/test/:val(\\d+)', {
-        regexSafety: { mode: 'error', maxLength: 256, forbidBacktrackingTokens: true, forbidBackreferences: true },
-      });
+      const result = parse('/test/:val(\\d+)');
       expect(isErr(result)).toBe(false);
     });
   });

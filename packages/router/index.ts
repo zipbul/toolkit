@@ -6,11 +6,9 @@ export { RouterError } from './src/error';
 export type {
   RouterOptions,
   OptionalParamBehavior,
-  RegexSafetyOptions,
   RouteParams,
-  RouterErrKind,
-  RouterErrData,
+  RouterErrorKind,
+  RouterErrorData,
   MatchMeta,
   MatchOutput,
-  RouterWarning,
 } from './src/types';

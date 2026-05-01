@@ -62,7 +62,7 @@ describe('Router<T> options', () => {
     expect(router.match('GET', '/this-is-too-long-segment')).toBeNull();
   });
 
-  it('should decode params when decodeParams=true (default)', () => {
+  it('should decode params (always-on)', () => {
     const router = new Router<string>();
     router.add('GET', '/users/:id', 'user');
     router.build();
@@ -70,16 +70,6 @@ describe('Router<T> options', () => {
     const result = router.match('GET', '/users/hello%20world');
     expect(result).not.toBeNull();
     expect(result!.params.id).toBe('hello world');
-  });
-
-  it('should not decode params when decodeParams=false', () => {
-    const router = new Router<string>({ decodeParams: false });
-    router.add('GET', '/users/:id', 'user');
-    router.build();
-
-    const result = router.match('GET', '/users/hello%20world');
-    expect(result).not.toBeNull();
-    expect(result!.params.id).toBe('hello%20world');
   });
 
   it('should work with caseSensitive=false + ignoreTrailingSlash=true combined', () => {
@@ -104,10 +94,8 @@ describe('Router<T> options', () => {
     expect(result!.value).toBe('val');
   });
 
-  it('should handle regexSafety mode=\'error\' for unsafe patterns', () => {
-    const router = new Router<string>({
-      regexSafety: { mode: 'error' },
-    });
+  it('should reject unsafe patterns (always-on regex safety guard)', () => {
+    const router = new Router<string>();
 
     const err = catchRouterError(() => router.add('GET', '/test/:val((a+)+)', 'test'));
     expect(err.data.kind).toBe('regex-unsafe');
@@ -123,8 +111,8 @@ describe('Router<T> options', () => {
     expect(result!.params.name).toBe('bad%GG');
   });
 
-  it('should handle optionalParamBehavior=\'setUndefined\'', () => {
-    const router = new Router<string>({ optionalParamBehavior: 'setUndefined' });
+  it('should handle optionalParamBehavior=\'set-undefined\'', () => {
+    const router = new Router<string>({ optionalParamBehavior: 'set-undefined' });
     router.add('GET', '/users/:id?', 'user');
     router.build();
 
@@ -145,13 +133,4 @@ describe('Router<T> options', () => {
     expect(result!.params.name).toBe('a/b');
   });
 
-  it('should not decode params when decodeParams=false even with %2F', () => {
-    const router = new Router<string>({ decodeParams: false });
-    router.add('GET', '/files/:name', 'files');
-    router.build();
-
-    const result = router.match('GET', '/files/a%2Fb');
-    expect(result).not.toBeNull();
-    expect(result!.params.name).toBe('a%2Fb');
-  });
 });

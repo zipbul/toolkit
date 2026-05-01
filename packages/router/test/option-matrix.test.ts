@@ -167,11 +167,11 @@ describe('caseSensitive: false × route type', () => {
   });
 });
 
-// ── decodeParams × route type / cache ─────────────────────────────────────
+// ── percent-decoding × cache ──────────────────────────────────────────────
 
-describe('decodeParams × cache', () => {
-  it('decodeParams=true × cache=true: cached hit returns decoded value', () => {
-    const r = new Router<string>({ decodeParams: true, enableCache: true });
+describe('decoding × cache', () => {
+  it('cached hit returns decoded value', () => {
+    const r = new Router<string>();
     r.add('GET', '/users/:name', 'u');
     r.build();
 
@@ -184,28 +184,13 @@ describe('decodeParams × cache', () => {
     expect(b.meta.source).toBe('cache');
     expect(b.params.name).toBe('hello world');
   });
-
-  it('decodeParams=false × cache=true: cached hit keeps raw encoded value', () => {
-    const r = new Router<string>({ decodeParams: false, enableCache: true });
-    r.add('GET', '/users/:name', 'u');
-    r.build();
-
-    const a = r.match('GET', '/users/hello%20world')!;
-
-    expect(a.params.name).toBe('hello%20world');
-
-    const b = r.match('GET', '/users/hello%20world')!;
-
-    expect(b.meta.source).toBe('cache');
-    expect(b.params.name).toBe('hello%20world');
-  });
 });
 
-// ── enableCache × route type ─────────────────────────────────────────────
+// ── cache × route type ───────────────────────────────────────────────────
 
-describe('enableCache: true × route type', () => {
+describe('cache × route type', () => {
   it('static: hit cache contains last lookup as static', () => {
-    const r = new Router<string>({ enableCache: true });
+    const r = new Router<string>({});
     r.add('GET', '/health', 'h');
     r.build();
 
@@ -216,7 +201,7 @@ describe('enableCache: true × route type', () => {
   });
 
   it('param: second hit comes from cache', () => {
-    const r = new Router<string>({ enableCache: true });
+    const r = new Router<string>({});
     r.add('GET', '/users/:id', 'u');
     r.build();
 
@@ -225,7 +210,7 @@ describe('enableCache: true × route type', () => {
   });
 
   it('miss: re-asking the same missing URL is short-circuited', () => {
-    const r = new Router<string>({ enableCache: true });
+    const r = new Router<string>({});
     r.add('GET', '/users/:id', 'u');
     r.build();
 
@@ -238,7 +223,7 @@ describe('enableCache: true × route type', () => {
 
 describe('optionalParamBehavior × cache', () => {
   it('omit + cache: missing optional remains absent on cached hit', () => {
-    const r = new Router<string>({ optionalParamBehavior: 'omit', enableCache: true });
+    const r = new Router<string>({ optionalParamBehavior: 'omit' });
     r.add('GET', '/users/:id?', 'u');
     r.build();
 
@@ -252,8 +237,8 @@ describe('optionalParamBehavior × cache', () => {
     expect('id' in b.params).toBe(false);
   });
 
-  it('setUndefined + cache: id is undefined on cached hit', () => {
-    const r = new Router<string>({ optionalParamBehavior: 'setUndefined', enableCache: true });
+  it('set-undefined + cache: id is undefined on cached hit', () => {
+    const r = new Router<string>({ optionalParamBehavior: 'set-undefined' });
     r.add('GET', '/users/:id?', 'u');
     r.build();
 
@@ -267,19 +252,6 @@ describe('optionalParamBehavior × cache', () => {
     expect(b.params.id).toBeUndefined();
   });
 
-  it('setEmptyString + cache: id is empty string on cached hit', () => {
-    const r = new Router<string>({ optionalParamBehavior: 'setEmptyString', enableCache: true });
-    r.add('GET', '/users/:id?', 'u');
-    r.build();
-
-    const a = r.match('GET', '/users')!;
-
-    expect(a.params.id).toBe('');
-
-    const b = r.match('GET', '/users')!;
-
-    expect(b.params.id).toBe('');
-  });
 });
 
 // ── maxPathLength + maxSegmentLength interactions ────────────────────────
@@ -347,7 +319,6 @@ describe('triple combinations', () => {
     const r = new Router<string>({
       ignoreTrailingSlash: true,
       caseSensitive: false,
-      enableCache: true,
     });
     r.add('GET', '/Users/:id', 'u');
     r.build();
@@ -365,10 +336,7 @@ describe('triple combinations', () => {
   });
 
   it('decode + tester + cache: all three apply for percent-encoded numeric', () => {
-    const r = new Router<string>({
-      decodeParams: true,
-      enableCache: true,
-    });
+    const r = new Router<string>();
     // %34%32 = "42" — encoded numeric. Tester runs on decoded value.
     r.add('GET', '/users/:id(\\d+)', 'u');
     r.build();

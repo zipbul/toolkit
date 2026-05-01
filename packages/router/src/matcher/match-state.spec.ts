@@ -1,7 +1,6 @@
 import { describe, it, expect } from 'bun:test';
 
 import { createMatchState, resetMatchState } from './match-state';
-import type { MatchState } from './match-state';
 
 describe('MatchState', () => {
   describe('createMatchState', () => {
@@ -13,16 +12,6 @@ describe('MatchState', () => {
     it('should initialize paramCount to 0', () => {
       const state = createMatchState();
       expect(state.paramCount).toBe(0);
-    });
-
-    it('should initialize errorKind to null', () => {
-      const state = createMatchState();
-      expect(state.errorKind).toBeNull();
-    });
-
-    it('should initialize errorMessage to null', () => {
-      const state = createMatchState();
-      expect(state.errorMessage).toBeNull();
     });
 
     it('should pre-allocate paramNames array with 32 slots', () => {
@@ -64,17 +53,6 @@ describe('MatchState', () => {
       resetMatchState(state);
 
       expect(state.paramCount).toBe(0);
-    });
-
-    it('should reset errorKind to null', () => {
-      const state = createMatchState();
-      state.errorKind = 'regex-timeout';
-      state.errorMessage = 'bad %';
-
-      resetMatchState(state);
-
-      expect(state.errorKind).toBeNull();
-      expect(state.errorMessage).toBeNull();
     });
 
     it('should NOT clear paramNames or paramValues arrays (reused)', () => {

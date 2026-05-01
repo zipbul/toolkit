@@ -40,7 +40,6 @@ const MAX_SOURCE = 8000;
 
 export function compileSegmentTree(
   root: SegmentNode,
-  decodeParams: boolean,
 ): MatchFn | null {
   // Empirically tuned. Synthetic flat shapes (`/pfxN/:id`) suggest codegen
   // wins for fanout 3-15. But real router shapes (param1: simple chains;
@@ -60,10 +59,9 @@ export function compileSegmentTree(
     counter: 0,
     bail: false,
     testers: [],
-    decodeParams,
   };
 
-  const body = emitNode(ctx, root, 'pos0', 0);
+  const body = emitNode(ctx, root, 'pos0');
 
   if (ctx.bail) return null;
 
@@ -100,7 +98,6 @@ interface Ctx {
   counter: number;
   bail: boolean;
   testers: unknown[];
-  decodeParams: boolean;
 }
 
 function hasWideFanout(root: SegmentNode, max: number): boolean {
@@ -164,7 +161,7 @@ function emitRootSlashTerminal(root: SegmentNode): string {
  * positions; star-wildcard children at the same node still match (their emit
  * handles the empty-capture case explicitly).
  */
-function emitNode(ctx: Ctx, node: SegmentNode, posVar: string, depth: number, justAfterSlash = false): string {
+function emitNode(ctx: Ctx, node: SegmentNode, posVar: string, justAfterSlash = false): string {
   if (ctx.bail) return '';
 
   // Defensive bail for any ambiguity that can require backtracking — both
@@ -225,7 +222,7 @@ function emitNode(ctx: Ctx, node: SegmentNode, posVar: string, depth: number, ju
           const childPos = fresh(ctx, 'pos');
           // Just consumed `key + '/'` — recurse into child in slash-boundary
           // context so a bare-store at child won't match trailing-slash URLs.
-          const inner = emitNode(ctx, child, childPos, depth + 1, true);
+          const inner = emitNode(ctx, child, childPos, true);
 
           if (ctx.bail) return '';
 
@@ -259,7 +256,7 @@ ${exactBody}
         const prefixWithSlash = key + '/';
         const childPos = fresh(ctx, 'pos');
         // Slash-boundary context after consuming `key + '/'` (see emitNode doc).
-        const inner = emitNode(ctx, child, childPos, depth + 1, true);
+        const inner = emitNode(ctx, child, childPos, true);
 
         if (ctx.bail) return '';
 
@@ -316,7 +313,7 @@ ${exactBody}
       // Match only when no further slash AND there's a value to capture.
       code += `
     if (${slashVar} === -1 && ${posVar} < len) {
-      var ${valVar} = url.substring(${posVar});${decodeBlock(ctx, valVar)}${testerBlock(ctx, valVar, testerIdx, '          ')}
+      var ${valVar} = url.substring(${posVar});${decodeBlock(valVar)}${testerBlock(valVar, testerIdx)}
       params[${JSON.stringify(param.name)}] = ${valVar};
       state.handlerIndex = ${next.store};
       return true;
@@ -325,7 +322,7 @@ ${exactBody}
       // /:param/*x where x is multi (1+ segments)
       code += `
     if (${slashVar} !== -1 && ${slashVar} > ${posVar} && ${slashVar} + 1 < len) {
-      var ${valVar} = url.substring(${posVar}, ${slashVar});${decodeBlock(ctx, valVar)}${testerBlock(ctx, valVar, testerIdx, '          ')}
+      var ${valVar} = url.substring(${posVar}, ${slashVar});${decodeBlock(valVar)}${testerBlock(valVar, testerIdx)}
       params[${JSON.stringify(param.name)}] = ${valVar};
       params[${JSON.stringify(next.wildcardName!)}] = url.substring(${slashVar} + 1);
       state.handlerIndex = ${next.wildcardStore};
@@ -336,7 +333,7 @@ ${exactBody}
       // recurse into next. innerPos sits at slash+1 — same slash-boundary
       // context as a static descent — so bare-store at `next` must not fire
       // for a trailing-slash URL (covered by the justAfterSlash flag).
-      const inner = emitNode(ctx, next, innerPos, depth + 1, true);
+      const inner = emitNode(ctx, next, innerPos, true);
 
       if (ctx.bail) return '';
 
@@ -346,7 +343,7 @@ ${exactBody}
       // the param value optimistically — never need to restore.
       code += `
     if (${slashVar} !== -1 && ${slashVar} > ${posVar}) {
-      var ${valVar} = url.substring(${posVar}, ${slashVar});${decodeBlock(ctx, valVar)}${testerBlock(ctx, valVar, testerIdx, '        ')}
+      var ${valVar} = url.substring(${posVar}, ${slashVar});${decodeBlock(valVar)}${testerBlock(valVar, testerIdx)}
       var ${innerPos} = ${slashVar} + 1;
       params[${JSON.stringify(param.name)}] = ${valVar};
 ${inner}
@@ -356,7 +353,7 @@ ${inner}
       if (next.store !== null) {
         code += `
     if (${slashVar} === -1 && ${posVar} < len) {
-      var ${valVar}_t = url.substring(${posVar});${decodeBlock(ctx, valVar + '_t')}${testerBlock(ctx, valVar + '_t', testerIdx, '          ')}
+      var ${valVar}_t = url.substring(${posVar});${decodeBlock(valVar + '_t')}${testerBlock(valVar + '_t', testerIdx)}
       params[${JSON.stringify(param.name)}] = ${valVar}_t;
       state.handlerIndex = ${next.store};
       return true;
@@ -391,27 +388,19 @@ ${inner}
   return code;
 }
 
-function decodeBlock(ctx: Ctx, valVar: string): string {
-  if (!ctx.decodeParams) return '';
-
+function decodeBlock(valVar: string): string {
   // Inline decodeURIComponent without the indexOf('%') gate is ~5.6x slower
   // on no-% inputs (bench/percent-gate.bench.ts). Keep the gate for codegen
   // paths that bypass the closure decoder.
   return `
-        if (${valVar}.indexOf('%') !== -1) { try { ${valVar} = decodeURIComponent(${valVar}); } catch (_e) {} }`;
+        if (${valVar}.indexOf('%') !== -1) { try { ${valVar} = decodeURIComponent(${valVar}); } catch { /* invalid percent-encoding: keep raw value */ } }`;
 }
 
-function testerBlock(ctx: Ctx, valVar: string, testerIdx: number, _indent: string): string {
+function testerBlock(valVar: string, testerIdx: number): string {
   if (testerIdx < 0) return '';
 
-  ctx.counter++;
-
-  const r = `tr_${ctx.counter}`;
-
   return `
-        var ${r} = testers[${testerIdx}](${valVar});
-        if (${r} === 2) { state.errorKind = 'regex-timeout'; state.errorMessage = 'Route parameter regex exceeded time limit'; return false; }
-        if (${r} !== 1) break;`;
+        if (testers[${testerIdx}](${valVar}) !== 1) break;`;
 }
 
 function emitTerminalAt(node: SegmentNode): string {

@@ -29,7 +29,7 @@ test('public API surface — Router is constructable', () => {
 });
 
 test('public API surface — RouterError is the thrown error type', () => {
-  // Drift-guard: RouterError extends Error, exposes `data` (RouterErrData).
+  // Drift-guard: RouterError extends Error, exposes `data` (RouterErrorData).
   const r = new PublicAPI.Router<string>();
   r.build();
 

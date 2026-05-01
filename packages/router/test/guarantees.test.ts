@@ -13,6 +13,7 @@ import { describe, it, expect } from 'bun:test';
 
 import { Router } from '../src/router';
 import { RouterError } from '../src/error';
+import { getRouterInternals } from '../internal';
 
 // ── API contract guarantees ─────────────────────────────────────────────────
 
@@ -113,7 +114,7 @@ describe('API guarantees', () => {
   });
 
   it('reports meta.source = "cache" for cached hits', () => {
-    const r = new Router<string>({ enableCache: true });
+    const r = new Router<string>({});
     r.add('GET', '/users/:id', 'd');
     r.build();
 
@@ -124,7 +125,7 @@ describe('API guarantees', () => {
   });
 
   it('cache returns fresh params object — caller may mutate without affecting cache', () => {
-    const r = new Router<string>({ enableCache: true });
+    const r = new Router<string>({});
     r.add('GET', '/users/:id', 'd');
     r.build();
 
@@ -154,8 +155,8 @@ describe('optional params', () => {
     expect('id' in withoutParam.params).toBe(false);
   });
 
-  it('setUndefined: missing optional becomes undefined', () => {
-    const r = new Router<string>({ optionalParamBehavior: 'setUndefined' });
+  it('set-undefined: missing optional becomes undefined', () => {
+    const r = new Router<string>({ optionalParamBehavior: 'set-undefined' });
     r.add('GET', '/users/:id?', 'u');
     r.build();
 
@@ -165,15 +166,6 @@ describe('optional params', () => {
     expect(m.params.id).toBeUndefined();
   });
 
-  it('setEmptyString: missing optional becomes empty string', () => {
-    const r = new Router<string>({ optionalParamBehavior: 'setEmptyString' });
-    r.add('GET', '/users/:id?', 'u');
-    r.build();
-
-    const m = r.match('GET', '/users')!;
-
-    expect(m.params.id).toBe('');
-  });
 });
 
 // ── Method specifications ─────────────────────────────────────────────────
@@ -266,22 +258,20 @@ describe('sealed state', () => {
     // wildcardNamesByMethod) and `matchLayer` (activeMethodCodes,
     // staticOutputsByMethod, trees). Hot-path tables stay mutable for
     // JSC IC perf — freezing them costs 5-10 ns per dynamic match.
-    const internal = (r as unknown as {
-      _internals: {
-        registration: {
-          segmentTrees: unknown[];
-          handlers: unknown[];
-          staticMap: Record<string, unknown>;
-          staticRegistered: Record<string, unknown>;
-          wildcardNamesByMethod: Map<number, Map<string, string>>;
-        };
-        matchLayer: {
-          activeMethodCodes: ReadonlyArray<readonly [string, number]>;
-          trees: unknown[];
-          staticOutputsByMethod: unknown[];
-        };
+    const internal = getRouterInternals(r) as unknown as {
+      registration: {
+        segmentTrees: unknown[];
+        handlers: unknown[];
+        staticMap: Record<string, unknown>;
+        staticRegistered: Record<string, unknown>;
+        wildcardNamesByMethod: Map<number, Map<string, string>>;
       };
-    })._internals;
+      matchLayer: {
+        activeMethodCodes: ReadonlyArray<readonly [string, number]>;
+        trees: unknown[];
+        staticOutputsByMethod: unknown[];
+      };
+    };
 
     // Build-only tables must be frozen.
     expect(Object.isFrozen(internal.registration.segmentTrees)).toBe(true);
@@ -328,7 +318,7 @@ describe('sibling-param expansion (multi-optional)', () => {
   it('builds a single segment tree (no fallback walker required)', () => {
     const r = makeOptionalRouter();
     // After B5, the per-method walker array lives on matchLayer.
-    const trees = (r as unknown as { _internals: { matchLayer: { trees: Array<unknown> } } })._internals.matchLayer.trees;
+    const trees = (getRouterInternals(r) as unknown as { matchLayer: { trees: Array<unknown> } }).matchLayer.trees;
     const built = trees.filter(t => t != null);
 
     expect(built.length).toBe(1);
@@ -443,7 +433,7 @@ describe('edge case URLs', () => {
   });
 
   it('handles percent-encoded multi-byte sequences', () => {
-    const r = new Router<string>({ decodeParams: true });
+    const r = new Router<string>();
     r.add('GET', '/users/:name', 'u');
     r.build();
 
@@ -525,7 +515,7 @@ describe('edge case URLs', () => {
 
 describe('cache stress', () => {
   it('miss cache evicts oldest when full (FIFO)', () => {
-    const r = new Router<string>({ enableCache: true, cacheSize: 3 });
+    const r = new Router<string>({ cacheSize: 3 });
     r.add('GET', '/users/:id', 'u');
     r.build();
 
@@ -543,7 +533,7 @@ describe('cache stress', () => {
   });
 
   it('hit cache returns the same value across repeated identical paths', () => {
-    const r = new Router<string>({ enableCache: true });
+    const r = new Router<string>({});
     r.add('GET', '/users/:id', 'u');
     r.build();
 

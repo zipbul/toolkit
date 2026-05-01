@@ -72,7 +72,7 @@ describe('match() never throws on bad input', () => {
   });
 
   it('does not throw on malformed percent-encoded sequences', () => {
-    const r = new Router<string>({ decodeParams: true });
+    const r = new Router<string>();
     r.add('GET', '/users/:name', 'u');
     r.build();
 
@@ -132,73 +132,30 @@ describe('add() rejects malformed registration input', () => {
   });
 });
 
-// ── Regex safety + anchor policy ─────────────────────────────────────────
+// ── Regex safety (always-on hardcoded guards) ────────────────────────────
 
-describe('regex safety options', () => {
-  it('throws RouterError when regex pattern exceeds maxLength', () => {
-    const r = new Router<string>({ regexSafety: { maxLength: 10 } });
-    const longPattern = '\\d'.repeat(20); // 40 chars
-
-    expect(() => r.add('GET', `/x/:id(${longPattern})`, 'x')).toThrow(RouterError);
-  });
-
-  it('throws RouterError on backreference patterns by default', () => {
+describe('regex safety', () => {
+  it('throws RouterError on backreference patterns', () => {
     const r = new Router<string>();
 
     expect(() => r.add('GET', '/x/:id((a)\\1)', 'x')).toThrow(RouterError);
   });
 
-  it('rejects forbidden backtracking tokens (nested quantifiers like (a+)+ )', () => {
+  it('rejects nested unlimited quantifiers (catastrophic-backtracking)', () => {
     const r = new Router<string>();
 
-    // (a+)+ — classic catastrophic-backtracking nested quantifier.
     expect(() => r.add('GET', '/x/:id((a+)+)', 'x')).toThrow(RouterError);
   });
 
-  it('regexAnchorPolicy: error rejects ^ or $ in patterns', () => {
-    const r = new Router<string>({ regexAnchorPolicy: 'error' });
-
-    expect(() => r.add('GET', '/x/:id(^abc$)', 'x')).toThrow(RouterError);
-  });
-
-  it('regexAnchorPolicy: warn fires onWarn but does not throw', () => {
-    const warnings: unknown[] = [];
-    const r = new Router<string>({
-      regexAnchorPolicy: 'warn',
-      onWarn: w => warnings.push(w),
-    });
+  it('strips ^/$ anchors silently (always-on)', () => {
+    const r = new Router<string>();
 
     expect(() => r.add('GET', '/x/:id(^abc$)', 'x')).not.toThrow();
-    expect(warnings.length).toBeGreaterThan(0);
-  });
-});
-
-// ── Regex tester runtime — timeout channel ────────────────────────────────
-
-describe('regex tester runtime', () => {
-  it('regex tester timeout: returns null and does not throw', () => {
-    // maxExecutionMs forces tester to give up on slow regex.
-    const r = new Router<string>({
-      regexSafety: {
-        maxExecutionMs: 1,
-        // Allow more dangerous patterns through so we can simulate slow regex.
-        forbidBacktrackingTokens: false,
-        forbidBackreferences: false,
-        maxLength: 200,
-      },
-    });
-
-    // catastrophic backtracking pattern + matching input (well-known ReDoS)
-    r.add('GET', '/x/:id((a+)+b)', 'x');
     r.build();
 
-    const evil = 'a'.repeat(40) + 'X'; // forces exponential backtracking
-    let result: ReturnType<typeof r.match> | undefined;
-
-    expect(() => { result = r.match('GET', `/x/${evil}`); }).not.toThrow();
-    // Either match was rejected (timeout) or completed quickly with a result.
-    // Critically: never throws.
-    expect(result === null || (result !== undefined && typeof result.value === 'string')).toBe(true);
+    // Anchors stripped → :id(abc) — exact-match only.
+    expect(r.match('GET', '/x/abc')!.value).toBe('x');
+    expect(r.match('GET', '/x/abcd')).toBeNull();
   });
 });
 

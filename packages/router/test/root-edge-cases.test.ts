@@ -41,8 +41,8 @@ describe('optional param at root matches /', () => {
     expect(m!.params.id).toBe('foo');
   });
 
-  it('/:id? + setUndefined behavior at root', () => {
-    const r = new Router<string>({ optionalParamBehavior: 'setUndefined' });
+  it('/:id? + set-undefined behavior at root', () => {
+    const r = new Router<string>({ optionalParamBehavior: 'set-undefined' });
     r.add('GET', '/:id?', 'opt');
     r.build();
 
@@ -51,17 +51,6 @@ describe('optional param at root matches /', () => {
     expect(m).not.toBeNull();
     expect(m!.params.id).toBeUndefined();
     expect('id' in m!.params).toBe(true);
-  });
-
-  it('/:id? + setEmptyString behavior at root', () => {
-    const r = new Router<string>({ optionalParamBehavior: 'setEmptyString' });
-    r.add('GET', '/:id?', 'opt');
-    r.build();
-
-    const m = r.match('GET', '/');
-
-    expect(m).not.toBeNull();
-    expect(m!.params.id).toBe('');
   });
 
   it('multi-segment /a/:b? still works at the inner level', () => {
