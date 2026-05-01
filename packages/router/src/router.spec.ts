@@ -422,7 +422,7 @@ describe('Router', () => {
       expect(second).not.toBeNull();
       expect(first!.value).toBe(second!.value);
       expect(first!.meta.source).toBe('static');
-      expect(second!.meta.source).toBe('static');
+      expect(second!.meta.source).toBe('cache');
     });
   });
 

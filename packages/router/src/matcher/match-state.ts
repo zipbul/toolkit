@@ -52,9 +52,3 @@ export function createMatchState(): MatchState {
     params: null,
   };
 }
-
-export function resetMatchState(state: MatchState): void {
-  state.handlerIndex = -1;
-  state.paramCount = 0;
-  state.params = null;
-}

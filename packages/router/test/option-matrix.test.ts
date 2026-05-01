@@ -194,10 +194,10 @@ describe('cache × route type', () => {
     r.add('GET', '/health', 'h');
     r.build();
 
-    // Static path returns pre-built MatchOutput (not via dynamic cache).
-    // Successive calls should always be 'static' source — they bypass cache.
+    // Static path returns pre-built MatchOutput on first hit.
+    // Successive calls come from the cache (which is always enabled).
     expect(r.match('GET', '/health')!.meta.source).toBe('static');
-    expect(r.match('GET', '/health')!.meta.source).toBe('static');
+    expect(r.match('GET', '/health')!.meta.source).toBe('cache');
   });
 
   it('param: second hit comes from cache', () => {

@@ -25,9 +25,6 @@ export interface BuildResult<T> {
   /** Per-method walker function (or `null` for methods with no dynamic
    *  routes). Indexed by methodCode. */
   trees: Array<MatchFn | null>;
-  /** Per-method specialized-wildcard codegen entries; `null` when the
-   *  method's tree is not a pure static-prefix wildcard shape. */
-  wildSpecs: Array<WildCodegenEntry[] | null>;
   /** True when at least one route registered a regex tester. Used by
    *  `detectSingleMethodWildSpec` to disqualify the inline static-prefix
    *  wildcard fast path when any tester would need to run. */
@@ -75,7 +72,6 @@ export function buildFromRegistration<T>(
   const decoder = buildDecoder();
 
   const trees: Array<MatchFn | null> = [];
-  const wildSpecs: Array<WildCodegenEntry[] | null> = [];
 
   // Per-method segment trees were built incrementally during add(); here
   // we just wire up walkers and detect specialized shapes per method.
@@ -83,16 +79,10 @@ export function buildFromRegistration<T>(
     const segRoot = snapshot.segmentTrees[code];
 
     if (segRoot !== undefined && segRoot !== null) {
-      // Detect static-prefix wildcard shape — when the entire router
-      // shape satisfies certain conditions (single method, no statics,
-      // etc.), compileMatchFn will inline these probes directly into
-      // matchImpl.
-      wildSpecs[code] = detectWildCodegenSpec(segRoot);
       trees[code] = createSegmentWalker(segRoot, decoder);
       continue;
     }
 
-    wildSpecs[code] = null;
     trees[code] = null;
   }
 
@@ -158,7 +148,6 @@ export function buildFromRegistration<T>(
 
   return {
     trees,
-    wildSpecs,
     anyTester,
     staticOutputsByMethod,
     activeMethodCodes,

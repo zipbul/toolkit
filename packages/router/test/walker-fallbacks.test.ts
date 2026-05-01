@@ -443,14 +443,14 @@ describe('shape specialization gating', () => {
     expect(impl.toString()).toContain('hitCacheByMethod');
   });
 
-  it('disables specialization when a static route is registered alongside wildcards', () => {
+  it('no longer uses activeBucket optimization (Generic shape only)', () => {
     const r = new Router<number>();
     r.add('GET', '/static/*path', 1);
-    r.add('GET', '/health', 2); // static, lives in staticMap
+    r.add('GET', '/health', 2);
     r.build();
 
     const impl = getRouterInternals(r).matchImpl as { toString: () => string };
 
-    expect(impl.toString()).toContain('activeBucket');
+    expect(impl.toString()).not.toContain('activeBucket');
   });
 });

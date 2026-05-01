@@ -2,10 +2,8 @@ import type { OptionalParamDefaults } from '../builder/optional-param-defaults';
 import type { MatchFn, MatchState } from '../matcher/match-state';
 import type { NormalizeCfg } from '../matcher/path-normalize';
 import type { MatchOutput, RouteParams } from '../types';
-import type { WildCodegenEntry } from './walker-strategy';
 
 import { RouterCache } from '../cache';
-import { detectSingleMethodWildSpec } from './walker-strategy';
 import {
   CACHE_META,
   DYNAMIC_META,
@@ -42,7 +40,6 @@ export interface MatchCacheEntry<T> {
  * read trimSlash/lowerCase/maxPathLen/etc. from any compatible cfg).
  */
 export interface MatchConfig<T> {
-  readonly useCache: boolean;
   readonly trimSlash: boolean;
   readonly lowerCase: boolean;
   readonly maxPathLen: number;
@@ -66,7 +63,6 @@ export interface MatchConfig<T> {
   // Build-output extras consumed only by codegen — not part of the closure
   // payload but needed to choose the emit shape.
   readonly activeMethodCodes: ReadonlyArray<readonly [string, number]>;
-  readonly wildSpecs: Array<WildCodegenEntry[] | null>;
 }
 
 type CompiledMatch<T> = (method: string, path: string) => MatchOutput<T> | null;
@@ -74,7 +70,7 @@ type CompiledMatch<T> = (method: string, path: string) => MatchOutput<T> | null;
 /**
  * Compile a specialized match closure via `new Function()` based on the
  * router's actual config and registered routes. Dead code paths
- * (disabled cache, default case sensitivity, empty tree, no optional
+ * (default case sensitivity, empty tree, no optional
  * defaults, etc.) are omitted entirely so the hot path only runs guards
  * that can fire.
  *
@@ -82,126 +78,29 @@ type CompiledMatch<T> = (method: string, path: string) => MatchOutput<T> | null;
  * helpers used by the hot path are closure-captured, not
  * `this.*`-dispatched.
  *
- * Public entry. Strategy detection lives in `walker-strategy.ts`;
- * the per-shape emit functions (`emitSpecializedWildMatchImpl`,
- * `emitGenericMatchImpl`) stay file-local.
+ * Public entry.
  */
 export function compileMatchFn<T>(cfg: MatchConfig<T>): CompiledMatch<T> {
-  const wild = detectSingleMethodWildSpec(cfg);
-
-  if (wild !== null) {
-    return emitSpecializedWildMatchImpl(cfg, wild);
-  }
-
   return emitGenericMatchImpl(cfg);
 }
 
 /**
- * Emitter for the shape-specialized wildcard fast path.
- *
- * For pure static-prefix wildcard routers (file server / asset CDN),
- * emit a tiny matchImpl that returns MatchOutput directly. Skips
- * method-code translation, staticOutputs probe, tree dispatch + tr()
- * call, new ParamsCtor() + matchState.params write, and the
- * matchState.handlerIndex round-trip. The function is small enough
- * for JSC FTL to compile aggressively, matching memoirist's tight
- * `find()` cost profile.
- */
-function emitSpecializedWildMatchImpl<T>(
-  cfg: MatchConfig<T>,
-  wildEntries: WildCodegenEntry[],
-): CompiledMatch<T> {
-  const [theMethod] = cfg.activeMethodCodes[0]!;
-  const lines: string[] = [];
-
-  if (cfg.checkPathLen) lines.push(`if (path.length > ${cfg.maxPathLen}) return null;`);
-  lines.push(`if (method !== ${JSON.stringify(theMethod)}) return null;`);
-  lines.push(`var sp = path;`);
-  lines.push(`var qi = sp.indexOf('?'); if (qi !== -1) sp = sp.substring(0, qi);`);
-
-  if (cfg.trimSlash) {
-    lines.push(`if (sp.length > 1 && sp.charCodeAt(sp.length - 1) === 47) sp = sp.substring(0, sp.length - 1);`);
-  }
-
-  if (cfg.checkSegLen) {
-    lines.push(`
-      if (sp.length > ${cfg.maxSegLen}) {
-        for (var i = 1, sl = 0, ml = ${cfg.maxSegLen}; i < sp.length; i++) {
-          if (sp.charCodeAt(i) === 47) { sl = 0; }
-          else { sl++; if (sl > ml) return null; }
-        }
-      }`);
-  }
-
-  // Per-prefix probes. Use full-prefix `startsWith('/X/', 0)` to fold the
-  // leading-slash check into the same call (one fewer charCodeAt branch).
-  // Object literal `{ "name": ... }` (JSON-quoted key) lets JSC pin a
-  // stable hidden class while remaining safe for any wildcard name —
-  // path-parser permits names that aren't strict JS identifiers, so we
-  // can't emit a bare-key literal.
-  for (const e of wildEntries) {
-    const fullPrefixSlash = '/' + e.prefix + '/';
-    const fullPrefixSlashLen = fullPrefixSlash.length;
-    const minLen = e.wildcardOrigin === 'multi' ? fullPrefixSlashLen + 1 : fullPrefixSlashLen;
-    const sliceStart = fullPrefixSlashLen;
-    const nameKey = JSON.stringify(e.wildcardName);
-
-    lines.push(`
-      if (sp.length >= ${minLen} && sp.startsWith(${JSON.stringify(fullPrefixSlash)}, 0)) {
-        return { value: handlers[${e.wildcardStore}], params: { ${nameKey}: sp.substring(${sliceStart}) }, meta: DYNAMIC_META };
-      }`);
-
-    if (e.wildcardOrigin === 'star') {
-      const fullPrefix = '/' + e.prefix;
-
-      lines.push(`
-      if (sp.length === ${fullPrefix.length} && sp === ${JSON.stringify(fullPrefix)}) {
-        return { value: handlers[${e.wildcardStore}], params: { ${nameKey}: '' }, meta: DYNAMIC_META };
-      }`);
-    }
-  }
-
-  lines.push(`return null;`);
-
-  const tinyBody = lines.join('\n');
-  const tinyFactory = new Function(
-    'handlers', 'DYNAMIC_META',
-    `return function match(method, path) {\n${tinyBody}\n};`,
-  );
-
-  return tinyFactory(cfg.handlers, DYNAMIC_META) as CompiledMatch<T>;
-}
-
-/**
  * Emitter for the generic matchImpl — every router that doesn't qualify
- * for the wildcard fast path. Assembles emit blocks based on `cfg`
- * flags so dead branches are omitted entirely:
+ * for a shape-specialized fast path (currently none, as cache is always
+ * enabled) flows through here.
  *
- *   1. method dispatch (single-method literal vs methodCodes lookup)
- *   2. path preprocessing (query strip, slash trim, lowercase)
- *   3. static lookup (closure-captured bucket vs methodCode-indexed)
- *   4. cache lookup (miss-set short-circuit + hit-cache return)
- *   5. dynamic match — segment walker (params written by walker)
- *      OR radix walker (params built from paramNames/paramValues)
- *   6. cache write + final MatchOutput return
+ * Generates a flat function that handles:
+ *   1. Path normalization (strip query, trim slash, case fold, etc.)
+ *   2. Method-code lookup (O(1) from closure-captured methodCodes)
+ *   3. Static-route hit cache lookup
+ *   4. Static-route record lookup (staticOutputsByMethod)
+ *   5. Dynamic-route tree walk (method-specific walker)
+ *   6. Miss cache write / Hit cache write on success.
  */
 function emitGenericMatchImpl<T>(cfg: MatchConfig<T>): CompiledMatch<T> {
   const activeMethodCount = cfg.activeMethodCodes.length;
-  const activeMethodLiteral = activeMethodCount === 1 ? cfg.activeMethodCodes[0]![0] : null;
-  const activeMethodCode = activeMethodCount === 1 ? cfg.activeMethodCodes[0]![1] : -1;
   const cacheMaxSize = cfg.cacheMaxSize;
-  const useCache = cfg.useCache;
   const hasOptDefaults = cfg.hasOptDefaults;
-
-  const emitMissCacheWrite = (): string => `
-    var ms = missCacheByMethod.get(mc);
-    if (ms === undefined) { ms = new Set(); missCacheByMethod.set(mc, ms); }
-    if (ms.size >= ${cacheMaxSize}) {
-      var oldest = ms.values().next().value;
-      if (oldest !== undefined) ms.delete(oldest);
-    }
-    ms.add(sp);
-  `;
 
   const src: string[] = [];
 
@@ -210,12 +109,7 @@ function emitGenericMatchImpl<T>(cfg: MatchConfig<T>): CompiledMatch<T> {
 
   if (pathLenJs !== '') src.push(pathLenJs);
 
-  if (activeMethodCount === 1 && activeMethodLiteral !== null) {
-    src.push(`if (method !== ${JSON.stringify(activeMethodLiteral)}) return null;`);
-    src.push(`var mc = ${activeMethodCode};`);
-  } else {
-    src.push(`var mc = methodCodes[method]; if (mc === undefined) return null;`);
-  }
+  src.push(`var mc = methodCodes[method]; if (mc === undefined) return null;`);
 
   src.push(emitQueryStrip('path', 'sp'));
 
@@ -227,66 +121,65 @@ function emitGenericMatchImpl<T>(cfg: MatchConfig<T>): CompiledMatch<T> {
 
   if (lowerJs !== '') src.push(lowerJs);
 
-  // Static lookup. Single-method case closure-captures the resolved
-  // bucket (`activeBucket`) so the lookup collapses to one property
-  // access; multi-method indexes by methodCode at runtime.
-  if (cfg.hasAnyStatic) {
-    if (activeMethodCount === 1) {
-      src.push(`
-        var out = activeBucket[sp];
-        if (out !== undefined) return out;
-      `);
-    } else {
-      src.push(`
-        var bucket = staticOutputsByMethod[mc];
-        if (bucket !== undefined) {
-          var out = bucket[sp];
-          if (out !== undefined) return out;
-        }
-      `);
+  // 1. Static cache lookup (Always enabled)
+  src.push(`
+    var ms = missCacheByMethod.get(mc);
+    if (ms !== undefined && ms.has(sp)) return null;
+    var hc = hitCacheByMethod.get(mc);
+    if (hc !== undefined) {
+      var cached = hc.get(sp);
+      if (cached !== undefined) {
+        return { value: cached.value, params: cached.params, meta: CACHE_META };
+      }
     }
-  }
+  `);
 
-  if (useCache) {
+  // 2. Static map lookup
+  if (cfg.hasAnyStatic) {
     src.push(`
-      var missSet = missCacheByMethod.get(mc);
-      if (missSet !== undefined && missSet.has(sp)) return null;
-      var hitCache = hitCacheByMethod.get(mc);
-      if (hitCache !== undefined) {
-        var cached = hitCache.get(sp);
-        if (cached !== undefined) {
-          if (cached === null) return null;
-          return { value: cached.value, params: cached.params, meta: CACHE_META };
+      var bucket = staticOutputsByMethod[mc];
+      if (bucket !== undefined) {
+        var out = bucket[sp];
+        if (out !== undefined) {
+          if (hc === undefined) {
+            hc = new RouterCache(${cacheMaxSize});
+            hitCacheByMethod.set(mc, hc);
+          }
+          hc.set(sp, { value: out.value, params: EMPTY_PARAMS });
+          return out;
         }
       }
     `);
   }
 
-  if (!cfg.hasAnyTree) {
-    if (useCache) src.push(emitMissCacheWrite());
-    src.push(`return null;`);
-  } else {
+  const emitMissCacheWrite = (): string => `
+    if (ms === undefined) { ms = new Set(); missCacheByMethod.set(mc, ms); }
+    if (ms.size >= ${cacheMaxSize}) {
+      var oldest = ms.values().next().value;
+      if (oldest !== undefined) ms.delete(oldest);
+    }
+    ms.add(sp);
+  `;
+
+  // 3. Dynamic tree walk
+  if (cfg.hasAnyTree) {
     // Per-segment length scan, deferred until after static lookup so
-    // static cache hits skip it. Path shorter than maxSegLen cannot have
-    // a segment that exceeds it — emitter elides the loop in that case.
+    // static cache hits skip it.
     const segJs = emitSegLenCheck(normCfg, 'sp', 'return null;');
 
     if (segJs !== '') src.push(segJs);
 
-    // Segment walker writes params directly into matchState.params on the
-    // success-return path only (no commit/rollback). Walkers signal failure
-    // by returning false — there is no out-of-band error channel.
     src.push(`
       var tr = trees[mc];
       if (!tr) {
-        ${useCache ? emitMissCacheWrite() : ''}
+        ${emitMissCacheWrite()}
         return null;
       }
       var params = new ParamsCtor();
       matchState.params = params;
       var ok = tr(sp, matchState);
       if (!ok) {
-        ${useCache ? emitMissCacheWrite() : ''}
+        ${emitMissCacheWrite()}
         return null;
       }
     `);
@@ -299,45 +192,32 @@ function emitGenericMatchImpl<T>(cfg: MatchConfig<T>): CompiledMatch<T> {
       `);
     }
 
-    src.push(`var val = handlers[matchState.handlerIndex];`);
-
-    if (useCache) {
-      src.push(`
-        var hc = hitCacheByMethod.get(mc);
-        if (hc === undefined) {
-          hc = new RouterCache(${cacheMaxSize});
-          hitCacheByMethod.set(mc, hc);
-        }
-        var cachedParams;
-        if (params === EMPTY_PARAMS) { cachedParams = EMPTY_PARAMS; }
-        else {
-          cachedParams = new ParamsCtor();
-          for (var cpk in params) cachedParams[cpk] = params[cpk];
-        }
-        hc.set(sp, { value: val, params: cachedParams });
-      `);
-    }
-
-    src.push(`return { value: val, params: params, meta: DYNAMIC_META };`);
+    src.push(`
+      var val = handlers[matchState.handlerIndex];
+      if (hc === undefined) {
+        hc = new RouterCache(${cacheMaxSize});
+        hitCacheByMethod.set(mc, hc);
+      }
+      var cachedParams = new ParamsCtor();
+      for (var cpk in params) cachedParams[cpk] = params[cpk];
+      hc.set(sp, { value: val, params: cachedParams });
+      return { value: val, params: params, meta: DYNAMIC_META };
+    `);
+  } else {
+    src.push(emitMissCacheWrite());
+    src.push(`return null;`);
   }
-
-  // Resolve the active bucket once for single-method routers so the
-  // emitted code has a closure-captured reference (no per-call indexed
-  // access into staticOutputsByMethod).
-  const activeBucket = activeMethodCount === 1
-    ? (cfg.staticOutputsByMethod[activeMethodCode] ?? new NullProtoObj() as Record<string, MatchOutput<T>>)
-    : new NullProtoObj() as Record<string, MatchOutput<T>>;
 
   const body = src.join('\n');
   const factory = new Function(
-    'staticOutputsByMethod', 'activeBucket', 'methodCodes', 'trees', 'matchState', 'handlers',
+    'staticOutputsByMethod', 'methodCodes', 'trees', 'matchState', 'handlers',
     'optDefaults', 'hitCacheByMethod', 'missCacheByMethod', 'RouterCache',
     'EMPTY_PARAMS', 'CACHE_META', 'DYNAMIC_META', 'ParamsCtor',
     `return function match(method, path) {\n${body}\n};`,
   );
 
   return factory(
-    cfg.staticOutputsByMethod, activeBucket, cfg.methodCodes, cfg.trees, cfg.matchState, cfg.handlers,
+    cfg.staticOutputsByMethod, cfg.methodCodes, cfg.trees, cfg.matchState, cfg.handlers,
     cfg.optDefaults, cfg.hitCacheByMethod, cfg.missCacheByMethod, RouterCache,
     EMPTY_PARAMS, CACHE_META, DYNAMIC_META, NullProtoObj,
   ) as CompiledMatch<T>;

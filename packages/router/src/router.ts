@@ -131,7 +131,6 @@ export class Router<T = unknown> {
       }
 
       const cfg: MatchConfig<T> = {
-        useCache: true,
         trimSlash: r.ignoreTrailingSlash,
         lowerCase: !r.caseSensitive,
         maxPathLen: r.maxPathLength,
@@ -153,7 +152,6 @@ export class Router<T = unknown> {
         missCacheByMethod: cache.miss,
         cacheMaxSize: cache.maxSize,
         activeMethodCodes: r.activeMethodCodes,
-        wildSpecs: r.wildSpecs,
       };
 
       matchImpl = compileMatchFn<T>(cfg);
@@ -176,7 +174,6 @@ export class Router<T = unknown> {
       Object.freeze(snapshot.segmentTrees);
       Object.freeze(snapshot.staticMap);
       Object.freeze(snapshot.staticRegistered);
-      Object.freeze(r.wildSpecs);
       Object.freeze(r.activeMethodCodes);
 
       internals.matchImpl = matchImpl;

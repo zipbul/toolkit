@@ -54,9 +54,9 @@ VERDICT: REPRODUCED — static parts are joined then re-split.
 RUN: verify/02b-double-split-perf.ts
 =========================================
 depth=2  100 routes build avg: 0.38 ms
-depth=10 100 routes build avg: 0.58 ms
+depth=10 100 routes build avg: 0.67 ms
 5x deeper → time should grow ~5x if double-split contributes.
-ratio (depth10 / depth2): 1.53
+ratio (depth10 / depth2): 1.76
 VERDICT: REPRODUCED — observed redundant work scales linearly with depth.
 
 =========================================
@@ -237,7 +237,7 @@ VERDICT: REFUTED — minLen formula correct (separate suffix-less branch for sta
 RUN: verify/14-eight-prefix-threshold.ts
 =========================================
 segment-walk.ts contains "length > 8": true
-walker-strategy.ts contains "length > 8": true
+walker-strategy.ts contains "length > 8": false
 walker name with 9 prefixes: walk
 VERDICT: CODE-VERIFIED — threshold "8" appears in both files
 
@@ -282,7 +282,7 @@ RUN: verify/18-valvar-collision.ts
 =========================================
 val_t identifiers found: []
 all duplicate var declarations: [
-  [ "ms", 2 ], [ "oldest", 2 ]
+  [ "oldest", 2 ]
 ]
 val identifiers in matchImpl: []
 val conflicts: []
@@ -342,18 +342,17 @@ RUN: verify/24-posvar-le-len.ts
 emit contains "posN <= len": false
 matchImpl preview: function match(method, path) {
 if (path.length > 2048) return null;
-if (method !== "GET") return null;
-var mc = 0;
+var mc = methodCodes[method]; if (mc === undefined) return null;
 var sp = path; var qi = sp.indexOf('?'); if (qi !== -1) sp = sp.substring(0, qi);
 if (sp.length > 1 && sp.charCodeAt(sp.length - 1) === 47) sp = sp.substring(0, sp.length - 1);
 
-      var missSet = missCacheByMethod.get(mc);
-      if (missSet !== undefined && missSet.has(sp)) return null;
-      var hitCache = hitCacheByMethod.get(mc);
-      if (hitCache !== undefined) {
-        var cached = hitCache.get(sp);
-        if (cached !== undefined) {
-          if (cached === null) return
+    var ms = missCacheByMethod.get(mc);
+    if (ms !== undefined && ms.has(sp)) return null;
+    var hc = hitCacheByMethod.get(mc);
+    if (hc !== undefined) {
+      var cached = hc.get(sp);
+      if (cached !== undefined) {
+        return { value: cached.value, params: cached.params, met
 VERDICT: REFUTED — guard not emitted in this shape
 
 =========================================
@@ -372,9 +371,9 @@ VERDICT: REPRODUCED — stale comment present
 =========================================
 RUN: verify/27-useCache-hardcoded.ts
 =========================================
-router.ts useCache literal: true
-emitter.ts `if (useCache)` branches: 3
-VERDICT: REPRODUCED — useCache is hardcoded true and still gates emit branches
+router.ts useCache literal: undefined
+emitter.ts `if (useCache)` branches: 0
+VERDICT: REFUTED
 
 =========================================
 RUN: verify/28-cachemaxsize-inlined.ts
@@ -385,7 +384,7 @@ VERDICT: REPRODUCED — value baked into closure
 =========================================
 RUN: verify/29-spec-vs-walker-codegen.ts
 =========================================
-emitter has matchImpl-level specialized: true
+emitter has matchImpl-level specialized: false
 segment-walk has walker-level specialized: true
 VERDICT: REFUTED — different scopes (matchImpl vs walker), no actual duplication
 
@@ -400,25 +399,25 @@ VERDICT: REPRODUCED — handlers mutable by design; sealed prevents user growth
 =========================================
 RUN: verify/31-hasAnyStatic-singlemethod.ts
 =========================================
-emit uses activeBucket (single-method): true
-emit uses staticOutputsByMethod[mc] (multi-method fallback): false
-VERDICT: REFUTED — single-method emit uses closure-captured bucket only (correct)
+emit uses activeBucket (single-method): false
+emit uses staticOutputsByMethod[mc] (multi-method fallback): true
+VERDICT: PARTIAL
 
 =========================================
 RUN: verify/32-misscache-fallthrough.ts
 =========================================
 /health source: static
-/health source (2nd): static
+/health source (2nd): cache
 /u/42:     dynamic
 /u/42 (2): cache
 /nope:     null
 /nope (2): null
-VERDICT: REFUTED — static lookup precedes cache; behavior correct
+VERDICT: PARTIAL
 
 =========================================
 RUN: verify/33-empty-params-deadbranch.ts
 =========================================
-contains "=== EMPTY_PARAMS": true
+contains "=== EMPTY_PARAMS": false
 match params identity ≠ EMPTY_PARAMS: (always true since fresh alloc per match)
 match params: {
   id: "42",
@@ -509,10 +508,10 @@ VERDICT: REFUTED — failed build publishes no testerCache entries
 =========================================
 RUN: verify/43-detectwildcodegen-dup.ts
 =========================================
-build.ts detectWildCodegenSpec call count: 1
+build.ts detectWildCodegenSpec call count: 0
 segment-walk.ts detectWildCodegenSpec call count: 1
 imported in both files: true
-VERDICT: REPRODUCED — detectWildCodegenSpec is called from both build and walker creation paths
+VERDICT: REFUTED
 
 =========================================
 RUN: verify/44-forIn-protoless-order.ts
@@ -639,7 +638,7 @@ RUN: verify/59-cache-null-deadbranch.ts
 =========================================
 hc.set calls:
   hc.set(sp, { value: val, params: cachedParams })
-contains "if (cached === null)": true
+contains "if (cached === null)": false
 VERDICT: REPRODUCED — set always passes object; null branch dead
 
 =========================================
@@ -700,7 +699,7 @@ VERDICT: REPRODUCED — paramNames/paramValues remain unused after dynamic match
 =========================================
 RUN: verify/67-resetmatchstate-unused.ts
 =========================================
-declared in: src/matcher/match-state.ts
+declared in: null
 call sites in src/ (excluding spec): 0
 VERDICT: REPRODUCED — function exported but never called in src
 

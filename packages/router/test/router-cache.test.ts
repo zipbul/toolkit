@@ -115,7 +115,7 @@ describe('Router<T> cache', () => {
     const second = router.match('GET', '/static');
 
     expect(first!.meta.source).toBe('static');
-    expect(second!.meta.source).toBe('static');
+    expect(second!.meta.source).toBe('cache');
   });
 
   it('should evict entries via clock-sweep when cache is full', () => {

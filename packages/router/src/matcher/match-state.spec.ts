@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'bun:test';
 
-import { createMatchState, resetMatchState } from './match-state';
+import { createMatchState } from './match-state';
 
 describe('MatchState', () => {
   describe('createMatchState', () => {
@@ -33,61 +33,6 @@ describe('MatchState', () => {
 
       expect(s2.handlerIndex).toBe(-1);
       expect(s2.paramCount).toBe(0);
-    });
-  });
-
-  describe('resetMatchState', () => {
-    it('should reset handlerIndex to -1', () => {
-      const state = createMatchState();
-      state.handlerIndex = 42;
-
-      resetMatchState(state);
-
-      expect(state.handlerIndex).toBe(-1);
-    });
-
-    it('should reset paramCount to 0', () => {
-      const state = createMatchState();
-      state.paramCount = 3;
-
-      resetMatchState(state);
-
-      expect(state.paramCount).toBe(0);
-    });
-
-    it('should NOT clear paramNames or paramValues arrays (reused)', () => {
-      const state = createMatchState();
-      state.paramNames[0] = 'id';
-      state.paramValues[0] = '42';
-      state.paramCount = 1;
-
-      resetMatchState(state);
-
-      // Arrays retain previous values (not cleared for performance)
-      expect(state.paramNames[0]).toBe('id');
-      expect(state.paramValues[0]).toBe('42');
-    });
-
-    it('should allow reuse after reset', () => {
-      const state = createMatchState();
-
-      // First use
-      state.handlerIndex = 1;
-      state.paramNames[0] = 'userId';
-      state.paramValues[0] = '100';
-      state.paramCount = 1;
-
-      // Reset and second use
-      resetMatchState(state);
-      state.handlerIndex = 2;
-      state.paramNames[0] = 'postId';
-      state.paramValues[0] = '200';
-      state.paramCount = 1;
-
-      expect(state.handlerIndex).toBe(2);
-      expect(state.paramNames[0]).toBe('postId');
-      expect(state.paramValues[0]).toBe('200');
-      expect(state.paramCount).toBe(1);
     });
   });
 });

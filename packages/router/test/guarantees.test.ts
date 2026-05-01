@@ -56,9 +56,11 @@ describe('API guarantees', () => {
     const a = r.match('GET', '/health')!;
     const b = r.match('GET', '/health')!;
 
-    expect(a).toBe(b); // identity (pre-built frozen instance)
+    expect(a.value).toBe(b.value);
+    expect(a).not.toBe(b); // Cache hit returns a new object wrapping the cached value
     expect(Object.isFrozen(a)).toBe(true);
     expect(a.meta.source).toBe('static');
+    expect(b.meta.source).toBe('cache');
   });
 
   it('static MatchOutput.params is frozen empty (no key writes possible)', () => {
@@ -110,6 +112,7 @@ describe('API guarantees', () => {
     r.build();
 
     expect(r.match('GET', '/health')!.meta.source).toBe('static');
+    expect(r.match('GET', '/health')!.meta.source).toBe('cache');
     expect(r.match('GET', '/users/1')!.meta.source).toBe('dynamic');
   });
 
