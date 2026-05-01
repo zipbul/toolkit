@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'bun:test';
 
-import { RouterCache } from './cache';
+import { RouterCache, RouterMissCache } from './cache';
 
 describe('RouterCache', () => {
   // ── HP ──
@@ -284,5 +284,54 @@ describe('RouterCache', () => {
     expect(cache.get('/b')).toBeUndefined(); // /b evicted next
     expect(cache.get('/c')).toBe('c');
     expect(cache.get('/d')).toBe('d');
+  });
+});
+
+describe('RouterMissCache', () => {
+  it('should report inserted misses', () => {
+    const cache = new RouterMissCache(4);
+
+    cache.add('/missing');
+
+    expect(cache.has('/missing')).toBe(true);
+    expect(cache.has('/other')).toBe(false);
+  });
+
+  it('should evict oldest miss when full', () => {
+    const cache = new RouterMissCache(2);
+
+    cache.add('/a');
+    cache.add('/b');
+    cache.add('/c');
+
+    expect(cache.has('/a')).toBe(false);
+    expect(cache.has('/b')).toBe(true);
+    expect(cache.has('/c')).toBe(true);
+  });
+
+  it('should not duplicate an existing miss entry', () => {
+    const cache = new RouterMissCache(2);
+
+    cache.add('/a');
+    cache.add('/a');
+    cache.add('/b');
+    cache.add('/c');
+
+    expect(cache.has('/a')).toBe(false);
+    expect(cache.has('/b')).toBe(true);
+    expect(cache.has('/c')).toBe(true);
+  });
+
+  it('should clear all misses and reset insertion order', () => {
+    const cache = new RouterMissCache(2);
+
+    cache.add('/a');
+    cache.add('/b');
+    cache.clear();
+    cache.add('/c');
+
+    expect(cache.has('/a')).toBe(false);
+    expect(cache.has('/b')).toBe(false);
+    expect(cache.has('/c')).toBe(true);
   });
 });

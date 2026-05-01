@@ -2,7 +2,7 @@ import type { MatchFn, MatchState } from '../matcher/match-state';
 import type { NormalizeCfg } from '../matcher/path-normalize';
 import type { MatchOutput, RouteParams } from '../types';
 
-import { RouterCache } from '../cache';
+import { RouterCache, RouterMissCache } from '../cache';
 import {
   CACHE_META,
   DYNAMIC_META,
@@ -55,7 +55,7 @@ export interface MatchConfig<T> {
   readonly matchState: MatchState;
   readonly handlers: T[];
   readonly hitCacheByMethod: Map<number, RouterCache<MatchCacheEntry<T>>> | undefined;
-  readonly missCacheByMethod: Map<number, Set<string>> | undefined;
+  readonly missCacheByMethod: Map<number, RouterMissCache> | undefined;
   readonly cacheMaxSize: number;
   // Build-output extras consumed only by codegen — not part of the closure
   // payload but needed to choose the emit shape.
@@ -145,11 +145,7 @@ function emitGenericMatchImpl<T>(cfg: MatchConfig<T>): CompiledMatch<T> {
   }
 
   const emitMissCacheWrite = (): string => `
-    if (ms === undefined) { ms = new Set(); missCacheByMethod.set(mc, ms); }
-    if (ms.size >= ${cacheMaxSize}) {
-      var oldest = ms.values().next().value;
-      if (oldest !== undefined) ms.delete(oldest);
-    }
+    if (ms === undefined) { ms = new RouterMissCache(${cacheMaxSize}); missCacheByMethod.set(mc, ms); }
     ms.add(sp);
   `;
 
@@ -201,14 +197,14 @@ function emitGenericMatchImpl<T>(cfg: MatchConfig<T>): CompiledMatch<T> {
   const body = src.join('\n');
   const factory = new Function(
     'staticOutputsByMethod', 'methodCodes', 'trees', 'matchState', 'handlers',
-    'hitCacheByMethod', 'missCacheByMethod', 'RouterCache',
+    'hitCacheByMethod', 'missCacheByMethod', 'RouterCache', 'RouterMissCache',
     'EMPTY_PARAMS', 'CACHE_META', 'DYNAMIC_META', 'terminalHandlers', 'paramsFactories',
     `return function match(method, path) {\n${body}\n};`,
   );
 
   return factory(
     cfg.staticOutputsByMethod, cfg.methodCodes, cfg.trees, cfg.matchState, cfg.handlers,
-    cfg.hitCacheByMethod, cfg.missCacheByMethod, RouterCache,
+    cfg.hitCacheByMethod, cfg.missCacheByMethod, RouterCache, RouterMissCache,
     EMPTY_PARAMS, CACHE_META, DYNAMIC_META, cfg.terminalHandlers, cfg.paramsFactories,
   ) as CompiledMatch<T>;
 }

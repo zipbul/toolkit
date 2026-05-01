@@ -1,7 +1,7 @@
 import type { HttpMethod } from '@zipbul/shared';
 import type { MatchOutput, RouterOptions } from './types';
 import type { MatchCacheEntry, MatchConfig } from './codegen/emitter';
-import type { RouterCache } from './cache';
+import type { RouterCache, RouterMissCache } from './cache';
 
 import { OptionalParamDefaults } from './builder/optional-param-defaults';
 import { PathParser } from './builder/path-parser';
@@ -27,7 +27,7 @@ export interface RouterInternals<T> {
 
 interface CacheContainers<T> {
   hit: Map<number, RouterCache<MatchCacheEntry<T>>>;
-  miss: Map<number, Set<string>>;
+  miss: Map<number, RouterMissCache>;
   maxSize: number;
 }
 

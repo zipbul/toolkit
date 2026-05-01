@@ -110,3 +110,50 @@ export class RouterCache<T> {
     }
   }
 }
+
+export class RouterMissCache {
+  private readonly keys: Array<string | undefined>;
+  private readonly index: Map<string, number>;
+  private readonly capacity: number;
+  private readonly mask: number;
+  private hand: number = 0;
+  private count: number = 0;
+
+  constructor(maxSize: number = 1000) {
+    this.capacity = nextPow2(maxSize);
+    this.mask = this.capacity - 1;
+    this.keys = new Array(this.capacity);
+    this.index = new Map();
+  }
+
+  has(key: string): boolean {
+    return this.index.has(key);
+  }
+
+  add(key: string): void {
+    if (this.index.has(key)) return;
+
+    let slot: number;
+
+    if (this.count < this.capacity) {
+      slot = this.count++;
+    } else {
+      slot = this.hand;
+      const old = this.keys[slot];
+
+      if (old !== undefined) this.index.delete(old);
+
+      this.hand = (this.hand + 1) & this.mask;
+    }
+
+    this.keys[slot] = key;
+    this.index.set(key, slot);
+  }
+
+  clear(): void {
+    this.keys.fill(undefined);
+    this.index.clear();
+    this.hand = 0;
+    this.count = 0;
+  }
+}
