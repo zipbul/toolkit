@@ -205,8 +205,10 @@ describe('Router', () => {
 
       const e = catchRouterError(() => r.build());
       expect(e.data.kind).toBe('route-validation');
-      expect(e.data.errors[0]?.index).toBe(2);
-      expect(e.data.errors[0]?.error.kind).toBe('route-duplicate');
+      if (e.data.kind === 'route-validation') {
+        expect(e.data.errors[0]?.index).toBe(2);
+        expect(e.data.errors[0]?.error.kind).toBe('route-duplicate');
+      }
     });
 
     it('should report method array duplicate during build validation', () => {
@@ -216,7 +218,9 @@ describe('Router', () => {
 
       const e = catchRouterError(() => r.build());
       expect(e.data.kind).toBe('route-validation');
-      expect(e.data.errors.some(issue => issue.method === 'GET' && issue.error.kind === 'route-duplicate')).toBe(true);
+      if (e.data.kind === 'route-validation') {
+        expect(e.data.errors.some(issue => issue.method === 'GET' && issue.error.kind === 'route-duplicate')).toBe(true);
+      }
     });
 
   });
@@ -477,8 +481,10 @@ describe('Router', () => {
 
       const e = catchRouterError(() => r.build());
       expect(e.data.kind).toBe('route-validation');
-      expect(e.data.errors).toHaveLength(1);
-      expect(e.data.errors[0]?.method).toBe('GET');
+      if (e.data.kind === 'route-validation') {
+        expect(e.data.errors).toHaveLength(1);
+        expect(e.data.errors[0]?.method).toBe('GET');
+      }
       expect(r.match('POST', '/x')).toBeNull();
     });
   });

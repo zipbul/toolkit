@@ -20,8 +20,11 @@ test('failed build validation does not publish compiled handler slots', () => {
   }
 
   expect(threw).toBeInstanceOf(RouterError);
-  expect((threw as RouterError).data.kind).toBe('route-validation');
-  expect((threw as RouterError).data.errors[0]?.error.kind).toBe('route-conflict');
+  const re = threw as RouterError;
+  expect(re.data.kind).toBe('route-validation');
+  if (re.data.kind === 'route-validation') {
+    expect(re.data.errors[0]?.error.kind).toBe('route-conflict');
+  }
 
   const handlers = peekHandlers(r);
   expect(handlers.length).toBe(0);

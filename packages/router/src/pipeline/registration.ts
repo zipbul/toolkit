@@ -2,7 +2,7 @@ import type { HttpMethod } from '@zipbul/shared';
 import type { Result } from '@zipbul/result';
 import type { PathPart } from '../builder/path-parser';
 import type { SegmentNode, SegmentTreeUndoLog } from '../matcher/segment-tree';
-import type { RouterErrorData, RouteValidationIssue } from '../types';
+import type { RouterErrorData, RouteValidationIssue, RouteParams } from '../types';
 import type { PatternTesterFn } from '../matcher/pattern-tester';
 
 import { err, isErr } from '@zipbul/result';
@@ -12,6 +12,7 @@ import { expandOptional } from '../builder/route-expand';
 import { RouterError } from '../error';
 import { MethodRegistry } from '../method-registry';
 import { createSegmentNode, insertIntoSegmentTree } from '../matcher/segment-tree';
+import { buildDecoder } from '../matcher/decoder';
 
 const ALL_METHODS: readonly HttpMethod[] = ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS', 'HEAD'];
 
@@ -23,14 +24,24 @@ interface PendingRoute<T> {
 
 export interface ParamMetadata {
   /** Parameters present in this specific expansion. */
-  present: string[];
-  /** Every parameter name declared by the original route (for set-undefined behavior). */
+  present: Array<{ name: string; type: 'param' | 'wildcard' }>;
+  /** Every parameter name declared by the original route. */
   original: string[];
 }
 
-export interface TerminalMetadata {
-  handlerIndex: number;
-  paramMeta: ParamMetadata;
+/**
+ * Snapshot of build-time products.
+ */
+export interface RegistrationSnapshot<T> {
+  staticMap: Record<string, Array<T | undefined>>;
+  staticRegistered: Record<string, boolean[]>;
+  segmentTrees: Array<SegmentNode | null>;
+  handlers: T[];
+  terminalHandlers: number[];
+  isWildcardByTerminal: boolean[];
+  paramsFactories: Array<((u: string, v: Int32Array) => RouteParams) | null>;
+  testerCache: Map<string, PatternTesterFn>;
+  wildcardNamesByMethod: Map<number, Map<string, string>>;
 }
 
 interface BuildState<T> {
@@ -38,32 +49,17 @@ interface BuildState<T> {
   staticRegistered: Record<string, boolean[]>;
   segmentTrees: Array<SegmentNode | null>;
   handlers: T[];
-  terminals: TerminalMetadata[];
+  terminalHandlers: number[];
+  isWildcardByTerminal: boolean[];
+  paramsFactories: Array<((u: string, v: Int32Array) => RouteParams) | null>;
   testerCache: Map<string, PatternTesterFn>;
   wildcardNamesByMethod: Map<number, Map<string, string>>;
   routeCounter: number;
 }
 
 /**
- * Output of `Registration.seal()`: the build-time products of the
- * registration phase, ready to be consumed by Router's build/match
- * pipeline. All fields are internal and owned by the sealed registration.
- */
-export interface RegistrationSnapshot<T> {
-  staticMap: Record<string, Array<T | undefined>>;
-  staticRegistered: Record<string, boolean[]>;
-  segmentTrees: Array<SegmentNode | null>;
-  handlers: T[];
-  terminals: TerminalMetadata[];
-  testerCache: Map<string, PatternTesterFn>;
-  wildcardNamesByMethod: Map<number, Map<string, string>>;
-}
-
-/**
  * `add()` records user intent only. `seal()` performs the authoritative
- * validation pass and publishes compiled state atomically only when every
- * route is valid. This keeps registration semantics strict without needing
- * route rollback as a public concept.
+ * validation pass.
  */
 export class Registration<T> {
   private readonly methodRegistry: MethodRegistry;
@@ -104,6 +100,18 @@ export class Registration<T> {
     return this.snapshot?.handlers;
   }
 
+  get terminalHandlers(): RegistrationSnapshot<T>['terminalHandlers'] | undefined {
+    return this.snapshot?.terminalHandlers;
+  }
+
+  get isWildcardByTerminal(): RegistrationSnapshot<T>['isWildcardByTerminal'] | undefined {
+    return this.snapshot?.isWildcardByTerminal;
+  }
+
+  get paramsFactories(): RegistrationSnapshot<T>['paramsFactories'] | undefined {
+    return this.snapshot?.paramsFactories;
+  }
+
   get testerCache(): RegistrationSnapshot<T>['testerCache'] | undefined {
     return this.snapshot?.testerCache;
   }
@@ -136,12 +144,7 @@ export class Registration<T> {
     }
   }
 
-  /**
-   * Validate every pending route, aggregate every invalid route, then publish
-   * the compiled snapshot exactly once. On failure no compiled snapshot is
-   * exposed and the method/optional-default registries are restored.
-   */
-  seal(): RegistrationSnapshot<T> {
+  seal(options: { optionalParamBehavior?: 'omit' | 'set-undefined' } = {}): RegistrationSnapshot<T> {
     if (this.snapshot !== null) return this.snapshot;
 
     const methodRegistrySnapshot = this.methodRegistry.snapshot();
@@ -150,19 +153,30 @@ export class Registration<T> {
     const issues: RouteValidationIssue[] = [];
     const undo: SegmentTreeUndoLog = [];
 
+    const factoryCache = new Map<string, (u: string, v: Int32Array) => RouteParams>();
+    const omitBehavior = (options.optionalParamBehavior ?? 'set-undefined') === 'omit';
+    const decoder = buildDecoder();
+
     for (let i = 0; i < this.pendingRoutes.length; i++) {
       const route = this.pendingRoutes[i]!;
       const mark = undo.length;
       const handlerMark = state.handlers.length;
-      const terminalMark = state.terminals.length;
+      const terminalMark = state.terminalHandlers.length;
+      const factoryMark = state.paramsFactories.length;
       const optionalMark = this.optionalParamDefaults.snapshot();
       const routeID = state.routeCounter++;
-      const result = this.compileRoute(route, state, undo, routeID);
+      
+      const result = this.compileRoute(
+        route, state, undo, routeID, 
+        factoryCache, omitBehavior, decoder
+      );
 
       if (isErr(result)) {
         rollback(undo, mark);
         state.handlers.length = handlerMark;
-        state.terminals.length = terminalMark;
+        state.terminalHandlers.length = terminalMark;
+        state.isWildcardByTerminal.length = terminalMark;
+        state.paramsFactories.length = factoryMark;
         this.optionalParamDefaults.restore(optionalMark);
         state.routeCounter--;
         issues.push({
@@ -187,14 +201,16 @@ export class Registration<T> {
     }
 
     this.sealed = true;
-    Object.freeze(state.wildcardNamesByMethod);
+    this.pendingRoutes.length = 0; 
 
     const snapshot: RegistrationSnapshot<T> = {
       staticMap: Object.freeze({ ...state.staticMap }),
       staticRegistered: Object.freeze({ ...state.staticRegistered }),
       segmentTrees: Object.freeze([...state.segmentTrees]) as Array<SegmentNode | null>,
-      handlers: state.handlers, // intentional: handlers stay mutable for JIT IC
-      terminals: state.terminals,
+      handlers: state.handlers,
+      terminalHandlers: state.terminalHandlers,
+      isWildcardByTerminal: state.isWildcardByTerminal,
+      paramsFactories: state.paramsFactories,
       testerCache: state.testerCache,
       wildcardNamesByMethod: Object.freeze(new Map(
         [...state.wildcardNamesByMethod].map(([mc, names]) => [mc, Object.freeze(new Map(names))]),
@@ -224,6 +240,9 @@ export class Registration<T> {
     state: BuildState<T>,
     undo: SegmentTreeUndoLog,
     routeID: number,
+    factoryCache: Map<string, (u: string, v: Int32Array) => RouteParams>,
+    omitBehavior: boolean,
+    decoder: (s: string) => string,
   ): Result<void, RouterErrorData> {
     const offsetResult = this.methodRegistry.getOrCreate(route.method);
 
@@ -258,7 +277,10 @@ export class Registration<T> {
       return this.compileStaticRoute(route, normalized, methodCode, state, undo);
     }
 
-    return this.compileDynamicRoute(route, parts, methodCode, state, undo, routeID);
+    return this.compileDynamicRoute(
+      route, parts, methodCode, state, undo, routeID, 
+      factoryCache, omitBehavior, decoder
+    );
   }
 
   private compileStaticRoute(
@@ -318,6 +340,9 @@ export class Registration<T> {
     state: BuildState<T>,
     undo: SegmentTreeUndoLog,
     routeID: number,
+    factoryCache: Map<string, (u: string, v: Int32Array) => RouteParams>,
+    omitBehavior: boolean,
+    decoder: (s: string) => string,
   ): Result<void, RouterErrorData> {
     const expansion = expandOptional(parts, -1, this.optionalParamDefaults);
 
@@ -326,11 +351,8 @@ export class Registration<T> {
     }
 
     const originalNames: string[] = [];
-
     for (const p of parts) {
-      if (p.type === 'param' || p.type === 'wildcard') {
-        originalNames.push(p.name);
-      }
+      if (p.type === 'param' || p.type === 'wildcard') originalNames.push(p.name);
     }
 
     let root = state.segmentTrees[methodCode];
@@ -341,31 +363,74 @@ export class Registration<T> {
       undo.push(() => { delete state.segmentTrees[methodCode]; });
     }
 
-    const handlerIndex = state.handlers.length;
+    const hIdx = state.handlers.length;
     state.handlers.push(route.value);
-    undo.push(() => { state.handlers.length = handlerIndex; });
+    undo.push(() => { state.handlers.length = hIdx; });
 
     for (const { parts: expParts } of expansion) {
-      const presentNames: string[] = [];
-
+      const present: Array<{ name: string; type: 'param' | 'wildcard' }> = [];
       for (const p of expParts) {
-        if (p.type === 'param' || p.type === 'wildcard') presentNames.push(p.name);
+        if (p.type === 'param' || p.type === 'wildcard') {
+          present.push({ name: p.name, type: p.type });
+        }
       }
 
-      const terminalIndex = state.terminals.length;
-      state.terminals.push({
-        handlerIndex,
-        paramMeta: {
-          present: presentNames,
-          original: originalNames,
-        },
+      const tIdx = state.terminalHandlers.length;
+      const isWildcard = expParts.length > 0 && expParts[expParts.length - 1]!.type === 'wildcard';
+
+      let factory: ((u: string, v: Int32Array) => RouteParams) | null = null;
+      if (present.length > 0 || (!omitBehavior && originalNames.length > 0)) {
+        const cacheKey = (omitBehavior ? 'O:' : 'S:') + originalNames.join(',') + '::' + present.map(p => p.name).join(',');
+        let cached = factoryCache.get(cacheKey);
+
+        if (cached === undefined) {
+          let body: string;
+          if (omitBehavior) {
+            body = 'var p = { __proto__: null };\n';
+            for (let j = 0; j < present.length; j++) {
+              const pInfo = present[j]!;
+              const start = j * 2;
+              const end = j * 2 + 1;
+              const val = `u.substring(v[${start}], v[${end}])`;
+              body += `p[${JSON.stringify(pInfo.name)}] = ${pInfo.type === 'param' ? `decoder(${val})` : val};\n`;
+            }
+            body += 'return p;';
+          } else {
+            const entries: string[] = ['__proto__: null'];
+            const presentNames = present.map(p => p.name);
+            for (const name of originalNames) {
+              const idx = presentNames.indexOf(name);
+              if (idx !== -1) {
+                const pInfo = present[idx]!;
+                const start = idx * 2;
+                const end = idx * 2 + 1;
+                const val = `u.substring(v[${start}], v[${end}])`;
+                entries.push(`${JSON.stringify(name)}: ${pInfo.type === 'param' ? `decoder(${val})` : val}`);
+              } else {
+                entries.push(`${JSON.stringify(name)}: undefined`);
+              }
+            }
+            body = `return { ${entries.join(', ')} };`;
+          }
+          cached = new Function('decoder', 'u', 'v', body).bind(null, decoder) as any;
+          factoryCache.set(cacheKey, cached!);
+        }
+        factory = cached!;
+      }
+
+      state.terminalHandlers[tIdx] = hIdx;
+      state.isWildcardByTerminal[tIdx] = isWildcard;
+      state.paramsFactories[tIdx] = factory;
+      undo.push(() => { 
+        state.terminalHandlers.length = tIdx;
+        state.isWildcardByTerminal.length = tIdx;
+        state.paramsFactories.length = tIdx;
       });
-      undo.push(() => { state.terminals.length = terminalIndex; });
 
       const insertResult = insertIntoSegmentTree(
         root,
         expParts,
-        terminalIndex,
+        tIdx,
         state.testerCache,
         routeID,
         undo,
@@ -373,11 +438,9 @@ export class Registration<T> {
 
       if (isErr(insertResult)) {
         const data = insertResult.data;
-
         if (data.kind === 'route-duplicate') {
           data.message = `Route already exists: ${route.method} ${route.path}`;
         }
-
         return err<RouterErrorData>({ ...data, path: route.path, method: route.method });
       }
     }
@@ -458,7 +521,9 @@ function createBuildState<T>(): BuildState<T> {
     staticRegistered: Object.create(null) as Record<string, boolean[]>,
     segmentTrees: [],
     handlers: [],
-    terminals: [],
+    terminalHandlers: [],
+    isWildcardByTerminal: [],
+    paramsFactories: [],
     testerCache: new Map(),
     wildcardNamesByMethod: new Map(),
     routeCounter: 0,

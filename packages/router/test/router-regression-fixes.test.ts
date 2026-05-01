@@ -21,8 +21,10 @@ describe('Router regression fixes', () => {
 
     const error = catchRouterError(() => router.build());
     expect(error.data.kind).toBe('route-validation');
-    expect(error.data.errors).toHaveLength(1);
-    expect(error.data.errors[0]?.error.kind).toBe('route-duplicate');
+    if (error.data.kind === 'route-validation') {
+      expect(error.data.errors).toHaveLength(1);
+      expect(error.data.errors[0]?.error.kind).toBe('route-duplicate');
+    }
   });
 
   it('rejects empty path segments at build time instead of silently remapping dynamic routes', () => {
@@ -32,7 +34,9 @@ describe('Router regression fixes', () => {
 
     const error = catchRouterError(() => router.build());
     expect(error.data.kind).toBe('route-validation');
-    expect(error.data.errors[0]?.error.kind).toBe('route-parse');
+    if (error.data.kind === 'route-validation') {
+      expect(error.data.errors[0]?.error.kind).toBe('route-parse');
+    }
   });
 
   it('reports star expansion conflicts as aggregate build validation errors', () => {
@@ -43,7 +47,9 @@ describe('Router regression fixes', () => {
 
     const error = catchRouterError(() => router.build());
     expect(error.data.kind).toBe('route-validation');
-    expect(error.data.errors.some(issue => issue.method === 'PUT' && issue.error.kind === 'route-conflict')).toBe(true);
+    if (error.data.kind === 'route-validation') {
+      expect(error.data.errors.some(issue => issue.method === 'PUT' && issue.error.kind === 'route-conflict')).toBe(true);
+    }
 
     const valid = new Router<string>();
     valid.add('PUT', '/files/*other', 'put-wild');
@@ -58,7 +64,9 @@ describe('Router regression fixes', () => {
 
     const error = catchRouterError(() => router.build());
     expect(error.data.kind).toBe('route-validation');
-    expect(error.data.errors[0]?.error.kind).toBe('route-parse');
+    if (error.data.kind === 'route-validation') {
+      expect(error.data.errors[0]?.error.kind).toBe('route-parse');
+    }
     expect(router.match('GET', '/leak/path/value')).toBeNull();
   });
 
@@ -82,7 +90,9 @@ describe('Router regression fixes', () => {
 
     const error = catchRouterError(() => router.build());
     expect(error.data.kind).toBe('route-validation');
-    expect(error.data.errors[0]?.error.kind).toBe('route-parse');
+    if (error.data.kind === 'route-validation') {
+      expect(error.data.errors[0]?.error.kind).toBe('route-parse');
+    }
     expect(router.match('GET', '/a/value')).toBeNull();
 
     const valid = new Router<string>();

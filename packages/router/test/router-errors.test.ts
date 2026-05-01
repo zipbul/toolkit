@@ -76,8 +76,10 @@ describe('Router<T> errors', () => {
 
     const err = catchRouterError(() => router.build());
     expect(err.data.kind).toBe('route-validation');
-    expect(err.data.errors[0]?.index).toBe(2);
-    expect(err.data.errors[0]?.error.kind).toBe('route-duplicate');
+    if (err.data.kind === 'route-validation') {
+      expect(err.data.errors[0]?.index).toBe(2);
+      expect(err.data.errors[0]?.error.kind).toBe('route-duplicate');
+    }
   });
 
   it('should report first addAll entry failure during build validation', () => {
@@ -90,8 +92,10 @@ describe('Router<T> errors', () => {
 
     const err = catchRouterError(() => router.build());
     expect(err.data.kind).toBe('route-validation');
-    expect(err.data.errors[0]?.index).toBe(1);
-    expect(err.data.errors[0]?.error.kind).toBe('route-duplicate');
+    if (err.data.kind === 'route-validation') {
+      expect(err.data.errors[0]?.index).toBe(1);
+      expect(err.data.errors[0]?.error.kind).toBe('route-duplicate');
+    }
   });
 
   it('should throw kind=\'router-sealed\' when addAll called after build', () => {

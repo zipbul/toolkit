@@ -18,12 +18,7 @@ import {
 } from '../matcher/path-normalize';
 
 /**
- * Cache entry shape — value+params only. The CACHE_META singleton is
- * attached at lookup time inside the emitted matchImpl, so cache writes
- * never store it.
- *
- * File-local to codegen because MatchConfig consumes it; not part of the
- * public API.
+ * Cache entry shape. Attached at lookup time inside emitted matchImpl.
  */
 export interface MatchCacheEntry<T> {
   value: T;
@@ -31,12 +26,7 @@ export interface MatchCacheEntry<T> {
 }
 
 /**
- * Snapshot of build-time flags + closure-captured references that drive
- * matchImpl emission. Built once by Router.collectMatchConfig() at
- * build time and threaded through the per-shape emitters.
- *
- * Structurally a NormalizeCfg superset (the path-normalize emit helpers
- * read trimSlash/lowerCase/maxPathLen/etc. from any compatible cfg).
+ * Configuration for compiled match implementation.
  */
 export interface MatchConfig<T> {
   readonly trimSlash: boolean;
@@ -57,44 +47,23 @@ export interface MatchConfig<T> {
   readonly hitCacheByMethod: Map<number, RouterCache<MatchCacheEntry<T>>> | undefined;
   readonly missCacheByMethod: Map<number, RouterMissCache> | undefined;
   readonly cacheMaxSize: number;
-  // Build-output extras consumed only by codegen — not part of the closure
-  // payload but needed to choose the emit shape.
   readonly activeMethodCodes: ReadonlyArray<readonly [string, number]>;
   readonly terminalHandlers: number[];
-  readonly paramsFactories: Array<((v: string[]) => RouteParams) | null>;
+  readonly isWildcardByTerminal: boolean[];
+  readonly paramsFactories: Array<((u: string, v: Int32Array) => RouteParams) | null>;
 }
 
 type CompiledMatch<T> = (method: string, path: string) => MatchOutput<T> | null;
 
 /**
- * Compile a specialized match closure via `new Function()` based on the
- * router's actual config and registered routes. Dead code paths
- * (default case sensitivity, empty tree, no optional
- * defaults, etc.) are omitted entirely so the hot path only runs guards
- * that can fire.
- *
- * Cache read/write is inlined (no bound-method call overhead). All
- * helpers used by the hot path are closure-captured, not
- * `this.*`-dispatched.
- *
- * Public entry.
+ * Compile a specialized match closure via `new Function()`.
  */
 export function compileMatchFn<T>(cfg: MatchConfig<T>): CompiledMatch<T> {
   return emitGenericMatchImpl(cfg);
 }
 
 /**
- * Emitter for the generic matchImpl — every router that doesn't qualify
- * for a shape-specialized fast path (currently none, as cache is always
- * enabled) flows through here.
- *
- * Generates a flat function that handles:
- *   1. Path normalization (strip query, trim slash, case fold, etc.)
- *   2. Method-code lookup (O(1) from closure-captured methodCodes)
- *   3. Static-route hit cache lookup
- *   4. Static-route record lookup (staticOutputsByMethod)
- *   5. Dynamic-route tree walk (method-specific walker)
- *   6. Miss cache write / Hit cache write on success.
+ * Emitter for the generic matchImpl. 
  */
 function emitGenericMatchImpl<T>(cfg: MatchConfig<T>): CompiledMatch<T> {
   const cacheMaxSize = cfg.cacheMaxSize;
@@ -160,6 +129,14 @@ function emitGenericMatchImpl<T>(cfg: MatchConfig<T>): CompiledMatch<T> {
         return null;
       }
       var ok = tr(sp, matchState);
+      
+      if (ok) {
+        var tIdx = matchState.handlerIndex;
+        if (!${cfg.trimSlash} && sp.length > 1 && sp.charCodeAt(sp.length - 1) === 47 && !isWildcardByTerminal[tIdx]) {
+          ok = false;
+        }
+      }
+
       if (!ok) {
         ${emitMissCacheWrite()}
         return null;
@@ -172,10 +149,8 @@ function emitGenericMatchImpl<T>(cfg: MatchConfig<T>): CompiledMatch<T> {
       var cachedParams;
       
       if (factory !== undefined && factory !== null) {
-        params = factory(matchState.paramValues);
-        // Double factory call is currently the fastest way in JSC to get 
-        // two independent monomorphic objects with minimum code complexity.
-        cachedParams = factory(matchState.paramValues);
+        params = factory(sp, matchState.paramOffsets);
+        cachedParams = factory(sp, matchState.paramOffsets);
       } else {
         params = EMPTY_PARAMS;
         cachedParams = EMPTY_PARAMS;
@@ -198,13 +173,13 @@ function emitGenericMatchImpl<T>(cfg: MatchConfig<T>): CompiledMatch<T> {
   const factory = new Function(
     'staticOutputsByMethod', 'methodCodes', 'trees', 'matchState', 'handlers',
     'hitCacheByMethod', 'missCacheByMethod', 'RouterCache', 'RouterMissCache',
-    'EMPTY_PARAMS', 'CACHE_META', 'DYNAMIC_META', 'terminalHandlers', 'paramsFactories',
+    'EMPTY_PARAMS', 'CACHE_META', 'DYNAMIC_META', 'terminalHandlers', 'isWildcardByTerminal', 'paramsFactories',
     `return function match(method, path) {\n${body}\n};`,
   );
 
   return factory(
     cfg.staticOutputsByMethod, cfg.methodCodes, cfg.trees, cfg.matchState, cfg.handlers,
     cfg.hitCacheByMethod, cfg.missCacheByMethod, RouterCache, RouterMissCache,
-    EMPTY_PARAMS, CACHE_META, DYNAMIC_META, cfg.terminalHandlers, cfg.paramsFactories,
+    EMPTY_PARAMS, CACHE_META, DYNAMIC_META, cfg.terminalHandlers, cfg.isWildcardByTerminal, cfg.paramsFactories,
   ) as CompiledMatch<T>;
 }

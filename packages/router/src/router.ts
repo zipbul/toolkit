@@ -151,6 +151,7 @@ export class Router<T = unknown> {
         cacheMaxSize: cache.maxSize,
         activeMethodCodes: r.activeMethodCodes,
         terminalHandlers: r.terminalHandlers,
+        isWildcardByTerminal: r.isWildcardByTerminal,
         paramsFactories: r.paramsFactories,
       };
 
@@ -163,14 +164,7 @@ export class Router<T = unknown> {
         trees: r.trees,
       });
 
-      // Build-only tables are frozen as a partition. Hot-path tables
-      // (`handlers`, `trees`, `staticOutputsByMethod`, `methodCodes`)
-      // are intentionally *not* frozen — JSC inline caches degrade when
-      // match() reads from frozen closure-captured objects in tight
-      // loops, costing ~5-10 ns per dynamic match (verified via bench
-      // against bench/baseline). Hot-path tables are still protected
-      // indirectly: nothing mutates them after build() because `sealed`
-      // rejects every public code path that would.
+      // Build-only tables are frozen as a partition.
       Object.freeze(snapshot.segmentTrees);
       Object.freeze(snapshot.staticMap);
       Object.freeze(snapshot.staticRegistered);

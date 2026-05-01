@@ -1,29 +1,27 @@
 import { MAX_PARAMS } from '../builder/constants';
 
 /**
- * Function shape produced by every walker (segment-recursive, segment-iterative,
- * segment-codegen, wildcard-codegen). Returns true when the URL matches a
- * registered route; on success the walker has populated state.handlerIndex
- * and (for segment paths) state.params.
+ * Hot-path match state. Shared across synchronous allowedMethods() lookups,
+ * and pre-allocated per Router instance for match() hot-path.
  */
-export type MatchFn = (url: string, state: MatchState) => boolean;
-
 export interface MatchState {
+  /** The index of the matched handler. -1 if no match. */
   handlerIndex: number;
+  /** Current count of matched parameters. */
   paramCount: number;
-  paramValues: string[];
+  /** 
+   * Flat buffer for [start, end] index pairs of matched parameters.
+   */
+  paramOffsets: Int32Array;
 }
 
 export function createMatchState(): MatchState {
-  const paramValues = new Array<string>(MAX_PARAMS);
-
-  for (let i = 0; i < MAX_PARAMS; i++) {
-    paramValues[i] = '';
-  }
+  // 32 parameters max, 2 slots per parameter (start, end)
+  const paramOffsets = new Int32Array(MAX_PARAMS * 2);
 
   return {
     handlerIndex: -1,
     paramCount: 0,
-    paramValues,
+    paramOffsets,
   };
 }

@@ -100,7 +100,9 @@ describe('Router<T> options', () => {
     router.add('GET', '/test/:val((a+)+)', 'test');
     const err = catchRouterError(() => router.build());
     expect(err.data.kind).toBe('route-validation');
-    expect(err.data.errors[0]?.error.kind).toBe('regex-unsafe');
+    if (err.data.kind === 'route-validation') {
+      expect(err.data.errors[0]?.error.kind).toBe('regex-unsafe');
+    }
   });
 
   it('should pass through malformed encoding as-is in param values', () => {
