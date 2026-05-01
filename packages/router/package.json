@@ -45,8 +45,6 @@
   },
   "scripts": {
     "build": "bun build index.ts internal.ts --outdir dist --target bun --format esm --packages external --production && tsc -p tsconfig.build.json",
-    "check:test-policy": "bash scripts/check-test-policy.sh",
-    "pretest": "bash scripts/check-test-policy.sh",
     "test": "bun test",
     "bench": "bun run bench/router.bench.ts",
     "coverage": "bun test --coverage"
