@@ -471,25 +471,30 @@ function validateParamName(
     });
   }
 
-  for (let i = 0; i < name.length; i++) {
+  // Strict check: Only snake_case and camelCase allowed.
+  // Pattern: ^[a-zA-Z][a-zA-Z0-9_]*$
+  const firstCode = name.charCodeAt(0);
+  const isFirstLetter = (firstCode >= 65 && firstCode <= 90) || (firstCode >= 97 && firstCode <= 122);
+
+  if (!isFirstLetter) {
+    return err({
+      kind: 'route-parse',
+      message: `Invalid parameter name '${prefix}${name}' in path: ${path}. Parameter names must start with a letter.`,
+      path,
+      segment: name,
+    });
+  }
+
+  for (let i = 1; i < name.length; i++) {
     const ch = name.charCodeAt(i);
+    const isLetter = (ch >= 65 && ch <= 90) || (ch >= 97 && ch <= 122);
+    const isDigit = ch >= 48 && ch <= 57;
+    const isUnderscore = ch === 95;
 
-    if (
-      ch === CC_COLON
-      || ch === CC_STAR
-      || ch === CC_QUESTION
-      || ch === CC_PLUS
-      || ch === CC_SLASH
-      || ch === CC_LPAREN
-      || ch === CC_RPAREN
-    ) {
-      const hint = prefix === ':'
-        ? "Use '/:a/:b' for two consecutive params."
-        : "Wildcards do not accept regex patterns — use a regex param like ':name(...)' for that.";
-
+    if (!isLetter && !isDigit && !isUnderscore) {
       return err({
         kind: 'route-parse',
-        message: `Invalid character '${name.charAt(i)}' in ${prefix === ':' ? 'parameter' : 'wildcard'} name '${prefix}${name}'. Names must not contain router metacharacters (':', '*', '?', '+', '/', '(', ')'). ${hint}`,
+        message: `Invalid character '${name.charAt(i)}' in parameter name '${prefix}${name}'. Only alphanumeric characters and underscores are allowed (snake_case or camelCase).`,
         path,
         segment: name,
       });
