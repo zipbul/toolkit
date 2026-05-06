@@ -121,7 +121,7 @@ export class Router<T = unknown> {
     });
 
     const performBuild = (): void => {
-      const snapshot = registration.seal();
+      const snapshot = registration.seal({ optionalParamBehavior: routerOptions.optionalParamBehavior });
       const r = buildFromRegistration<T>(snapshot, routerOptions, methodRegistry);
 
       let hasAnyStatic = false;

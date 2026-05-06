@@ -20,8 +20,8 @@ describe('performance guard invariants', () => {
     const snapshot = (getRouterInternals(r).registration as any).snapshot;
 
     expect(snapshot.handlers.length).toBe(1);
-    expect(snapshot.terminals.length).toBe(1024);
-    expect(snapshot.terminals.every((t: { handlerIndex: number }) => t.handlerIndex === 0)).toBe(true);
+    expect(snapshot.terminalHandlers.length).toBe(1024);
+    expect(snapshot.terminalHandlers.every((idx: number) => idx === 0)).toBe(true);
   });
 
   it('high-cardinality dynamic hit cache evicts old entries and preserves recent entries', () => {

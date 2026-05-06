@@ -1,5 +1,6 @@
 import type { SegmentNode } from '../matcher/segment-tree';
 import type { MatchFn } from '../matcher/match-state';
+import { performance } from 'node:perf_hooks';
 import { TESTER_PASS } from '../matcher/pattern-tester';
 import { hasAmbiguousNode } from '../matcher/segment-tree';
 
@@ -19,8 +20,12 @@ export interface CompiledPackage {
 export function compileSegmentTree(root: SegmentNode): CompiledPackage | null {
   // Bail on ambiguous trees: codegen only handles unique-winner trees.
   // Ambiguous trees (static+param collision) fallback to recursive walker.
-  if (hasAmbiguousNode(root)) return null;
+  if (hasAmbiguousNode(root)) {
+    logCodegen({ event: 'bail', reason: 'ambiguous-tree' });
+    return null;
+  }
 
+  const start = performance.now();
   const ctx: EmitContext = {
     bail: false,
     testers: [],
@@ -28,7 +33,10 @@ export function compileSegmentTree(root: SegmentNode): CompiledPackage | null {
 
   const body = emitNode(ctx, root, 'pos0', false);
 
-  if (ctx.bail) return null;
+  if (ctx.bail) {
+    logCodegen({ event: 'bail', reason: 'emitter-bail', emitMs: performance.now() - start });
+    return null;
+  }
 
   const source = `
 'use strict';
@@ -46,13 +54,46 @@ ${body}
   return false;
 };`;
 
-  if (source.length > MAX_SOURCE) return null;
+  const emitMs = performance.now() - start;
+
+  if (source.length > MAX_SOURCE) {
+    logCodegen({
+      event: 'bail',
+      reason: 'source-budget',
+      sourceLength: source.length,
+      testers: ctx.testers.length,
+      emitMs,
+    });
+    return null;
+  }
 
   try {
+    const compileStart = performance.now();
     const factory = new Function('testers', 'TESTER_PASS', 'decoder', source) as any;
+    const compileMs = performance.now() - compileStart;
+    logCodegen({
+      event: 'compiled',
+      sourceLength: source.length,
+      testers: ctx.testers.length,
+      emitMs,
+      compileMs,
+    });
     return { factory, testers: ctx.testers };
   } catch {
+    logCodegen({
+      event: 'bail',
+      reason: 'new-function-error',
+      sourceLength: source.length,
+      testers: ctx.testers.length,
+      emitMs,
+    });
     return null;
+  }
+}
+
+function logCodegen(data: Record<string, unknown>): void {
+  if (process.env.ZIPBUL_ROUTER_CODEGEN_DIAGNOSTICS === '1') {
+    console.log(`codegen=${JSON.stringify(data)}`);
   }
 }
 
@@ -82,7 +123,7 @@ function emitNode(
   let code = '';
 
   const slashVar = `s${posVar.slice(3).replace(/[^0-9]/g, '')}`;
-  const innerPos = `pos${parseInt(posVar.slice(3).split('_')[0]) + 1}`;
+  const innerPos = `pos${parseInt(posVar.slice(3).split('_')[0] ?? '0') + 1}`;
 
   // 1. Static children
   if (node.staticChildren !== null) {
