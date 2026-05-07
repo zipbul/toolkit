@@ -156,6 +156,7 @@ function createPathParser(options: RouterOptions): PathParser {
     maxPathLength: options.maxPathLength ?? 8192,
     maxSegmentCount: options.maxSegmentCount ?? 256,
     maxParams: options.maxParams ?? 64,
+    profile: options.profile ?? 'secure',
   });
 }
 
@@ -183,7 +184,7 @@ export class Router<T = unknown> {
     validateOptions(options);
     const routerOptions: RouterOptions = { ...options };
     const optionalParamDefaults = new OptionalParamDefaults(routerOptions.optionalParamBehavior);
-    const methodRegistry = new MethodRegistry();
+    const methodRegistry = new MethodRegistry(routerOptions.profile ?? 'secure');
     const pathParser = createPathParser(routerOptions);
     const registration = new Registration<T>(
       methodRegistry,

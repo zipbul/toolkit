@@ -1,6 +1,56 @@
 import { describe, test, expect } from 'bun:test';
 import { Router } from '../src/router';
 
+describe('registration path policy accepts well-formed routes', () => {
+  test.each([
+    ['/'],
+    ['/users'],
+    ['/users/:id'],
+    ['/users/:id?'],
+    ['/users/:id?/posts'],
+    ['/files/*p'],
+    ['/api/v1/_underscore/dot.token-and-tilde~'],
+    ['/colon:literal'],
+    ['/at@symbol'],
+    ['/sub:!$&\'()*+,;='],
+    ['/literal%23'],
+    ['/literal%3F'],
+    ['/users/:id(\\d+)'],
+  ])('accepts %s', (path) => {
+    const r = new Router<string>();
+    expect(() => {
+      r.add('GET', path, 'h');
+      r.build();
+    }).not.toThrow();
+  });
+
+  test('accepts a path exactly maxPathLength bytes long (boundary)', () => {
+    const r = new Router<string>({ maxPathLength: 16 });
+    expect(() => {
+      r.add('GET', '/' + 'x'.repeat(15), 'h');
+      r.build();
+    }).not.toThrow();
+  });
+});
+
+describe('compat profile relaxes the malformed-percent gate', () => {
+  test('compat: malformed percent registration accepted', () => {
+    const r = new Router<string>({ profile: 'compat' });
+    expect(() => {
+      r.add('GET', '/a/%ZZ', 'h');
+      r.build();
+    }).not.toThrow();
+  });
+
+  test('compat: raw fragment is still rejected (router grammar level)', () => {
+    const r = new Router<string>({ profile: 'compat' });
+    expect(() => {
+      r.add('GET', '/a#b', 'h');
+      r.build();
+    }).toThrow();
+  });
+});
+
 describe('registration path validation', () => {
   test('path with raw query "/a?b" must throw', () => {
     const r = new Router<string>();
