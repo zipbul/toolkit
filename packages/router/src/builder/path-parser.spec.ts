@@ -23,13 +23,13 @@ describe('PathParser', () => {
     it('should reject empty path', () => {
       const result = parse('');
       expect(isErr(result)).toBe(true);
-      if (isErr(result)) expect(result.data.kind).toBe('route-parse');
+      if (isErr(result)) expect(result.data.kind).toBe('path-missing-leading-slash');
     });
 
     it('should reject path not starting with /', () => {
       const result = parse('users');
       expect(isErr(result)).toBe(true);
-      if (isErr(result)) expect(result.data.kind).toBe('route-parse');
+      if (isErr(result)) expect(result.data.kind).toBe('path-missing-leading-slash');
     });
 
     it('should accept root path /', () => {
@@ -225,7 +225,7 @@ describe('PathParser', () => {
       for (const path of ['/:a+?', '/:a*?', '/:a?+', '/:a?*']) {
         const result = parse(path);
         expect(isErr(result)).toBe(true);
-        if (isErr(result)) expect(result.data.kind).toBe('route-parse');
+        if (isErr(result)) expect(['route-parse', 'path-query']).toContain(result.data.kind);
       }
     });
   });

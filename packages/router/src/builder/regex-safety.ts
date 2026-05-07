@@ -151,5 +151,108 @@ export function assessRegexSafety(pattern: string): RegexSafetyAssessment {
     return { safe: false, reason: 'Nested unlimited quantifiers detected' };
   }
 
+  if (hasOverlappingAlternationUnderRepeat(pattern)) {
+    return { safe: false, reason: 'Quantifier on alternation group with overlapping branches (polynomial backtracking risk)' };
+  }
+
   return { safe: true };
+}
+
+/**
+ * Reject `(a|aa)+`, `(a|a?)+`, `(x|xy)*` and similar shapes where a quantified
+ * group's alternatives can match the same prefix. Conservative scan: detect a
+ * top-level alternation inside `()` followed by `*`, `+`, or `{m,n}` with
+ * `n>1` and check whether any pair of branches share a non-empty literal
+ * prefix (or one branch is `\w?`-style optional). Anything ambiguous is
+ * rejected — false positives are acceptable; false negatives are not.
+ */
+function hasOverlappingAlternationUnderRepeat(pattern: string): boolean {
+  let i = 0;
+  while (i < pattern.length) {
+    if (pattern[i] === '\\') { i += 2; continue; }
+    if (pattern[i] === '[') { i = skipCharClassExternal(pattern, i) + 1; continue; }
+    if (pattern[i] !== '(') { i++; continue; }
+
+    // Scan to matching close paren at the same nesting level, capturing
+    // top-level alternation branches.
+    const groupStart = i + 1;
+    let depth = 1;
+    let j = groupStart;
+    const splits: number[] = [];
+    while (j < pattern.length && depth > 0) {
+      const c = pattern[j];
+      if (c === '\\') { j += 2; continue; }
+      if (c === '[') { j = skipCharClassExternal(pattern, j) + 1; continue; }
+      if (c === '(') { depth++; j++; continue; }
+      if (c === ')') { depth--; if (depth === 0) break; j++; continue; }
+      if (c === '|' && depth === 1) splits.push(j);
+      j++;
+    }
+
+    const groupEnd = j; // position of matching ')'
+    if (depth !== 0) return false; // unmatched, parser will catch elsewhere
+
+    // Quantifier following the group?
+    const after = pattern[groupEnd + 1];
+    const quantified =
+      after === '*' || after === '+' ||
+      (after === '{' && /\{\d*,(?:\d+)?\}/.test(pattern.slice(groupEnd + 1, groupEnd + 8)));
+
+    if (quantified && splits.length >= 1) {
+      // Build branches.
+      const branches: string[] = [];
+      let prev = groupStart;
+      for (const s of splits) { branches.push(pattern.slice(prev, s)); prev = s + 1; }
+      branches.push(pattern.slice(prev, groupEnd));
+
+      if (branchesOverlap(branches)) return true;
+    }
+
+    i = groupEnd + 1;
+  }
+  return false;
+}
+
+function branchesOverlap(branches: string[]): boolean {
+  // Strip leading `(?:` group-flag if present (non-capturing) — branch text
+  // here is the inner group content, so prefixes are the branch chars.
+  for (let a = 0; a < branches.length; a++) {
+    for (let b = a + 1; b < branches.length; b++) {
+      if (sharePrefix(branches[a]!, branches[b]!)) return true;
+    }
+  }
+  return false;
+}
+
+// Two branches "share a prefix" if at least one non-empty starting literal
+// (or its prefix) matches the other in a way that lets the matcher take
+// either path on the same input. For conservative purposes:
+//   - empty branch overlaps with any non-empty branch (`(a|)+`)
+//   - identical first literal char overlaps (`a|aa`, `ab|ac`)
+//   - branch ending in `?` overlaps if its required prefix is a prefix of the other (`a|a?` shares "a")
+function sharePrefix(x: string, y: string): boolean {
+  if (x === '' || y === '') return true;
+  // Strip non-capturing group prefix if present.
+  const xs = x.startsWith('(?:') && x.endsWith(')') ? x.slice(3, -1) : x;
+  const ys = y.startsWith('(?:') && y.endsWith(')') ? y.slice(3, -1) : y;
+  // If either branch starts with `?` (after a literal), peel until first non-`?` literal.
+  const fx = firstLiteralByte(xs);
+  const fy = firstLiteralByte(ys);
+  if (fx === null || fy === null) return true;
+  return fx === fy;
+}
+
+function firstLiteralByte(s: string): string | null {
+  if (s.length === 0) return null;
+  if (s[0] === '\\') return s.slice(0, 2);
+  return s[0]!;
+}
+
+function skipCharClassExternal(pattern: string, i: number): number {
+  let j = i + 1;
+  while (j < pattern.length && pattern[j] !== ']') {
+    if (pattern[j] === '\\') j += 2;
+    else j++;
+  }
+  return j;
 }

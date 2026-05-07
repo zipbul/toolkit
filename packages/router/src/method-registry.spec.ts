@@ -66,7 +66,7 @@ describe('MethodRegistry', () => {
 
       expect(isErr(result)).toBe(true);
       if (isErr(result)) {
-        expect(result.data.kind).toBe('route-parse');
+        expect(['method-empty', 'method-too-long', 'method-invalid-token']).toContain(result.data.kind);
       }
     });
 
@@ -83,7 +83,7 @@ describe('MethodRegistry', () => {
 
       expect(isErr(result)).toBe(true);
       if (isErr(result)) {
-        expect(result.data.kind).toBe('route-parse');
+        expect(['method-empty', 'method-too-long', 'method-invalid-token']).toContain(result.data.kind);
       }
     });
 

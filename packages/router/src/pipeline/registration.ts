@@ -15,7 +15,7 @@ import { MethodRegistry } from '../method-registry';
 import { createSegmentNode, insertIntoSegmentTree } from '../matcher/segment-tree';
 import { buildDecoder } from '../matcher/decoder';
 
-const ALL_METHODS: readonly HttpMethod[] = ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS', 'HEAD'];
+const WILDCARD_METHOD = '*' as const;
 
 interface PendingRoute<T> {
   method: string;
@@ -98,6 +98,9 @@ export class Registration<T> {
   private snapshot: RegistrationSnapshot<T> | null = null;
   private diagnostics: RegistrationDiagnostics | null = null;
   private sealed = false;
+  private maxExpandedRoutes = 200_000;
+  private totalExpandedRoutes = 0;
+  private expansionLimitEmitted = false;
 
   constructor(
     methodRegistry: MethodRegistry,
@@ -162,7 +165,9 @@ export class Registration<T> {
     }
 
     if (method === '*') {
-      for (const m of ALL_METHODS) this.pendingRoutes.push({ method: m, path, value });
+      // Defer expansion to seal() so methods registered after this call
+      // (but before seal) are included.
+      this.pendingRoutes.push({ method: WILDCARD_METHOD, path, value });
       return;
     }
 
@@ -177,7 +182,7 @@ export class Registration<T> {
     }
   }
 
-  seal(options: { optionalParamBehavior?: 'omit' | 'set-undefined' } = {}): RegistrationSnapshot<T> {
+  seal(options: { optionalParamBehavior?: 'omit' | 'set-undefined'; maxExpandedRoutes?: number } = {}): RegistrationSnapshot<T> {
     if (this.snapshot !== null) return this.snapshot;
 
     const pendingRouteCount = this.pendingRoutes.length;
@@ -190,6 +195,32 @@ export class Registration<T> {
     const factoryCache = new Map<string, (u: string, v: Int32Array) => RouteParams>();
     const omitBehavior = (options.optionalParamBehavior ?? 'set-undefined') === 'omit';
     const decoder = buildDecoder();
+    this.maxExpandedRoutes = options.maxExpandedRoutes ?? 200_000;
+    this.totalExpandedRoutes = 0;
+    this.expansionLimitEmitted = false;
+
+    // Resolve `*`-method registrations against the set of methods present at
+    // seal time (built-ins plus any custom token registered before seal).
+    {
+      const expanded: PendingRoute<T>[] = [];
+      const sealMethods = (() => {
+        const out: string[] = [];
+        for (const [name] of this.methodRegistry.getAllCodes()) out.push(name);
+        for (const r of this.pendingRoutes) {
+          if (r.method !== WILDCARD_METHOD && !out.includes(r.method)) out.push(r.method);
+        }
+        return out;
+      })();
+      for (const r of this.pendingRoutes) {
+        if (r.method === WILDCARD_METHOD) {
+          for (const m of sealMethods) expanded.push({ method: m, path: r.path, value: r.value });
+        } else {
+          expanded.push(r);
+        }
+      }
+      this.pendingRoutes.length = 0;
+      this.pendingRoutes.push(...expanded);
+    }
 
     for (let i = 0; i < this.pendingRoutes.length; i++) {
       const route = this.pendingRoutes[i]!;
@@ -435,6 +466,17 @@ export class Registration<T> {
     undo.push(() => { state.handlers.length = hIdx; });
 
     for (const { parts: expParts } of expansion) {
+      if (++this.totalExpandedRoutes > this.maxExpandedRoutes) {
+        if (this.expansionLimitEmitted) return;
+        this.expansionLimitEmitted = true;
+        return err<RouterErrorData>({
+          kind: 'expansion-total-limit',
+          message: `Total expanded routes exceed cap ${this.maxExpandedRoutes}.`,
+          path: route.path,
+          method: route.method,
+          suggestion: `Reduce optional-param expansion across the registered routes, or raise maxExpandedRoutes (default 200000).`,
+        });
+      }
       if (state.diagnostics !== null) state.diagnostics.expandedRoutes++;
       const present: Array<{ name: string; type: 'param' | 'wildcard' }> = [];
       for (const p of expParts) {

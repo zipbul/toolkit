@@ -62,16 +62,27 @@ export class MethodRegistry {
   }
 
   getOrCreate(method: string): Result<number, RouterErrorData> {
+    if (method.length === 0) {
+      return err({
+        kind: 'method-empty',
+        message: 'HTTP method must not be empty.',
+        suggestion: 'Provide a non-empty method token (e.g., GET, POST, custom token).',
+      });
+    }
+    if (method.length > MAX_METHOD_LENGTH) {
+      return err({
+        kind: 'method-too-long',
+        message: `HTTP method exceeds ${MAX_METHOD_LENGTH} ASCII bytes: '${method.slice(0, 16)}...'`,
+        method,
+        suggestion: `Method tokens must be 1-${MAX_METHOD_LENGTH} ASCII bytes.`,
+      });
+    }
     if (!isValidMethodToken(method)) {
       return err({
-        kind: 'route-parse',
-        message: method.length === 0
-          ? 'HTTP method must not be empty.'
-          : method.length > MAX_METHOD_LENGTH
-            ? `HTTP method exceeds ${MAX_METHOD_LENGTH} ASCII bytes: '${method.slice(0, 16)}...'`
-            : `HTTP method contains invalid character (RFC 9110 token grammar): '${method}'`,
+        kind: 'method-invalid-token',
+        message: `HTTP method contains invalid character (RFC 9110 token grammar): '${method}'`,
         method,
-        suggestion: 'Use only RFC 9110 token characters: alphanumerics + ! # $ % & \' * + - . ^ _ ` | ~. Length 1-64 ASCII bytes.',
+        suggestion: 'Use only RFC 9110 token characters: alphanumerics + ! # $ % & \' * + - . ^ _ ` | ~.',
       });
     }
 

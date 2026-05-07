@@ -73,7 +73,7 @@ export class PathParser {
   private validatePath(path: string): Result<never, RouterErrorData> | null {
     if (path.length === 0 || path.charCodeAt(0) !== CC_SLASH) {
       return err({
-        kind: 'route-parse',
+        kind: 'path-missing-leading-slash',
         message: `Path must start with '/': ${path}`,
         path,
       });
@@ -86,21 +86,16 @@ export class PathParser {
     for (let i = 0; i < len; i++) {
       const c = path.charCodeAt(i);
 
-      // Raw fragment `#` (0x23) — never valid in registered path
       if (c === 0x23) {
         return err({
-          kind: 'route-parse',
+          kind: 'path-fragment',
           message: `Path must not contain raw fragment '#': ${path}`,
           path,
           suggestion: 'Use percent-encoded form `%23` for literal `#`.',
         });
       }
 
-      // Raw query `?` (0x3f) — only valid as `:name?` decorator suffix.
-      // After `?`, next char must be `/` or end-of-path.
       if (c === 0x3f) {
-        // Acceptable when preceded by an identifier-like name and at segment-end.
-        // Conservative: require previous char alnum or `_` and next char `/` or end.
         const prev = i > 0 ? path.charCodeAt(i - 1) : 0;
         const isIdentChar = (prev >= 0x30 && prev <= 0x39) || (prev >= 0x41 && prev <= 0x5a) ||
                             (prev >= 0x61 && prev <= 0x7a) || prev === 0x5f;
@@ -108,7 +103,7 @@ export class PathParser {
         const isSegEnd = next === 0 || next === CC_SLASH;
         if (!isIdentChar || !isSegEnd) {
           return err({
-            kind: 'route-parse',
+            kind: 'path-query',
             message: `Path must not contain raw query '?' (use \`:name?\` decorator only): ${path}`,
             path,
             suggestion: 'Optional param decorator `?` must follow a param name and end the segment.',
@@ -116,31 +111,28 @@ export class PathParser {
         }
       }
 
-      // C0 control (0x00-0x1f) and DEL (0x7f)
       if ((c >= 0x00 && c <= 0x1f) || c === 0x7f) {
         return err({
-          kind: 'route-parse',
+          kind: 'path-control-char',
           message: `Path must not contain control characters (charCode 0x${c.toString(16).padStart(2, '0')}): ${path}`,
           path,
           suggestion: 'Remove control characters from the route pattern.',
         });
       }
 
-      // Raw non-ASCII (0x80+)
       if (c >= 0x80) {
         return err({
-          kind: 'route-parse',
+          kind: 'path-non-ascii',
           message: `Path must not contain raw non-ASCII bytes (charCode 0x${c.toString(16)}): ${path}`,
           path,
           suggestion: 'Represent non-ASCII characters as percent-encoded UTF-8 (e.g. `%ED%95%9C` for `한`).',
         });
       }
 
-      // Malformed percent (`%` not followed by 2 hex)
       if (c === 0x25) {
         if (i + 2 >= len || !isHex(path.charCodeAt(i + 1)) || !isHex(path.charCodeAt(i + 2))) {
           return err({
-            kind: 'route-parse',
+            kind: 'path-malformed-percent',
             message: `Path contains malformed percent-escape: ${path}`,
             path,
             suggestion: 'Every `%` must be followed by exactly two hex digits (0-9, A-F, a-f).',
@@ -148,13 +140,12 @@ export class PathParser {
         }
       }
 
-      // Segment boundary check for dot segment detection
       if (c === CC_SLASH || i === len - 1) {
         const segEnd = c === CC_SLASH ? i : i + 1;
         if (segEnd > segStart) {
           if (isDotSegment(path, segStart, segEnd)) {
             return err({
-              kind: 'route-parse',
+              kind: 'path-dot-segment',
               message: `Path must not contain dot segments '.' or '..' (literal or percent-encoded): ${path}`,
               path,
               suggestion: 'Remove dot segments. Encoded forms `%2e`, `%2E`, `%2e%2e` are also rejected.',

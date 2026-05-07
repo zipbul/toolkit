@@ -6,6 +6,8 @@ import type { PathPart } from '../builder/path-parser';
 import { err } from '@zipbul/result';
 import { buildPatternTester } from './pattern-tester';
 
+const MAX_REGEX_SIBLINGS_PER_SEGMENT = 32;
+
 /**
  * Segment-based route tree. Each node corresponds to one URL segment
  * (no intra-segment splits). Built at Router.build() directly from
@@ -230,6 +232,18 @@ export function insertIntoSegmentTree(
         }
 
         if (matched === null) {
+          // Cap regex/param sibling chain length per segment position.
+          let siblingCount = 1;
+          let cursor: ParamSegment | null = node.paramChild;
+          while (cursor !== null) { siblingCount++; cursor = cursor.nextSibling; }
+          if (siblingCount > MAX_REGEX_SIBLINGS_PER_SEGMENT) {
+            return fail({
+              kind: 'regex-sibling-limit',
+              message: `Too many regex/param siblings at the same position (cap ${MAX_REGEX_SIBLINGS_PER_SEGMENT}).`,
+              segment: part.name,
+              suggestion: `Reduce the number of distinct regex constraints sharing this segment to ${MAX_REGEX_SIBLINGS_PER_SEGMENT} or fewer.`,
+            });
+          }
           const fresh: ParamSegment = {
             name: part.name,
             tester,

@@ -57,6 +57,41 @@ function createCacheContainers<T>(options: RouterOptions): CacheContainers<T> {
   };
 }
 
+const NUMERIC_OPTION_KEYS = [
+  'maxMethodLength',
+  'maxPathLength',
+  'maxSegmentLength',
+  'maxSegmentCount',
+  'maxParams',
+  'maxOptionalExpansions',
+  'maxExpandedRoutes',
+  'maxRegexSiblingsPerSegment',
+  'cacheSize',
+] as const;
+
+function validateNumericOptions(options: RouterOptions): void {
+  const allowUnbounded = options.unsafeAllowUnboundedLimits === true;
+  for (const key of NUMERIC_OPTION_KEYS) {
+    const v = options[key];
+    if (v === undefined) continue;
+    if (typeof v !== 'number' || Number.isNaN(v) || v <= 0) {
+      throw new RangeError(`${key} must be a positive number (received ${String(v)}).`);
+    }
+    if (!Number.isFinite(v) && !allowUnbounded) {
+      throw new RangeError(`${key} must be finite without unsafeAllowUnboundedLimits=true (received ${String(v)}).`);
+    }
+    if (v === Number.MAX_SAFE_INTEGER && !allowUnbounded) {
+      throw new RangeError(`${key} = MAX_SAFE_INTEGER is rejected without unsafeAllowUnboundedLimits=true.`);
+    }
+    if (Number.isFinite(v) && !Number.isInteger(v)) {
+      throw new RangeError(`${key} must be an integer (received ${String(v)}).`);
+    }
+  }
+  if (options.profile === 'secure' && options.unsafeAllowUnboundedLimits === true) {
+    throw new RangeError('profile="secure" cannot be combined with unsafeAllowUnboundedLimits=true.');
+  }
+}
+
 function createPathParser(options: RouterOptions): PathParser {
   return new PathParser({
     caseSensitive: options.caseSensitive ?? true,
@@ -86,6 +121,7 @@ export class Router<T = unknown> {
   readonly allowedMethods: (path: string) => HttpMethod[];
 
   constructor(options: RouterOptions = {}) {
+    validateNumericOptions(options);
     const routerOptions: RouterOptions = { ...options };
     const optionalParamDefaults = new OptionalParamDefaults(routerOptions.optionalParamBehavior);
     const methodRegistry = new MethodRegistry();
@@ -121,7 +157,10 @@ export class Router<T = unknown> {
     });
 
     const performBuild = (): void => {
-      const snapshot = registration.seal({ optionalParamBehavior: routerOptions.optionalParamBehavior });
+      const snapshot = registration.seal({
+        optionalParamBehavior: routerOptions.optionalParamBehavior,
+        maxExpandedRoutes: routerOptions.maxExpandedRoutes,
+      });
       const r = buildFromRegistration<T>(snapshot, routerOptions, methodRegistry);
 
       let hasAnyStatic = false;
