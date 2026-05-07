@@ -78,7 +78,19 @@ function mixedRoutes(): Route[] {
   return out;
 }
 
-function scenario(): { routes: Route[]; hits: string[]; misses: string[] } {
+interface Scenario {
+  routes: Route[];
+  hits: string[];
+  misses: string[];
+  /**
+   * Same path as one of the hits but registered under a different method.
+   * Used to verify the adapter actually rejects mismatched methods rather
+   * than returning the GET route for a POST request.
+   */
+  wrongMethod: { method: string; path: string };
+}
+
+function scenario(): Scenario {
   if (scenarioName === 'param') {
     return {
       routes: paramRoutes(),
@@ -90,6 +102,7 @@ function scenario(): { routes: Route[]; hits: string[]; misses: string[] } {
       misses: [
         '/tenant-x/users/42/posts/7',
       ],
+      wrongMethod: { method: 'POST', path: '/tenant-0/users/42/posts/7' },
     };
   }
 
@@ -97,13 +110,16 @@ function scenario(): { routes: Route[]; hits: string[]; misses: string[] } {
     return {
       routes: wildcardRoutes(),
       hits: [
+        // Match the bucket numbering used by wildcardRoutes()
+        // (`bucket-${b*1000+g}` for g in [0,1000), b in [0,100)).
         '/files/group-0/bucket-0/a.txt',
-        '/files/group-500/bucket-500500/a/b/c.txt',
-        '/files/group-999/bucket-999999/a/b/c.txt',
+        '/files/group-500/bucket-50500/a/b/c.txt',
+        '/files/group-999/bucket-99999/a/b/c.txt',
       ],
       misses: [
         '/files/group-x/bucket-0/a.txt',
       ],
+      wrongMethod: { method: 'POST', path: '/files/group-0/bucket-0/a.txt' },
     };
   }
 
@@ -118,6 +134,7 @@ function scenario(): { routes: Route[]; hits: string[]; misses: string[] } {
       misses: [
         '/v0/none',
       ],
+      wrongMethod: { method: 'PATCH', path: '/v0/static/resource-0' },
     };
   }
 
@@ -136,6 +153,7 @@ function scenario(): { routes: Route[]; hits: string[]; misses: string[] } {
     misses: [
       '/api/v1/resource-x',
     ],
+    wrongMethod: { method: 'POST', path: '/api/v1/resource-0' },
   };
 }
 
@@ -240,7 +258,35 @@ function resolveAdapterVersion(pkg: string): string {
 const BUILD_TIMEOUT_MS = 60_000;
 const BENCH_MEMORY_CAP_MB = 2_048;
 
-function measure(name: string, build: (rs: Route[]) => unknown, match: (router: unknown, path: string) => unknown): void {
+function correctnessCheck(
+  router: unknown,
+  match: (router: unknown, method: string, path: string) => unknown,
+  sc: Scenario,
+): { ok: true } | { ok: false; reason: string; detail: string } {
+  for (const hit of sc.hits) {
+    const r = match(router, 'GET', hit);
+    if (r === null || r === undefined) {
+      return { ok: false, reason: 'hit-returned-null', detail: hit };
+    }
+  }
+  for (const miss of sc.misses) {
+    const r = match(router, 'GET', miss);
+    if (r !== null && r !== undefined) {
+      return { ok: false, reason: 'miss-returned-non-null', detail: miss };
+    }
+  }
+  const wm = match(router, sc.wrongMethod.method, sc.wrongMethod.path);
+  if (wm !== null && wm !== undefined) {
+    return {
+      ok: false,
+      reason: 'wrong-method-returned-non-null',
+      detail: `${sc.wrongMethod.method} ${sc.wrongMethod.path}`,
+    };
+  }
+  return { ok: true };
+}
+
+function measure(name: string, build: (rs: Route[]) => unknown, match: (router: unknown, method: string, path: string) => unknown): void {
   const meta = adapterMeta[name];
   const sc = scenario();
   const version = meta !== undefined ? resolveAdapterVersion(meta.pkg) : 'unknown';
@@ -280,10 +326,22 @@ function measure(name: string, build: (rs: Route[]) => unknown, match: (router: 
     return;
   }
   console.log(`build=${buildMs.toFixed(2)}ms mem=${fmtMem(before, after)}`);
-  bench('hit first', () => match(router, sc.hits[0]!));
-  bench('hit middle', () => match(router, sc.hits[1]!));
-  bench('hit last', () => match(router, sc.hits[2]!));
-  bench('miss', () => match(router, sc.misses[0]!));
+  // Sanity-check the adapter on the canonical hit / miss / wrong-method
+  // paths before measuring. Catches silent mismatches that would
+  // otherwise show up as a `checksum=0` line buried among the timing
+  // numbers.
+  const correctness = correctnessCheck(router, match, sc);
+  if (!correctness.ok) {
+    console.log(
+      `correctnessClass=mismatch reason=${correctness.reason} detail=${JSON.stringify(correctness.detail)}`,
+    );
+    return;
+  }
+  bench('hit first', () => match(router, 'GET', sc.hits[0]!));
+  bench('hit middle', () => match(router, 'GET', sc.hits[1]!));
+  bench('hit last', () => match(router, 'GET', sc.hits[2]!));
+  bench('miss', () => match(router, 'GET', sc.misses[0]!));
+  bench('wrong-method', () => match(router, sc.wrongMethod.method, sc.wrongMethod.path));
 }
 
 const builders: Record<string, () => void> = {
@@ -295,7 +353,7 @@ const builders: Record<string, () => void> = {
       router.build();
       return router;
     },
-    (router, path) => (router as Router<number>).match('GET', path),
+    (router, method, path) => (router as Router<number>).match(method, path),
   ),
   'find-my-way': () => measure(
     'find-my-way',
@@ -304,7 +362,7 @@ const builders: Record<string, () => void> = {
       for (const [method, path, value] of rs) router.on(method as 'GET', path, () => value);
       return router;
     },
-    (router, path) => (router as ReturnType<typeof FindMyWay>).find('GET', path),
+    (router, method, path) => (router as ReturnType<typeof FindMyWay>).find(method as 'GET', path),
   ),
   memoirist: () => measure(
     'memoirist',
@@ -313,7 +371,7 @@ const builders: Record<string, () => void> = {
       for (const [method, path, value] of rs) router.add(method, path, value);
       return router;
     },
-    (router, path) => (router as Memoirist<number>).find('GET', path),
+    (router, method, path) => (router as Memoirist<number>).find(method, path),
   ),
   rou3: () => measure(
     'rou3',
@@ -322,7 +380,7 @@ const builders: Record<string, () => void> = {
       for (const [method, path, value] of rs) addRoute(router, method, path, value);
       return router;
     },
-    (router, path) => findRoute(router as ReturnType<typeof createRou3<number>>, 'GET', path),
+    (router, method, path) => findRoute(router as ReturnType<typeof createRou3<number>>, method, path),
   ),
   'hono-trie': () => measure(
     'hono-trie',
@@ -331,8 +389,8 @@ const builders: Record<string, () => void> = {
       for (const [method, path, value] of rs) router.add(method, path, value);
       return router;
     },
-    (router, path) => {
-      const result = (router as TrieRouter<number>).match('GET', path) as unknown as [unknown[]];
+    (router, method, path) => {
+      const result = (router as TrieRouter<number>).match(method, path) as unknown as [unknown[]];
       return result[0].length > 0 ? result : null;
     },
   ),
@@ -343,8 +401,8 @@ const builders: Record<string, () => void> = {
       for (const [method, path, value] of rs) router.add(method, path, value);
       return router;
     },
-    (router, path) => {
-      const result = (router as RegExpRouter<number>).match('GET', path) as unknown as [unknown[]];
+    (router, method, path) => {
+      const result = (router as RegExpRouter<number>).match(method, path) as unknown as [unknown[]];
       return result[0].length > 0 ? result : null;
     },
   ),
@@ -355,8 +413,8 @@ const builders: Record<string, () => void> = {
       for (const [method, path, value] of rs) router.on(method, path, () => value);
       return router;
     },
-    (router, path) => {
-      const result = (router as any).find('GET', path);
+    (router, method, path) => {
+      const result = (router as any).find(method, path);
       return result.handle === null ? null : result;
     },
   ),
