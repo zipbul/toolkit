@@ -190,4 +190,20 @@ describe('Router<T> cache', () => {
     expect(last!.meta.source).toBe('cache');
     expect(last!.params.id).toBe('9');
   });
+
+  it('caller mutation of returned params must not poison later cache hits', () => {
+    const r = new Router<string>();
+    r.add('GET', '/users/:id', 'h');
+    r.build();
+
+    const a = r.match('GET', '/users/42');
+    expect(a).not.toBeNull();
+    expect(a!.params.id).toBe('42');
+
+    (a!.params as any).id = 'POISONED';
+
+    const b = r.match('GET', '/users/42');
+    expect(b).not.toBeNull();
+    expect(b!.params.id).toBe('42');
+  });
 });
