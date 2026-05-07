@@ -1,5 +1,6 @@
 /* JSC object shape / dictionary-mode evidence — §14.5 line 2168/2169 */
 /* eslint-disable no-console */
+export {};
 
 const N = 100_000;
 const ITERS = 1_000_000;

@@ -1,7 +1,6 @@
 import type { SegmentNode } from '../matcher/segment-tree';
 import type { MatchFn } from '../matcher/match-state';
 import { performance } from 'node:perf_hooks';
-import { TESTER_PASS } from '../matcher/pattern-tester';
 import { hasAmbiguousNode } from '../matcher/segment-tree';
 
 /**
@@ -31,7 +30,7 @@ export function compileSegmentTree(root: SegmentNode): CompiledPackage | null {
     testers: [],
   };
 
-  const body = emitNode(ctx, root, 'pos0', false);
+  const body = emitNode(ctx, root, 'pos0');
 
   if (ctx.bail) {
     logCodegen({ event: 'bail', reason: 'emitter-bail', emitMs: performance.now() - start });
@@ -118,7 +117,6 @@ function emitNode(
   ctx: EmitContext,
   node: SegmentNode,
   posVar: string,
-  justAfterSlash: boolean,
 ): string {
   let code = '';
 
@@ -137,7 +135,7 @@ function emitNode(
       var c = url.charCodeAt(${posVar} + ${segLen});
       if (c === 47) { // '/'
         var ${nextPos} = ${posVar} + ${segLen} + 1;
-${emitNode(ctx, child, nextPos, true)}
+${emitNode(ctx, child, nextPos)}
       } else if (isNaN(c)) { // terminal
 ${emitTerminalAt(child)}
       }
@@ -189,7 +187,7 @@ ${emitTerminalAt(child)}
       return true;
     }`;
     } else {
-      const inner = emitNode(ctx, next, innerPos, true);
+      const inner = emitNode(ctx, next, innerPos);
       if (ctx.bail) return '';
 
       code += `

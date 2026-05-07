@@ -19,6 +19,8 @@ const defaultScenarios = [
   '100k high-fanout',
   '100k versioned-api',
   '100k wildcard-heavy',
+  '100k regex-heavy',
+  '100k churn',
 ];
 const scenarios = process.argv.length > 2 ? process.argv.slice(2) : defaultScenarios;
 const runs = Number(process.env.RUNS ?? '3');

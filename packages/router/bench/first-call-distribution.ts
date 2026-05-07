@@ -1,5 +1,6 @@
 /* D — first-call latency distribution (100 fresh compiles per node count) */
 /* eslint-disable no-console */
+export {};
 
 function makeSource(nodes: number): string {
   let body = 'return function match(url, state) { state.paramCount = 0;';

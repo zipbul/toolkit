@@ -1,5 +1,6 @@
 /* §14.5 line 2171: new Function compile time / first-call latency / code-cache pressure proxy */
 /* eslint-disable no-console */
+export {};
 
 function makeSource(nodes: number): string {
   let body = 'return function match(url, state) { state.paramCount = 0;';

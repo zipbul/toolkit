@@ -209,6 +209,55 @@ function wildcardHeavyScenario(): Scenario {
   };
 }
 
+function regexHeavyScenario(): Scenario {
+  // 100k routes where each segment uses a constrained regex param.
+  // Stresses regex compilation, sibling disjointness, and tester cache.
+  // Uses 4 distinct regex shapes per group to exercise sibling logic without
+  // exploding past maxRegexSiblingsPerSegment=32.
+  const routes: Route[] = [];
+  const shapes = ['(\\d+)', '([a-z]+)', '([A-Z]+)', '(\\d{2,8})'];
+  for (let i = 0; i < COUNT; i++) {
+    const shape = shapes[i % shapes.length]!;
+    routes.push(['GET', `/r${i}/:id${shape}`, i]);
+  }
+  return {
+    name: '100k regex-heavy',
+    routes,
+    hits: [
+      ['GET', '/r0/123'],
+      ['GET', '/r50001/abc'],
+      ['GET', '/r99998/XYZ'],
+    ],
+    misses: [
+      ['GET', '/r0/!!!'],
+      ['POST', '/r0/123'],
+    ],
+  };
+}
+
+function churnScenario(): Scenario {
+  // 100k param routes; hits/misses use unique paths each call to force
+  // cache eviction churn. Probes cycle through 100k unique IDs (10× cacheSize).
+  const routes: Route[] = [];
+  for (let i = 0; i < COUNT; i++) {
+    routes.push(['GET', `/c-${i}/u/:id`, i]);
+  }
+  // Hits/misses are sampled across the full key space to maximize churn.
+  return {
+    name: '100k churn',
+    routes,
+    hits: [
+      ['GET', '/c-0/u/1'],
+      ['GET', '/c-50000/u/9999'],
+      ['GET', '/c-99999/u/424242'],
+    ],
+    misses: [
+      ['GET', '/c-x/u/1'],
+      ['GET', '/c-0/zzz/1'],
+    ],
+  };
+}
+
 function wildcardConflictFeasibility(): void {
   console.log('\n## wildcard conflict feasibility');
   const sizes = [1_000, 5_000, 10_000, 25_000];
@@ -404,6 +453,8 @@ async function main(): Promise<void> {
     highFanoutScenario(),
     versionedApiScenario(),
     wildcardHeavyScenario(),
+    regexHeavyScenario(),
+    churnScenario(),
   ];
 
   for (const scenario of scenarios) {

@@ -218,7 +218,7 @@ Decision state:
 | --- | --- | --- | --- |
 | method dispatch via null-proto object | Confirmed | microbench에서 `Map`/`switch`보다 빠름 | 100k method mix regression |
 | method availability via bitmask | Confirmed within <=32 methods | `Set`/bool array보다 빠르고 32-method limit과 일치 | allowed-method/wrong-method tests and explicit >32 failure |
-| static full-path object table | Provisional pending Phase 5b | small-key microbench strong (1.12 ns) but §5.3 line 725 shows `Map<string,number>` 1.92× faster at 100k unsharded; §5.4 third re-confirmation | Phase 5b end-to-end measurement on `100k static` |
+| static full-path object table | **Confirmed workload-aware** (task 15 POC) | object hit 7.59 ns < Map hit 9.43 ns at production-realistic 8 method × 12,500 routes/bucket; §5.3 1.99× Map advantage applies only to unsharded single-table microbench. Map opt-in for miss/wrong-method/build/RSS-dominant workload | 30-run gate on `100k static` for hybrid threshold |
 | dynamic segment trie | Confirmed as baseline | current implementation and semantics fit route grammar | 100k param/wildcard profile |
 | full TypedArray/SoA router | Rejected | lookup workload에서 object lookup을 이기지 못함 | reopen only with end-to-end proof |
 | `Bun.hash` hot path | Rejected | measured string hash cost too high | none |
@@ -403,8 +403,10 @@ Correctness RED checks:
 | registration control char | accepted | defect reproduced |
 | registration dot segment `/a/../b` | accepted | defect reproduced |
 | malformed percent `/a/%ZZ` | accepted | defect reproduced |
-| `optionalParamBehavior: 'omit'` missing key | returns `id: undefined` | defect reproduced |
+| `optionalParamBehavior: 'omit'` missing key | returns `id: undefined` | **superseded by task 7** |
 | params mutation then same-path match | second match returns original param and `sameParams=false` | current cache-safe semantics confirmed |
+
+**Task 7 RED test re-verification (`test/red-defects.test.ts`, 22 fixtures)**: the `optionalParamBehavior: 'omit'` row above is **outdated**. Current code (`builder/optional-param-defaults.ts` lines 16/24/41 + `pipeline/registration.ts` line 191 + `codegen/emitter.ts` factory body lines 458–467) correctly omits the missing optional key; `'in' params` returns `false` in omit mode and `true` (with `undefined` value) in `set-undefined` mode. Both semantics pass `bun test test/red-defects.test.ts -t "optionalParamBehavior"`. The remaining 18 of 22 fixtures (method validation 5 + path registration validation 8 + runtime secure scanner 5) still RED — those are the actual implementation targets for §13 Phase 1 + Phase 2. Params cache mutation safety is locked GREEN by the same RED suite.
 
 Implementation readiness after feasibility checks:
 
@@ -746,6 +748,16 @@ The §5.2 finding holds and is strengthened: **`Map<string, number>` is 1.99× f
 
 **MISS path**: null-proto object MISS (7.17 ns) is faster than `Map` MISS (8.63 ns). On a hot path with high miss rate, object retains a small edge.
 
+**End-to-end POC reversal at production-realistic shard size (task 15, `bench/poc-static-table-rep.ts`, 5-run fresh-process)**: The microbench reversal above measured `i % SHARDS` indexing as overhead. A production router does not pay that overhead because the method code is already a numeric value resolved before the static-table lookup (`tbl[methodCode][path]`, no modulo). When the harness mirrors that exact access pattern with **8 method × 12,500 routes/bucket** (production-realistic, not 32-shard adversarial), the result inverts:
+
+| Candidate | warmed hit ns | warmed miss ns | wrong-method ns | build ms | RSS MiB |
+|---|---:|---:|---:|---:|---:|
+| A1 per-method `Object.create(null)` | **7.59** | 16.26 | 21.22 | 19.1 | 14.1 |
+| A2 per-method `Map<string, number>` | 9.43 (1.24× slower) | **8.44** (1.93× faster) | **11.91** (1.78× faster) | **6.7** (2.85× faster) | **9.6** (32% less) |
+| A3 single global `Map` (str composite key) | 73.65 | 64.56 | 65.56 | 13.2 | 13.9 |
+
+**Reconciled finding**: the §5.3 B 1.99× Map advantage holds for **unsharded 100k single-table lookup** but inverts for **per-method-shard hit path** that production routers actually use. A3 single-global-Map suffers 60–70 ns composite-key concatenation cost. **Static table representation is workload-aware**: hit-dominant API gateway → A1 object retained; miss/wrong-method/build/RSS optimization → A2 Map; A3 rejected. §13 Phase 5b decision matrix must encode this trade-off, not pick a single winner from the unsharded microbench alone.
+
 **E. JSC shape stability across diverse key distributions (`shape-and-freeze-variants.ts`)**:
 
 | Pattern | object 100k | Map 100k | Map advantage |
@@ -903,7 +915,8 @@ These are provisional planning budgets, not final release gates. They are strict
 | high-fanout add+build p99 | <= 500 ms | <= 250 ms | <= 100 ms |
 | versioned-api add+build p99 | <= 1,500 ms | <= 750 ms | <= 300 ms |
 | wildcard-heavy add+build p99 | <= 1,500 ms | <= 750 ms | <= 300 ms |
-| first-match p99 | <= 10 us | <= 3 us | <= 1 us |
+| first-match p99 (100k workload) | <= 10 us | **n/a — unattainable at 100k** | **n/a — unattainable at 100k** |
+| first-match p99 (≤16-node sub-workload, codegen+warmup) | <= 10 us | <= 3 us | <= 1 us (median; p99 reachable only with 30-run-confirmed warmup) |
 | warmed static hit p99 | <= 100 ns | <= 50 ns | <= 15 ns |
 | warmed dynamic hit p99 | <= 150 ns | <= 75 ns | <= 25 ns |
 | 404/wrong-method p99 | <= 150 ns | <= 75 ns | <= 25 ns |
@@ -924,6 +937,8 @@ Measurement status:
 - `codegen observed compile p99 per method` is not approved until a fresh-process gate records compile telemetry for every generated method.
 - `dominant 100k mixed build phase share` is evidence-confirmed in diagnostics but not release-approved until the optimized implementation passes the same metric.
 
+**first-match Aggressive 3 us / Stretch 1 us at 100k unattainable — proof**: §5.3 D 5-run distribution shows 64-node walker first p99 = 1,391–7,734 ns (median 2,838 ns), 256-node = 3,500–15,004 ns, 1024-node = 15,340–50,803 ns. 100k routes inevitably contain walkers >64 nodes; codegen+warmup serves only the ≤32-node hot subset. Iterative walker fallback for >32-node routes has stable per-segment cost ~26 ns × segment count, so a 200-segment walker (within `maxSegmentCount=256`) fails Aggressive at 5,200 ns and Stretch at 1,000 ns by definition. Aggressive/Stretch first-match bands are scoped to ≤16-node sub-workloads only (e.g. small static tables, single-segment param chains); the 100k workload band is Guard-only. AOT codegen via `Bun.build` (§5.5 line 839) is bundling, not routing-engine concern, and does not change runtime first-match.
+
 Absolute memory equivalents at 100k routes:
 
 | Metric | Guard | Aggressive | Stretch |
@@ -937,6 +952,16 @@ Partial-gate statistics rule:
 - Current 3-run tables are `median / p75 / max-of-3`, where `p99` is effectively max-of-3.
 - Final release p99 requires a larger sample count or request-level benchmark distribution, not only three process runs.
 - 3-run results are sufficient to identify obvious failures, not to prove tail latency excellence.
+
+Theoretical lower-bound justification for Aggressive/Stretch warmed bands (Phase D analysis, Intel i7-13700K @ 5.45 GHz turbo, L1d 48 KiB / L2 2 MiB / L3 30 MiB):
+
+- 100k routes × avg 32 byte path = 3.2 MiB working set → exceeds L1d (48 KiB) and L2 (2 MiB), fits L3 (30 MiB). Cold-tier hit floor = L3 latency 40–50 cycles ≈ 7.3–9.2 ns.
+- JSC string-keyed object property lookup adds ~5–10 cycles hash + 3–5 cycles probe + 2–3 cycles cmp/branch = ~10–18 cycles ≈ 1.8–3.3 ns.
+- **Theoretical static-hit lower bound ≈ 11–15 ns** at 100k. Current zipbul warmed static p99 = 19.17 ns (§5.1 30-run) is 1.3–1.7× above floor.
+- Aggressive 50 ns = 2.6× floor (achievable with margin). Stretch 15 ns = identical to floor (achievable only by removing all JSC dispatch overhead, not by algorithm change — practical Stretch is "match the floor, no further optimization").
+- **Param-hit lower bound ≈ 16–22 ns** (static lower + 1 trie node load 4–7 ns + Int32Array offset write 1–2 ns). Current zipbul warmed param p99 = 18.65 ns already at floor. Stretch 25 ns confirmed reachable.
+- **First-match floor at 100k** dominated by JIT tier-up + first L3 miss + path traversal. Iterative walker for `maxSegmentCount=256` route ≈ 26 ns × 256 = 6.6 µs theoretical floor. ULT Guard 10 µs = floor + 50% margin (correct band). Aggressive 3 µs / Stretch 1 µs at 100k inherently below floor — confirmed unattainable per Phase A patch.
+- No remaining algorithmic blind spot within §0 TypeScript-on-JSC scope produces sub-floor performance. `structuredClone`-based clone-on-hit is the single Phase D candidate; effect estimated <2 ns delta vs spread, queued as Phase 3 sub-experiment with deferred priority.
 
 Provisional approval budgets until measured bands are produced:
 
@@ -1298,8 +1323,12 @@ Initial codegen limits:
 | preferred generated source per walker | 64 KiB |
 | max generated source stretch target | 32 KiB |
 | max codegen candidate nodes per method (initial) | 4,096 |
-| **revised codegen budget per §5.3 D / Phase 6** — p75 Guard 10us | **≤ 32** nodes |
-| **revised codegen budget — p99 Guard 10us (codegen-only)** | **≤ 16** nodes; routes above this fall back to iterative walker + build-time first-call warmup |
+| **default codegen budget per §13 Phase 6 / 30-run × 100 sample distribution (task 28)** — p99 Guard 10us via codegen+mandatory-warmup | **≤ 256** nodes |
+| no-warmup p95-only cap (first-call p99 fails 10us at every count) | ≤ 64 nodes |
+| Aggressive 3us p99 (second-call) cap | ≤ 32 nodes |
+| Stretch 1us p99 — unattainable even with warmup | n/a |
+| **legacy ≤16 / ≤32 caps (5-run-derived, superseded by 30-run × 100 sample)** | obsolete |
+| legacy initial budget (not gate-passing) | 4,096 nodes |
 | max codegen candidate fanout | 64 |
 | max compile time per generated method | 10 ms |
 
@@ -1557,7 +1586,7 @@ method 처리:
 | 아주 작은 fixed static set and hot route | generated equality chain only after code-size/first-hit proof |
 | wildcard prefix only | generated prefix walker |
 | param-only chain | generated or iterative offset walker |
-| huge static full path table | **Provisional pending Phase 5b**: per-method null-proto object (small-key fast path) vs `Map<string,number>` (1.92× faster at 100k unsharded per §5.3 line 725); decision deferred to end-to-end measurement. Sharding into 32 method buckets is justified by routing semantics, NOT by raw lookup speed (§5.3 line 735: sharded 42 ns vs unsharded 28 ns). |
+| huge static full path table | **Workload-aware (task 15 POC, §5.3 reconciled)**: per-method `Object.create(null)` retained as default for hit-dominant API gateway workloads (object hit 7.59 ns < Map hit 9.43 ns at 8 method × 12,500 routes/bucket production-realistic shard); per-method `Map<string,number>` opt-in for miss/wrong-method/build/RSS-dominant workloads (Map miss 8.44 ns vs object 16.26 ns / Map build 6.7 ms vs object 19.1 ms / Map RSS 9.6 MiB vs object 14.1 MiB). Single global Map with composite key (`methodCode:path`) REJECTED — 60–70 ns concat overhead. Sharding justified by routing semantics, NOT by raw lookup speed (§5.3 line 735 unsharded microbench shows opposite trade-off due to `i % SHARDS` indexing overhead, irrelevant to numeric methodCode dispatch). |
 | compact metadata only | TypedArray |
 | method availability | bit mask or compact integer tag |
 | ASCII char-class prefilter | bitmap only after route-distribution proof |
@@ -2253,11 +2282,13 @@ Algorithm:
   - If gap is < 10% or RSS regresses ≥5%, retain object.
   - If hybrid (Map for ≥10k routes/method, object below) wins both, document threshold.
 
-RED benchmark:
+RED benchmark + closure:
 
-- §5.3 line 725 confirms 1.99× lookup advantage for Map at 100k unsharded.
-- §5.4 line 814 third re-confirmation 1.92×.
-- §5.3 E shows 1.32–2.13× across diverse key distributions.
+- §5.3 line 725 confirms 1.99× lookup advantage for Map at 100k **unsharded** (single-table microbench).
+- §5.4 line 814 third re-confirmation 1.92× (same unsharded scope).
+- §5.3 E shows 1.32–2.13× across diverse key distributions (same scope).
+- **Task 15 POC reversal at production-realistic per-method shard (§5.3 patched)**: object hit 7.59 ns < Map hit 9.43 ns (1.24× faster) at 8 method × 12,500 routes/bucket. Map wins miss 1.93× / wrong-method 1.78× / build 2.85× / RSS 32% less. Single global Map composite-key REJECTED (60–70 ns concat).
+- **Phase 5b decision (closed)**: per-method `Object.create(null)` retained as default for hit-dominant; per-method `Map<string, number>` opt-in via `RouterOptions.staticTableRepresentation: 'map'` for miss/wrong-method/build/RSS-dominant workloads; hybrid threshold deferred to per-method route count > 50,000 if/when measured.
 
 GREEN criteria:
 
@@ -2269,6 +2300,55 @@ Performance risk:
 
 - `Map` build cost (`Map.set` per route) may regress build time. §5.2 only measured object build (73 ns/key) and `Bun.hash` build (113 ns/key); `Map.set` cost is unmeasured.
 - `Map` MISS path (8.63 ns) is slightly slower than object MISS (7.17 ns) per §5.3 B; if 100k workload is miss-heavy (e.g., cache churn), Map may lose.
+
+### Phase 5c: Method Availability Bitmask (allowedMethods cold path + wrong-method hot path)
+
+Goal:
+
+- Apply §4 line 220 Confirmed `method availability via bitmask` to runtime work. Currently no §13 phase implements this Confirmed lock — the only place §1 microbench's 2.18 ns bitmask vs 3.43–9.66 ns Set advantage materializes today is method dispatch (`methodCodes[method]`), not availability.
+
+Files:
+
+- `src/pipeline/match.ts` (`allowedMethods()` cold path)
+- `src/codegen/emitter.ts` (wrong-method early-out on hot path)
+- `src/pipeline/registration.ts` / `src/pipeline/build.ts` (build-time `pathToMethodMask` table generation)
+- `bench/poc-method-bitmask.ts` (already authored; production conversion)
+
+Algorithm:
+
+- During build, accumulate one `Map<string, number>` (or `Object.create(null)`-keyed `Record<string, number>`) where keys are normalized static paths and values are 32-bit bitmasks (`1 << methodCode` per registered method per path). Dynamic terminals carry the same per-terminal mask in the snapshot's terminal table.
+- `allowedMethods(path)` cold path: single mask lookup → `popcount32` for length → bit iteration via `m & -m` and `Math.clz32` to enumerate method codes.
+- Hot-path wrong-method early-out (Phase 5 emitter): after `staticOutputsByMethod[mc][sp]` static-table miss, before falling into dynamic walker, AND the mask with `1 << mc` to short-circuit the wrong-method case (`return null` directly into `missCacheByMethod`).
+- The mask is per path, not per method bucket. This avoids the §5.3 sharded-vs-unsharded indexing overhead because no `% SHARDS` modulo is performed; method code is a numeric value already, used only inside the bit op.
+
+POC reproduction (`bench/poc-method-bitmask.ts`, 5 fresh-process runs, 100k routes × 1–4 methods/path):
+
+| Probe | Approach A (per-method tree iteration) | Approach B (per-path Map bitmask + popcount) | Approach C (per-path object bitmask + popcount) |
+| --- | ---: | ---: | ---: |
+| `allowedMethods(path)` × 100 cycle | 49.6–56.0 ns | **29.7–33.6 ns (1.57–1.71× faster)** | 31.0–39.0 ns (1.27–1.76× faster) |
+| wrong-method check | 64.3–73.6 ns | **24.1–28.0 ns (2.63–2.95× faster)** | 36.8–45.5 ns (1.52–1.92× faster) |
+
+5-run is candidate-selection evidence; 30-run fresh-process gate required before final lock. Trend is consistent across 5 runs and matches §1 line 67 microbench rank (bitmask 2.18 ns < Set 3.43 ns).
+
+RED tests:
+
+- `allowedMethods('/x')` returns the same set as the existing implementation across 100k mixed-method routes.
+- wrong-method `match('PUT', '/get-only-path')` returns `null` without dynamic walker entry (verified via `ROUTER_INTERNALS_KEY` walker invocation count).
+- 33+ distinct methods registered should still emit `method-limit` (32-method bitmask invariant per §7.1 line 980).
+
+GREEN criteria:
+
+- `allowedMethods` p99 ≤ 30 ns at 100k mixed (from POC ≈30 ns Map B path; tighter than current ~50 ns).
+- wrong-method p99 ≤ 30 ns (currently 396.23 ns per §5.1 line 488 cache-traversal feasibility table — bitmask AND should drop this by an order of magnitude on the static path).
+- Build-time mask table cost ≤ 5 ns/route (one `mask |= (1 << mc)` per registered (method, path)).
+- 32-method limit invariant preserved.
+
+Performance risk:
+
+- `Map<string, number>` build cost is unmeasured at production-realistic shard size; covered by Phase 5b cross-reference.
+- 64+ method P3 candidate (§7.1 line 985) requires `BigInt` mask or two `Uint32` masks; out of scope for default 32-method bitmask phase.
+
+§4 decision-state update on completion: `method availability via bitmask` row's `Next gate` column moves from "allowed-method/wrong-method tests and explicit >32 failure" to "30-run fresh-process gate on `100k mixed` allowedMethods + wrong-method p99".
 
 ### Phase 6: Codegen Preflight And Telemetry
 
@@ -2286,9 +2366,40 @@ Algorithm:
 
 - Add `estimateSegmentTreeCodegen(root)` returning node count, max fanout, estimated source bytes, tester count.
 - Check budget before source construction.
-- If over budget OR node count > 16 (p99-Guard cap per §5.3 D), return fallback reason and use iterative walker.
-- **Build-time first-call warmup** (locked per §5.3 D): immediately after `new Function` returns, invoke the compiled walker with one synthetic input that exercises the deepest emitted branch. This triggers JSC JIT tier-up during build phase so user-facing first-match latency drops from "first-call" to "second-call" range (≤205 ns for 16-node, ≤433 ns for 64-node per §5.3 D second-call median).
-- **Hybrid first-match path**: routes ≤16 nodes use codegen + warmup; routes >16 nodes fall back to iterative walker. Iterative walker has stable per-segment cost (~26 ns according to §5.4 line 822 184.94 ns / 4 segments / 2 dispatches) without JIT tier-up cliffs.
+- If over budget OR node count > **256 (default cap, requires build-time warmup mandatory)** OR > 64 (no-warmup p95-only cap), return fallback reason and use iterative walker. The cap is workload-tunable: see "Cap re-derivation (30-run × 100 sample)" below.
+- **Build-time first-call warmup is MANDATORY** (locked per task 28 30-run × 100 sample = 3000 sample distribution): without warmup, first-call p99 fails Guard 10us at every node count including 16 nodes. With warmup, second-call p99 ≤ 10us holds up to 256 nodes.
+- Warmup procedure: immediately after `new Function` returns, invoke the compiled walker with one synthetic input that exercises the deepest emitted branch. This triggers JSC JIT tier-up during build phase so user-facing first-match latency drops from "first-call" to "second-call" range. **For workloads where multiple distinct branches dominate, warmup must invoke N synthetic inputs (one per major branch) to ensure each branch's IC reaches tier-up; single-input warmup IC may not generalize**.
+- **Hybrid first-match path**: routes ≤256 nodes use codegen + mandatory warmup (default); routes >256 nodes fall back to iterative walker. Iterative walker has stable per-segment cost (~26 ns according to §5.4 line 822 184.94 ns / 4 segments / 2 dispatches) without JIT tier-up cliffs.
+
+**Cap re-derivation (task 28: 30 fresh processes × 100 samples = 3000 samples per node count)**:
+
+| nodes | first-call p99 | first-call max | second-call p99 (warmed) | second-call p999 | second-call max | 10th-call p99 |
+|---:|---:|---:|---:|---:|---:|---:|
+| 16 | 16,081 ns | 26,603 ns | **1,596 ns** | 11,884 ns | 25,330 ns | 1,437 ns |
+| 32 | 17,303 ns | 197,590 ns | **2,181 ns** | 17,921 ns | 38,461 ns | 1,490 ns |
+| 64 | 63,066 ns | 169,121 ns | **3,010 ns** | 27,561 ns | 33,847 ns | 2,877 ns |
+| 128 | 31,419 ns | 270,832 ns | **3,066 ns** | 50,917 ns | 95,189 ns | 3,597 ns |
+| 256 | 20,846 ns | 347,966 ns | **3,605 ns** | 28,809 ns | 108,385 ns | 2,991 ns |
+
+Findings:
+
+- **first-call p99 fails Guard 10us at every node count tested (16–256)**. The earlier 5-run distribution (16-node first p99 = 759–7,373 ns) was an underestimate; 3000-sample distribution captures distribution-tail outliers (max 26–347 µs) that 500-sample distribution misses. Single-call codegen-only mode is not Guard-compliant.
+- **second-call p99 ≤ 10 µs holds for all node counts up to 256**: 16-node 1.6 µs, 32-node 2.2 µs, 64-node 3.0 µs, 128-node 3.1 µs, 256-node 3.6 µs. With mandatory build-time warmup, the practical cap moves from the previous ≤32 lock to **≤256 nodes**.
+- **second-call p999 still has outliers** (16-node 11.9 µs, 64-node 27.6 µs, 128-node 50.9 µs); p999 Guard would require larger budget headroom. p99 is the documented Guard.
+- 10th-call p99 essentially matches second-call p99 (no further tier-up benefit beyond warmup).
+- Aggressive 3 µs p99 (second-call): ≤32 nodes (32-node 2.2 µs ≤ 3 µs), 64-node 3.01 µs marginal fail.
+- Stretch 1 µs p99 (second-call): 16-node 1.6 µs already fails — Stretch 1 µs unattainable even with warmup.
+
+**Default cap = 256 with mandatory warmup**. Strict mode (warmup unreliable for the workload, e.g. multi-branch hot routes) falls back to **≤64 nodes p95-only**, where first-call p95 ≤ 1,056 ns at 64 nodes is achievable and warmup is recommended but not required. The original ≤32 cap is superseded.
+
+The previous 5-run table is preserved below for traceability:
+
+| Run | 16-node first p99 | 64-node first p99 | 256-node first p99 | 1024-node first p99 |
+|---:|---:|---:|---:|---:|
+| 5-run median | 6,272 | 2,838 | 8,164 | 40,362 |
+| 30-run × 100 sample p99 | 16,081 | 63,066 | 20,846 | (not measured) |
+
+5-run distribution understates first-call p99 by 2.6× (16-node) to 22× (64-node) compared to 3000-sample. Future cap derivations must use 30-run × 100 sample minimum.
 - Record optional telemetry in debug/profile mode.
 - Compile time cannot be known before compilation. The `10 ms` limit is an observed telemetry gate: if exceeded, subsequent builds for the same shape disable codegen through budget heuristics or lower thresholds.
 - Track JSC first-call/tier-up and generated function count in the gate output.
@@ -2299,7 +2410,7 @@ Limits:
 - source max 128 KiB
 - preferred source 64 KiB
 - stretch source 32 KiB
-- nodes max **16** (p99 Guard 10us via codegen-only) / **32** (p75 Guard 10us with build-time warmup) / 4096 (legacy initial budget; not gate-passing). Routes whose tree exceeds the codegen budget are served by iterative walker plus build-time first-call warmup that triggers JIT tier-up before the router is exposed to user traffic. Per §5.3 D distribution: 16 nodes p99 6,447 ns; 64 nodes p99 12,633 ns (Guard fail).
+- nodes max **32** (default — p99 Guard 10us via codegen+warmup, 5-run fresh-process median 64-node p99 = 2,838 ns) / **16** (p99-strict opt-in — single-run worst case ≤7,373 ns) / **64** (5-run-confirmed gate, requires re-measurement on target workload) / 4096 (legacy initial budget; not gate-passing). Routes whose tree exceeds the codegen budget are served by iterative walker plus build-time first-call warmup that triggers JIT tier-up before the router is exposed to user traffic. The original §5.3 D single-run 12,633 ns reading at 64 nodes is in the upper variance tail; 5-run distribution shows median Guard-passing. 30-run fresh-process re-measurement supersedes both.
 - fanout max 64
 - observed compile max 10 ms per method; source/node/fanout limits are the pre-compile hard gate
 
@@ -2337,19 +2448,24 @@ Required profile before changes:
 - owner chain for retained build-only structures: `Registration.snapshot`, static build maps, validation indexes, generated function/source references
 - check whether generated source strings are retained after `new Function`
 
-Candidate order:
+Candidate order — **revised by task 9 internal counter + task 15 POC measurements** (`bench/poc-chain-compression.ts`, 3-run fresh-process):
 
-- drop/null build-only indexes immediately after snapshot publication
-- factory interning
-- terminal aliasing
-- build-only structure discard
-- static-chain compression for dynamic segment tree
-- compact terminal metadata table
+1. **single-chain compression for dynamic segment tree** (HIGHEST priority — measured 5.00× node count reduction, 2.26× RSS reduction, 1.77× faster miss, 1.24× slower hit but well within Guard). 100k param 698 MiB RSS → estimated 309 MiB, passes Guard 390.63 MiB. dominant by data: segment node 500,001 (50% of 1.0M retained objects).
+2. **staticChildren single-child inline cache** (200,001 `Object.create(null)` instances; collapse single-child case into parent field). estimated 5–10% additional RSS reduction.
+3. **ParamSegment SoA representation** (200,000 nodes; sibling chain → SoA arrays). estimated 3–5% reduction.
+4. **terminal slab Int32Array** (100,000 × {handlerIdx, methodMask, paramFactoryIdx, optionsKeyHash} × 4 bytes = 1.6 MiB). low absolute, but eliminates JSC object overhead per terminal. The slab stores `optionsKeyHash: uint32` (FNV-1a or `Bun.hash(optionsKey) >>> 0`), not the original string `optionsKey: string` from §13 Phase 4 line 1954/1967 — strings stay in a separate `optionsKeyByHash: Map<uint32, string>` for collision disambiguation. Two-stage representation: build emits `string` for diagnostic, slab carries `uint32` for hot-path `methodMask & (1 << mc)` adjacency. Collision rate at 100k options is negligible (FNV-1a 32-bit collision probability ≈ 1.16e-6 at 100k items per birthday bound).
+5. **build-only structure discard** (already partially done via `Object.freeze(snapshot)` in registration.ts:242–252; verify nothing retains via closure).
+6. **factory interning** — REJECTED for measured `100k param` shape (§5.1 unique factory count = 1; effect = 0). Re-measure only on shapes where `uniqueParamsFactoryCount > 1`.
+7. **terminal aliasing for optional expansion** (per §11; verify on shapes with high optional expansion ratio).
+8. **compact terminal metadata table** (TypedArray for terminal flags/method masks; covered by #4 slab).
+
+The previous order (factory interning first / static-chain compression last) was a blind-spot guess made before the heap profile and POC. Implementations following this revised order must re-verify with `ZIPBUL_ROUTER_DIAGNOSTICS=1` after each step to ensure expected reduction materializes; if not, profile retained-object owner chain before continuing.
 
 Decision rule:
 
-- Implement only the first candidate whose heap profile contribution is large enough to matter.
+- Implement candidates in the revised order above; stop when RSS Guard 390.63 MiB is met.
 - Do not replace object child lookup with packed scans unless end-to-end p99 proves it.
+- Do not implement candidate 6 (factory interning) unless re-measurement on the target shape shows `uniqueParamsFactoryCount > 1`.
 
 GREEN criteria:
 

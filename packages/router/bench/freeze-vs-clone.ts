@@ -1,5 +1,6 @@
 /* §14.5 line 2170: Object.freeze vs clone cost for params cache */
 /* eslint-disable no-console */
+export {};
 
 const ITERS = 5_000_000;
 

@@ -1,5 +1,6 @@
 /* Perfect hash POC + build-time Bun.hash — §10 P3 candidate */
 /* eslint-disable no-console */
+export {};
 
 const N = 100_000;
 const ITERS = 5_000_000;
@@ -18,7 +19,7 @@ const hashTable = new Int32Array(cap);
 hashTable.fill(-1);
 const hashKeys: string[] = new Array(cap);
 function bunHashU32(s: string): number {
-  return Number(Bun.hash(s) & BigInt(0xFFFFFFFF));
+  return Number(BigInt.asUintN(32, BigInt(Bun.hash(s))));
 }
 for (let i = 0; i < N; i++) {
   let h = bunHashU32(keys[i]!) & (cap - 1);
