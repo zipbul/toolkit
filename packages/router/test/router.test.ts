@@ -357,21 +357,21 @@ describe('Router<T>', () => {
     it('should complete standard lifecycle: construct → add → build → match', () => {
       const router = new Router<string>();
 
-      // Phase 1: not built yet → match returns null
+      // not built yet → match returns null
       expect(router.match('GET', '/x')).toBeNull();
 
-      // Phase 2: add
+      // add
       router.add('GET', '/x', 'x');
 
-      // Phase 3: build
+      // build
       const built = router.build();
       expect(built).toBe(router);
 
-      // Phase 4: match succeeds
+      // match succeeds
       const matchAfter = router.match('GET', '/x');
       expect(matchAfter).not.toBeNull();
 
-      // Phase 5: add after seal throws
+      // add after seal throws
       expect(() => router.add('POST', '/y', 'y')).toThrow(RouterError);
     });
 
@@ -801,28 +801,22 @@ describe('Router<T>', () => {
       expect(result!.params.val).toBe('%20');
     });
 
-    it('should apply all defaults when multiple optional params are absent', () => {
+    it('should apply default to absent optional param', () => {
       const router = new Router<string>({ optionalParamBehavior: 'set-undefined' });
-      router.add('GET', '/items/:a?/:b?', 'handler');
+      router.add('GET', '/items/:a?', 'handler');
       router.build();
 
-      // Both absent
+      // Absent → a is defaulted to undefined
       const r1 = router.match('GET', '/items');
       expect(r1).not.toBeNull();
       expect(r1!.value).toBe('handler');
+      expect('a' in r1!.params).toBe(true);
+      expect(r1!.params.a).toBeUndefined();
 
-      // One present, one absent → b is defaulted
+      // Present
       const r2 = router.match('GET', '/items/42');
       expect(r2).not.toBeNull();
       expect(r2!.params.a).toBe('42');
-      expect('b' in r2!.params).toBe(true);
-      expect(r2!.params.b).toBeUndefined();
-
-      // Both present
-      const r3 = router.match('GET', '/items/42/99');
-      expect(r3).not.toBeNull();
-      expect(r3!.params.a).toBe('42');
-      expect(r3!.params.b).toBe('99');
     });
 
     it('should not publish dead handler when duplicate dynamic route fails build validation', () => {

@@ -57,13 +57,13 @@ describe('Router<T> errors', () => {
     expect(issue.kind).toBe('route-duplicate');
   });
 
-  it('should throw for conflicting wildcard after param (route-conflict)', () => {
+  it('should throw for wildcard whose prefix already has a descendant terminal', () => {
     const router = new Router<string>();
     router.add('GET', '/users/:id', 'by-id');
     router.add('GET', '/users/*', 'by-wildcard');
 
     const issue = firstBuildIssue(router);
-    expect(issue.kind).toBe('route-conflict');
+    expect(issue.kind).toBe('route-unreachable');
   });
 
   it('should report addAll duplicate during build validation', () => {
@@ -201,13 +201,13 @@ describe('Router<T> errors', () => {
     }
   });
 
-  it('should throw for conflicting wildcard names at same node within the same method (F9 — method-scoped)', () => {
+  it('should throw route-unreachable for a second wildcard at a prefix that already has one (method-scoped)', () => {
     const router = new Router<string>();
     router.add('GET', '/files/*path', 'files-get');
     router.add('GET', '/files/*other', 'files-get-2');
 
     const issue = firstBuildIssue(router);
-    expect(issue.kind).toBe('route-conflict');
+    expect(issue.kind).toBe('route-unreachable');
   });
 
   it('should allow the same wildcard prefix with different names across distinct methods (F9 — cross-method coexistence)', () => {
@@ -254,13 +254,13 @@ describe('Router<T> errors', () => {
     expect(err.data.registeredCount).toBe(0);
   });
 
-  it('should throw for route-conflict when static after wildcard', () => {
+  it('should throw route-unreachable when static is registered under an ancestor wildcard', () => {
     const router = new Router<string>();
     router.add('GET', '/api/*', 'wildcard');
     router.add('GET', '/api/specific', 'specific');
 
     const issue = firstBuildIssue(router);
-    expect(issue.kind).toBe('route-conflict');
+    expect(issue.kind).toBe('route-unreachable');
   });
 
   it('should include method field in add error data', () => {

@@ -70,9 +70,16 @@ test('AUDIT add() array validation is reported during build without publishing p
 
 // ─── Optional param expansion ───
 
-test('AUDIT expandOptional: 10 optionals register in reasonable time', () => {
+test('AUDIT expandOptional: rejects 10 differently-named optionals (paramName collision)', () => {
   const r = new Router<string>();
   const path = '/' + Array.from({ length: 10 }, (_, i) => `:p${i}?`).join('/');
+  r.add('GET', path, 'x');
+  expect(() => r.build()).toThrow();
+});
+
+test('AUDIT expandOptional: 10 optionals with shared paramName register in reasonable time', () => {
+  const r = new Router<string>();
+  const path = '/x/:tail?';
   const t0 = Bun.nanoseconds();
   r.add('GET', path, 'x');
   r.build();

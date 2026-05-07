@@ -11,16 +11,16 @@ import { Router } from '../src/router';
 import { RouterError } from '../src/error';
 
 describe('optional-param expansion guard', () => {
-  it('accepts up to 10 optionals (1024 expansions)', () => {
+  it('rejects 10 optionals with distinct paramNames at build (paramName collision)', () => {
+    // Per the prefix-index policy: same-position different-name plain params
+    // emit route-duplicate. A 10-distinct-name optional pattern is illegal
+    // even though the expansion count (1024) is under the cap.
     const r = new Router<number>();
     let path = '/x';
     for (let i = 0; i < 10; i++) path += `/:p${i}?`;
 
-    expect(() => r.add('GET', path, 1)).not.toThrow();
-    expect(() => r.build()).not.toThrow();
-
-    expect(r.match('GET', '/x')!.value).toBe(1);
-    expect(r.match('GET', '/x/a/b/c')!.value).toBe(1);
+    r.add('GET', path, 1);
+    expect(() => r.build()).toThrow();
   });
 
   it('rejects 11 optionals at build validation time', () => {

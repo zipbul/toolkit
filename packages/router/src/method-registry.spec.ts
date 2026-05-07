@@ -281,10 +281,10 @@ describe('MethodRegistry', () => {
     it('should complete full lifecycle: construct → fill to 32 → hit limit → reads ok', () => {
       const reg = new MethodRegistry();
 
-      // Phase 1: verify initial state
+      // initial state
       expect(reg.size).toBe(7);
 
-      // Phase 2: fill to capacity
+      // fill to capacity
       for (let i = 0; i < 25; i++) {
         const result = reg.getOrCreate(`M_${i}`);
         expect(isErr(result)).toBe(false);
@@ -293,11 +293,11 @@ describe('MethodRegistry', () => {
 
       expect(reg.size).toBe(32);
 
-      // Phase 3: hit limit
+      // hit limit
       const errResult = reg.getOrCreate('OVER');
       expect(isErr(errResult)).toBe(true);
 
-      // Phase 4: reads still work
+      // reads still work
       expect(reg.get('GET')).toBe(0);
       expect(reg.get('HEAD')).toBe(6);
       expect(reg.get('M_0')).toBe(7);

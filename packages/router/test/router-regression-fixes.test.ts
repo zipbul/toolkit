@@ -48,7 +48,7 @@ describe('Router regression fixes', () => {
     const error = catchRouterError(() => router.build());
     expect(error.data.kind).toBe('route-validation');
     if (error.data.kind === 'route-validation') {
-      expect(error.data.errors.some(issue => issue.method === 'PUT' && issue.error.kind === 'route-conflict')).toBe(true);
+      expect(error.data.errors.some(issue => issue.method === 'PUT' && issue.error.kind === 'route-unreachable')).toBe(true);
     }
 
     const valid = new Router<string>();

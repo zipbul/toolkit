@@ -212,33 +212,26 @@ describe('misuse rejection', () => {
     expect(() => r.build()).toThrow(RouterError);
   });
 
-  it('still allows siblings from the same route via optional-param expansion', () => {
-    // /users/:a?/:b? expands to four routes ALL sharing the same handler
-    // index. The segment-tree insert records ownerHandler on each ParamSegment
-    // and skips the unreachability check when colliding siblings come from
-    // the same expansion family (they all converge on the same handler).
+  it('rejects optional-expansion siblings whose paramName differs at the same segment position', () => {
+    // /users/:a?/:b? expands to four concrete routes; two of them place
+    // different paramNames at the same segment position. The prefix index
+    // policy rejects this as route-duplicate at build time so matching is
+    // never order-dependent.
     const r = new Router<string>();
 
-    expect(() => r.add('GET', '/users/:a?/:b?', 'opt')).not.toThrow();
-    r.build();
-
-    expect(r.match('GET', '/users')!.value).toBe('opt');
-    expect(r.match('GET', '/users/x')!.value).toBe('opt');
-    expect(r.match('GET', '/users/x/y')!.value).toBe('opt');
+    r.add('GET', '/users/:a?/:b?', 'opt');
+    expect(() => r.build()).toThrow(RouterError);
   });
 
-  it('allows sibling params when one has a regex tester', () => {
-    // Tester-bearing siblings can legitimately distinguish at runtime.
-    // /a/:id(\\d+) matches digits only; /a/:slug catches the rest. Insertion
-    // order (numeric tester first) makes both reachable.
+  it('rejects a plain param sibling adjacent to a regex param at the same segment', () => {
+    // /a/:id(\\d+) registers a regex param edge. A subsequent /a/:slug
+    // would shadow that edge order-dependently; the prefix index rejects
+    // this as route-conflict so collision-class is order-independent.
     const r = new Router<string>();
     r.add('GET', '/a/:id(\\d+)', 'numeric');
+    r.add('GET', '/a/:slug', 'catchall');
 
-    expect(() => r.add('GET', '/a/:slug', 'catchall')).not.toThrow();
-    r.build();
-
-    expect(r.match('GET', '/a/42')!.value).toBe('numeric');
-    expect(r.match('GET', '/a/hello')!.value).toBe('catchall');
+    expect(() => r.build()).toThrow(RouterError);
   });
 
   it('rejects empty path (must start with "/")', () => {

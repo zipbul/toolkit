@@ -27,7 +27,7 @@ describe('expandOptional', () => {
       const result = expandOptional(parts, 7, defaults);
 
       expect(isErr(result)).toBe(false);
-      expect(result).toEqual([{ parts, handlerIndex: 7 }]);
+      expect(result).toEqual([{ parts, handlerIndex: 7, isOptionalExpansion: false }]);
       expect(defaults.has(7)).toBe(false);
     });
   });

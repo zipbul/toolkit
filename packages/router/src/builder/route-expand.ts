@@ -8,6 +8,13 @@ import { OptionalParamDefaults } from './optional-param-defaults';
 export interface ExpandedRoute {
   parts: PathPart[];
   handlerIndex: number;
+  /**
+   * True only for concrete routes produced by optional-segment dropping.
+   * The all-present variant and routes with no optionals at all are false.
+   * Drives prefix-index alias detection: alias success is permitted only in
+   * the optional-expansion context.
+   */
+  isOptionalExpansion: boolean;
 }
 
 interface OptionalCollection {
@@ -39,7 +46,7 @@ export function expandOptional(
   if (guard !== null) return guard;
 
   if (collection.indices.length === 0) {
-    return [{ parts, handlerIndex }];
+    return [{ parts, handlerIndex, isOptionalExpansion: false }];
   }
 
   optionalDefaults.record(handlerIndex, collection.names);
@@ -117,7 +124,7 @@ function enumerateExpansions(
   const fullParts = parts.map(p =>
     p.type === 'param' && p.optional ? { ...p, optional: false } : p,
   );
-  result.push({ parts: fullParts, handlerIndex });
+  result.push({ parts: fullParts, handlerIndex, isOptionalExpansion: false });
 
   // Iterate the 2^N - 1 non-empty subsets of "which optionals to drop".
   for (let bit = 1; bit < (1 << optionalIndices.length); bit++) {
@@ -170,12 +177,12 @@ function enumerateExpansions(
     const merged = mergeStaticParts(filtered);
 
     if (merged.length > 0) {
-      result.push({ parts: merged, handlerIndex });
+      result.push({ parts: merged, handlerIndex, isOptionalExpansion: true });
     } else {
       // Every required segment was an optional that got dropped (e.g. `/:id?`
       // with `:id` omitted). The intended URL is `/`, not nothing — registering
       // an empty parts list would silently fail-match `/`.
-      result.push({ parts: [createStaticPart('/')], handlerIndex });
+      result.push({ parts: [createStaticPart('/')], handlerIndex, isOptionalExpansion: true });
     }
   }
 
