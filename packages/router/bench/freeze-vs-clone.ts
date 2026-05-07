@@ -1,4 +1,4 @@
-/* §14.5 line 2170: Object.freeze vs clone cost for params cache */
+/* Microbench: Object.freeze vs clone cost for the params cache. */
 /* eslint-disable no-console */
 export {};
 

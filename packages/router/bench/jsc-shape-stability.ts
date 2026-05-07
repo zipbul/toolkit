@@ -1,4 +1,4 @@
-/* JSC object shape / dictionary-mode evidence — §14.5 line 2168/2169 */
+/* JSC object-shape / dictionary-mode evidence microbench. */
 /* eslint-disable no-console */
 export {};
 

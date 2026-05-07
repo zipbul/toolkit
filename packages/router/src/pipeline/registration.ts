@@ -1,6 +1,7 @@
 import type { Result } from '@zipbul/result';
 import type { PathPart } from '../builder/path-parser';
 import type { SegmentNode, SegmentTreeUndoLog } from '../matcher/segment-tree';
+import { applyUndo, setPrefixIndexRollback } from '../matcher/segment-tree';
 import type { RouterErrorData, RouteParams } from '../types';
 import type { RouteValidationIssue } from '../builder/validation-issue';
 import type { PatternTesterFn } from '../matcher/pattern-tester';
@@ -14,6 +15,14 @@ import { RouterError } from '../error';
 import { MethodRegistry } from '../method-registry';
 import { createSegmentNode, insertIntoSegmentTree } from '../matcher/segment-tree';
 import { buildDecoder } from '../matcher/decoder';
+import { WildcardPrefixIndex, rollbackPlan, type RouteMeta, type CommitPlan } from './wildcard-prefix-index';
+
+// One-time wiring: dispatch UndoKind.PrefixIndexPlan from segment-tree's
+// applyUndo() down into the prefix-index module. Done here so the matcher
+// layer has no upward dependency on the pipeline layer.
+setPrefixIndexRollback(rollbackPlan as (plan: unknown) => void);
+import { IdentityRegistry, optionsKeyOf } from './identity-registry';
+import { UndoKind } from '../matcher/segment-tree';
 
 const WILDCARD_METHOD = '*' as const;
 
@@ -32,10 +41,16 @@ export interface ParamMetadata {
 
 /**
  * Snapshot of build-time products.
+ *
+ * Static-route storage is method-major (`staticByMethod[methodCode][path]`)
+ * rather than path-major. The previous shape was
+ * `staticMap[path]: Array<T | undefined>` plus a parallel `boolean[]`
+ * registered table; that allocated two 1-entry arrays per path and ran
+ * ~160ms over a 100k high-fanout build. Method-major keeps allocation to
+ * one Record per active method (plus the terminal value entries themselves).
  */
 export interface RegistrationSnapshot<T> {
-  staticMap: Record<string, Array<T | undefined>>;
-  staticRegistered: Record<string, boolean[]>;
+  staticByMethod: Array<Record<string, T> | undefined>;
   segmentTrees: Array<SegmentNode | null>;
   handlers: T[];
   terminalHandlers: number[];
@@ -46,8 +61,7 @@ export interface RegistrationSnapshot<T> {
 }
 
 interface BuildState<T> {
-  staticMap: Record<string, Array<T | undefined>>;
-  staticRegistered: Record<string, boolean[]>;
+  staticByMethod: Array<Record<string, T> | undefined>;
   segmentTrees: Array<SegmentNode | null>;
   handlers: T[];
   terminalHandlers: number[];
@@ -69,6 +83,8 @@ export interface RegistrationDiagnostics {
   parseMs: number;
   wildcardNameMs: number;
   staticWildcardConflictMs: number;
+  prefixIndexPlanMs: number;
+  routeLoopOverheadMs: number;
   staticInsertMs: number;
   optionalExpandMs: number;
   dynamicInsertMs: number;
@@ -102,6 +118,10 @@ export class Registration<T> {
   private maxOptionalExpansions = 1024;
   private totalExpandedRoutes = 0;
   private expansionLimitEmitted = false;
+  private prefixIndex: WildcardPrefixIndex | null = null;
+  private identityRegistry: IdentityRegistry | null = null;
+  private routeIdCounter = 0;
+  private cachedEmptyOptionsKey: string | null = null;
 
   constructor(
     methodRegistry: MethodRegistry,
@@ -117,12 +137,8 @@ export class Registration<T> {
     return this.sealed;
   }
 
-  get staticMap(): RegistrationSnapshot<T>['staticMap'] | undefined {
-    return this.snapshot?.staticMap;
-  }
-
-  get staticRegistered(): RegistrationSnapshot<T>['staticRegistered'] | undefined {
-    return this.snapshot?.staticRegistered;
+  get staticByMethod(): RegistrationSnapshot<T>['staticByMethod'] | undefined {
+    return this.snapshot?.staticByMethod;
   }
 
   get segmentTrees(): RegistrationSnapshot<T>['segmentTrees'] | undefined {
@@ -187,6 +203,7 @@ export class Registration<T> {
     optionalParamBehavior?: 'omit' | 'set-undefined';
     maxExpandedRoutes?: number;
     maxOptionalExpansions?: number;
+    maxRegexSiblingsPerSegment?: number;
   } = {}): RegistrationSnapshot<T> {
     if (this.snapshot !== null) return this.snapshot;
 
@@ -204,6 +221,13 @@ export class Registration<T> {
     this.maxOptionalExpansions = options.maxOptionalExpansions ?? 1024;
     this.totalExpandedRoutes = 0;
     this.expansionLimitEmitted = false;
+    this.prefixIndex = new WildcardPrefixIndex(options.maxRegexSiblingsPerSegment ?? 32);
+    this.identityRegistry = new IdentityRegistry();
+    this.routeIdCounter = 0;
+    {
+      const ek = optionsKeyOf({});
+      this.cachedEmptyOptionsKey = isErr(ek) ? '' : ek;
+    }
 
     // Resolve `*`-method registrations against the set of methods present at
     // seal time (built-ins plus any custom token registered before seal).
@@ -228,6 +252,7 @@ export class Registration<T> {
       this.pendingRoutes.push(...expanded);
     }
 
+    const loopStart = state.diagnostics !== null ? nowMs() : 0;
     for (let i = 0; i < this.pendingRoutes.length; i++) {
       const route = this.pendingRoutes[i]!;
       const mark = undo.length;
@@ -236,9 +261,9 @@ export class Registration<T> {
       const factoryMark = state.paramsFactories.length;
       const optionalMark = this.optionalParamDefaults.snapshot();
       const routeID = state.routeCounter++;
-      
+
       const result = this.compileRoute(
-        route, state, undo, routeID, 
+        route, state, undo, routeID,
         factoryCache, omitBehavior, decoder
       );
 
@@ -258,6 +283,7 @@ export class Registration<T> {
         });
       }
     }
+    if (state.diagnostics !== null) state.diagnostics.routeLoopOverheadMs = nowMs() - loopStart;
 
     if (issues.length > 0) {
       rollback(undo, 0);
@@ -276,8 +302,7 @@ export class Registration<T> {
 
     const snapshotStart = nowMs();
     const snapshot: RegistrationSnapshot<T> = {
-      staticMap: Object.freeze({ ...state.staticMap }),
-      staticRegistered: Object.freeze({ ...state.staticRegistered }),
+      staticByMethod: state.staticByMethod,
       segmentTrees: Object.freeze([...state.segmentTrees]) as Array<SegmentNode | null>,
       handlers: state.handlers,
       terminalHandlers: state.terminalHandlers,
@@ -291,6 +316,10 @@ export class Registration<T> {
     addMs(state.diagnostics, 'snapshotMs', snapshotStart);
 
     this.snapshot = snapshot;
+    // Build-only structures (prefix index, identity registry) are discarded
+    // here so they do not retain memory past snapshot publication.
+    this.prefixIndex = null;
+    this.identityRegistry = null;
     if (state.diagnostics !== null) {
       const paramsFactorySlots = state.paramsFactories.filter(Boolean);
       state.diagnostics.routes = pendingRouteCount;
@@ -355,22 +384,13 @@ export class Registration<T> {
 
     const { parts, normalized, isDynamic } = parseResult;
     const methodCode = offsetResult;
-    const wildcardNameStart = nowMs();
-    const wildcardResult = this.checkWildcardNameConflict(
-      parts,
-      normalized,
-      methodCode,
-      route.method,
-      state.wildcardNamesByMethod,
-      undo,
-    );
-    addMs(state.diagnostics, 'wildcardNameMs', wildcardNameStart);
-
-    if (isErr(wildcardResult)) return wildcardResult;
+    // Same-prefix wildcard-name collisions are detected by the prefix index
+    // walk (descendant terminal/wildcard => route-unreachable), so the
+    // legacy per-route prefix-regex check is no longer needed.
 
     if (!isDynamic) {
       if (state.diagnostics !== null) state.diagnostics.staticRoutes++;
-      return this.compileStaticRoute(route, normalized, methodCode, state, undo);
+      return this.compileStaticRoute(route, parts, normalized, methodCode, state, undo);
     }
 
     if (state.diagnostics !== null) state.diagnostics.dynamicRoutes++;
@@ -382,39 +402,31 @@ export class Registration<T> {
 
   private compileStaticRoute(
     route: PendingRoute<T>,
+    parts: PathPart[],
     normalized: string,
     methodCode: number,
     state: BuildState<T>,
     undo: SegmentTreeUndoLog,
   ): Result<void, RouterErrorData> {
     const conflictStart = nowMs();
-    const conflict = this.checkStaticWildcardConflict(
-      normalized,
-      methodCode,
-      route.method,
-      state.wildcardNamesByMethod,
-      state.diagnostics,
-    );
+    const conflict = this.runPrefixIndexPlan(parts, methodCode, route, undo, state);
     addMs(state.diagnostics, 'staticWildcardConflictMs', conflictStart);
 
     if (isErr(conflict)) return conflict;
 
     const insertStart = nowMs();
-    let arr = state.staticMap[normalized];
-    let registered = state.staticRegistered[normalized];
-
-    if (arr === undefined) {
-      arr = [];
-      registered = [];
-      state.staticMap[normalized] = arr;
-      state.staticRegistered[normalized] = registered;
-      undo.push(() => {
-        delete state.staticMap[normalized];
-        delete state.staticRegistered[normalized];
+    let bucket = state.staticByMethod[methodCode];
+    if (bucket === undefined) {
+      bucket = Object.create(null) as Record<string, T>;
+      state.staticByMethod[methodCode] = bucket;
+      undo.push({
+        k: UndoKind.SegmentTreeReset,
+        trees: state.staticByMethod as unknown as Array<SegmentNode | null | undefined>,
+        mc: methodCode,
       });
     }
 
-    if (registered![methodCode]) {
+    if (normalized in bucket) {
       return err<RouterErrorData>({
         kind: 'route-duplicate',
         message: `Route already exists: ${route.method} ${normalized}`,
@@ -424,13 +436,12 @@ export class Registration<T> {
       });
     }
 
-    const previousValue = arr[methodCode];
-    const previousRegistered = registered![methodCode] ?? false;
-    arr[methodCode] = route.value;
-    registered![methodCode] = true;
-    undo.push(() => {
-      arr[methodCode] = previousValue;
-      registered![methodCode] = previousRegistered;
+    bucket[normalized] = route.value;
+    undo.push({
+      k: UndoKind.StaticMapDelete,
+      map: bucket as unknown as Record<string, unknown>,
+      reg: bucket as unknown as Record<string, unknown>,
+      key: normalized,
     });
     addMs(state.diagnostics, 'staticInsertMs', insertStart);
   }
@@ -464,14 +475,15 @@ export class Registration<T> {
     if (root === undefined || root === null) {
       root = createSegmentNode();
       state.segmentTrees[methodCode] = root;
-      undo.push(() => { delete state.segmentTrees[methodCode]; });
+      undo.push({ k: UndoKind.SegmentTreeReset, trees: state.segmentTrees, mc: methodCode });
     }
 
     const hIdx = state.handlers.length;
     state.handlers.push(route.value);
-    undo.push(() => { state.handlers.length = hIdx; });
+    undo.push({ k: UndoKind.HandlersTruncate, arr: state.handlers, len: hIdx });
 
-    for (const { parts: expParts } of expansion) {
+    for (const expanded of expansion) {
+      const expParts = expanded.parts;
       if (++this.totalExpandedRoutes > this.maxExpandedRoutes) {
         if (this.expansionLimitEmitted) return;
         this.expansionLimitEmitted = true;
@@ -483,6 +495,16 @@ export class Registration<T> {
           suggestion: `Reduce optional-param expansion across the registered routes, or raise maxExpandedRoutes (default 200000).`,
         });
       }
+      const prefixCheck = this.runPrefixIndexPlan(
+        expParts,
+        methodCode,
+        route,
+        undo,
+        state,
+        hIdx,
+        expanded.isOptionalExpansion,
+      );
+      if (isErr(prefixCheck)) return prefixCheck;
       if (state.diagnostics !== null) state.diagnostics.expandedRoutes++;
       const present: Array<{ name: string; type: 'param' | 'wildcard' }> = [];
       for (const p of expParts) {
@@ -540,10 +562,12 @@ export class Registration<T> {
       state.terminalHandlers[tIdx] = hIdx;
       state.isWildcardByTerminal[tIdx] = isWildcard;
       state.paramsFactories[tIdx] = factory;
-      undo.push(() => { 
-        state.terminalHandlers.length = tIdx;
-        state.isWildcardByTerminal.length = tIdx;
-        state.paramsFactories.length = tIdx;
+      undo.push({
+        k: UndoKind.TerminalArraysTruncate,
+        t: state.terminalHandlers,
+        w: state.isWildcardByTerminal,
+        f: state.paramsFactories,
+        len: tIdx,
       });
 
       const dynamicInsertStart = nowMs();
@@ -567,82 +591,54 @@ export class Registration<T> {
     }
   }
 
-  private checkWildcardNameConflict(
+  private runPrefixIndexPlan(
     parts: PathPart[],
-    normalized: string,
     methodCode: number,
-    method: string,
-    wildcardNamesByMethod: Map<number, Map<string, string>>,
+    route: PendingRoute<T>,
     undo: SegmentTreeUndoLog,
+    state: BuildState<T>,
+    handlerSlotId: number = -1,
+    isOptionalExpansion: boolean = false,
   ): Result<void, RouterErrorData> {
-    let scope = wildcardNamesByMethod.get(methodCode);
-
-    for (const part of parts) {
-      if (part.type !== 'wildcard') continue;
-
-      const prefix = normalized.replace(/\/[*:].*$/, '');
-      const existing = scope?.get(prefix);
-
-      if (existing !== undefined && existing !== part.name) {
-        return err<RouterErrorData>({
-          kind: 'route-conflict',
-          message: `Wildcard '*${part.name}' conflicts with existing wildcard '*${existing}' at path prefix '${prefix}' for method ${method}`,
-          segment: part.name,
-          conflictsWith: existing,
-          method,
-        });
-      }
-
-      if (scope === undefined) {
-        scope = new Map();
-        wildcardNamesByMethod.set(methodCode, scope);
-        undo.push(() => { wildcardNamesByMethod.delete(methodCode); });
-      }
-
-      const previous = scope.get(prefix);
-      scope.set(prefix, part.name);
-      undo.push(() => {
-        if (previous === undefined) {
-          scope!.delete(prefix);
-        } else {
-          scope!.set(prefix, previous);
-        }
+    const idx = this.prefixIndex;
+    const registry = this.identityRegistry;
+    if (idx === null || registry === null) {
+      return err<RouterErrorData>({
+        kind: 'router-sealed',
+        message: 'Prefix index unavailable: router already sealed.',
+        registeredCount: 0,
+        suggestion: 'Construct a fresh Router instance to register additional routes.',
       });
-      break;
     }
-  }
-
-  private checkStaticWildcardConflict(
-    normalized: string,
-    methodCode: number,
-    method: string,
-    wildcardNamesByMethod: Map<number, Map<string, string>>,
-    diagnostics: RegistrationDiagnostics | null,
-  ): Result<void, RouterErrorData> {
-    const scope = wildcardNamesByMethod.get(methodCode);
-
-    if (scope === undefined) return;
-
-    if (diagnostics !== null) diagnostics.wildcardConflictChecks++;
-    for (const [prefix, wildcardName] of scope) {
-      if (diagnostics !== null) diagnostics.wildcardConflictPrefixScans++;
-      if (normalized.startsWith(prefix + '/') || normalized === prefix) {
-        return err<RouterErrorData>({
-          kind: 'route-conflict',
-          message: `Static route '${normalized}' conflicts with existing wildcard at '${prefix}/*' for method ${method}`,
-          segment: normalized,
-          conflictsWith: `${prefix}/*${wildcardName}`,
-          method,
-        });
-      }
+    const handlerId = handlerSlotId >= 0 ? handlerSlotId : registry.idFor(route.value);
+    const optionsKey = this.cachedEmptyOptionsKey ?? '';
+    const meta: RouteMeta = {
+      routeIndex: this.routeIdCounter++,
+      path: route.path,
+      method: route.method,
+      handlerId,
+      optionsKey,
+      isOptionalExpansion,
+    };
+    if (state.diagnostics !== null) state.diagnostics.wildcardConflictChecks++;
+    const planStart = state.diagnostics !== null ? nowMs() : 0;
+    const planResult = idx.planAndCommit(methodCode, parts, meta);
+    if (state.diagnostics !== null) state.diagnostics.prefixIndexPlanMs += nowMs() - planStart;
+    if (isErr(planResult)) {
+      return err<RouterErrorData>({ ...planResult.data, path: route.path, method: route.method });
     }
+    if (planResult === 'alias') return undefined;
+    undo.push({
+      k: UndoKind.PrefixIndexPlan,
+      plan: planResult as CommitPlan,
+    });
+    return undefined;
   }
 }
 
 function createBuildState<T>(withDiagnostics = false): BuildState<T> {
   return {
-    staticMap: Object.create(null) as Record<string, Array<T | undefined>>,
-    staticRegistered: Object.create(null) as Record<string, boolean[]>,
+    staticByMethod: [],
     segmentTrees: [],
     handlers: [],
     terminalHandlers: [],
@@ -666,6 +662,8 @@ function createDiagnostics(): RegistrationDiagnostics {
     parseMs: 0,
     wildcardNameMs: 0,
     staticWildcardConflictMs: 0,
+    prefixIndexPlanMs: 0,
+    routeLoopOverheadMs: 0,
     staticInsertMs: 0,
     optionalExpandMs: 0,
     dynamicInsertMs: 0,
@@ -723,7 +721,7 @@ function countSegmentTree(root: SegmentNode): { nodes: number; staticMaps: numbe
 
 function rollback(undo: SegmentTreeUndoLog, mark: number): void {
   for (let i = undo.length - 1; i >= mark; i--) {
-    undo[i]!();
+    applyUndo(undo[i]!);
   }
 
   undo.length = mark;

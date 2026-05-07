@@ -1,5 +1,6 @@
 /* eslint-disable no-console */
-/* §14.4 baseline correctness gate — exact value, params, wrong method, wildcard capture */
+/* Baseline correctness gate vs external routers — checks exact value,
+ * params, wrong-method behavior, and wildcard capture. */
 export {};
 
 import FindMyWay from 'find-my-way';

@@ -3,11 +3,8 @@
  * POC: method availability bitmask vs current per-method-tree iteration
  * for `allowedMethods()` cold path + wrong-method check on hot path.
  *
- * §4 line 220 Confirmed within <=32 methods (§1 2.18 ns vs Set 3.43-9.66).
- * §13 phase grep: 0 work item assignment found.
- *
- * This POC measures end-to-end allowedMethods() and hot-path wrong-method
- * detection cost, not just the primitive lookup.
+ * Measures end-to-end allowedMethods() and hot-path wrong-method detection
+ * cost, not just the primitive lookup.
  */
 export {};
 

@@ -6,6 +6,11 @@ import { OptionalParamDefaults } from './builder/optional-param-defaults';
 import { PathParser } from './builder/path-parser';
 import { RouterError } from './error';
 import { compileMatchFn } from './codegen/emitter';
+import {
+  resetBuildAggregate,
+  snapshotBuildAggregate,
+  type BuildAggregate,
+} from './codegen/codegen-telemetry';
 import { MethodRegistry } from './method-registry';
 import { buildFromRegistration } from './pipeline/build';
 import { MatchLayer } from './pipeline/match';
@@ -23,6 +28,11 @@ export interface RouterInternals<T> {
   matchImpl: ((method: string, path: string) => MatchOutput<T> | null) | undefined;
   matchLayer: MatchLayer<T> | undefined;
   registration: Registration<T>;
+  /**
+   * Codegen aggregate for the most recent build pass: counts of generated
+   * vs bailed compiled walkers, total emit/compile/warmup time spent.
+   */
+  codegenAggregate: BuildAggregate | undefined;
 }
 
 interface CacheContainers<T> {
@@ -202,10 +212,11 @@ export class Router<T = unknown> implements RouterPublicApi<T> {
     // `Object.keys(router)` does not surface it; the wrapper itself is
     // unfrozen so build() can populate fields, while the Router instance
     // is frozen to prevent wrapper substitution.
-    const internals = {
-      matchImpl: undefined as ((method: string, path: string) => MatchOutput<T> | null) | undefined,
-      matchLayer: undefined as MatchLayer<T> | undefined,
+    const internals: RouterInternals<T> = {
+      matchImpl: undefined,
+      matchLayer: undefined,
       registration,
+      codegenAggregate: undefined,
     };
 
     Object.defineProperty(this, ROUTER_INTERNALS_KEY, {
@@ -216,10 +227,12 @@ export class Router<T = unknown> implements RouterPublicApi<T> {
     });
 
     const performBuild = (): void => {
+      resetBuildAggregate();
       const snapshot = registration.seal({
         optionalParamBehavior: routerOptions.optionalParamBehavior,
         maxExpandedRoutes: routerOptions.maxExpandedRoutes,
         maxOptionalExpansions: routerOptions.maxOptionalExpansions,
+        maxRegexSiblingsPerSegment: routerOptions.maxRegexSiblingsPerSegment,
       });
       const r = buildFromRegistration<T>(snapshot, routerOptions, methodRegistry);
 
@@ -241,7 +254,6 @@ export class Router<T = unknown> implements RouterPublicApi<T> {
         anyTester: r.anyTester,
         hasAnyStatic,
         staticOutputsByMethod: r.staticOutputsByMethod,
-        staticMap: snapshot.staticMap,
         methodCodes: r.methodCodes,
         trees: r.trees,
         matchState: r.matchState,
@@ -266,12 +278,12 @@ export class Router<T = unknown> implements RouterPublicApi<T> {
 
       // Build-only tables are frozen as a partition.
       Object.freeze(snapshot.segmentTrees);
-      Object.freeze(snapshot.staticMap);
-      Object.freeze(snapshot.staticRegistered);
+      Object.freeze(snapshot.staticByMethod);
       Object.freeze(r.activeMethodCodes);
 
       internals.matchImpl = matchImpl;
       internals.matchLayer = matchLayer;
+      internals.codegenAggregate = snapshotBuildAggregate();
     };
 
     this.add = (method, path, value) => {

@@ -59,7 +59,13 @@ export class OptionalParamDefaults {
     }
   }
 
+  /** Sentinel reused across all snapshots taken when the defaults map is
+   *  empty — common case for wildcard/static heavy builds where no route
+   *  has optional params. Avoids 100k empty-array allocations per build. */
+  private static readonly EMPTY_SNAPSHOT: OptionalParamDefaultsSnapshot = { entries: [] };
+
   snapshot(): OptionalParamDefaultsSnapshot {
+    if (this.defaults.size === 0) return OptionalParamDefaults.EMPTY_SNAPSHOT;
     return {
       entries: [...this.defaults],
     };

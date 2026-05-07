@@ -2,10 +2,51 @@ import type { MatchFn, MatchState } from './match-state';
 import type { DecoderFn } from './decoder';
 import type { ParamSegment, SegmentNode } from './segment-tree';
 
+import { performance } from 'node:perf_hooks';
 import { TESTER_PASS } from './pattern-tester';
 import { hasAmbiguousNode } from './segment-tree';
-import { compileSegmentTree } from '../codegen/segment-compile';
+import { compileSegmentTree, collectWarmupPaths } from '../codegen/segment-compile';
 import { detectWildCodegenSpec } from '../codegen/walker-strategy';
+import { createMatchState } from './match-state';
+import { recordWarmupCall } from '../codegen/codegen-telemetry';
+
+/**
+ * Run the freshly-compiled walker once per major branch so JSC IC reaches
+ * tier-up across the dominant code paths instead of just one. Without
+ * warmup, first-call latency tail is multi-µs even for small trees because
+ * tier-up otherwise happens on the user's first request.
+ *
+ * Single-input warmup is insufficient for trees whose hot work is split
+ * across siblings — the IC only generalizes through paths it has actually
+ * observed. `collectWarmupPaths()` returns one synthesized path per direct
+ * child of the root.
+ *
+ * Errors from warmup invocations are swallowed: warmup is a best-effort
+ * hint to the JIT, not a correctness check.
+ */
+function warmupCompiledWalker(
+  walker: MatchFn,
+  root: SegmentNode,
+  shape: string | null,
+): void {
+  const paths = collectWarmupPaths(root);
+  const state = createMatchState();
+  // Drive JSC IC past its baseline thresholds so the walker is at least
+  // baseline-compiled before the first user request lands on it.
+  const WARMUP_ITERATIONS = 20;
+  for (let it = 0; it < WARMUP_ITERATIONS; it++) {
+    for (const p of paths) {
+      try { walker(p, state); } catch { /* warmup failures are non-fatal */ }
+    }
+  }
+  // Record only the final post-tier-up call latency.
+  for (const p of paths) {
+    const t0 = performance.now();
+    try { walker(p, state); } catch { /* warmup failures are non-fatal */ }
+    const ns = (performance.now() - t0) * 1e6;
+    if (shape !== null) recordWarmupCall(shape, ns);
+  }
+}
 
 /**
  * Generate a walker function via `new Function()` for the static-prefix
@@ -68,13 +109,19 @@ function tryCodegenStaticPrefixWildcard(root: SegmentNode): MatchFn | null {
 export function createSegmentWalker(
   root: SegmentNode,
   decoder: DecoderFn,
+  strictNoWarmup = false,
 ): MatchFn {
   const compiledWild = tryCodegenStaticPrefixWildcard(root);
-  if (compiledWild !== null) return compiledWild;
+  if (compiledWild !== null) {
+    warmupCompiledWalker(compiledWild, root, null);
+    return compiledWild;
+  }
 
-  const compiledFullPackage = compileSegmentTree(root);
+  const compiledFullPackage = compileSegmentTree(root, { strictNoWarmup });
   if (compiledFullPackage !== null) {
-    return compiledFullPackage.factory(compiledFullPackage.testers, TESTER_PASS, decoder);
+    const compiled = compiledFullPackage.factory(compiledFullPackage.testers, TESTER_PASS, decoder);
+    if (!strictNoWarmup) warmupCompiledWalker(compiled, root, compiledFullPackage.shape);
+    return compiled;
   }
 
   if (!hasAmbiguousNode(root)) {

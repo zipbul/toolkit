@@ -50,6 +50,13 @@ export interface RouterOptions {
    */
   unsafeAllowUnboundedLimits?: boolean;
   optionalParamBehavior?: OptionalParamBehavior;
+  /**
+   * Opt out of build-time JIT warmup. Drops the codegen node ceiling from
+   * 256 to 64 (no-warmup p95-only regime) so first-call latency stays bounded
+   * without the warmup pass. Use only when warmup invocations interfere
+   * with the workload's IC characteristics.
+   */
+  codegenStrictNoWarmup?: boolean;
 }
 
 export type OptionalParamBehavior = 'omit' | 'set-undefined';
@@ -74,7 +81,7 @@ export type RouterErrorKind =
   | 'regex-unsafe'       // regex safety 검사 실패 (length / nested-quantifier / backreference / alternation overlap)
   | 'method-limit'       // 32개 메서드 초과 (MethodRegistry)
   | 'method-empty'       // 빈 method 토큰
-  | 'method-invalid-token' // RFC 9110 token grammar 위반
+  | 'method-invalid-token' // method 가 HTTP token 문법을 위반
   | 'method-too-long'    // maxMethodLength 초과
   | 'path-missing-leading-slash'
   | 'path-query'         // 등록 path에 raw `?`
@@ -155,7 +162,7 @@ export type RouterErrorData = {
 // ── Match output types ──
 
 // Public API surface a built router exposes. Match/allowedMethods accept any
-// RFC 9110 token as the method argument; the runtime token gate handles
+// HTTP method token as the method argument; the runtime token gate handles
 // validation.
 export interface RouterPublicApi<T> {
   add(method: string | readonly string[], path: string, value: T): void;

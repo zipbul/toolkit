@@ -46,7 +46,7 @@ export function buildFromRegistration<T>(
   for (const [, code] of allCodes) {
     const segRoot = snapshot.segmentTrees[code];
     if (segRoot !== undefined && segRoot !== null) {
-      trees[code] = createSegmentWalker(segRoot, decoder);
+      trees[code] = createSegmentWalker(segRoot, decoder, options.codegenStrictNoWarmup === true);
       continue;
     }
     trees[code] = null;
@@ -56,21 +56,16 @@ export function buildFromRegistration<T>(
   
   const staticOutputsByMethod: Array<Record<string, MatchOutput<T>> | undefined> = [];
 
-  for (const path in snapshot.staticMap) {
-    const arr = snapshot.staticMap[path]!;
-    const registered = snapshot.staticRegistered[path]!;
+  for (let mc = 0; mc < snapshot.staticByMethod.length; mc++) {
+    const inputBucket = snapshot.staticByMethod[mc];
+    if (inputBucket === undefined) continue;
 
-    for (let mc = 0; mc < arr.length; mc++) {
-      if (!registered[mc]) continue;
+    const outBucket = new NullProtoObj() as Record<string, MatchOutput<T>>;
+    staticOutputsByMethod[mc] = outBucket;
 
-      let bucket = staticOutputsByMethod[mc];
-      if (bucket === undefined) {
-        bucket = new NullProtoObj() as Record<string, MatchOutput<T>>;
-        staticOutputsByMethod[mc] = bucket;
-      }
-
-      bucket[path] = Object.freeze({
-        value: arr[mc] as T,
+    for (const path in inputBucket) {
+      outBucket[path] = Object.freeze({
+        value: inputBucket[path] as T,
         params: EMPTY_PARAMS,
         meta: STATIC_META,
       }) as MatchOutput<T>;

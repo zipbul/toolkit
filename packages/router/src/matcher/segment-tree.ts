@@ -45,7 +45,122 @@ export interface ParamSegment {
   nextSibling: ParamSegment | null;
 }
 
-export type SegmentTreeUndoLog = Array<() => void>;
+/**
+ * Tagged-record undo log entries. Hot insertions on `100k wildcard-heavy`
+ * historically allocated one closure per mutation (~300k closures per build);
+ * each new closure freshly captured the surrounding scope and dominated GC.
+ * Replacing the closures with monomorphic plain-object records keeps the
+ * memory shape stable (one hidden class per kind) and lets the rollback
+ * loop dispatch via a tag instead of a function call.
+ */
+export const enum UndoKind {
+  StaticChildrenInit = 1,
+  StaticChildAdd = 2,
+  ParamChildSet = 3,
+  ParamSiblingAdd = 4,
+  WildcardSet = 5,
+  StoreSet = 6,
+  TesterAdd = 7,
+  /**
+   * Inverse of WildcardPrefixIndex.commit(). Stored as a tagged record
+   * carrying the `CommitPlan` so the registration rollback path does not
+   * have to allocate a closure per route during high-volume builds.
+   */
+  PrefixIndexPlan = 8,
+  /** Truncate three parallel state arrays back to a recorded length (terminalHandlers, isWildcardByTerminal, paramsFactories). */
+  TerminalArraysTruncate = 9,
+  /** Truncate handlers array back to a recorded length. */
+  HandlersTruncate = 10,
+  /** Truncate state.segmentTrees[mc] back to undefined. */
+  SegmentTreeReset = 11,
+  /** Restore static-map slot prior values. */
+  StaticMapRestore = 12,
+  /** Static-map slot delete (was undefined before). */
+  StaticMapDelete = 13,
+}
+
+export type UndoRecord =
+  | { k: UndoKind.StaticChildrenInit; n: SegmentNode }
+  | { k: UndoKind.StaticChildAdd; p: Record<string, SegmentNode>; key: string }
+  | { k: UndoKind.ParamChildSet; n: SegmentNode }
+  | { k: UndoKind.ParamSiblingAdd; prev: ParamSegment }
+  | { k: UndoKind.WildcardSet; n: SegmentNode }
+  | { k: UndoKind.StoreSet; n: SegmentNode }
+  | { k: UndoKind.TesterAdd; cache: Map<string, PatternTesterFn>; key: string }
+  | { k: UndoKind.PrefixIndexPlan; plan: unknown }
+  | { k: UndoKind.TerminalArraysTruncate; t: number[]; w: boolean[]; f: Array<unknown>; len: number }
+  | { k: UndoKind.HandlersTruncate; arr: unknown[]; len: number }
+  | { k: UndoKind.SegmentTreeReset; trees: Array<SegmentNode | null | undefined>; mc: number }
+  | { k: UndoKind.StaticMapRestore; arr: unknown[]; reg: boolean[]; mc: number; prevValue: unknown; prevReg: boolean }
+  | { k: UndoKind.StaticMapDelete; map: Record<string, unknown>; reg: Record<string, unknown>; key: string };
+
+export type SegmentTreeUndoEntry = UndoRecord | (() => void);
+export type SegmentTreeUndoLog = SegmentTreeUndoEntry[];
+
+let prefixIndexRollback: ((plan: unknown) => void) | null = null;
+
+/**
+ * Wire the prefix-index rollback dispatcher. Called once at module
+ * initialization from `pipeline/registration.ts`. Decouples the matcher
+ * from the pipeline so segment-tree.ts has no upward dependency.
+ */
+export function setPrefixIndexRollback(fn: (plan: unknown) => void): void {
+  prefixIndexRollback = fn;
+}
+
+export function applyUndo(entry: SegmentTreeUndoEntry): void {
+  if (typeof entry === 'function') { entry(); return; }
+  switch (entry.k) {
+    case UndoKind.StaticChildrenInit:
+      entry.n.staticChildren = null;
+      return;
+    case UndoKind.StaticChildAdd:
+      delete entry.p[entry.key];
+      return;
+    case UndoKind.ParamChildSet:
+      entry.n.paramChild = null;
+      return;
+    case UndoKind.ParamSiblingAdd:
+      entry.prev.nextSibling = null;
+      return;
+    case UndoKind.WildcardSet:
+      entry.n.wildcardStore = null;
+      entry.n.wildcardName = null;
+      entry.n.wildcardOrigin = null;
+      return;
+    case UndoKind.StoreSet:
+      entry.n.store = null;
+      return;
+    case UndoKind.TesterAdd:
+      entry.cache.delete(entry.key);
+      return;
+    case UndoKind.PrefixIndexPlan:
+      // Dispatched by registration's caller (which knows the prefix-index
+      // module). The matcher layer must not depend on pipeline, so the
+      // dispatcher is registered via setPrefixIndexRollback().
+      prefixIndexRollback!(entry.plan);
+      return;
+    case UndoKind.TerminalArraysTruncate:
+      entry.t.length = entry.len;
+      entry.w.length = entry.len;
+      entry.f.length = entry.len;
+      return;
+    case UndoKind.HandlersTruncate:
+      entry.arr.length = entry.len;
+      return;
+    case UndoKind.SegmentTreeReset:
+      delete entry.trees[entry.mc];
+      return;
+    case UndoKind.StaticMapRestore:
+      entry.arr[entry.mc] = entry.prevValue;
+      entry.reg[entry.mc] = entry.prevReg;
+      return;
+    case UndoKind.StaticMapDelete:
+      delete entry.map[entry.key];
+      delete entry.reg[entry.key];
+      return;
+  }
+}
 
 export function createSegmentNode(): SegmentNode {
   return {
@@ -94,8 +209,21 @@ export function hasAmbiguousNode(root: SegmentNode): boolean {
   return false;
 }
 
+function rollbackUndo(undo: SegmentTreeUndoLog, start: number): void {
+  for (let i = undo.length - 1; i >= start; i--) applyUndo(undo[i]!);
+  undo.length = start;
+}
+
 /**
  * Insert one expanded route (no optional markers) into the segment tree.
+ *
+ * Hot-path notes:
+ *  - Error paths call the free `rollbackUndo()` helper rather than closing
+ *    over a per-call `fail` arrow; allocating one closure per route was
+ *    observable GC pressure on large builds.
+ *  - The literal-segment branch is structured so the common case (existing
+ *    literal child on a non-wildcard node) takes a single hash lookup and
+ *    no allocation.
  */
 export function insertIntoSegmentTree(
   root: SegmentNode,
@@ -109,24 +237,24 @@ export function insertIntoSegmentTree(
   const undo = undoLog ?? [];
   const undoStart = undo.length;
 
-  const fail = (data: RouterErrorData): Result<void, RouterErrorData> => {
-    for (let i = undo.length - 1; i >= undoStart; i--) {
-      undo[i]!();
-    }
-    undo.length = undoStart;
-
-    return err(data);
-  };
-
   for (let i = 0; i < parts.length; i++) {
     const part = parts[i]!;
 
     if (part.type === 'static') {
       const segs = part.segments;
 
-      for (const seg of segs) {
+      for (let s = 0; s < segs.length; s++) {
+        const seg = segs[s]!;
+        // Fast path: existing literal child on a non-wildcard node.
+        const sc = node.staticChildren;
+        if (sc !== null && node.wildcardStore === null) {
+          const child = sc[seg];
+          if (child !== undefined) { node = child; continue; }
+        }
+
         if (node.wildcardStore !== null) {
-          return fail({
+          rollbackUndo(undo, undoStart);
+          return err({
             kind: 'route-conflict',
             message: `Static route conflicts with existing wildcard '*${node.wildcardName}' at the same position`,
             segment: seg,
@@ -134,26 +262,22 @@ export function insertIntoSegmentTree(
           });
         }
 
-        if (node.staticChildren === null) {
-          const owner = node;
-          node.staticChildren = Object.create(null) as Record<string, SegmentNode>;
-          undo.push(() => { owner.staticChildren = null; });
+        let children = node.staticChildren;
+        if (children === null) {
+          children = Object.create(null) as Record<string, SegmentNode>;
+          node.staticChildren = children;
+          undo.push({ k: UndoKind.StaticChildrenInit, n: node });
         }
 
-        let child = node.staticChildren[seg];
-
-        if (child === undefined) {
-          const children = node.staticChildren;
-          child = createSegmentNode();
-          node.staticChildren[seg] = child;
-          undo.push(() => { delete children[seg]; });
-        }
-
-        node = child;
+        const fresh = createSegmentNode();
+        children[seg] = fresh;
+        undo.push({ k: UndoKind.StaticChildAdd, p: children, key: seg });
+        node = fresh;
       }
     } else if (part.type === 'param') {
       if (node.wildcardStore !== null) {
-        return fail({
+        rollbackUndo(undo, undoStart);
+        return err({
           kind: 'route-conflict',
           message: `Parameter ':${part.name}' conflicts with existing wildcard '*${node.wildcardName}' at the same position`,
           segment: part.name,
@@ -174,9 +298,10 @@ export function insertIntoSegmentTree(
 
             tester = buildPatternTester(part.pattern, compiled);
             testerCache.set(part.pattern, tester);
-            undo.push(() => { testerCache.delete(part.pattern!); });
+            undo.push({ k: UndoKind.TesterAdd, cache: testerCache, key: part.pattern });
           } catch (e) {
-            return fail({
+            rollbackUndo(undo, undoStart);
+            return err({
               kind: 'route-parse',
               message: `Invalid regex pattern in parameter ':${part.name}': ${e instanceof Error ? e.message : String(e)}`,
               segment: part.name,
@@ -187,8 +312,7 @@ export function insertIntoSegmentTree(
       }
 
       if (node.paramChild === null) {
-        const owner = node;
-        node.paramChild = {
+        const created: ParamSegment = {
           name: part.name,
           tester,
           patternSource: part.pattern,
@@ -196,8 +320,9 @@ export function insertIntoSegmentTree(
           next: createSegmentNode(),
           nextSibling: null,
         };
-        undo.push(() => { owner.paramChild = null; });
-        node = node.paramChild.next;
+        node.paramChild = created;
+        undo.push({ k: UndoKind.ParamChildSet, n: node });
+        node = created.next;
       } else {
         let p: ParamSegment | null = node.paramChild;
         let prev: ParamSegment | null = null;
@@ -210,7 +335,8 @@ export function insertIntoSegmentTree(
           }
 
           if (p.name === part.name && p.patternSource !== part.pattern) {
-            return fail({
+            rollbackUndo(undo, undoStart);
+            return err({
               kind: 'route-conflict',
               message: `Parameter ':${part.name}' has conflicting regex patterns`,
               segment: part.name,
@@ -219,7 +345,8 @@ export function insertIntoSegmentTree(
           }
 
           if (p.patternSource === null && p.ownerRouteID !== routeID) {
-            return fail({
+            rollbackUndo(undo, undoStart);
+            return err({
               kind: 'route-conflict',
               message: `Parameter ':${part.name}' is unreachable — earlier sibling ':${p.name}' (registered by a different route) has no regex pattern and matches every value at this position. Add a regex pattern to disambiguate, or remove this route.`,
               segment: part.name,
@@ -232,12 +359,12 @@ export function insertIntoSegmentTree(
         }
 
         if (matched === null) {
-          // Cap regex/param sibling chain length per segment position.
           let siblingCount = 1;
           let cursor: ParamSegment | null = node.paramChild;
           while (cursor !== null) { siblingCount++; cursor = cursor.nextSibling; }
           if (siblingCount > MAX_REGEX_SIBLINGS_PER_SEGMENT) {
-            return fail({
+            rollbackUndo(undo, undoStart);
+            return err({
               kind: 'regex-sibling-limit',
               message: `Too many regex/param siblings at the same position (cap ${MAX_REGEX_SIBLINGS_PER_SEGMENT}).`,
               segment: part.name,
@@ -252,8 +379,9 @@ export function insertIntoSegmentTree(
             next: createSegmentNode(),
             nextSibling: null,
           };
-          prev!.nextSibling = fresh;
-          undo.push(() => { prev!.nextSibling = null; });
+          const tail = prev!;
+          tail.nextSibling = fresh;
+          undo.push({ k: UndoKind.ParamSiblingAdd, prev: tail });
           node = fresh.next;
         } else {
           node = matched.next;
@@ -263,7 +391,8 @@ export function insertIntoSegmentTree(
       // wildcard — terminal
       if (node.wildcardStore !== null) {
         if (node.wildcardName !== part.name) {
-          return fail({
+          rollbackUndo(undo, undoStart);
+          return err({
             kind: 'route-conflict',
             message: `Wildcard '*${part.name}' conflicts with existing wildcard '*${node.wildcardName}'`,
             segment: part.name,
@@ -271,7 +400,8 @@ export function insertIntoSegmentTree(
           });
         }
 
-        return fail({
+        rollbackUndo(undo, undoStart);
+        return err({
           kind: 'route-duplicate',
           message: 'Wildcard route already exists at this position',
           suggestion: 'Use a different path or HTTP method',
@@ -279,7 +409,8 @@ export function insertIntoSegmentTree(
       }
 
       if (node.paramChild !== null) {
-        return fail({
+        rollbackUndo(undo, undoStart);
+        return err({
           kind: 'route-conflict',
           message: `Wildcard '*${part.name}' conflicts with existing parameter at the same position`,
           segment: part.name,
@@ -290,18 +421,15 @@ export function insertIntoSegmentTree(
       node.wildcardStore = handlerIndex;
       node.wildcardName = part.name;
       node.wildcardOrigin = part.origin;
-      undo.push(() => {
-        node.wildcardStore = null;
-        node.wildcardName = null;
-        node.wildcardOrigin = null;
-      });
+      undo.push({ k: UndoKind.WildcardSet, n: node });
 
       return;
     }
   }
 
   if (node.store !== null) {
-    return fail({
+    rollbackUndo(undo, undoStart);
+    return err({
       kind: 'route-duplicate',
       message: 'Terminal route already exists at this position',
       suggestion: 'Use a different path or HTTP method',
@@ -309,5 +437,5 @@ export function insertIntoSegmentTree(
   }
 
   node.store = handlerIndex;
-  undo.push(() => { node.store = null; });
+  undo.push({ k: UndoKind.StoreSet, n: node });
 }

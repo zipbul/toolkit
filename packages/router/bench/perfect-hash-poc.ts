@@ -1,4 +1,4 @@
-/* Perfect hash POC + build-time Bun.hash — §10 P3 candidate */
+/* POC: perfect-hash plus build-time Bun.hash for the static table. */
 /* eslint-disable no-console */
 export {};
 

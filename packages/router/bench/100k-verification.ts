@@ -260,7 +260,7 @@ function churnScenario(): Scenario {
 
 function wildcardConflictFeasibility(): void {
   console.log('\n## wildcard conflict feasibility');
-  const sizes = [1_000, 5_000, 10_000, 25_000];
+  const sizes = [1_000, 5_000, 10_000, 25_000, 50_000];
   for (const size of sizes) {
     const routes: Route[] = [];
     for (let i = 0; i < size; i++) routes.push(['GET', `/wc/${i}/*path`, i]);

@@ -40,13 +40,12 @@ function pickedWalkerName(router: Router<string>): string | null {
 describe('iterative walker (wide fanout exceeding codegen size budget)', () => {
   // To force the iterative walker we need either:
   //   (a) hasAmbiguousNode true (segment-tree codegen bails on ambiguity), or
-  //   (b) source size > MAX_SOURCE (codegen compiles to too much JS).
-  // The current fanoutCap is 16 — synthetic param routes with many distinct
-  // top-level prefixes will exceed MAX_SOURCE and fall through to iterative.
+  //   (b) the codegen budget gate (max nodes / source bytes / fanout).
+  // 200 distinct prefixes with two routes each pushes the segment-tree node
+  // count past the 256-node default cap and falls through to iterative.
   function makeWideFanoutRouter() {
     const r = new Router<string>();
-    // 25 distinct prefixes — emits enough codegen to exceed MAX_SOURCE.
-    for (let i = 0; i < 25; i++) {
+    for (let i = 0; i < 200; i++) {
       r.add('GET', `/zone${i}/:slug`, `r${i}`);
       r.add('GET', `/zone${i}/:slug/sub/:sub`, `r${i}sub`);
     }

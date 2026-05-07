@@ -189,15 +189,15 @@ describe('decoding × cache', () => {
 // ── cache × route type ───────────────────────────────────────────────────
 
 describe('cache × route type', () => {
-  it('static: hit cache contains last lookup as static', () => {
+  it('static: every static lookup returns the pre-built MatchOutput directly', () => {
     const r = new Router<string>({});
     r.add('GET', '/health', 'h');
     r.build();
 
-    // Static path returns pre-built MatchOutput on first hit.
-    // Successive calls come from the cache (which is always enabled).
+    // Static path returns the same pre-built MatchOutput every time without
+    // going through the dynamic hit cache.
     expect(r.match('GET', '/health')!.meta.source).toBe('static');
-    expect(r.match('GET', '/health')!.meta.source).toBe('cache');
+    expect(r.match('GET', '/health')!.meta.source).toBe('static');
   });
 
   it('param: second hit comes from cache', () => {

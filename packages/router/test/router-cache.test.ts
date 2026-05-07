@@ -106,7 +106,10 @@ describe('Router<T> cache', () => {
     expect(second!.meta.source).toBe('cache');
   });
 
-  it('should bypass cache for static route matches (static fast-path)', () => {
+  it('should never route static lookups through the dynamic cache (static fast-path)', () => {
+    // Static lookups go straight to the per-method bucket — wrapping that
+    // O(1) hit in the dynamic cache would only add Map.get + Map.set on
+    // every request, so meta.source stays "static" on every call.
     const router = new Router<string>({});
     router.add('GET', '/static', 'static-val');
     router.build();
@@ -115,7 +118,7 @@ describe('Router<T> cache', () => {
     const second = router.match('GET', '/static');
 
     expect(first!.meta.source).toBe('static');
-    expect(second!.meta.source).toBe('cache');
+    expect(second!.meta.source).toBe('static');
   });
 
   it('should evict entries via clock-sweep when cache is full', () => {

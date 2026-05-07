@@ -9,8 +9,8 @@
  * (16/32/64/128/256), aggregates p50/p75/p99/p999/max across all 3000 samples,
  * prints final table.
  *
- * Replaces the 5-run lock used to derive Phase 6 ≤32 cap with a 30-run-grade
- * distribution per ULT line 953.
+ * Provides a 30-run-grade distribution from which the codegen ≤32 cap is
+ * derived (replacing the prior 5-run lock).
  */
 export {};
 
@@ -120,7 +120,7 @@ function driverMode(): void {
     }
   }
 
-  console.log(`\n## Phase 6 cap recommendation`);
+  console.log(`\n## codegen cap recommendation`);
   for (const k of ['first', 'second'] as CallKind[]) {
     let best = 0;
     for (const n of NODE_COUNTS) {

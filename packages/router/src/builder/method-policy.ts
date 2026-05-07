@@ -5,7 +5,7 @@ import { err } from '@zipbul/result';
 
 const MAX_METHOD_LENGTH = 64;
 
-// RFC 9110 token grammar: 1*tchar where tchar = ALPHA / DIGIT /
+// HTTP method token grammar: 1*tchar where tchar = ALPHA / DIGIT /
 // "!" / "#" / "$" / "%" / "&" / "'" / "*" / "+" / "-" / "." /
 // "^" / "_" / "`" / "|" / "~". Char-code switch instead of regex to keep
 // the per-add gate allocation-free.
@@ -25,8 +25,8 @@ function isValidMethodToken(method: string): boolean {
 
 /**
  * Validate an HTTP method token under the given profile. `secure` and
- * `compat` both apply RFC 9110 token grammar — token validation is not
- * relaxed in `compat` (see §7.1: method validation/32-method limit still
+ * `compat` both apply the HTTP token grammar — token validation is not
+ * relaxed in `compat` (method validation and the 32-method limit still
  * apply). `unsafe` profile keeps the same gate; only numeric limits relax.
  */
 export function validateMethodToken(
@@ -51,9 +51,9 @@ export function validateMethodToken(
   if (!isValidMethodToken(method)) {
     return err({
       kind: 'method-invalid-token',
-      message: `HTTP method contains invalid character (RFC 9110 token grammar): '${method}'`,
+      message: `HTTP method contains a character outside the token grammar: '${method}'`,
       method,
-      suggestion: 'Use only RFC 9110 token characters: alphanumerics + ! # $ % & \' * + - . ^ _ ` | ~.',
+      suggestion: 'Use only HTTP token characters: alphanumerics + ! # $ % & \' * + - . ^ _ ` | ~.',
     });
   }
   return undefined;

@@ -2,10 +2,10 @@
 /**
  * POC: Static table representation comparison at 100k scale, end-to-end.
  *
- * Compares three candidates from CANDIDATE-SPACE.md §A:
- *  - A1: per-method Object.create(null) (current)
- *  - A2: per-method Map<string, number>
- *  - A3: single global Map<(method,path) composite key, handler>
+ * Compares three candidate static-table representations:
+ *  - per-method Object.create(null) (current)
+ *  - per-method Map<string, number>
+ *  - single global Map<(method,path) composite key, handler>
  *
  * Output: warmed hit/miss/wrong-method ns, build ms, RSS MiB.
  * Uses 100k routes, 8 methods sharded uniformly.

@@ -2,25 +2,204 @@ import type { SegmentNode } from '../matcher/segment-tree';
 import type { MatchFn } from '../matcher/match-state';
 import { performance } from 'node:perf_hooks';
 import { hasAmbiguousNode } from '../matcher/segment-tree';
+import {
+  recordBail,
+  recordCompile,
+  recordEmitMs,
+  shapeSignature,
+  shouldSkipCodegen,
+} from './codegen-telemetry';
 
 /**
- * Source budget for the codegen specialist.
+ * Codegen budget thresholds. Trees exceeding any of these fall back to the
+ * iterative walker; the per-node estimate runs once before any source bytes
+ * are concatenated.
+ *
+ * Two cap regimes:
+ *  - default: 256-node ceiling — relies on the mandatory build-time warmup
+ *    that drives JSC tier-up before user traffic.
+ *  - strict (no-warmup): 64-node ceiling — used when the caller opts out of
+ *    warmup or warmup is unreliable for the workload.
+ *
+ * Source budgets are layered: 64 KiB is the preferred ceiling, 128 KiB is
+ * the absolute hard cap.
  */
-const MAX_SOURCE = 8000;
+const MAX_SOURCE_BYTES_PREFERRED = 64 * 1024;
+const MAX_SOURCE_BYTES_HARD = 128 * 1024;
+const MAX_NODES_DEFAULT = 256;
+const MAX_NODES_STRICT = 64;
+const MAX_FANOUT = 64;
+const APPROX_SOURCE_PER_NODE = 80;
+
+export interface CompileOptions {
+  /** When true, the build-time warmup pass is omitted; cap drops to 64. */
+  strictNoWarmup?: boolean;
+}
+
+interface CodegenEstimate {
+  nodes: number;
+  maxFanout: number;
+  approxSourceBytes: number;
+  testers: number;
+  rejection: 'too-large' | 'too-fanout' | 'source-budget' | null;
+}
+
+function estimateSegmentTreeCodegen(
+  root: SegmentNode,
+  nodeCap: number,
+): CodegenEstimate {
+  let nodes = 0;
+  let maxFanout = 0;
+  let testers = 0;
+  const stack: SegmentNode[] = [root];
+
+  while (stack.length > 0) {
+    if (nodes > nodeCap) {
+      return {
+        nodes,
+        maxFanout,
+        approxSourceBytes: nodes * APPROX_SOURCE_PER_NODE,
+        testers,
+        rejection: 'too-large',
+      };
+    }
+    const node = stack.pop()!;
+    nodes++;
+    let fanoutHere = 0;
+    if (node.staticChildren !== null) {
+      for (const k in node.staticChildren) {
+        stack.push(node.staticChildren[k]!);
+        fanoutHere++;
+      }
+    }
+    let p = node.paramChild;
+    while (p !== null) {
+      stack.push(p.next);
+      fanoutHere++;
+      if (p.tester !== null) testers++;
+      p = p.nextSibling;
+    }
+    if (node.wildcardStore !== null) fanoutHere++;
+    if (fanoutHere > maxFanout) maxFanout = fanoutHere;
+  }
+
+  let rejection: CodegenEstimate['rejection'] = null;
+  if (maxFanout > MAX_FANOUT) rejection = 'too-fanout';
+  else if (nodes * APPROX_SOURCE_PER_NODE > MAX_SOURCE_BYTES_PREFERRED) rejection = 'source-budget';
+
+  return {
+    nodes,
+    maxFanout,
+    approxSourceBytes: nodes * APPROX_SOURCE_PER_NODE,
+    testers,
+    rejection,
+  };
+}
+
+/**
+ * Walk the segment tree once and return a small, deterministic set of paths
+ * that exercise each major branch at the root. The set is used as warmup
+ * input so JSC IC reaches tier-up across the dominant code paths instead of
+ * a single one. Caller is responsible for cap-bounding the depth of each
+ * synthesized path; this collector emits at most one per direct child of
+ * the root and falls back to the synthetic placeholder for empty trees.
+ */
+export function collectWarmupPaths(root: SegmentNode, max = 8): string[] {
+  const out: string[] = [];
+
+  const synthForNode = (node: SegmentNode, prefix: string): string => {
+    if (out.length >= max) return prefix;
+    let path = prefix;
+    let n: SegmentNode | null = node;
+    let guard = 0;
+    while (n !== null && guard++ < 16) {
+      let advanced = false;
+      if (n.staticChildren !== null) {
+        for (const seg in n.staticChildren) {
+          path += '/' + seg;
+          n = n.staticChildren[seg]!;
+          advanced = true;
+          break;
+        }
+        if (advanced) continue;
+      }
+      if (n.paramChild !== null) {
+        path += '/__warm__';
+        n = n.paramChild.next;
+        advanced = true;
+        continue;
+      }
+      if (n.wildcardStore !== null) {
+        path += '/__warm__/__warm__';
+        n = null;
+        advanced = true;
+        continue;
+      }
+      break;
+    }
+    return path;
+  };
+
+  if (root.staticChildren !== null) {
+    for (const seg in root.staticChildren) {
+      if (out.length >= max) break;
+      out.push(synthForNode(root.staticChildren[seg]!, '/' + seg));
+    }
+  }
+  if (root.paramChild !== null && out.length < max) {
+    out.push(synthForNode(root.paramChild.next, '/__warm__'));
+  }
+  if (root.wildcardStore !== null && out.length < max) {
+    out.push('/__warm__/__warm__');
+  }
+
+  if (out.length === 0) out.push('/__zipbul_warmup__');
+  return out;
+}
 
 export interface CompiledPackage {
   factory: (testers: any[], pass: any, decoder: any) => MatchFn;
   testers: any[];
+  /** Shape signature recorded in the codegen telemetry registry. */
+  shape: string;
 }
 
 /**
  * Compile a segment tree into a flat match function via `new Function()`.
  */
-export function compileSegmentTree(root: SegmentNode): CompiledPackage | null {
+export function compileSegmentTree(root: SegmentNode, options: CompileOptions = {}): CompiledPackage | null {
   // Bail on ambiguous trees: codegen only handles unique-winner trees.
   // Ambiguous trees (static+param collision) fallback to recursive walker.
   if (hasAmbiguousNode(root)) {
     logCodegen({ event: 'bail', reason: 'ambiguous-tree' });
+    return null;
+  }
+
+  const nodeCap = options.strictNoWarmup ? MAX_NODES_STRICT : MAX_NODES_DEFAULT;
+  const estimate = estimateSegmentTreeCodegen(root, nodeCap);
+  const shape = shapeSignature(estimate.nodes, estimate.maxFanout, estimate.testers);
+  if (estimate.rejection !== null) {
+    recordBail(shape, estimate.rejection);
+    logCodegen({
+      event: 'bail',
+      reason: estimate.rejection,
+      shape,
+      nodes: estimate.nodes,
+      maxFanout: estimate.maxFanout,
+      approxSourceBytes: estimate.approxSourceBytes,
+    });
+    return null;
+  }
+  // Per-shape feedback: a previous build for a structurally identical tree
+  // already exceeded the observed-compile budget. Skip codegen.
+  if (shouldSkipCodegen(shape)) {
+    recordBail(shape, 'prior-shape-disabled');
+    logCodegen({
+      event: 'bail',
+      reason: 'prior-shape-disabled',
+      shape,
+      nodes: estimate.nodes,
+    });
     return null;
   }
 
@@ -33,7 +212,10 @@ export function compileSegmentTree(root: SegmentNode): CompiledPackage | null {
   const body = emitNode(ctx, root, 'pos0');
 
   if (ctx.bail) {
-    logCodegen({ event: 'bail', reason: 'emitter-bail', emitMs: performance.now() - start });
+    const dt = performance.now() - start;
+    recordBail(shape, 'emitter-bail');
+    recordEmitMs(dt);
+    logCodegen({ event: 'bail', reason: 'emitter-bail', shape, emitMs: dt });
     return null;
   }
 
@@ -54,34 +236,52 @@ ${body}
 };`;
 
   const emitMs = performance.now() - start;
+  recordEmitMs(emitMs);
 
-  if (source.length > MAX_SOURCE) {
+  if (source.length > MAX_SOURCE_BYTES_HARD) {
+    recordBail(shape, 'source-budget-hard');
     logCodegen({
       event: 'bail',
-      reason: 'source-budget',
+      reason: 'source-budget-hard',
+      shape,
       sourceLength: source.length,
       testers: ctx.testers.length,
       emitMs,
     });
     return null;
   }
+  if (source.length > MAX_SOURCE_BYTES_PREFERRED) {
+    logCodegen({
+      event: 'over-preferred',
+      shape,
+      sourceLength: source.length,
+      testers: ctx.testers.length,
+      emitMs,
+    });
+  }
 
   try {
     const compileStart = performance.now();
     const factory = new Function('testers', 'TESTER_PASS', 'decoder', source) as any;
     const compileMs = performance.now() - compileStart;
+    recordCompile(shape, compileMs, source.length);
     logCodegen({
       event: 'compiled',
+      shape,
+      nodes: estimate.nodes,
+      maxFanout: estimate.maxFanout,
       sourceLength: source.length,
       testers: ctx.testers.length,
       emitMs,
       compileMs,
     });
-    return { factory, testers: ctx.testers };
+    return { factory, testers: ctx.testers, shape };
   } catch {
+    recordBail(shape, 'new-function-error');
     logCodegen({
       event: 'bail',
       reason: 'new-function-error',
+      shape,
       sourceLength: source.length,
       testers: ctx.testers.length,
       emitMs,

@@ -3,7 +3,13 @@ import type { NormalizeCfg } from '../matcher/path-normalize';
 import type { RuntimePathPolicyConfig } from '../matcher/runtime-path-policy';
 import type { MatchOutput, RouteParams, RouterProfile } from '../types';
 
+import { performance } from 'node:perf_hooks';
 import { RouterCache, RouterMissCache } from '../cache';
+import {
+  recordCompile,
+  recordWarmupCall,
+  shapeSignature,
+} from './codegen-telemetry';
 import {
   CACHE_META,
   DYNAMIC_META,
@@ -39,7 +45,6 @@ export interface MatchConfig<T> {
   readonly anyTester: boolean;
   readonly hasAnyStatic: boolean;
   readonly staticOutputsByMethod: Array<Record<string, MatchOutput<T>> | undefined>;
-  readonly staticMap: Record<string, Array<T | undefined>>;
   readonly methodCodes: Record<string, number>;
   readonly trees: Array<MatchFn | null>;
   readonly matchState: MatchState;
@@ -83,7 +88,48 @@ function emitGenericMatchImpl<T>(cfg: MatchConfig<T>): CompiledMatch<T> {
     var sp = __scan.key;
   `);
 
-  // 1. Static cache lookup
+  // Adaptive method-order: methods that have no dynamic walker take the
+  // static-first fast path (direct table lookup, no cache wrap). Methods
+  // with a dynamic walker take cache-first ordering so dynamic-cache hits
+  // do not pay an upfront static-bucket miss.
+  if (cfg.hasAnyStatic && !cfg.hasAnyTree) {
+    src.push(`
+      var bucket = staticOutputsByMethod[mc];
+      if (bucket !== undefined) {
+        var out = bucket[sp];
+        if (out !== undefined) return out;
+      }
+      return null;
+    `);
+
+    const body = src.join('\n');
+    const factory = new Function(
+      'staticOutputsByMethod', 'methodCodes', 'trees', 'matchState', 'handlers',
+      'hitCacheByMethod', 'missCacheByMethod', 'RouterCache', 'RouterMissCache',
+      'EMPTY_PARAMS', 'CACHE_META', 'DYNAMIC_META', 'terminalHandlers', 'isWildcardByTerminal', 'paramsFactories',
+      'scanRuntimePath', 'runtimePathPolicyCfg', 'NullProtoObj',
+      `return function match(method, path) {\n${body}\n};`,
+    );
+
+    const policyCfg: RuntimePathPolicyConfig = {
+      profile: cfg.profile,
+      trimTrailingSlash: cfg.trimSlash,
+      toLowerCase: cfg.lowerCase,
+      maxPathLen: cfg.maxPathLen,
+      maxSegLen: cfg.maxSegLen,
+      checkPathLen: cfg.checkPathLen,
+      checkSegLen: cfg.checkSegLen,
+    };
+
+    return factory(
+      cfg.staticOutputsByMethod, cfg.methodCodes, cfg.trees, cfg.matchState, cfg.handlers,
+      cfg.hitCacheByMethod, cfg.missCacheByMethod, RouterCache, RouterMissCache,
+      EMPTY_PARAMS, CACHE_META, DYNAMIC_META, cfg.terminalHandlers, cfg.isWildcardByTerminal, cfg.paramsFactories,
+      scanRuntimePath, policyCfg, NullProtoObj,
+    ) as CompiledMatch<T>;
+  }
+
+  // Cache-first ordering for routers that include any dynamic walker.
   src.push(`
     var ms = missCacheByMethod.get(mc);
     if (ms !== undefined && ms.has(sp)) return null;
@@ -101,20 +147,13 @@ function emitGenericMatchImpl<T>(cfg: MatchConfig<T>): CompiledMatch<T> {
     }
   `);
 
-  // 2. Static map lookup
+  // After cache miss, try the static table once (cheaper than the walker).
   if (cfg.hasAnyStatic) {
     src.push(`
       var bucket = staticOutputsByMethod[mc];
       if (bucket !== undefined) {
         var out = bucket[sp];
-        if (out !== undefined) {
-          if (hc === undefined) {
-            hc = new RouterCache(${cacheMaxSize});
-            hitCacheByMethod.set(mc, hc);
-          }
-          hc.set(sp, { value: out.value, params: EMPTY_PARAMS });
-          return out;
-        }
+        if (out !== undefined) return out;
       }
     `);
   }
@@ -124,7 +163,6 @@ function emitGenericMatchImpl<T>(cfg: MatchConfig<T>): CompiledMatch<T> {
     ms.add(sp);
   `;
 
-  // 3. Dynamic tree walk
   if (cfg.hasAnyTree) {
     if (cfg.checkSegLen) src.push(emitSegLenCheck(normCfg, 'sp', 'return null;'));
 
@@ -135,7 +173,7 @@ function emitGenericMatchImpl<T>(cfg: MatchConfig<T>): CompiledMatch<T> {
         return null;
       }
       var ok = tr(sp, matchState);
-      
+
       if (ok) {
         var tIdx = matchState.handlerIndex;
         if (!${cfg.trimSlash} && sp.length > 1 && sp.charCodeAt(sp.length - 1) === 47 && !isWildcardByTerminal[tIdx]) {
@@ -147,7 +185,7 @@ function emitGenericMatchImpl<T>(cfg: MatchConfig<T>): CompiledMatch<T> {
         ${emitMissCacheWrite()}
         return null;
       }
-      
+
       var tIdx = matchState.handlerIndex;
       var hIdx = terminalHandlers[tIdx];
       var factory = paramsFactories[tIdx];
@@ -191,10 +229,48 @@ function emitGenericMatchImpl<T>(cfg: MatchConfig<T>): CompiledMatch<T> {
     checkSegLen: cfg.checkSegLen,
   };
 
-  return factory(
+  const compileStart = performance.now();
+  const compiled = factory(
     cfg.staticOutputsByMethod, cfg.methodCodes, cfg.trees, cfg.matchState, cfg.handlers,
     cfg.hitCacheByMethod, cfg.missCacheByMethod, RouterCache, RouterMissCache,
     EMPTY_PARAMS, CACHE_META, DYNAMIC_META, cfg.terminalHandlers, cfg.isWildcardByTerminal, cfg.paramsFactories,
     scanRuntimePath, policyCfg, NullProtoObj,
   ) as CompiledMatch<T>;
+  const matchImplShape = shapeSignature(
+    cfg.activeMethodCodes.length,
+    cfg.trees.filter(t => t != null).length,
+    cfg.handlers.length,
+  );
+  recordCompile(matchImplShape, performance.now() - compileStart, 0);
+
+  // Warm the freshly-compiled match implementation across the major
+  // branches of the emitted code (one synthetic call per active method)
+  // so JSC IC reaches tier-up on each branch the user will actually hit.
+  // A single-input warmup leaves sibling-method branches cold, which shows
+  // up as a multi-µs first-call tail under multi-method workloads.
+  //
+  // Iteration count drives JSC IC past its baseline thresholds so the hot
+  // path is at least baseline-compiled by the time the first user request
+  // arrives. Tier-up to DFG is best-effort — the runtime engine controls
+  // when that promotion fires.
+  const warmPaths = ['/__zipbul_warmup__', '/__zipbul_warmup__/sub'];
+  const WARMUP_ITERATIONS = 20;
+  for (let it = 0; it < WARMUP_ITERATIONS; it++) {
+    for (const [methodName] of cfg.activeMethodCodes) {
+      for (const p of warmPaths) {
+        try { compiled(methodName, p); } catch { /* warmup non-fatal */ }
+      }
+    }
+  }
+  // Telemetry: record only the final call latency so the row reflects the
+  // post-tier-up cost rather than the cold first-call cost.
+  for (const [methodName] of cfg.activeMethodCodes) {
+    for (const p of warmPaths) {
+      const t0 = performance.now();
+      try { compiled(methodName, p); } catch { /* warmup non-fatal */ }
+      recordWarmupCall(matchImplShape, (performance.now() - t0) * 1e6);
+    }
+  }
+
+  return compiled;
 }

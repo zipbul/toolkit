@@ -1,4 +1,5 @@
-/* §14.5 line 2171: new Function compile time / first-call latency / code-cache pressure proxy */
+/* Microbench: `new Function` compile time, first-call latency, and a
+ * proxy for code-cache pressure. */
 /* eslint-disable no-console */
 export {};
 

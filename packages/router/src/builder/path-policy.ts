@@ -9,7 +9,8 @@ const CC_SLASH = 0x2f;
  * Single-pass scan over a registered path. Rejects bytes the secure profile
  * forbids: raw `?`/`#` (except the `:name?` decorator), C0/DEL controls,
  * raw non-ASCII, malformed percent escapes, dot segments (literal and
- * percent-encoded), and ASCII chars outside RFC 3986 pchar. Inside a regex
+ * percent-encoded), and ASCII chars outside the path-segment grammar
+ * (`unreserved / pct-encoded / sub-delims / ":" / "@"`). Inside a regex
  * group `(...)` only the first three rules apply — body chars are passed
  * through to the regex-safety pass.
  *
@@ -125,7 +126,7 @@ export function validatePathChars(
         kind: 'path-invalid-pchar',
         message: `Path contains invalid character '${path[i]}' (charCode 0x${c.toString(16)}): ${path}`,
         path,
-        suggestion: 'Use percent-encoded form for characters outside RFC 3986 pchar.',
+        suggestion: 'Use the percent-encoded form for characters outside the path-segment grammar.',
       });
     }
   }
