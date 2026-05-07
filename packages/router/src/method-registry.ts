@@ -1,6 +1,6 @@
 import { err, isErr } from '@zipbul/result';
 import type { Result } from '@zipbul/result';
-import type { RouterErrorData, RouterProfile } from './types';
+import type { RouterErrorData } from './types';
 import { validateMethodToken } from './builder/method-policy';
 
 const DEFAULT_METHODS: ReadonlyArray<readonly [string, number]> = [
@@ -30,11 +30,9 @@ export class MethodRegistry {
    *  `Object.create(null)` for the same reason router's NullProtoObj exists —
    *  no Object.prototype walk on every match. */
   private readonly codeMap: Record<string, number> = Object.create(null) as Record<string, number>;
-  private readonly profile: RouterProfile;
   private nextOffset: number;
 
-  constructor(profile: RouterProfile = 'secure') {
-    this.profile = profile;
+  constructor() {
     for (const [method, offset] of DEFAULT_METHODS) {
       this.methodToOffset.set(method, offset);
       this.codeMap[method] = offset;
@@ -44,7 +42,7 @@ export class MethodRegistry {
   }
 
   getOrCreate(method: string): Result<number, RouterErrorData> {
-    const tokenCheck = validateMethodToken(method, this.profile);
+    const tokenCheck = validateMethodToken(method);
     if (isErr(tokenCheck)) return tokenCheck;
 
     const existing = this.methodToOffset.get(method);

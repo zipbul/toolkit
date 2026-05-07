@@ -71,11 +71,11 @@ describe('Router regression fixes', () => {
   });
 
   it('uses an immutable options snapshot for parser and matcher behavior', () => {
-    const options = { caseSensitive: false };
+    const options = { pathCaseSensitive: false };
     const router = new Router<string>(options);
 
     router.add('GET', '/Hello', 'handler');
-    options.caseSensitive = true;
+    options.pathCaseSensitive = true;
     router.build();
 
     expect(router.match('GET', '/hello')?.value).toBe('handler');

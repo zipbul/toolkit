@@ -76,7 +76,6 @@ const NUMERIC_OPTION_KEYS = [
 ] as const;
 
 function validateOptions(options: RouterOptions): void {
-  const allowUnbounded = options.unsafeAllowUnboundedLimits === true;
   const issues: Array<{ option: string; message: string; suggestion?: string }> = [];
   for (const key of NUMERIC_OPTION_KEYS) {
     const v = options[key];
@@ -85,46 +84,10 @@ function validateOptions(options: RouterOptions): void {
       issues.push({ option: key, message: `${key} must be a positive number (received ${String(v)}).` });
       continue;
     }
-    if (!Number.isFinite(v) && !allowUnbounded) {
-      issues.push({
-        option: key,
-        message: `${key} must be finite (received Infinity).`,
-        suggestion: 'Provide a finite cap, or opt in via unsafeAllowUnboundedLimits=true (drops secure-profile guarantees).',
-      });
-      continue;
-    }
-    if (v === Number.MAX_SAFE_INTEGER && !allowUnbounded) {
-      issues.push({
-        option: key,
-        message: `${key} = Number.MAX_SAFE_INTEGER is treated as unbounded.`,
-        suggestion: 'Provide a finite cap, or opt in via unsafeAllowUnboundedLimits=true.',
-      });
-      continue;
-    }
     if (Number.isFinite(v) && !Number.isInteger(v)) {
       issues.push({ option: key, message: `${key} must be an integer (received ${String(v)}).` });
       continue;
     }
-  }
-  if (options.profile === 'secure' && options.unsafeAllowUnboundedLimits === true) {
-    issues.push({
-      option: 'profile',
-      message: 'profile="secure" is incompatible with unsafeAllowUnboundedLimits=true.',
-      suggestion: 'Choose profile="compat" or profile="unsafe" to allow unbounded limits.',
-    });
-  }
-  if (options.profile === 'secure' && (options.pathCaseSensitive === false || options.caseSensitive === false)) {
-    issues.push({
-      option: 'pathCaseSensitive',
-      message: 'profile="secure" requires path case-sensitivity (pathCaseSensitive must not be false).',
-      suggestion: 'Switch to profile="compat" or remove pathCaseSensitive=false.',
-    });
-  }
-  if (options.profile !== undefined && !['secure', 'compat', 'unsafe'].includes(options.profile)) {
-    issues.push({
-      option: 'profile',
-      message: `profile must be 'secure' | 'compat' | 'unsafe' (received '${String(options.profile)}').`,
-    });
   }
   if (options.trailingSlash !== undefined && options.trailingSlash !== 'strict' && options.trailingSlash !== 'ignore') {
     issues.push({
@@ -146,15 +109,13 @@ function validateOptions(options: RouterOptions): void {
 }
 
 function resolveTrailingSlashIgnore(options: RouterOptions): boolean {
-  if (options.trailingSlash !== undefined) return options.trailingSlash === 'ignore';
-  if (options.ignoreTrailingSlash !== undefined) return options.ignoreTrailingSlash;
-  return options.profile === 'secure' ? false : true; // secure default = strict
+  // Default is 'ignore' so `/foo/` and `/foo` map to the same route.
+  // Set `trailingSlash: 'strict'` for byte-exact matching.
+  return options.trailingSlash !== 'strict';
 }
 
 function resolvePathCaseSensitive(options: RouterOptions): boolean {
-  if (options.pathCaseSensitive !== undefined) return options.pathCaseSensitive;
-  if (options.caseSensitive !== undefined) return options.caseSensitive;
-  return true;
+  return options.pathCaseSensitive ?? true;
 }
 
 function createPathParser(options: RouterOptions): PathParser {
@@ -165,7 +126,6 @@ function createPathParser(options: RouterOptions): PathParser {
     maxPathLength: options.maxPathLength ?? 8192,
     maxSegmentCount: options.maxSegmentCount ?? 256,
     maxParams: options.maxParams ?? 64,
-    profile: options.profile ?? 'secure',
   });
 }
 
@@ -193,7 +153,7 @@ export class Router<T = unknown> implements RouterPublicApi<T> {
     validateOptions(options);
     const routerOptions: RouterOptions = { ...options };
     const optionalParamDefaults = new OptionalParamDefaults(routerOptions.optionalParamBehavior);
-    const methodRegistry = new MethodRegistry(routerOptions.profile ?? 'secure');
+    const methodRegistry = new MethodRegistry();
     const pathParser = createPathParser(routerOptions);
     const registration = new Registration<T>(
       methodRegistry,
@@ -243,7 +203,6 @@ export class Router<T = unknown> implements RouterPublicApi<T> {
       }
 
       const cfg: MatchConfig<T> = {
-        profile: routerOptions.profile ?? 'secure',
         trimSlash: r.ignoreTrailingSlash,
         lowerCase: !r.caseSensitive,
         maxPathLen: r.maxPathLength,

@@ -91,7 +91,7 @@ describe('iterative walker (wide fanout exceeding codegen size budget)', () => {
   });
 
   it('returns null for trailing-slash on terminal param when ignoreTrailingSlash=false', () => {
-    const r = new Router<string>({ ignoreTrailingSlash: false });
+    const r = new Router<string>({ trailingSlash: "strict" });
     // Force iterative path with many prefixes so codegen bails on size.
     for (let i = 0; i < 25; i++) {
       r.add('GET', `/zone${i}/:slug`, `r${i}`);
@@ -256,8 +256,8 @@ describe('decoding under fallback walkers', () => {
     expect(m!.params).toEqual({ user: 'hello world' });
   });
 
-  it('compat profile keeps raw value when decodeURIComponent would throw (malformed %)', () => {
-    const r = new Router<string>({ profile: 'compat' });
+  it('keeps raw value when decodeURIComponent would throw (router does not decode)', () => {
+    const r = new Router<string>();
     r.add('GET', '/api/v1/:user', 'v1');
     r.add('GET', '/api/:ver/users', 'pv');
     r.build();
@@ -267,14 +267,6 @@ describe('decoding under fallback walkers', () => {
     expect(m).not.toBeNull();
     expect(m!.value).toBe('v1');
     expect(typeof m!.params.user).toBe('string');
-  });
-
-  it('secure profile rejects malformed % at runtime', () => {
-    const r = new Router<string>();
-    r.add('GET', '/api/v1/:user', 'v1');
-    r.build();
-
-    expect(r.match('GET', '/api/v1/%E0%A4%A')).toBeNull();
   });
 });
 
@@ -449,7 +441,7 @@ describe('shape specialization gating', () => {
     expect(impl.toString()).toContain('hitCacheByMethod');
   });
 
-  it('no longer uses activeBucket optimization (Generic shape only)', () => {
+  it('uses the closure-captured activeBucket fast path when only one method is active', () => {
     const r = new Router<number>();
     r.add('GET', '/static/*path', 1);
     r.add('GET', '/health', 2);
@@ -457,6 +449,6 @@ describe('shape specialization gating', () => {
 
     const impl = getRouterInternals(r).matchImpl as { toString: () => string };
 
-    expect(impl.toString()).not.toContain('activeBucket');
+    expect(impl.toString()).toContain('activeBucket');
   });
 });

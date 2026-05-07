@@ -51,7 +51,7 @@ describe('allowedMethods', () => {
   });
 
   it('strict trailing-slash with ignoreTrailingSlash=false', () => {
-    const r = new Router<number>({ ignoreTrailingSlash: false });
+    const r = new Router<number>({ trailingSlash: "strict" });
     r.add('GET', '/users', 1);
     r.build();
 
@@ -68,7 +68,7 @@ describe('allowedMethods', () => {
   });
 
   it('case-insensitive matching with caseSensitive=false', () => {
-    const r = new Router<number>({ caseSensitive: false });
+    const r = new Router<number>({ pathCaseSensitive: false });
     r.add('GET', '/Users', 1);
     r.add('POST', '/Users', 2);
     r.build();

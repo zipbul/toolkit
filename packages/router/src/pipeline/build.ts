@@ -46,7 +46,7 @@ export function buildFromRegistration<T>(
   for (const [, code] of allCodes) {
     const segRoot = snapshot.segmentTrees[code];
     if (segRoot !== undefined && segRoot !== null) {
-      trees[code] = createSegmentWalker(segRoot, decoder, options.codegenStrictNoWarmup === true);
+      trees[code] = createSegmentWalker(segRoot, decoder);
       continue;
     }
     trees[code] = null;
@@ -79,12 +79,8 @@ export function buildFromRegistration<T>(
     }
   }
 
-  const ignoreTrailingSlash = options.trailingSlash !== undefined
-    ? options.trailingSlash === 'ignore'
-    : (options.ignoreTrailingSlash ?? (options.profile === 'secure' ? false : true));
-  const caseSensitive = options.pathCaseSensitive !== undefined
-    ? options.pathCaseSensitive
-    : (options.caseSensitive ?? true);
+  const ignoreTrailingSlash = options.trailingSlash !== 'strict';
+  const caseSensitive = options.pathCaseSensitive ?? true;
   const maxPathLength = options.maxPathLength ?? 2048;
   const maxSegmentLength = options.maxSegmentLength ?? 1024;
 

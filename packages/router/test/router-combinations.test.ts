@@ -7,7 +7,7 @@ describe('Router<T> combinations', () => {
 
   describe('option × cache', () => {
     it('should use lowered cache key when caseSensitive=false + cache enabled', () => {
-      const router = new Router<string>({ caseSensitive: false });
+      const router = new Router<string>({ pathCaseSensitive: false });
       router.add('GET', '/users/:id', 'val');
       router.build();
 
@@ -22,7 +22,7 @@ describe('Router<T> combinations', () => {
     });
 
     it('should share cache entry for trailing-slash and non-trailing-slash paths when ignoreTrailingSlash + cache', () => {
-      const router = new Router<string>({ ignoreTrailingSlash: true });
+      const router = new Router<string>({ trailingSlash: "ignore" });
       router.add('GET', '/api/:id', 'val');
       router.build();
 
@@ -77,7 +77,7 @@ describe('Router<T> combinations', () => {
   describe('option × option pipeline', () => {
     it('should strip trailing slash when ignoreTrailingSlash=true', () => {
       const router = new Router<string>({
-        ignoreTrailingSlash: true,
+        trailingSlash: "ignore",
       });
       router.add('GET', '/api/:id', 'val');
       router.build();
@@ -89,7 +89,7 @@ describe('Router<T> combinations', () => {
 
     it('should not match trailing slash when ignoreTrailingSlash=false', () => {
       const router = new Router<string>({
-        ignoreTrailingSlash: false,
+        trailingSlash: "strict",
       });
       router.add('GET', '/api/:id', 'val');
       router.build();
@@ -108,7 +108,7 @@ describe('Router<T> combinations', () => {
 
   describe('option × route type', () => {
     it('should match lowered input against regex param when caseSensitive=false', () => {
-      const router = new Router<string>({ caseSensitive: false });
+      const router = new Router<string>({ pathCaseSensitive: false });
       router.add('GET', '/users/:id(\\d+)', 'val');
       router.build();
 
@@ -119,7 +119,7 @@ describe('Router<T> combinations', () => {
 
     it('should treat stripped trailing slash as optional param absent when ignoreTrailingSlash + optional param', () => {
       const router = new Router<string>({
-        ignoreTrailingSlash: true,
+        trailingSlash: "ignore",
         optionalParamBehavior: 'set-undefined',
       });
       router.add('GET', '/items/:id?', 'val');
@@ -132,7 +132,7 @@ describe('Router<T> combinations', () => {
     });
 
     it('should capture empty suffix when ignoreTrailingSlash strips wildcard trailing slash', () => {
-      const router = new Router<string>({ ignoreTrailingSlash: true });
+      const router = new Router<string>({ trailingSlash: "ignore" });
       router.add('GET', '/files/*', 'val');
       router.build();
 
@@ -195,8 +195,8 @@ describe('Router<T> combinations', () => {
   describe('triple+ combinations', () => {
     it('should apply caseSensitive=false + ignoreTrailingSlash + cache as triple transform with consistent cache key', () => {
       const router = new Router<string>({
-        caseSensitive: false,
-        ignoreTrailingSlash: true,
+        pathCaseSensitive: false,
+        trailingSlash: "ignore",
       });
       router.add('GET', '/api/:id', 'val');
       router.build();
@@ -213,8 +213,8 @@ describe('Router<T> combinations', () => {
 
     it('should match correctly with remaining options enabled simultaneously', () => {
       const router = new Router<string>({
-        caseSensitive: false,
-        ignoreTrailingSlash: true,
+        pathCaseSensitive: false,
+        trailingSlash: "ignore",
         cacheSize: 10,
         maxSegmentLength: 256,
         optionalParamBehavior: 'set-undefined',

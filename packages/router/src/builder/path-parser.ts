@@ -1,5 +1,5 @@
 import type { Result } from '@zipbul/result';
-import type { RouterErrorData, RouterProfile } from '../types';
+import type { RouterErrorData } from '../types';
 
 import { err, isErr } from '@zipbul/result';
 import {
@@ -31,7 +31,6 @@ export interface PathParserConfig {
   maxPathLength: number;
   maxSegmentCount: number;
   maxParams: number;
-  profile: RouterProfile;
 }
 
 // ── PathParser ──
@@ -67,7 +66,7 @@ export class PathParser {
 
   // Single-pass char-code scan covering the structural-sanity check (leading
   private validatePath(path: string): Result<never, RouterErrorData> | null {
-    const result = validatePathChars(path, this.config.profile, this.config.maxPathLength);
+    const result = validatePathChars(path, this.config.maxPathLength);
     if (isErr(result)) return result;
     return null;
   }

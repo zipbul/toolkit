@@ -14,27 +14,12 @@ import {
  * Codegen budget thresholds. Trees exceeding any of these fall back to the
  * iterative walker; the per-node estimate runs once before any source bytes
  * are concatenated.
- *
- * Two cap regimes:
- *  - default: 256-node ceiling — relies on the mandatory build-time warmup
- *    that drives JSC tier-up before user traffic.
- *  - strict (no-warmup): 64-node ceiling — used when the caller opts out of
- *    warmup or warmup is unreliable for the workload.
- *
- * Source budgets are layered: 64 KiB is the preferred ceiling, 128 KiB is
- * the absolute hard cap.
  */
 const MAX_SOURCE_BYTES_PREFERRED = 64 * 1024;
 const MAX_SOURCE_BYTES_HARD = 128 * 1024;
 const MAX_NODES_DEFAULT = 256;
-const MAX_NODES_STRICT = 64;
 const MAX_FANOUT = 64;
 const APPROX_SOURCE_PER_NODE = 80;
-
-export interface CompileOptions {
-  /** When true, the build-time warmup pass is omitted; cap drops to 64. */
-  strictNoWarmup?: boolean;
-}
 
 interface CodegenEstimate {
   nodes: number;
@@ -167,7 +152,7 @@ export interface CompiledPackage {
 /**
  * Compile a segment tree into a flat match function via `new Function()`.
  */
-export function compileSegmentTree(root: SegmentNode, options: CompileOptions = {}): CompiledPackage | null {
+export function compileSegmentTree(root: SegmentNode): CompiledPackage | null {
   // Bail on ambiguous trees: codegen only handles unique-winner trees.
   // Ambiguous trees (static+param collision) fallback to recursive walker.
   if (hasAmbiguousNode(root)) {
@@ -175,8 +160,7 @@ export function compileSegmentTree(root: SegmentNode, options: CompileOptions = 
     return null;
   }
 
-  const nodeCap = options.strictNoWarmup ? MAX_NODES_STRICT : MAX_NODES_DEFAULT;
-  const estimate = estimateSegmentTreeCodegen(root, nodeCap);
+  const estimate = estimateSegmentTreeCodegen(root, MAX_NODES_DEFAULT);
   const shape = shapeSignature(estimate.nodes, estimate.maxFanout, estimate.testers);
   if (estimate.rejection !== null) {
     recordBail(shape, estimate.rejection);

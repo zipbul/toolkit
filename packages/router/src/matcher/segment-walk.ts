@@ -109,7 +109,6 @@ function tryCodegenStaticPrefixWildcard(root: SegmentNode): MatchFn | null {
 export function createSegmentWalker(
   root: SegmentNode,
   decoder: DecoderFn,
-  strictNoWarmup = false,
 ): MatchFn {
   const compiledWild = tryCodegenStaticPrefixWildcard(root);
   if (compiledWild !== null) {
@@ -117,10 +116,10 @@ export function createSegmentWalker(
     return compiledWild;
   }
 
-  const compiledFullPackage = compileSegmentTree(root, { strictNoWarmup });
+  const compiledFullPackage = compileSegmentTree(root);
   if (compiledFullPackage !== null) {
     const compiled = compiledFullPackage.factory(compiledFullPackage.testers, TESTER_PASS, decoder);
-    if (!strictNoWarmup) warmupCompiledWalker(compiled, root, compiledFullPackage.shape);
+    warmupCompiledWalker(compiled, root, compiledFullPackage.shape);
     return compiled;
   }
 

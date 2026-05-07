@@ -16,9 +16,9 @@ import { Router } from '../src/router';
 
 // ── ignoreTrailingSlash × every route type ─────────────────────────────────
 
-describe('ignoreTrailingSlash: true × route type', () => {
+describe('trailingSlash: "ignore" × route type', () => {
   it('static: trailing slash variant matches the no-slash route', () => {
-    const r = new Router<string>({ ignoreTrailingSlash: true });
+    const r = new Router<string>({ trailingSlash: "ignore" });
     r.add('GET', '/health', 'h');
     r.build();
 
@@ -27,7 +27,7 @@ describe('ignoreTrailingSlash: true × route type', () => {
   });
 
   it('single param: trailing slash trims before match', () => {
-    const r = new Router<string>({ ignoreTrailingSlash: true });
+    const r = new Router<string>({ trailingSlash: "ignore" });
     r.add('GET', '/users/:id', 'u');
     r.build();
 
@@ -36,7 +36,7 @@ describe('ignoreTrailingSlash: true × route type', () => {
   });
 
   it('param chain: trailing slash trims', () => {
-    const r = new Router<string>({ ignoreTrailingSlash: true });
+    const r = new Router<string>({ trailingSlash: "ignore" });
     r.add('GET', '/users/:id/posts/:postId', 'p');
     r.build();
 
@@ -71,9 +71,9 @@ describe('ignoreTrailingSlash: true × route type', () => {
   });
 });
 
-describe('ignoreTrailingSlash: false × route type', () => {
+describe('trailingSlash: "strict" × route type', () => {
   it('static: trailing slash variant DOES NOT match', () => {
-    const r = new Router<string>({ ignoreTrailingSlash: false });
+    const r = new Router<string>({ trailingSlash: "strict" });
     r.add('GET', '/health', 'h');
     r.build();
 
@@ -82,7 +82,7 @@ describe('ignoreTrailingSlash: false × route type', () => {
   });
 
   it('single param (codegen path): trailing slash on terminal param fails', () => {
-    const r = new Router<string>({ ignoreTrailingSlash: false });
+    const r = new Router<string>({ trailingSlash: "strict" });
     r.add('GET', '/users/:id', 'u');
     r.build();
 
@@ -91,7 +91,7 @@ describe('ignoreTrailingSlash: false × route type', () => {
   });
 
   it('param chain: trailing slash on inner segment fails', () => {
-    const r = new Router<string>({ ignoreTrailingSlash: false });
+    const r = new Router<string>({ trailingSlash: "strict" });
     r.add('GET', '/users/:id/posts/:postId', 'p');
     r.build();
 
@@ -100,7 +100,7 @@ describe('ignoreTrailingSlash: false × route type', () => {
   });
 
   it('star wildcard: empty trailing-slash position captures empty', () => {
-    const r = new Router<string>({ ignoreTrailingSlash: false });
+    const r = new Router<string>({ trailingSlash: "strict" });
     r.add('GET', '/files/*p', 'f');
     r.build();
 
@@ -110,7 +110,7 @@ describe('ignoreTrailingSlash: false × route type', () => {
   });
 
   it('multi wildcard: trailing slash with no content fails', () => {
-    const r = new Router<string>({ ignoreTrailingSlash: false });
+    const r = new Router<string>({ trailingSlash: "strict" });
     r.add('GET', '/files/*p+', 'f');
     r.build();
 
@@ -121,7 +121,7 @@ describe('ignoreTrailingSlash: false × route type', () => {
 
 // ── caseSensitive × route type ─────────────────────────────────────────────
 
-describe('caseSensitive: true (default) × route type', () => {
+describe('pathCaseSensitive: true (default) × route type', () => {
   it('static: case mismatch returns null', () => {
     const r = new Router<string>();
     r.add('GET', '/Health', 'h');
@@ -141,9 +141,9 @@ describe('caseSensitive: true (default) × route type', () => {
   });
 });
 
-describe('caseSensitive: false × route type', () => {
+describe('pathCaseSensitive: false × route type', () => {
   it('static: case differences match', () => {
-    const r = new Router<string>({ caseSensitive: false });
+    const r = new Router<string>({ pathCaseSensitive: false });
     r.add('GET', '/Health', 'h');
     r.build();
 
@@ -153,7 +153,7 @@ describe('caseSensitive: false × route type', () => {
   });
 
   it('single param: prefix is case-folded; param value preserves source case', () => {
-    const r = new Router<string>({ caseSensitive: false });
+    const r = new Router<string>({ pathCaseSensitive: false });
     r.add('GET', '/Users/:id', 'u');
     r.build();
 
@@ -317,8 +317,8 @@ describe('length limits × route type', () => {
 describe('triple combinations', () => {
   it('trim slash + case fold + cache: all three apply consistently', () => {
     const r = new Router<string>({
-      ignoreTrailingSlash: true,
-      caseSensitive: false,
+      trailingSlash: "ignore",
+      pathCaseSensitive: false,
     });
     r.add('GET', '/Users/:id', 'u');
     r.build();

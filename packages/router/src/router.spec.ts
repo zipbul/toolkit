@@ -294,7 +294,7 @@ describe('Router', () => {
     it('should apply combined preNormalize (caseSensitive:false + ignoreTrailingSlash)', () => {
       const r = buildWith(
         [['GET', '/users', 1]],
-        { caseSensitive: false, ignoreTrailingSlash: true },
+        { pathCaseSensitive: false, trailingSlash: "ignore" },
       );
 
       // Trailing slash + uppercase → both normalized

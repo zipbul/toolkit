@@ -33,24 +33,6 @@ describe('registration path policy accepts well-formed routes', () => {
   });
 });
 
-describe('compat profile relaxes the malformed-percent gate', () => {
-  test('compat: malformed percent registration accepted', () => {
-    const r = new Router<string>({ profile: 'compat' });
-    expect(() => {
-      r.add('GET', '/a/%ZZ', 'h');
-      r.build();
-    }).not.toThrow();
-  });
-
-  test('compat: raw fragment is still rejected (router grammar level)', () => {
-    const r = new Router<string>({ profile: 'compat' });
-    expect(() => {
-      r.add('GET', '/a#b', 'h');
-      r.build();
-    }).toThrow();
-  });
-});
-
 describe('registration path validation', () => {
   test('path with raw query "/a?b" must throw', () => {
     const r = new Router<string>();

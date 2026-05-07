@@ -1,5 +1,5 @@
 import type { Result } from '@zipbul/result';
-import type { RouterErrorData, RouterProfile } from '../types';
+import type { RouterErrorData } from '../types';
 
 import { err } from '@zipbul/result';
 
@@ -24,15 +24,10 @@ function isValidMethodToken(method: string): boolean {
 }
 
 /**
- * Validate an HTTP method token under the given profile. `secure` and
- * `compat` both apply the HTTP token grammar — token validation is not
- * relaxed in `compat` (method validation and the 32-method limit still
- * apply). `unsafe` profile keeps the same gate; only numeric limits relax.
+ * Validate an HTTP method token. Always strict — registration is a
+ * compile-time concern and the token grammar is fixed by the HTTP spec.
  */
-export function validateMethodToken(
-  method: string,
-  _profile: RouterProfile,
-): Result<void, RouterErrorData> {
+export function validateMethodToken(method: string): Result<void, RouterErrorData> {
   if (method.length === 0) {
     return err({
       kind: 'method-empty',

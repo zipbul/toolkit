@@ -1,30 +1,15 @@
-
-export type RouterProfile = 'secure' | 'compat' | 'unsafe';
-
 export interface RouterOptions {
-  /**
-   * Validation/runtime strictness profile. `secure` rejects malformed
-   * percent escapes, control bytes, dot segments, and the unsafe regex
-   * subset. `compat` softens those checks. `unsafe` additionally allows
-   * unbounded limits via {@link unsafeAllowUnboundedLimits}.
-   */
-  profile?: RouterProfile;
   /**
    * Trailing-slash policy. `'strict'` keeps `/a` and `/a/` distinct.
    * `'ignore'` collapses one trailing slash on registration and at match
-   * time. Takes precedence over the legacy `ignoreTrailingSlash` boolean
-   * when both are supplied.
+   * time.
    */
   trailingSlash?: 'strict' | 'ignore';
-  /** Path case-sensitivity. `false` requires the `compat` profile. */
+  /** Path case-sensitivity. Default true. */
   pathCaseSensitive?: boolean;
-  /** @deprecated Use `trailingSlash`. */
-  ignoreTrailingSlash?: boolean;
-  /** @deprecated Use `pathCaseSensitive`. */
-  caseSensitive?: boolean;
   /** HTTP method token max length (ASCII bytes). Default 64. */
   maxMethodLength?: number;
-  /** Full path max length. Default 8192. Runtime path over the limit returns null. */
+  /** Full path max length used for build-time guards. Default 8192. */
   maxPathLength?: number;
   /** Single segment max length. Default 1024. */
   maxSegmentLength?: number;
@@ -44,19 +29,7 @@ export interface RouterOptions {
    * 토글의 가치가 없다. 1000 이 모자란 고-카디널리티 워크로드는 늘리면 된다.
    */
   cacheSize?: number;
-  /**
-   * Opt-in to disable numeric limit caps (allow `Infinity`). Setting this
-   * to `true` invalidates secure/enterprise profile guarantees.
-   */
-  unsafeAllowUnboundedLimits?: boolean;
   optionalParamBehavior?: OptionalParamBehavior;
-  /**
-   * Opt out of build-time JIT warmup. Drops the codegen node ceiling from
-   * 256 to 64 (no-warmup p95-only regime) so first-call latency stays bounded
-   * without the warmup pass. Use only when warmup invocations interfere
-   * with the workload's IC characteristics.
-   */
-  codegenStrictNoWarmup?: boolean;
 }
 
 export type OptionalParamBehavior = 'omit' | 'set-undefined';

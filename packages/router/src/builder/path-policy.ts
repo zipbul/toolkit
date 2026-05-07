@@ -1,26 +1,26 @@
 import type { Result } from '@zipbul/result';
-import type { RouterErrorData, RouterProfile } from '../types';
+import type { RouterErrorData } from '../types';
 
 import { err } from '@zipbul/result';
 
 const CC_SLASH = 0x2f;
 
 /**
- * Single-pass scan over a registered path. Rejects bytes the secure profile
- * forbids: raw `?`/`#` (except the `:name?` decorator), C0/DEL controls,
- * raw non-ASCII, malformed percent escapes, dot segments (literal and
- * percent-encoded), and ASCII chars outside the path-segment grammar
- * (`unreserved / pct-encoded / sub-delims / ":" / "@"`). Inside a regex
- * group `(...)` only the first three rules apply — body chars are passed
- * through to the regex-safety pass.
+ * Single-pass scan over a registered path. Rejects bytes the path
+ * grammar forbids at registration time: raw `?`/`#` (except the
+ * `:name?` decorator), C0/DEL controls, raw non-ASCII, malformed
+ * percent escapes, dot segments (literal and percent-encoded), and
+ * ASCII chars outside `unreserved / pct-encoded / sub-delims / ":" / "@"`.
  *
- * Compat profile relaxes the malformed-percent gate (raw pass-through); the
- * raw-fragment, raw-query, and control-char rejects are kept because they
- * are router-grammar level rather than secure-only.
+ * Inside a regex group `(...)` only the first three rules apply —
+ * body chars pass through to the regex-safety pass.
+ *
+ * This runs once per `add()` call. There is no "compat" relaxation —
+ * registered paths are code, not user input, and code that violates
+ * the grammar is a developer bug.
  */
 export function validatePathChars(
   path: string,
-  profile: RouterProfile,
   maxPathLength: number,
 ): Result<void, RouterErrorData> {
   if (path.length === 0 || path.charCodeAt(0) !== CC_SLASH) {
@@ -39,8 +39,6 @@ export function validatePathChars(
       suggestion: `Shorten the path or raise maxPathLength.`,
     });
   }
-
-  const compatRelaxed = profile === 'compat';
 
   let segStart = 1;
   let parenDepth = 0;
@@ -94,7 +92,7 @@ export function validatePathChars(
       });
     }
 
-    if (c === 0x25 && !compatRelaxed) {
+    if (c === 0x25) {
       if (i + 2 >= len || !isHex(path.charCodeAt(i + 1)) || !isHex(path.charCodeAt(i + 2))) {
         return err({
           kind: 'path-malformed-percent',

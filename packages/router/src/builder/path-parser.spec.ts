@@ -12,7 +12,6 @@ function defaultConfig(overrides: Partial<PathParserConfig> = {}): PathParserCon
     maxPathLength: 8192,
     maxSegmentCount: 64,
     maxParams: 32,
-    profile: 'secure',
     ...overrides,
   };
 }

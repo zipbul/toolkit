@@ -390,8 +390,11 @@ describe('optional expansion combined with deep param routes', () => {
 // ── Edge URLs ─────────────────────────────────────────────────────────────
 
 describe('edge case URLs', () => {
-  it('handles unicode characters in param values (compat profile passes raw bytes through)', () => {
-    const r = new Router<string>({ profile: 'compat' });
+  it('passes raw unicode in param values through to the matcher', () => {
+    // The router does not perform runtime URL validation; raw bytes from
+    // the framework / HTTP server pass straight to the segment-tree
+    // walker which captures the param value byte-for-byte.
+    const r = new Router<string>();
     r.add('GET', '/users/:name', 'u');
     r.build();
 
@@ -399,14 +402,6 @@ describe('edge case URLs', () => {
 
     expect(m).not.toBeNull();
     expect(m!.params.name).toBe('한글');
-  });
-
-  it('rejects raw unicode in secure profile (URL must be percent-encoded)', () => {
-    const r = new Router<string>();
-    r.add('GET', '/users/:name', 'u');
-    r.build();
-
-    expect(r.match('GET', '/users/한글')).toBeNull();
   });
 
   it('handles percent-encoded multi-byte sequences', () => {

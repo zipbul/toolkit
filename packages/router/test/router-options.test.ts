@@ -15,7 +15,7 @@ function catchRouterError(fn: () => void): RouterError {
 
 describe('Router<T> options', () => {
   it('should not match different case when caseSensitive=true', () => {
-    const router = new Router<string>({ caseSensitive: true });
+    const router = new Router<string>({ pathCaseSensitive: true });
     router.add('GET', '/Hello', 'hello');
     router.build();
 
@@ -26,7 +26,7 @@ describe('Router<T> options', () => {
   });
 
   it('should match different case when caseSensitive=false', () => {
-    const router = new Router<string>({ caseSensitive: false });
+    const router = new Router<string>({ pathCaseSensitive: false });
     router.add('GET', '/Hello', 'hello');
     router.build();
 
@@ -35,7 +35,7 @@ describe('Router<T> options', () => {
   });
 
   it('should match with trailing slash when ignoreTrailingSlash=true', () => {
-    const router = new Router<string>({ ignoreTrailingSlash: true });
+    const router = new Router<string>({ trailingSlash: "ignore" });
     router.add('GET', '/path', 'val');
     router.build();
 
@@ -45,7 +45,7 @@ describe('Router<T> options', () => {
   });
 
   it('should not match trailing slash when ignoreTrailingSlash=false', () => {
-    const router = new Router<string>({ ignoreTrailingSlash: false });
+    const router = new Router<string>({ trailingSlash: "strict" });
     router.add('GET', '/path', 'val');
     router.build();
 
@@ -74,8 +74,8 @@ describe('Router<T> options', () => {
 
   it('should work with caseSensitive=false + ignoreTrailingSlash=true combined', () => {
     const router = new Router<string>({
-      caseSensitive: false,
-      ignoreTrailingSlash: true,
+      pathCaseSensitive: false,
+      trailingSlash: "ignore",
     });
     router.add('GET', '/Hello', 'hello');
     router.build();
@@ -105,22 +105,14 @@ describe('Router<T> options', () => {
     }
   });
 
-  it('compat profile passes malformed encoding through as raw bytes', () => {
-    const router = new Router<string>({ profile: 'compat' });
+  it('passes malformed encoding through as raw bytes (router does not validate runtime paths)', () => {
+    const router = new Router<string>();
     router.add('GET', '/files/:name', 'files');
     router.build();
 
     const result = router.match('GET', '/files/bad%GG');
     expect(result).not.toBeNull();
     expect(result!.params.name).toBe('bad%GG');
-  });
-
-  it('secure profile rejects malformed encoding', () => {
-    const router = new Router<string>();
-    router.add('GET', '/files/:name', 'files');
-    router.build();
-
-    expect(router.match('GET', '/files/bad%GG')).toBeNull();
   });
 
   it('should handle optionalParamBehavior=\'set-undefined\'', () => {
@@ -135,12 +127,18 @@ describe('Router<T> options', () => {
     expect(result!.params.id).toBeUndefined();
   });
 
-  it('secure profile rejects %2F in param values (path traversal guard)', () => {
+  it('decodes percent-escapes in captured param values', () => {
+    // Per RFC 3986 §2.4, percent-encoded octets in the path component
+    // are decoded when extracted as a parameter. `%2F` becomes `/` in
+    // the captured string — it's just a value, not a path component, so
+    // there is no traversal risk.
     const router = new Router<string>();
     router.add('GET', '/files/:name', 'files');
     router.build();
 
-    expect(router.match('GET', '/files/a%2Fb')).toBeNull();
+    const result = router.match('GET', '/files/a%2Fb');
+    expect(result).not.toBeNull();
+    expect(result!.params.name).toBe('a/b');
   });
 
 });

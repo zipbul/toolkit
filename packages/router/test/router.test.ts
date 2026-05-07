@@ -782,7 +782,7 @@ describe('Router<T>', () => {
     });
 
     it('should not strip trailing slash on root path / when ignoreTrailingSlash=true', () => {
-      const router = new Router<string>({ ignoreTrailingSlash: true });
+      const router = new Router<string>({ trailingSlash: "ignore" });
       router.add('GET', '/', 'root');
       router.build();
 
