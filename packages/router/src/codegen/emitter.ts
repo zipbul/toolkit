@@ -91,7 +91,12 @@ function emitGenericMatchImpl<T>(cfg: MatchConfig<T>): CompiledMatch<T> {
     if (hc !== undefined) {
       var cached = hc.get(sp);
       if (cached !== undefined) {
-        return { value: cached.value, params: cached.params, meta: CACHE_META };
+        var cp = cached.params;
+        return {
+          value: cached.value,
+          params: cp === EMPTY_PARAMS ? cp : Object.assign(new NullProtoObj(), cp),
+          meta: CACHE_META,
+        };
       }
     }
   `);
@@ -146,24 +151,21 @@ function emitGenericMatchImpl<T>(cfg: MatchConfig<T>): CompiledMatch<T> {
       var tIdx = matchState.handlerIndex;
       var hIdx = terminalHandlers[tIdx];
       var factory = paramsFactories[tIdx];
-      var params;
-      var cachedParams;
-      
-      if (factory !== undefined && factory !== null) {
-        params = factory(sp, matchState.paramOffsets);
-        cachedParams = factory(sp, matchState.paramOffsets);
-      } else {
-        params = EMPTY_PARAMS;
-        cachedParams = EMPTY_PARAMS;
-      }
+      var params = (factory !== undefined && factory !== null)
+        ? factory(sp, matchState.paramOffsets)
+        : EMPTY_PARAMS;
 
       var val = handlers[hIdx];
       if (hc === undefined) {
         hc = new RouterCache(${cacheMaxSize});
         hitCacheByMethod.set(mc, hc);
       }
-      hc.set(sp, { value: val, params: cachedParams });
-      return { value: val, params: params, meta: DYNAMIC_META };
+      hc.set(sp, { value: val, params: params });
+      return {
+        value: val,
+        params: params === EMPTY_PARAMS ? params : Object.assign(new NullProtoObj(), params),
+        meta: DYNAMIC_META,
+      };
     `);
   } else {
     src.push(emitMissCacheWrite());
@@ -175,7 +177,7 @@ function emitGenericMatchImpl<T>(cfg: MatchConfig<T>): CompiledMatch<T> {
     'staticOutputsByMethod', 'methodCodes', 'trees', 'matchState', 'handlers',
     'hitCacheByMethod', 'missCacheByMethod', 'RouterCache', 'RouterMissCache',
     'EMPTY_PARAMS', 'CACHE_META', 'DYNAMIC_META', 'terminalHandlers', 'isWildcardByTerminal', 'paramsFactories',
-    'scanRuntimePath', 'runtimePathPolicyCfg',
+    'scanRuntimePath', 'runtimePathPolicyCfg', 'NullProtoObj',
     `return function match(method, path) {\n${body}\n};`,
   );
 
@@ -193,6 +195,6 @@ function emitGenericMatchImpl<T>(cfg: MatchConfig<T>): CompiledMatch<T> {
     cfg.staticOutputsByMethod, cfg.methodCodes, cfg.trees, cfg.matchState, cfg.handlers,
     cfg.hitCacheByMethod, cfg.missCacheByMethod, RouterCache, RouterMissCache,
     EMPTY_PARAMS, CACHE_META, DYNAMIC_META, cfg.terminalHandlers, cfg.isWildcardByTerminal, cfg.paramsFactories,
-    scanRuntimePath, policyCfg,
+    scanRuntimePath, policyCfg, NullProtoObj,
   ) as CompiledMatch<T>;
 }
