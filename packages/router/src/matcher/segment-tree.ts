@@ -25,6 +25,14 @@ export interface SegmentNode {
   wildcardStore: number | null;
   wildcardName: string | null;
   wildcardOrigin: 'star' | 'multi' | null;
+  /**
+   * Compacted single-static-chain prefix produced by post-seal compaction.
+   * When set, the matcher must consume each segment in order against the
+   * input path before evaluating this node's children. Saves one
+   * SegmentNode + one staticChildren map per chain link removed. `null`
+   * for un-compacted nodes.
+   */
+  staticPrefix: string[] | null;
 }
 
 export interface ParamSegment {
@@ -170,7 +178,103 @@ export function createSegmentNode(): SegmentNode {
     wildcardStore: null,
     wildcardName: null,
     wildcardOrigin: null,
+    staticPrefix: null,
   };
+}
+
+/**
+ * Post-seal compaction. Walks the tree and folds every chain of nodes that
+ * each have exactly one static child (and no param/wildcard/store) into the
+ * deepest node, recording the path on `staticPrefix`. Returns counters for
+ * diagnostics: nodes folded, chains merged.
+ */
+export function compactSegmentTree(root: SegmentNode): { foldedNodes: number; chains: number } {
+  let foldedNodes = 0;
+  let chains = 0;
+  // Intern shared `staticPrefix` arrays so 100k nodes carrying the same
+  // single-element prefix share one array reference instead of allocating
+  // 100k 1-entry arrays.
+  const prefixIntern = new Map<string, readonly string[]>();
+  const internPrefix = (parts: string[]): string[] => {
+    const key = parts.join('\x00');
+    const existing = prefixIntern.get(key);
+    if (existing !== undefined) return existing as string[];
+    const frozen = parts;
+    prefixIntern.set(key, frozen);
+    return frozen;
+  };
+
+  // Single-static-child passthrough probe that avoids `Object.keys()`
+  // allocations: peeks the staticChildren record via `for-in` and bails as
+  // soon as more than one key is observed.
+  function peekSingleStatic(children: Record<string, SegmentNode>): { key: string | null; many: boolean } {
+    let only: string | null = null;
+    let many = false;
+    for (const k in children) {
+      if (only === null) only = k;
+      else { many = true; break; }
+    }
+    return { key: only, many };
+  }
+
+  function foldChainFrom(start: SegmentNode): { target: SegmentNode; folded: string[] } {
+    const folded: string[] = [];
+    let target = start;
+    while (
+      target.staticChildren !== null &&
+      target.paramChild === null &&
+      target.wildcardStore === null &&
+      target.store === null &&
+      (target.staticPrefix === null || target.staticPrefix.length === 0)
+    ) {
+      const peek = peekSingleStatic(target.staticChildren);
+      if (peek.many || peek.key === null) break;
+      folded.push(peek.key);
+      target = target.staticChildren[peek.key]!;
+      foldedNodes++;
+    }
+    return { target, folded };
+  }
+
+  const stack: SegmentNode[] = [root];
+  const visited = new Set<SegmentNode>();
+  while (stack.length > 0) {
+    const node = stack.pop()!;
+    if (visited.has(node)) continue;
+    visited.add(node);
+
+    if (node.staticChildren !== null) {
+      const sc = node.staticChildren;
+      for (const key in sc) {
+        const { target, folded } = foldChainFrom(sc[key]!);
+        if (folded.length > 0) {
+          chains++;
+          const merged = target.staticPrefix === null
+            ? internPrefix(folded)
+            : internPrefix([...folded, ...target.staticPrefix]);
+          target.staticPrefix = merged;
+          (sc as Record<string, SegmentNode>)[key] = target;
+        }
+        stack.push(target);
+      }
+    }
+
+    let p = node.paramChild;
+    while (p !== null) {
+      const { target, folded } = foldChainFrom(p.next);
+      if (folded.length > 0) {
+        chains++;
+        const merged = target.staticPrefix === null
+          ? internPrefix(folded)
+          : internPrefix([...folded, ...target.staticPrefix]);
+        target.staticPrefix = merged;
+        p.next = target;
+      }
+      stack.push(target);
+      p = p.nextSibling;
+    }
+  }
+  return { foldedNodes, chains };
 }
 
 /**

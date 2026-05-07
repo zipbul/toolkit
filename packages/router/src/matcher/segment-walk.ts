@@ -4,7 +4,7 @@ import type { ParamSegment, SegmentNode } from './segment-tree';
 
 import { performance } from 'node:perf_hooks';
 import { TESTER_PASS } from './pattern-tester';
-import { hasAmbiguousNode } from './segment-tree';
+import { compactSegmentTree, hasAmbiguousNode } from './segment-tree';
 import { compileSegmentTree, collectWarmupPaths } from '../codegen/segment-compile';
 import { detectWildCodegenSpec } from '../codegen/walker-strategy';
 import { createMatchState } from './match-state';
@@ -124,6 +124,16 @@ export function createSegmentWalker(
     return compiled;
   }
 
+  // Codegen bailed — the tree is large enough that the iterative/recursive
+  // path will be used. Run single-static-chain compaction here so the
+  // walker pays only one node visit per merged chain rather than one per
+  // segment. Compaction is destructive; no codegen attempt may follow.
+  const stats = compactSegmentTree(root);
+  if (process.env.ZIPBUL_ROUTER_CODEGEN_DIAGNOSTICS === '1') {
+    // eslint-disable-next-line no-console
+    console.log(`compact=foldedNodes=${stats.foldedNodes} chains=${stats.chains}`);
+  }
+
   if (!hasAmbiguousNode(root)) {
     return createIterativeWalker(root, decoder);
   }
@@ -163,6 +173,18 @@ export function createSegmentWalker(
     decoder: DecoderFn,
   ): boolean {
     const len = path.length;
+
+    // Compacted single-static chain: walk each prefix segment in order.
+    if (node.staticPrefix !== null) {
+      const sp = node.staticPrefix;
+      for (let i = 0; i < sp.length; i++) {
+        if (pos > len) return false;
+        const ns = path.indexOf('/', pos);
+        const segEnd = ns === -1 ? len : ns;
+        if (path.substring(pos, segEnd) !== sp[i]) return false;
+        pos = segEnd === len ? len : segEnd + 1;
+      }
+    }
 
     if (pos >= len) {
       if (node.store !== null) {
@@ -260,6 +282,22 @@ function createIterativeWalker(root: SegmentNode, decoder: DecoderFn): MatchFn {
     let pos = 1;
 
     while (pos < len) {
+      // Compacted single-static chain on this node — consume its prefix
+      // segments before the regular per-segment dispatch.
+      if (node.staticPrefix !== null) {
+        const sp = node.staticPrefix;
+        let ok = true;
+        for (let i = 0; i < sp.length; i++) {
+          if (pos > len) { ok = false; break; }
+          const ns2 = url.indexOf('/', pos);
+          const segEnd = ns2 === -1 ? len : ns2;
+          if (url.substring(pos, segEnd) !== sp[i]) { ok = false; break; }
+          pos = segEnd === len ? len : segEnd + 1;
+        }
+        if (!ok) return false;
+        if (pos >= len) break;
+      }
+
       const nextSlash = url.indexOf('/', pos);
       const end = nextSlash === -1 ? len : nextSlash;
       const seg = url.substring(pos, end);
