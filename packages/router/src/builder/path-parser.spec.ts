@@ -9,6 +9,7 @@ function defaultConfig(overrides: Partial<PathParserConfig> = {}): PathParserCon
     caseSensitive: true,
     ignoreTrailingSlash: true,
     maxSegmentLength: 256,
+    maxPathLength: 8192,
     ...overrides,
   };
 }
@@ -67,7 +68,7 @@ describe('PathParser', () => {
       for (const path of ['/api//users', '//', '/a///b']) {
         const result = parse(path);
         expect(isErr(result)).toBe(true);
-        if (isErr(result)) expect(result.data.kind).toBe('route-parse');
+        if (isErr(result)) expect(result.data.kind).toBe('path-empty-segment');
       }
     });
   });

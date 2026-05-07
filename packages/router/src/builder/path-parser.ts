@@ -30,6 +30,7 @@ export interface PathParserConfig {
   caseSensitive: boolean;
   ignoreTrailingSlash: boolean;
   maxSegmentLength: number;
+  maxPathLength: number;
 }
 
 // ── PathParser ──
@@ -79,12 +80,28 @@ export class PathParser {
       });
     }
 
+    const maxLen = this.config.maxPathLength;
+    if (Number.isFinite(maxLen) && path.length > maxLen) {
+      return err({
+        kind: 'path-too-long',
+        message: `Path length ${path.length} exceeds maxPathLength ${maxLen}.`,
+        path,
+        suggestion: `Shorten the path or raise maxPathLength.`,
+      });
+    }
+
     // Single-pass scan for control / non-ASCII / fragment / malformed-percent / dot-segment.
     // Track segment boundaries via slash position tracking for dot-segment detection.
+    // Track open `(` for regex-pattern body (chars inside `(...)` skip the pchar
+    // rule but are still scanned for unsafe bytes via the other rules).
     let segStart = 1; // skip leading `/`
+    let parenDepth = 0;
     const len = path.length;
     for (let i = 0; i < len; i++) {
       const c = path.charCodeAt(i);
+
+      if (c === 0x28) parenDepth++; // '('
+      else if (c === 0x29 && parenDepth > 0) parenDepth--; // ')'
 
       if (c === 0x23) {
         return err({
@@ -154,6 +171,23 @@ export class PathParser {
         }
         segStart = i + 1;
       }
+
+      // RFC 3986 pchar = unreserved / pct-encoded / sub-delims / ":" / "@"
+      // unreserved = ALPHA / DIGIT / "-" / "." / "_" / "~"
+      // sub-delims = "!" / "$" / "&" / "'" / "(" / ")" / "*" / "+" / "," / ";" / "="
+      // Plus router grammar: `/` (segment separator), `:` (param marker), `*` (wildcard),
+      // `?` (optional decorator). Inside a regex group `(...)` chars belong to the
+      // pattern syntax — skip the pchar gate there; the regex parser/safety pass
+      // is the right place to flag them.
+      if (parenDepth > 0) continue;
+      if (!isAcceptablePathChar(c)) {
+        return err({
+          kind: 'path-invalid-pchar',
+          message: `Path contains invalid character '${path[i]}' (charCode 0x${c.toString(16)}): ${path}`,
+          path,
+          suggestion: 'Use percent-encoded form for characters outside RFC 3986 pchar.',
+        });
+      }
     }
 
     return null;
@@ -183,7 +217,7 @@ export class PathParser {
     for (const seg of segments) {
       if (seg === '') {
         return err({
-          kind: 'route-parse',
+          kind: 'path-empty-segment',
           message: `Path must not contain empty segments: ${path}`,
           path,
           suggestion: 'Collapse repeated slashes or register a single canonical path.',
@@ -586,6 +620,25 @@ function validateParamName(
 
 function isHex(c: number): boolean {
   return (c >= 0x30 && c <= 0x39) || (c >= 0x41 && c <= 0x46) || (c >= 0x61 && c <= 0x66);
+}
+
+// RFC 3986 pchar + router grammar (segment separator `/`, param `:`, wildcard
+// `*`, optional decorator `?`). Already-handled bytes earlier in the scan
+// (control, non-ASCII, raw `#`, `?` outside decorator, `%` malformed) won't
+// reach this gate.
+function isAcceptablePathChar(c: number): boolean {
+  // ALPHA / DIGIT
+  if ((c >= 0x41 && c <= 0x5a) || (c >= 0x61 && c <= 0x7a) || (c >= 0x30 && c <= 0x39)) return true;
+  // unreserved special: - . _ ~
+  if (c === 0x2d || c === 0x2e || c === 0x5f || c === 0x7e) return true;
+  // sub-delims: ! $ & ' ( ) * + , ; =
+  if (c === 0x21 || c === 0x24 || c === 0x26 || c === 0x27 || c === 0x28 ||
+      c === 0x29 || c === 0x2a || c === 0x2b || c === 0x2c || c === 0x3b || c === 0x3d) return true;
+  // pchar `:` `@` and router-grammar `/` `?` (validated as decorator above)
+  if (c === 0x3a || c === 0x40 || c === 0x2f || c === 0x3f) return true;
+  // percent-escape (validated above)
+  if (c === 0x25) return true;
+  return false;
 }
 
 // True only when the segment, after decoding `%2e`/`%2E` to `.`, is exactly

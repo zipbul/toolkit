@@ -5,6 +5,7 @@ import type { RouterCache, RouterMissCache } from './cache';
 
 import { OptionalParamDefaults } from './builder/optional-param-defaults';
 import { PathParser } from './builder/path-parser';
+import { RouterError } from './error';
 import { compileMatchFn } from './codegen/emitter';
 import { MethodRegistry } from './method-registry';
 import { buildFromRegistration } from './pipeline/build';
@@ -46,10 +47,6 @@ const DEFAULT_CACHE_SIZE = 1000;
 function createCacheContainers<T>(options: RouterOptions): CacheContainers<T> {
   const maxSize = options.cacheSize ?? DEFAULT_CACHE_SIZE;
 
-  if (!Number.isInteger(maxSize) || maxSize <= 0) {
-    throw new RangeError(`cacheSize must be a positive integer (received ${String(maxSize)}).`);
-  }
-
   return {
     hit: new Map(),
     miss: new Map(),
@@ -69,27 +66,55 @@ const NUMERIC_OPTION_KEYS = [
   'cacheSize',
 ] as const;
 
-function validateNumericOptions(options: RouterOptions): void {
+function validateOptions(options: RouterOptions): void {
   const allowUnbounded = options.unsafeAllowUnboundedLimits === true;
+  const issues: Array<{ option: string; message: string; suggestion?: string }> = [];
   for (const key of NUMERIC_OPTION_KEYS) {
     const v = options[key];
     if (v === undefined) continue;
     if (typeof v !== 'number' || Number.isNaN(v) || v <= 0) {
-      throw new RangeError(`${key} must be a positive number (received ${String(v)}).`);
+      issues.push({ option: key, message: `${key} must be a positive number (received ${String(v)}).` });
+      continue;
     }
     if (!Number.isFinite(v) && !allowUnbounded) {
-      throw new RangeError(`${key} must be finite without unsafeAllowUnboundedLimits=true (received ${String(v)}).`);
+      issues.push({
+        option: key,
+        message: `${key} must be finite (received Infinity).`,
+        suggestion: 'Provide a finite cap, or opt in via unsafeAllowUnboundedLimits=true (drops secure-profile guarantees).',
+      });
+      continue;
     }
     if (v === Number.MAX_SAFE_INTEGER && !allowUnbounded) {
-      throw new RangeError(`${key} = MAX_SAFE_INTEGER is rejected without unsafeAllowUnboundedLimits=true.`);
+      issues.push({
+        option: key,
+        message: `${key} = Number.MAX_SAFE_INTEGER is treated as unbounded.`,
+        suggestion: 'Provide a finite cap, or opt in via unsafeAllowUnboundedLimits=true.',
+      });
+      continue;
     }
     if (Number.isFinite(v) && !Number.isInteger(v)) {
-      throw new RangeError(`${key} must be an integer (received ${String(v)}).`);
+      issues.push({ option: key, message: `${key} must be an integer (received ${String(v)}).` });
+      continue;
     }
   }
   if (options.profile === 'secure' && options.unsafeAllowUnboundedLimits === true) {
-    throw new RangeError('profile="secure" cannot be combined with unsafeAllowUnboundedLimits=true.');
+    issues.push({
+      option: 'profile',
+      message: 'profile="secure" is incompatible with unsafeAllowUnboundedLimits=true.',
+      suggestion: 'Choose profile="compat" or profile="unsafe" to allow unbounded limits.',
+    });
   }
+  if (issues.length === 0) return;
+  throw new RouterError({
+    kind: 'route-validation',
+    message: `${issues.length} option(s) failed validation.`,
+    errors: issues.map((i, idx) => ({
+      index: idx,
+      method: '',
+      path: '',
+      error: { kind: 'option-invalid' as const, message: i.message, option: i.option, suggestion: i.suggestion },
+    })),
+  });
 }
 
 function createPathParser(options: RouterOptions): PathParser {
@@ -97,6 +122,7 @@ function createPathParser(options: RouterOptions): PathParser {
     caseSensitive: options.caseSensitive ?? true,
     ignoreTrailingSlash: options.ignoreTrailingSlash ?? true,
     maxSegmentLength: options.maxSegmentLength ?? 1024,
+    maxPathLength: options.maxPathLength ?? 8192,
   });
 }
 
@@ -121,7 +147,7 @@ export class Router<T = unknown> {
   readonly allowedMethods: (path: string) => HttpMethod[];
 
   constructor(options: RouterOptions = {}) {
-    validateNumericOptions(options);
+    validateOptions(options);
     const routerOptions: RouterOptions = { ...options };
     const optionalParamDefaults = new OptionalParamDefaults(routerOptions.optionalParamBehavior);
     const methodRegistry = new MethodRegistry();

@@ -35,7 +35,7 @@ describe('Router regression fixes', () => {
     const error = catchRouterError(() => router.build());
     expect(error.data.kind).toBe('route-validation');
     if (error.data.kind === 'route-validation') {
-      expect(error.data.errors[0]?.error.kind).toBe('route-parse');
+      expect(error.data.errors[0]?.error.kind).toBe('path-empty-segment');
     }
   });
 
