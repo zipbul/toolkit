@@ -1,10 +1,7 @@
-import type { HttpMethod } from '@zipbul/shared';
-
 import type { MatchFn, MatchState } from '../matcher/match-state';
 import type { PathNormalizer } from '../matcher/path-normalize';
 import type { MatchOutput } from '../types';
 
-import { NullProtoObj } from '../internal/null-proto-obj';
 
 /**
  * Dependencies the MatchLayer requires from the build pipeline. Every
@@ -74,12 +71,12 @@ export class MatchLayer<T> {
    *     single pre-allocated `state.params` across iterations.
    *   - matchImpl is never invoked — no duplicated preprocessing.
    */
-  allowedMethods(path: string): HttpMethod[] {
+  allowedMethods(path: string): readonly string[] {
     const sp = this.normalizePath(path);
 
     if (sp === null) return [];
 
-    const out: HttpMethod[] = [];
+    const out: string[] = [];
     const state = this.matchState;
     const active = this.activeMethodCodes;
 
@@ -89,7 +86,7 @@ export class MatchLayer<T> {
       const bucket = this.staticOutputsByMethod[methodCode];
 
       if (bucket !== undefined && bucket[sp] !== undefined) {
-        out.push(entry[0] as HttpMethod);
+        out.push(entry[0]);
         continue;
       }
 
@@ -98,7 +95,7 @@ export class MatchLayer<T> {
       if (tr === null || tr === undefined) continue;
 
       if (tr(sp, state)) {
-        out.push(entry[0] as HttpMethod);
+        out.push(entry[0]);
       }
     }
 

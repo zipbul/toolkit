@@ -1,5 +1,4 @@
-import type { HttpMethod } from '@zipbul/shared';
-import type { MatchOutput, RouterOptions } from './types';
+import type { MatchOutput, RouterOptions, RouterPublicApi } from './types';
 import type { MatchCacheEntry, MatchConfig } from './codegen/emitter';
 import type { RouterCache, RouterMissCache } from './cache';
 
@@ -169,16 +168,16 @@ function createPathParser(options: RouterOptions): PathParser {
  * the constructor; the caches and other build-time state live in the
  * closure scope where external code cannot reach them.
  */
-export class Router<T = unknown> {
+export class Router<T = unknown> implements RouterPublicApi<T> {
   readonly add: (
-    method: HttpMethod | HttpMethod[] | '*',
+    method: string | readonly string[],
     path: string,
     value: T,
   ) => void;
-  readonly addAll: (entries: Array<[HttpMethod, string, T]>) => void;
-  readonly build: () => this;
-  readonly match: (method: HttpMethod, path: string) => MatchOutput<T> | null;
-  readonly allowedMethods: (path: string) => HttpMethod[];
+  readonly addAll: (entries: ReadonlyArray<readonly [string, string, T]>) => void;
+  readonly build: () => RouterPublicApi<T>;
+  readonly match: (method: string, path: string) => MatchOutput<T> | null;
+  readonly allowedMethods: (path: string) => readonly string[];
 
   constructor(options: RouterOptions = {}) {
     validateOptions(options);

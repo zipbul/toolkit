@@ -59,6 +59,25 @@ describe('32-method limit boundary', () => {
   });
 });
 
+describe('HEAD and OPTIONS get no implicit fallback', () => {
+  test('HEAD does not match a GET-only registration', () => {
+    const r = new Router<string>();
+    r.add('GET', '/x', 'g');
+    r.build();
+    expect(r.match('HEAD', '/x')).toBeNull();
+    expect(r.allowedMethods('/x')).toEqual(['GET']);
+  });
+
+  test('OPTIONS is not generated implicitly', () => {
+    const r = new Router<string>();
+    r.add('GET', '/x', 'g');
+    r.add('POST', '/x', 'p');
+    r.build();
+    expect(r.match('OPTIONS', '/x')).toBeNull();
+    expect([...r.allowedMethods('/x')].sort()).toEqual(['GET', 'POST']);
+  });
+});
+
 describe('method token validation', () => {
   test('empty method must throw on add()/build()', () => {
     const r = new Router<string>();

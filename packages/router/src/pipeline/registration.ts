@@ -1,8 +1,8 @@
-import type { HttpMethod } from '@zipbul/shared';
 import type { Result } from '@zipbul/result';
 import type { PathPart } from '../builder/path-parser';
 import type { SegmentNode, SegmentTreeUndoLog } from '../matcher/segment-tree';
-import type { RouterErrorData, RouteValidationIssue, RouteParams } from '../types';
+import type { RouterErrorData, RouteParams } from '../types';
+import type { RouteValidationIssue } from '../builder/validation-issue';
 import type { PatternTesterFn } from '../matcher/pattern-tester';
 
 import { performance } from 'node:perf_hooks';
@@ -157,8 +157,8 @@ export class Registration<T> {
     return this.diagnostics;
   }
 
-  add(method: HttpMethod | HttpMethod[] | '*', path: string, value: T): void {
-    this.assertNotSealed({ path, method: Array.isArray(method) ? method[0] : method });
+  add(method: string | readonly string[], path: string, value: T): void {
+    this.assertNotSealed({ path, method: Array.isArray(method) ? method[0] : (method as string) });
 
     if (Array.isArray(method)) {
       for (const m of method) this.pendingRoutes.push({ method: m, path, value });
@@ -172,10 +172,10 @@ export class Registration<T> {
       return;
     }
 
-    this.pendingRoutes.push({ method, path, value });
+    this.pendingRoutes.push({ method: method as string, path, value });
   }
 
-  addAll(entries: Array<[HttpMethod, string, T]>): void {
+  addAll(entries: ReadonlyArray<readonly [string, string, T]>): void {
     this.assertNotSealed({ registeredCount: 0 });
 
     for (const [method, path, value] of entries) {

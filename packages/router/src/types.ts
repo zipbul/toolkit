@@ -154,6 +154,17 @@ export type RouterErrorData = {
 
 // ── Match output types ──
 
+// Public API surface a built router exposes. Match/allowedMethods accept any
+// RFC 9110 token as the method argument; the runtime token gate handles
+// validation.
+export interface RouterPublicApi<T> {
+  add(method: string | readonly string[], path: string, value: T): void;
+  addAll(entries: ReadonlyArray<readonly [string, string, T]>): void;
+  build(): RouterPublicApi<T>;
+  match(method: string, path: string): MatchOutput<T> | null;
+  allowedMethods(path: string): readonly string[];
+}
+
 /**
  * 매칭 메타 정보.
  * 디버깅/모니터링 용도로 매칭 소스를 알려준다.

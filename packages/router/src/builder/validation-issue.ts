@@ -1,8 +1,8 @@
-import type { RouterErrorData } from '../types';
+import type { RouterErrorData, RouteValidationIssue } from '../types';
 
-/**
- * Single issue collected during a build / option validation pass. Identical
- * shape to RouterErrorData; the dedicated alias documents intent at the
- * call sites that aggregate into a route-validation error.
- */
-export type ValidationIssue = RouterErrorData;
+// Single issue collected during a build / option validation pass. The shape
+// matches RouterErrorData; the alias documents intent at aggregation sites.
+export type RouterIssue = RouterErrorData;
+
+// Aggregate row collected by seal() into the route-validation error payload.
+export type { RouteValidationIssue };
