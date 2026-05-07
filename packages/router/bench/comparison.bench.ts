@@ -1,37 +1,40 @@
+/**
+ * Apples-to-apples microbench against six external routers.
+ *
+ * Each adapter is held to the same per-scenario sanity contract before any
+ * timing runs:
+ *   - every hit path the bench will measure must return non-null
+ *   - every declared miss path must return null
+ *   - the declared wrong-method dispatch must return null
+ *   - the wildcard syntax rewrite produces a path the adapter actually
+ *     accepts at registration time
+ * If any adapter fails the contract for a scenario, that adapter is
+ * excluded from the scenario's bench block (with a printed reason)
+ * instead of silently emitting a `0 ns/op` line.
+ */
+
 import { run, bench, summary, do_not_optimize } from 'mitata';
 
-// ── @zipbul/router ──
 import { Router } from '../src/router';
-
-// ── find-my-way ──
 import FindMyWay from 'find-my-way';
-
-// ── memoirist (Elysia) ──
 import { Memoirist } from 'memoirist';
-
-// ── rou3 (H3/Nitro) ──
 import { createRouter as createRou3, addRoute, findRoute } from 'rou3';
-
-// ── hono ──
 import { RegExpRouter } from 'hono/router/reg-exp-router';
 import { TrieRouter } from 'hono/router/trie-router';
-
-// ── koa-tree-router ──
 import KoaTreeRouter from 'koa-tree-router';
+
+type Method = string;
+type Route = readonly [Method, string, number];
 
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 //  ROUTE SETS
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-type Route = [method: string, path: string, value: number];
-
-// 1) Static routes (100)
 const STATIC_ROUTES: Route[] = [];
 for (let i = 0; i < 100; i++) {
   STATIC_ROUTES.push(['GET', `/api/v1/resource${i}`, i]);
 }
 
-// 2) Parametric routes
 const PARAM_ROUTES: Route[] = [
   ['GET', '/users/:id', 1],
   ['GET', '/users/:id/posts/:postId', 2],
@@ -39,15 +42,14 @@ const PARAM_ROUTES: Route[] = [
   ['GET', '/orgs/:org/teams/:team/members/:member', 4],
 ];
 
-// 3) Wildcard routes
+// Wildcard scenario uses two distinct prefixes; both adapters' hit paths
+// hit a different prefix so neither side is biased by IC monomorphism.
 const WILDCARD_ROUTES: Route[] = [
   ['GET', '/static/*path', 1],
   ['GET', '/files/*filepath', 2],
 ];
 
-// 4) GitHub API-like routes (~65)
 const GITHUB_ROUTES: Route[] = [
-  // Users
   ['GET', '/user', 1],
   ['GET', '/users/:user', 2],
   ['GET', '/users/:user/repos', 3],
@@ -57,7 +59,6 @@ const GITHUB_ROUTES: Route[] = [
   ['GET', '/users/:user/following', 7],
   ['GET', '/users/:user/following/:target', 8],
   ['GET', '/users/:user/keys', 9],
-  // Repos
   ['GET', '/repos/:owner/:repo', 10],
   ['GET', '/repos/:owner/:repo/commits', 11],
   ['GET', '/repos/:owner/:repo/commits/:sha', 12],
@@ -92,7 +93,6 @@ const GITHUB_ROUTES: Route[] = [
   ['GET', '/repos/:owner/:repo/collaborators/:user', 41],
   ['PUT', '/repos/:owner/:repo/collaborators/:user', 42],
   ['DELETE', '/repos/:owner/:repo/collaborators/:user', 43],
-  // Orgs
   ['GET', '/orgs/:org', 44],
   ['GET', '/orgs/:org/repos', 45],
   ['GET', '/orgs/:org/members', 46],
@@ -102,17 +102,14 @@ const GITHUB_ROUTES: Route[] = [
   ['POST', '/orgs/:org/teams', 50],
   ['GET', '/orgs/:org/teams/:team/members', 51],
   ['GET', '/orgs/:org/teams/:team/repos', 52],
-  // Gists
   ['GET', '/gists', 53],
   ['GET', '/gists/:id', 54],
   ['POST', '/gists', 55],
   ['GET', '/gists/:id/comments', 56],
-  // Search
   ['GET', '/search/repositories', 57],
   ['GET', '/search/code', 58],
   ['GET', '/search/issues', 59],
   ['GET', '/search/users', 60],
-  // Misc
   ['GET', '/notifications', 61],
   ['GET', '/events', 62],
   ['GET', '/feeds', 63],
@@ -121,409 +118,311 @@ const GITHUB_ROUTES: Route[] = [
 ];
 
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-//  ROUTER ADAPTERS
+//  ADAPTER INTERFACE
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-// Wildcard path converters
-function toFindMyWayPath(path: string): string {
-  // /static/*path → /static/*
-  return path.replace(/\*\w+/, '*');
+interface Adapter {
+  readonly name: string;
+  /** Per-scenario route-shape rewrite; identity for adapters that accept
+   *  the canonical `*name` named-wildcard form. */
+  rewrite(path: string): string;
+  setup(routes: ReadonlyArray<Route>): unknown;
+  /** Match returning a non-null sentinel on hit, null on miss. */
+  match(router: unknown, method: Method, path: string): unknown;
 }
 
-function toRou3Path(path: string): string {
-  // /static/*path → /static/**
-  return path.replace(/\*\w+/, '**');
+const adapters: Adapter[] = [
+  {
+    name: 'zipbul',
+    rewrite: (p) => p,
+    setup: (rs) => {
+      const r = new Router<number>();
+      for (const [m, p, v] of rs) r.add(m as 'GET', p, v);
+      r.build();
+      return r;
+    },
+    match: (r, m, p) => (r as Router<number>).match(m, p),
+  },
+  {
+    name: 'find-my-way',
+    // find-my-way accepts a bare trailing `*` as catchall; named `*name`
+    // is rejected at register time.
+    rewrite: (p) => p.replace(/\/\*[^/]+$/, '/*'),
+    setup: (rs) => {
+      const r = FindMyWay();
+      for (const [m, p, v] of rs) r.on(m as 'GET', p, () => v);
+      return r;
+    },
+    match: (r, m, p) => (r as ReturnType<typeof FindMyWay>).find(m as 'GET', p),
+  },
+  {
+    name: 'memoirist',
+    // memoirist accepts canonical `*name`.
+    rewrite: (p) => p,
+    setup: (rs) => {
+      const r = new Memoirist<number>();
+      for (const [m, p, v] of rs) r.add(m, p, v);
+      return r;
+    },
+    match: (r, m, p) => (r as Memoirist<number>).find(m, p),
+  },
+  {
+    name: 'rou3',
+    // rou3 reserves `**:name` as the named catch-all form.
+    rewrite: (p) => p.replace(/\/\*([^/]+)$/, '/**:$1'),
+    setup: (rs) => {
+      const r = createRou3<number>();
+      for (const [m, p, v] of rs) addRoute(r, m, p, v);
+      return r;
+    },
+    match: (r, m, p) => findRoute(r as ReturnType<typeof createRou3<number>>, m, p),
+  },
+  {
+    name: 'hono-regexp',
+    // hono accepts a bare trailing `*` placeholder.
+    rewrite: (p) => p.replace(/\/\*[^/]+$/, '/*'),
+    setup: (rs) => {
+      const r = new RegExpRouter<number>();
+      for (const [m, p, v] of rs) r.add(m, p, v);
+      return r;
+    },
+    match: (r, m, p) => {
+      const out = (r as RegExpRouter<number>).match(m, p) as unknown as [unknown[]];
+      return out[0].length > 0 ? out : null;
+    },
+  },
+  {
+    name: 'hono-trie',
+    rewrite: (p) => p.replace(/\/\*[^/]+$/, '/*'),
+    setup: (rs) => {
+      const r = new TrieRouter<number>();
+      for (const [m, p, v] of rs) r.add(m, p, v);
+      return r;
+    },
+    match: (r, m, p) => {
+      const out = (r as TrieRouter<number>).match(m, p) as unknown as [unknown[]];
+      return out[0].length > 0 ? out : null;
+    },
+  },
+  {
+    name: 'koa-tree-router',
+    // koa-tree-router uses `*name` as named catchall.
+    rewrite: (p) => p,
+    setup: (rs) => {
+      const r = new KoaTreeRouter() as unknown as {
+        on: (m: string, p: string, h: () => unknown) => void;
+        find: (m: string, p: string) => { handle: unknown };
+      };
+      for (const [m, p, v] of rs) r.on(m, p, () => v);
+      return r;
+    },
+    match: (r, m, p) => {
+      const out = (r as { find: (m: string, p: string) => { handle: unknown } }).find(m, p);
+      return out.handle === null ? null : out;
+    },
+  },
+];
+
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+//  SCENARIO DEFINITIONS
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+interface Scenario {
+  /** Display label (also used to name bench summary blocks). */
+  label: string;
+  /** Canonical route list (each adapter rewrites with `rewrite()` first). */
+  routes: ReadonlyArray<Route>;
+  /** Hit assertions: each `[method, path]` must return non-null on every adapter. */
+  hits: ReadonlyArray<readonly [Method, string]>;
+  /** Miss assertions: each path must return null on every adapter. */
+  misses: ReadonlyArray<readonly [Method, string]>;
+  /** Wrong-method axis: `path` is registered under a different method,
+   *  the bench dispatches `method` and expects null. */
+  wrongMethod: readonly [Method, string];
 }
 
-function toHonoPath(path: string): string {
-  // /static/*path → /static/*
-  return path.replace(/\*\w+/, '*');
+const scenarios: Scenario[] = [
+  {
+    label: 'static',
+    routes: STATIC_ROUTES,
+    hits: [
+      ['GET', '/api/v1/resource0'],
+      ['GET', '/api/v1/resource50'],
+      ['GET', '/api/v1/resource99'],
+    ],
+    misses: [['GET', '/api/v1/missing']],
+    wrongMethod: ['POST', '/api/v1/resource50'],
+  },
+  {
+    label: 'param-1',
+    routes: PARAM_ROUTES,
+    hits: [['GET', '/users/42']],
+    misses: [['GET', '/missing/42']],
+    wrongMethod: ['POST', '/users/42'],
+  },
+  {
+    label: 'param-3',
+    routes: PARAM_ROUTES,
+    hits: [['GET', '/repos/zipbul/toolkit/issues/42']],
+    misses: [['GET', '/repos/zipbul/toolkit/missing/42']],
+    wrongMethod: ['POST', '/repos/zipbul/toolkit/issues/42'],
+  },
+  {
+    label: 'wildcard',
+    routes: WILDCARD_ROUTES,
+    hits: [
+      ['GET', '/static/js/app.bundle.js'],
+      ['GET', '/files/uploads/2024/photo.jpg'],
+    ],
+    misses: [['GET', '/missing/path/here']],
+    wrongMethod: ['POST', '/static/js/app.bundle.js'],
+  },
+  {
+    label: 'github-static',
+    routes: GITHUB_ROUTES,
+    hits: [['GET', '/user']],
+    misses: [['GET', '/missing']],
+    wrongMethod: ['POST', '/user'],
+  },
+  {
+    label: 'github-param',
+    routes: GITHUB_ROUTES,
+    hits: [['GET', '/repos/zipbul/toolkit/issues/42']],
+    misses: [['GET', '/repos/zipbul/toolkit/missing/42']],
+    wrongMethod: ['DELETE', '/repos/zipbul/toolkit/issues/42'],
+  },
+  {
+    label: 'miss',
+    routes: STATIC_ROUTES,
+    hits: [],
+    misses: [['GET', '/nonexistent/path/that/does/not/exist']],
+    // wrong-method on a known-missing path is the same outcome as a plain
+    // miss; reuse the miss path so the axis is exercised consistently.
+    wrongMethod: ['POST', '/nonexistent/path/that/does/not/exist'],
+  },
+];
+
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+//  SANITY GATE
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+interface BuiltAdapter {
+  adapter: Adapter;
+  router: unknown;
+  /** True iff every hit/miss/wrong-method assertion passed for this scenario. */
+  passed: boolean;
+  failureReason?: string;
 }
 
-function toKoaTreePath(path: string): string {
-  // /static/*path → /static/*filepath (koa-tree-router uses *name)
-  return path.replace(/\*\w+/, '*filepath');
-}
-
-function toMemoiristPath(path: string): string {
-  // /static/*path → /static/*
-  return path.replace(/\*\w+/, '*');
-}
-
-// ── @zipbul/router ──
-
-function setupZipbul(routes: Route[]): Router<number> {
-  const router = new Router<number>();
-  for (const [method, path, value] of routes) {
-    router.add(method as 'GET', path, value);
-  }
-  router.build();
-  return router;
-}
-
-// ── find-my-way ──
-
-function setupFindMyWay(routes: Route[]): ReturnType<typeof FindMyWay> {
-  const router = FindMyWay();
-  for (const [method, path, value] of routes) {
-    router.on(method as 'GET', toFindMyWayPath(path), () => value);
-  }
-  return router;
-}
-
-// ── memoirist ──
-
-function setupMemoirist(routes: Route[]): Memoirist<number> {
-  const router = new Memoirist<number>();
-  for (const [method, path, value] of routes) {
-    router.add(method, toMemoiristPath(path), value);
-  }
-  return router;
-}
-
-// ── rou3 ──
-
-function setupRou3(routes: Route[]) {
-  const router = createRou3<number>();
-  for (const [method, path, value] of routes) {
-    addRoute(router, method, toRou3Path(path), value);
-  }
-  return router;
-}
-
-// ── hono RegExpRouter ──
-
-function setupHonoRegExp(routes: Route[]): RegExpRouter<number> {
-  const router = new RegExpRouter<number>();
-  for (const [method, path, value] of routes) {
-    router.add(method, toHonoPath(path), value);
-  }
-  return router;
-}
-
-// ── hono TrieRouter ──
-
-function setupHonoTrie(routes: Route[]): TrieRouter<number> {
-  const router = new TrieRouter<number>();
-  for (const [method, path, value] of routes) {
-    router.add(method, toHonoPath(path), value);
-  }
-  return router;
-}
-
-// ── koa-tree-router ──
-
-function setupKoaTree(routes: Route[]) {
-  const router = new KoaTreeRouter() as any;
-  for (const [method, path, value] of routes) {
-    router.on(method, toKoaTreePath(path), () => value);
-  }
-  return router;
+function buildAndCheck(scenario: Scenario): BuiltAdapter[] {
+  return adapters.map((adapter) => {
+    let router: unknown;
+    const rewritten = scenario.routes.map(([m, p, v]) => [m, adapter.rewrite(p), v] as Route);
+    try {
+      router = adapter.setup(rewritten);
+    } catch (e) {
+      return {
+        adapter,
+        router: null,
+        passed: false,
+        failureReason: `setup-failed: ${e instanceof Error ? e.message : String(e)}`,
+      };
+    }
+    for (const [m, p] of scenario.hits) {
+      const r = adapter.match(router, m, p);
+      if (r === null || r === undefined) {
+        return { adapter, router, passed: false, failureReason: `hit-null: ${m} ${p}` };
+      }
+    }
+    for (const [m, p] of scenario.misses) {
+      const r = adapter.match(router, m, p);
+      if (r !== null && r !== undefined) {
+        return { adapter, router, passed: false, failureReason: `miss-not-null: ${m} ${p}` };
+      }
+    }
+    {
+      const [m, p] = scenario.wrongMethod;
+      const r = adapter.match(router, m, p);
+      if (r !== null && r !== undefined) {
+        return { adapter, router, passed: false, failureReason: `wrong-method-not-null: ${m} ${p}` };
+      }
+    }
+    return { adapter, router, passed: true };
+  });
 }
 
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-//  PRE-BUILT ROUTERS
+//  BENCH HARNESS
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-// Static (100 routes)
-const zipbulStatic = setupZipbul(STATIC_ROUTES);
-const fmwStatic = setupFindMyWay(STATIC_ROUTES);
-const memoStatic = setupMemoirist(STATIC_ROUTES);
-const rou3Static = setupRou3(STATIC_ROUTES);
-const honoRegStatic = setupHonoRegExp(STATIC_ROUTES);
-const honoTrieStatic = setupHonoTrie(STATIC_ROUTES);
-const koaStatic = setupKoaTree(STATIC_ROUTES);
+const builtPerScenario = scenarios.map((s) => ({ scenario: s, built: buildAndCheck(s) }));
 
-// Parametric
-const zipbulParam = setupZipbul(PARAM_ROUTES);
-const fmwParam = setupFindMyWay(PARAM_ROUTES);
-const memoParam = setupMemoirist(PARAM_ROUTES);
-const rou3Param = setupRou3(PARAM_ROUTES);
-const honoRegParam = setupHonoRegExp(PARAM_ROUTES);
-const honoTrieParam = setupHonoTrie(PARAM_ROUTES);
-const koaParam = setupKoaTree(PARAM_ROUTES);
-
-// Wildcard
-const zipbulWild = setupZipbul(WILDCARD_ROUTES);
-const fmwWild = setupFindMyWay(WILDCARD_ROUTES);
-const memoWild = setupMemoirist(WILDCARD_ROUTES);
-const rou3Wild = setupRou3(WILDCARD_ROUTES);
-const honoRegWild = setupHonoRegExp(WILDCARD_ROUTES);
-const honoTrieWild = setupHonoTrie(WILDCARD_ROUTES);
-const koaWild = setupKoaTree(WILDCARD_ROUTES);
-
-// GitHub API (~65 routes)
-const zipbulGH = setupZipbul(GITHUB_ROUTES);
-const fmwGH = setupFindMyWay(GITHUB_ROUTES);
-const memoGH = setupMemoirist(GITHUB_ROUTES);
-const rou3GH = setupRou3(GITHUB_ROUTES);
-const honoRegGH = setupHonoRegExp(GITHUB_ROUTES);
-const honoTrieGH = setupHonoTrie(GITHUB_ROUTES);
-const koaGH = setupKoaTree(GITHUB_ROUTES);
-
-// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-//  SANITY CHECK
-// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-function sanityCheck() {
-  // Verify all routers match the same test paths
-  const checks: [string, string, string][] = [
-    // [method, path, description]
-    ['GET', '/api/v1/resource50', 'static'],
-    ['GET', '/users/42', 'param-1'],
-    ['GET', '/repos/zipbul/toolkit/issues/1', 'param-3'],
-    ['GET', '/user', 'github-static'],
-    ['GET', '/repos/zipbul/toolkit/commits', 'github-param'],
-  ];
-
-  for (const [method, path, desc] of checks) {
-    const z = zipbulGH.match(method as 'GET', path) ?? zipbulStatic.match(method as 'GET', path) ?? zipbulParam.match(method as 'GET', path);
-    const f = fmwGH.find(method as 'GET', path) ?? fmwStatic.find(method as 'GET', path) ?? fmwParam.find(method as 'GET', path);
-    const m = memoGH.find(method, path) ?? memoStatic.find(method, path) ?? memoParam.find(method, path);
-    const r = findRoute(rou3GH, method, path) ?? findRoute(rou3Static, method, path) ?? findRoute(rou3Param, method, path);
-    const hr = honoRegGH.match(method, path) ?? honoRegStatic.match(method, path) ?? honoRegParam.match(method, path);
-    const ht = honoTrieGH.match(method, path) ?? honoTrieStatic.match(method, path) ?? honoTrieParam.match(method, path);
-    const k = koaGH.find(method, path) ?? koaStatic.find(method, path) ?? koaParam.find(method, path);
-
-    const allFound = z && f && m && r && hr && ht && k;
-    if (!allFound) {
-      console.error(`SANITY FAIL [${desc}]: ${method} ${path}`);
-      console.error(`  zipbul=${!!z} fmw=${!!f} memo=${!!m} rou3=${!!r} honoReg=${!!hr} honoTrie=${!!ht} koa=${!!k}`);
-      process.exit(1);
+console.log('## Sanity gate');
+for (const { scenario, built } of builtPerScenario) {
+  for (const b of built) {
+    if (b.passed) {
+      console.log(`  ${scenario.label.padEnd(14)} ${b.adapter.name.padEnd(18)} OK`);
+    } else {
+      console.log(`  ${scenario.label.padEnd(14)} ${b.adapter.name.padEnd(18)} EXCLUDED reason=${b.failureReason}`);
     }
   }
+}
+console.log('');
 
-  console.log('Sanity check passed: all routers match test paths.\n');
+/**
+ * Run a single hit/miss/wrong-method block for one scenario. Each adapter
+ * that survived the sanity gate contributes one mitata bench entry; the
+ * input arguments are identical across adapters so the comparison is
+ * apples-to-apples.
+ */
+function benchScenario(scenario: Scenario, built: BuiltAdapter[]): void {
+  // Hit benches — one summary per declared hit path.
+  scenario.hits.forEach(([m, path], idx) => {
+    summary(() => {
+      for (const b of built) {
+        if (!b.passed) continue;
+        const router = b.router;
+        const adapter = b.adapter;
+        bench(`${scenario.label}/hit${scenario.hits.length > 1 ? `-${idx}` : ''} — ${adapter.name}`, () => {
+          do_not_optimize(adapter.match(router, m, path));
+        });
+      }
+    });
+  });
+
+  // Miss bench.
+  if (scenario.misses.length > 0) {
+    const [m, path] = scenario.misses[0]!;
+    summary(() => {
+      for (const b of built) {
+        if (!b.passed) continue;
+        const router = b.router;
+        const adapter = b.adapter;
+        bench(`${scenario.label}/miss — ${adapter.name}`, () => {
+          do_not_optimize(adapter.match(router, m, path));
+        });
+      }
+    });
+  }
+
+  // Wrong-method bench.
+  {
+    const [m, path] = scenario.wrongMethod;
+    summary(() => {
+      for (const b of built) {
+        if (!b.passed) continue;
+        const router = b.router;
+        const adapter = b.adapter;
+        bench(`${scenario.label}/wrong-method — ${adapter.name}`, () => {
+          do_not_optimize(adapter.match(router, m, path));
+        });
+      }
+    });
+  }
 }
 
-sanityCheck();
-
-// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-//  BENCHMARKS
-// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-// ── 1. Static match (100 routes) ──
-
-summary(() => {
-  bench('static — @zipbul/router', () => {
-    do_not_optimize(zipbulStatic.match('GET', '/api/v1/resource50'));
-  });
-
-  bench('static — find-my-way', () => {
-    do_not_optimize(fmwStatic.find('GET', '/api/v1/resource50'));
-  });
-
-  bench('static — memoirist', () => {
-    do_not_optimize(memoStatic.find('GET', '/api/v1/resource50'));
-  });
-
-  bench('static — rou3', () => {
-    do_not_optimize(findRoute(rou3Static, 'GET', '/api/v1/resource50'));
-  });
-
-  bench('static — hono RegExpRouter', () => {
-    do_not_optimize(honoRegStatic.match('GET', '/api/v1/resource50'));
-  });
-
-  bench('static — hono TrieRouter', () => {
-    do_not_optimize(honoTrieStatic.match('GET', '/api/v1/resource50'));
-  });
-
-  bench('static — koa-tree-router', () => {
-    do_not_optimize(koaStatic.find('GET', '/api/v1/resource50'));
-  });
-});
-
-// ── 2. Param match (1-param: /users/:id) ──
-
-summary(() => {
-  bench('param1 — @zipbul/router', () => {
-    do_not_optimize(zipbulParam.match('GET', '/users/42'));
-  });
-
-  bench('param1 — find-my-way', () => {
-    do_not_optimize(fmwParam.find('GET', '/users/42'));
-  });
-
-  bench('param1 — memoirist', () => {
-    do_not_optimize(memoParam.find('GET', '/users/42'));
-  });
-
-  bench('param1 — rou3', () => {
-    do_not_optimize(findRoute(rou3Param, 'GET', '/users/42'));
-  });
-
-  bench('param1 — hono RegExpRouter', () => {
-    do_not_optimize(honoRegParam.match('GET', '/users/42'));
-  });
-
-  bench('param1 — hono TrieRouter', () => {
-    do_not_optimize(honoTrieParam.match('GET', '/users/42'));
-  });
-
-  bench('param1 — koa-tree-router', () => {
-    do_not_optimize(koaParam.find('GET', '/users/42'));
-  });
-});
-
-// ── 3. Param match (3-deep: /repos/:owner/:repo/issues/:number) ──
-
-summary(() => {
-  bench('param3 — @zipbul/router', () => {
-    do_not_optimize(zipbulParam.match('GET', '/repos/zipbul/toolkit/issues/42'));
-  });
-
-  bench('param3 — find-my-way', () => {
-    do_not_optimize(fmwParam.find('GET', '/repos/zipbul/toolkit/issues/42'));
-  });
-
-  bench('param3 — memoirist', () => {
-    do_not_optimize(memoParam.find('GET', '/repos/zipbul/toolkit/issues/42'));
-  });
-
-  bench('param3 — rou3', () => {
-    do_not_optimize(findRoute(rou3Param, 'GET', '/repos/zipbul/toolkit/issues/42'));
-  });
-
-  bench('param3 — hono RegExpRouter', () => {
-    do_not_optimize(honoRegParam.match('GET', '/repos/zipbul/toolkit/issues/42'));
-  });
-
-  bench('param3 — hono TrieRouter', () => {
-    do_not_optimize(honoTrieParam.match('GET', '/repos/zipbul/toolkit/issues/42'));
-  });
-
-  bench('param3 — koa-tree-router', () => {
-    do_not_optimize(koaParam.find('GET', '/repos/zipbul/toolkit/issues/42'));
-  });
-});
-
-// ── 4. Wildcard match (/static/*path) ──
-
-summary(() => {
-  bench('wild — @zipbul/router', () => {
-    do_not_optimize(zipbulWild.match('GET', '/static/js/app.bundle.js'));
-  });
-
-  bench('wild — find-my-way', () => {
-    do_not_optimize(fmwWild.find('GET', '/static/js/app.bundle.js'));
-  });
-
-  bench('wild — memoirist', () => {
-    do_not_optimize(memoWild.find('GET', '/static/js/app.bundle.js'));
-  });
-
-  bench('wild — rou3', () => {
-    do_not_optimize(findRoute(rou3Wild, 'GET', '/static/js/app.bundle.js'));
-  });
-
-  bench('wild — hono RegExpRouter', () => {
-    do_not_optimize(honoRegWild.match('GET', '/static/js/app.bundle.js'));
-  });
-
-  bench('wild — hono TrieRouter', () => {
-    do_not_optimize(honoTrieWild.match('GET', '/static/js/app.bundle.js'));
-  });
-
-  bench('wild — koa-tree-router', () => {
-    do_not_optimize(koaWild.find('GET', '/static/js/app.bundle.js'));
-  });
-});
-
-// ── 5. GitHub API — static hit (/user) ──
-
-summary(() => {
-  bench('gh-static — @zipbul/router', () => {
-    do_not_optimize(zipbulGH.match('GET', '/user'));
-  });
-
-  bench('gh-static — find-my-way', () => {
-    do_not_optimize(fmwGH.find('GET', '/user'));
-  });
-
-  bench('gh-static — memoirist', () => {
-    do_not_optimize(memoGH.find('GET', '/user'));
-  });
-
-  bench('gh-static — rou3', () => {
-    do_not_optimize(findRoute(rou3GH, 'GET', '/user'));
-  });
-
-  bench('gh-static — hono RegExpRouter', () => {
-    do_not_optimize(honoRegGH.match('GET', '/user'));
-  });
-
-  bench('gh-static — hono TrieRouter', () => {
-    do_not_optimize(honoTrieGH.match('GET', '/user'));
-  });
-
-  bench('gh-static — koa-tree-router', () => {
-    do_not_optimize(koaGH.find('GET', '/user'));
-  });
-});
-
-// ── 6. GitHub API — param hit (/repos/:owner/:repo/issues/:number) ──
-
-summary(() => {
-  bench('gh-param — @zipbul/router', () => {
-    do_not_optimize(zipbulGH.match('GET', '/repos/zipbul/toolkit/issues/42'));
-  });
-
-  bench('gh-param — find-my-way', () => {
-    do_not_optimize(fmwGH.find('GET', '/repos/zipbul/toolkit/issues/42'));
-  });
-
-  bench('gh-param — memoirist', () => {
-    do_not_optimize(memoGH.find('GET', '/repos/zipbul/toolkit/issues/42'));
-  });
-
-  bench('gh-param — rou3', () => {
-    do_not_optimize(findRoute(rou3GH, 'GET', '/repos/zipbul/toolkit/issues/42'));
-  });
-
-  bench('gh-param — hono RegExpRouter', () => {
-    do_not_optimize(honoRegGH.match('GET', '/repos/zipbul/toolkit/issues/42'));
-  });
-
-  bench('gh-param — hono TrieRouter', () => {
-    do_not_optimize(honoTrieGH.match('GET', '/repos/zipbul/toolkit/issues/42'));
-  });
-
-  bench('gh-param — koa-tree-router', () => {
-    do_not_optimize(koaGH.find('GET', '/repos/zipbul/toolkit/issues/42'));
-  });
-});
-
-// ── 7. 404 miss (100 routes) ──
-
-summary(() => {
-  bench('miss — @zipbul/router', () => {
-    do_not_optimize(zipbulStatic.match('GET', '/nonexistent/path/that/does/not/exist'));
-  });
-
-  bench('miss — find-my-way', () => {
-    do_not_optimize(fmwStatic.find('GET', '/nonexistent/path/that/does/not/exist'));
-  });
-
-  bench('miss — memoirist', () => {
-    do_not_optimize(memoStatic.find('GET', '/nonexistent/path/that/does/not/exist'));
-  });
-
-  bench('miss — rou3', () => {
-    do_not_optimize(findRoute(rou3Static, 'GET', '/nonexistent/path/that/does/not/exist'));
-  });
-
-  bench('miss — hono RegExpRouter', () => {
-    do_not_optimize(honoRegStatic.match('GET', '/nonexistent/path/that/does/not/exist'));
-  });
-
-  bench('miss — hono TrieRouter', () => {
-    do_not_optimize(honoTrieStatic.match('GET', '/nonexistent/path/that/does/not/exist'));
-  });
-
-  bench('miss — koa-tree-router', () => {
-    do_not_optimize(koaStatic.find('GET', '/nonexistent/path/that/does/not/exist'));
-  });
-});
+for (const { scenario, built } of builtPerScenario) {
+  benchScenario(scenario, built);
+}
 
 await run();
