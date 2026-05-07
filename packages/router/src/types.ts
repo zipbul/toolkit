@@ -9,7 +9,18 @@ export interface RouterOptions {
    * unbounded limits via {@link unsafeAllowUnboundedLimits}.
    */
   profile?: RouterProfile;
+  /**
+   * Trailing-slash policy. `'strict'` keeps `/a` and `/a/` distinct.
+   * `'ignore'` collapses one trailing slash on registration and at match
+   * time. Takes precedence over the legacy `ignoreTrailingSlash` boolean
+   * when both are supplied.
+   */
+  trailingSlash?: 'strict' | 'ignore';
+  /** Path case-sensitivity. `false` requires the `compat` profile. */
+  pathCaseSensitive?: boolean;
+  /** @deprecated Use `trailingSlash`. */
   ignoreTrailingSlash?: boolean;
+  /** @deprecated Use `pathCaseSensitive`. */
   caseSensitive?: boolean;
   /** HTTP method token max length (ASCII bytes). Default 64. */
   maxMethodLength?: number;

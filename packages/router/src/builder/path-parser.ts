@@ -7,8 +7,6 @@ import {
   CC_PLUS,
   CC_SLASH,
   CC_STAR,
-  MAX_PARAMS,
-  MAX_SEGMENTS,
 } from './constants';
 import { normalizeParamPatternSource } from './pattern-utils';
 import { assessRegexSafety } from './regex-safety';
@@ -31,6 +29,8 @@ export interface PathParserConfig {
   ignoreTrailingSlash: boolean;
   maxSegmentLength: number;
   maxPathLength: number;
+  maxSegmentCount: number;
+  maxParams: number;
 }
 
 // ── PathParser ──
@@ -254,12 +254,13 @@ export class PathParser {
     }
 
     // Validate segment count
-    if (segments.length > MAX_SEGMENTS) {
+    const maxSegments = this.config.maxSegmentCount;
+    if (Number.isFinite(maxSegments) && segments.length > maxSegments) {
       return err({
         kind: 'segment-limit',
-        message: `Path has ${segments.length} segments, exceeding the maximum of ${MAX_SEGMENTS}: ${path}`,
+        message: `Path has ${segments.length} segments, exceeding the maximum of ${maxSegments}: ${path}`,
         path,
-        suggestion: `Split deeply nested routes into shorter sub-paths (limit is ${MAX_SEGMENTS}).`,
+        suggestion: `Split deeply nested routes into shorter sub-paths (limit is ${maxSegments}).`,
       });
     }
 
@@ -274,12 +275,13 @@ export class PathParser {
       }
     }
 
-    if (paramCount > MAX_PARAMS) {
+    const maxParams = this.config.maxParams;
+    if (Number.isFinite(maxParams) && paramCount > maxParams) {
       return err({
         kind: 'segment-limit',
-        message: `Path has ${paramCount} parameters, exceeding the maximum of ${MAX_PARAMS}: ${path}`,
+        message: `Path has ${paramCount} parameters, exceeding the maximum of ${maxParams}: ${path}`,
         path,
-        suggestion: `Reduce the number of named parameters in this path (limit is ${MAX_PARAMS}).`,
+        suggestion: `Reduce the number of named parameters in this path (limit is ${maxParams}).`,
       });
     }
 

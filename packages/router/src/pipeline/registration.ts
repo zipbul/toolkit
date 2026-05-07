@@ -99,6 +99,7 @@ export class Registration<T> {
   private diagnostics: RegistrationDiagnostics | null = null;
   private sealed = false;
   private maxExpandedRoutes = 200_000;
+  private maxOptionalExpansions = 1024;
   private totalExpandedRoutes = 0;
   private expansionLimitEmitted = false;
 
@@ -182,7 +183,11 @@ export class Registration<T> {
     }
   }
 
-  seal(options: { optionalParamBehavior?: 'omit' | 'set-undefined'; maxExpandedRoutes?: number } = {}): RegistrationSnapshot<T> {
+  seal(options: {
+    optionalParamBehavior?: 'omit' | 'set-undefined';
+    maxExpandedRoutes?: number;
+    maxOptionalExpansions?: number;
+  } = {}): RegistrationSnapshot<T> {
     if (this.snapshot !== null) return this.snapshot;
 
     const pendingRouteCount = this.pendingRoutes.length;
@@ -193,9 +198,10 @@ export class Registration<T> {
     const undo: SegmentTreeUndoLog = [];
 
     const factoryCache = new Map<string, (u: string, v: Int32Array) => RouteParams>();
-    const omitBehavior = (options.optionalParamBehavior ?? 'set-undefined') === 'omit';
+    const omitBehavior = (options.optionalParamBehavior ?? 'omit') === 'omit';
     const decoder = buildDecoder();
     this.maxExpandedRoutes = options.maxExpandedRoutes ?? 200_000;
+    this.maxOptionalExpansions = options.maxOptionalExpansions ?? 1024;
     this.totalExpandedRoutes = 0;
     this.expansionLimitEmitted = false;
 
@@ -441,7 +447,7 @@ export class Registration<T> {
     decoder: (s: string) => string,
   ): Result<void, RouterErrorData> {
     const expandStart = nowMs();
-    const expansion = expandOptional(parts, -1, this.optionalParamDefaults);
+    const expansion = expandOptional(parts, -1, this.optionalParamDefaults, this.maxOptionalExpansions);
     addMs(state.diagnostics, 'optionalExpandMs', expandStart);
 
     if (isErr(expansion)) {

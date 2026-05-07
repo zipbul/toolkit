@@ -294,33 +294,33 @@ describe('Router<T> errors', () => {
 
   // ── 0-2: MAX_STACK_DEPTH / MAX_PARAMS guard ──
 
-  it('should throw kind=\'segment-limit\' when path has more than 64 segments', () => {
-    const router = new Router<string>();
-    const path = '/' + Array.from({ length: 65 }, (_, i) => `s${i}`).join('/');
+  it('emits segment-limit when path exceeds the configured maxSegmentCount', () => {
+    const router = new Router<string>({ maxSegmentCount: 8 });
+    const path = '/' + Array.from({ length: 9 }, (_, i) => `s${i}`).join('/');
 
     router.add('GET', path, 'deep');
     const issue = firstBuildIssue(router);
     expect(issue.kind).toBe('segment-limit');
   });
 
-  it('should not throw when path has exactly 64 segments', () => {
-    const router = new Router<string>();
-    const path = '/' + Array.from({ length: 64 }, (_, i) => `s${i}`).join('/');
+  it('accepts a path with exactly maxSegmentCount segments', () => {
+    const router = new Router<string>({ maxSegmentCount: 8 });
+    const path = '/' + Array.from({ length: 8 }, (_, i) => `s${i}`).join('/');
 
     router.add('GET', path, 'deep');
   });
 
-  it('should throw when path has more than 32 unique param segments', () => {
-    const router = new Router<string>();
-    const path = '/' + Array.from({ length: 33 }, (_, i) => `:p${i}`).join('/');
+  it('emits segment-limit when path exceeds the configured maxParams', () => {
+    const router = new Router<string>({ maxParams: 4 });
+    const path = '/' + Array.from({ length: 5 }, (_, i) => `:p${i}`).join('/');
 
     router.add('GET', path, 'many-params');
     expect(firstBuildIssue(router).kind).toBe('segment-limit');
   });
 
-  it('should not throw when path has exactly 32 unique param segments', () => {
-    const router = new Router<string>();
-    const path = '/' + Array.from({ length: 32 }, (_, i) => `:p${i}`).join('/');
+  it('accepts a path with exactly maxParams params', () => {
+    const router = new Router<string>({ maxParams: 4 });
+    const path = '/' + Array.from({ length: 4 }, (_, i) => `:p${i}`).join('/');
 
     router.add('GET', path, 'max-params');
   });

@@ -3,7 +3,6 @@ import type { PathPart } from './path-parser';
 import type { RouterErrorData } from '../types';
 
 import { err } from '@zipbul/result';
-import { MAX_OPTIONAL } from './constants';
 import { OptionalParamDefaults } from './optional-param-defaults';
 
 export interface ExpandedRoute {
@@ -31,10 +30,11 @@ export function expandOptional(
   parts: PathPart[],
   handlerIndex: number,
   optionalDefaults: OptionalParamDefaults,
+  maxOptionalExpansions = 1024,
 ): Result<ExpandedRoute[], RouterErrorData> {
   const collection = collectOptionalIndices(parts);
 
-  const guard = validateOptionalCount(collection.indices.length);
+  const guard = validateOptionalCount(collection.indices.length, maxOptionalExpansions);
 
   if (guard !== null) return guard;
 
@@ -70,15 +70,25 @@ function collectOptionalIndices(parts: PathPart[]): OptionalCollection {
  */
 function validateOptionalCount(
   count: number,
+  cap: number,
 ): Result<never, RouterErrorData> | null {
-  if (count > MAX_OPTIONAL) {
+  if (count > cap) {
     return err({
       kind: 'segment-limit',
-      message: `Path has more than ${MAX_OPTIONAL} optional parameters. Each optional doubles the route-expansion count and risks pathological build cost.`,
+      message: `Path has more than ${cap} optional parameters (cartesian expansion would explode).`,
       suggestion: 'Reduce optionals or split into multiple explicit routes.',
     });
   }
-
+  // Equivalently bound the cartesian product: 2^count must stay ≤ cap.
+  // For count up to ~20 this is the same as the count gate; the explicit
+  // check below covers caps that are smaller than 2^count for tight caps.
+  if (count > 0 && Math.pow(2, count) > cap) {
+    return err({
+      kind: 'segment-limit',
+      message: `Path's 2^${count} optional expansion exceeds maxOptionalExpansions cap ${cap}.`,
+      suggestion: 'Reduce optionals or raise maxOptionalExpansions explicitly.',
+    });
+  }
   return null;
 }
 

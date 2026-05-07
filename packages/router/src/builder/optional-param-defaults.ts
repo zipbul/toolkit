@@ -8,7 +8,7 @@ export class OptionalParamDefaults {
   private readonly behavior: OptionalParamBehavior;
   private readonly defaults = new Map<number, readonly string[]>();
 
-  constructor(behavior: OptionalParamBehavior = 'set-undefined') {
+  constructor(behavior: OptionalParamBehavior = 'omit') {
     this.behavior = behavior;
   }
 

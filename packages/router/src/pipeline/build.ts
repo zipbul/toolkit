@@ -84,8 +84,12 @@ export function buildFromRegistration<T>(
     }
   }
 
-  const ignoreTrailingSlash = options.ignoreTrailingSlash ?? true;
-  const caseSensitive = options.caseSensitive ?? true;
+  const ignoreTrailingSlash = options.trailingSlash !== undefined
+    ? options.trailingSlash === 'ignore'
+    : (options.ignoreTrailingSlash ?? (options.profile === 'secure' ? false : true));
+  const caseSensitive = options.pathCaseSensitive !== undefined
+    ? options.pathCaseSensitive
+    : (options.caseSensitive ?? true);
   const maxPathLength = options.maxPathLength ?? 2048;
   const maxSegmentLength = options.maxSegmentLength ?? 1024;
 

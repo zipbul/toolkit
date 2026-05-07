@@ -33,7 +33,7 @@ describe('expandOptional', () => {
   });
 
   describe('validateOptionalCount', () => {
-    it('should reject paths with more than 10 optional params', () => {
+    it('rejects an optional count whose 2^N expansion exceeds the cap', () => {
       const parts: PathPart[] = [];
 
       for (let i = 0; i < 11; i++) {
@@ -42,16 +42,15 @@ describe('expandOptional', () => {
       }
 
       const defaults = new OptionalParamDefaults('set-undefined');
-      const result = expandOptional(parts, 0, defaults);
+      const result = expandOptional(parts, 0, defaults, 1024);
 
       expect(isErr(result)).toBe(true);
       if (isErr(result)) {
         expect(result.data.kind).toBe('segment-limit');
-        expect(result.data.message).toContain('more than 10 optional');
       }
     });
 
-    it('should accept exactly 10 optionals (1024 expansions)', () => {
+    it('accepts exactly the cap of 1024 expansions (2^10)', () => {
       const parts: PathPart[] = [];
 
       for (let i = 0; i < 10; i++) {
@@ -60,11 +59,11 @@ describe('expandOptional', () => {
       }
 
       const defaults = new OptionalParamDefaults('set-undefined');
-      const result = expandOptional(parts, 0, defaults);
+      const result = expandOptional(parts, 0, defaults, 1024);
 
       expect(isErr(result)).toBe(false);
       if (!isErr(result)) {
-        expect(result.length).toBe(1 << 10); // 2^N variants
+        expect(result.length).toBe(1 << 10);
       }
     });
   });

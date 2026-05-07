@@ -104,6 +104,25 @@ function validateOptions(options: RouterOptions): void {
       suggestion: 'Choose profile="compat" or profile="unsafe" to allow unbounded limits.',
     });
   }
+  if (options.profile === 'secure' && (options.pathCaseSensitive === false || options.caseSensitive === false)) {
+    issues.push({
+      option: 'pathCaseSensitive',
+      message: 'profile="secure" requires path case-sensitivity (pathCaseSensitive must not be false).',
+      suggestion: 'Switch to profile="compat" or remove pathCaseSensitive=false.',
+    });
+  }
+  if (options.profile !== undefined && !['secure', 'compat', 'unsafe'].includes(options.profile)) {
+    issues.push({
+      option: 'profile',
+      message: `profile must be 'secure' | 'compat' | 'unsafe' (received '${String(options.profile)}').`,
+    });
+  }
+  if (options.trailingSlash !== undefined && options.trailingSlash !== 'strict' && options.trailingSlash !== 'ignore') {
+    issues.push({
+      option: 'trailingSlash',
+      message: `trailingSlash must be 'strict' | 'ignore' (received '${String(options.trailingSlash)}').`,
+    });
+  }
   if (issues.length === 0) return;
   throw new RouterError({
     kind: 'route-validation',
@@ -117,12 +136,26 @@ function validateOptions(options: RouterOptions): void {
   });
 }
 
+function resolveTrailingSlashIgnore(options: RouterOptions): boolean {
+  if (options.trailingSlash !== undefined) return options.trailingSlash === 'ignore';
+  if (options.ignoreTrailingSlash !== undefined) return options.ignoreTrailingSlash;
+  return options.profile === 'secure' ? false : true; // secure default = strict
+}
+
+function resolvePathCaseSensitive(options: RouterOptions): boolean {
+  if (options.pathCaseSensitive !== undefined) return options.pathCaseSensitive;
+  if (options.caseSensitive !== undefined) return options.caseSensitive;
+  return true;
+}
+
 function createPathParser(options: RouterOptions): PathParser {
   return new PathParser({
-    caseSensitive: options.caseSensitive ?? true,
-    ignoreTrailingSlash: options.ignoreTrailingSlash ?? true,
+    caseSensitive: resolvePathCaseSensitive(options),
+    ignoreTrailingSlash: resolveTrailingSlashIgnore(options),
     maxSegmentLength: options.maxSegmentLength ?? 1024,
     maxPathLength: options.maxPathLength ?? 8192,
+    maxSegmentCount: options.maxSegmentCount ?? 256,
+    maxParams: options.maxParams ?? 64,
   });
 }
 
@@ -186,6 +219,7 @@ export class Router<T = unknown> {
       const snapshot = registration.seal({
         optionalParamBehavior: routerOptions.optionalParamBehavior,
         maxExpandedRoutes: routerOptions.maxExpandedRoutes,
+        maxOptionalExpansions: routerOptions.maxOptionalExpansions,
       });
       const r = buildFromRegistration<T>(snapshot, routerOptions, methodRegistry);
 
