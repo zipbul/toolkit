@@ -54,6 +54,30 @@ function paramRoutes(): Route[] {
   return out;
 }
 
+function wildcardRoutes(): Route[] {
+  const out: Route[] = [];
+  // Same shape as the in-process `100k wildcard-heavy` scenario so the
+  // baseline numbers compare apples-to-apples against the in-tree run.
+  for (let g = 0; g < 1000; g++) {
+    for (let b = 0; b < 100; b++) {
+      out.push(['GET', `/files/group-${g}/bucket-${b * 1000 + g}/*p`, g * 100 + b]);
+    }
+  }
+  return out;
+}
+
+function mixedRoutes(): Route[] {
+  const out: Route[] = [];
+  for (let i = 0; i < COUNT; i++) {
+    const mod = i % 4;
+    if (mod === 0) out.push(['GET', `/v${i % 20}/static/resource-${i}`, i]);
+    else if (mod === 1) out.push(['GET', `/v${i % 20}/users/:id/items/${i}`, i]);
+    else if (mod === 2) out.push(['POST', `/v${i % 20}/orgs/:org/repos/:repo/actions/${i}`, i]);
+    else out.push(['GET', `/v${i % 20}/files/${i}/*path`, i]);
+  }
+  return out;
+}
+
 function scenario(): { routes: Route[]; hits: string[]; misses: string[] } {
   if (scenarioName === 'param') {
     return {
@@ -69,8 +93,36 @@ function scenario(): { routes: Route[]; hits: string[]; misses: string[] } {
     };
   }
 
+  if (scenarioName === 'wildcard') {
+    return {
+      routes: wildcardRoutes(),
+      hits: [
+        '/files/group-0/bucket-0/a.txt',
+        '/files/group-500/bucket-500500/a/b/c.txt',
+        '/files/group-999/bucket-999999/a/b/c.txt',
+      ],
+      misses: [
+        '/files/group-x/bucket-0/a.txt',
+      ],
+    };
+  }
+
+  if (scenarioName === 'mixed') {
+    return {
+      routes: mixedRoutes(),
+      hits: [
+        '/v0/static/resource-0',
+        '/v1/users/42/items/50001',
+        '/v19/files/99999/a/b/c.txt',
+      ],
+      misses: [
+        '/v0/none',
+      ],
+    };
+  }
+
   if (scenarioName !== 'static') {
-    console.error(`Unknown scenario '${scenarioName}'. Choices: static, param`);
+    console.error(`Unknown scenario '${scenarioName}'. Choices: static, param, wildcard, mixed`);
     process.exit(1);
   }
 
@@ -100,10 +152,114 @@ function bench(name: string, fn: () => unknown): void {
   console.log(`${name.padEnd(28)} ${ns.toFixed(2)} ns/op checksum=${checksum}`);
 }
 
+interface AdapterMeta {
+  /** npm package name resolved against package.json. */
+  pkg: string;
+  /** Capability matrix: which scenarios this adapter can run under. */
+  scenarios: ReadonlySet<'static' | 'param' | 'wildcard' | 'mixed'>;
+  /**
+   * Failure class summary when a scenario is unsupported. The harness
+   * prints this so reproducers can see why a baseline was skipped without
+   * digging through adapter source.
+   */
+  notes: string;
+  /**
+   * Path rewrite that converts the canonical route shape (`*p` named
+   * wildcards, `:name` params) into the adapter's accepted syntax. The
+   * default (no rewrite) is correct for adapters that already accept the
+   * canonical form. Rewriting only touches REGISTRATION paths — the
+   * runtime hit/miss paths are kept identical so the bench comparison is
+   * apples-to-apples on what each adapter resolves.
+   */
+  rewritePath?: (path: string) => string;
+}
+
+/**
+ * Rewrites the trailing `/*name` wildcard segment to the form the target
+ * adapter expects. The path tail is the only place wildcards appear in our
+ * scenarios; mid-path wildcards remain canonical and would need a richer
+ * per-adapter normalizer.
+ */
+function rewriteWildcardTrailing(path: string, replacement: string): string {
+  return path.replace(/\/\*[^/]*$/, replacement);
+}
+
+const adapterMeta: Record<string, AdapterMeta> = {
+  zipbul: {
+    pkg: '@zipbul/router (workspace)',
+    scenarios: new Set(['static', 'param', 'wildcard', 'mixed']),
+    notes: 'in-tree implementation under test',
+  },
+  'find-my-way': {
+    pkg: 'find-my-way',
+    scenarios: new Set(['static', 'param', 'wildcard', 'mixed']),
+    notes: 'wildcard tail registered as bare `/*` (find-my-way drops the wildcard name)',
+    rewritePath: (path) => rewriteWildcardTrailing(path, '/*'),
+  },
+  memoirist: {
+    pkg: 'memoirist',
+    scenarios: new Set(['static', 'param', 'wildcard', 'mixed']),
+    notes: 'wildcard tail registered as `/*name` (memoirist accepts the canonical form)',
+  },
+  rou3: {
+    pkg: 'rou3',
+    scenarios: new Set(['static', 'param', 'wildcard', 'mixed']),
+    notes: 'wildcard tail rewritten to `/**:name` (rou3 reserves `**` for catch-all)',
+    rewritePath: (path) => path.replace(/\/\*([^/]+)$/, '/**:$1'),
+  },
+  'hono-trie': {
+    pkg: 'hono/router/trie-router',
+    scenarios: new Set(['static', 'param']),
+    notes: 'static-only / param-only — wildcard and mixed shapes return ambiguous matches',
+  },
+  'hono-regexp': {
+    pkg: 'hono/router/reg-exp-router',
+    scenarios: new Set(['static', 'param']),
+    notes: 'param-only — wildcard/mixed unsupported by RegExpRouter',
+  },
+  'koa-tree-router': {
+    pkg: 'koa-tree-router',
+    scenarios: new Set(['static', 'param']),
+    notes: 'static-only / param-only — wildcard and mixed unsupported',
+  },
+};
+
+function resolveAdapterVersion(pkg: string): string {
+  if (pkg.startsWith('@zipbul/')) return 'workspace';
+  // Hono ships subpath routers off the same `hono` package — resolve the
+  // top-level package.json, not the subpath.
+  const top = pkg.split('/')[0]!;
+  try {
+    const meta = require(`${top}/package.json`);
+    return typeof meta.version === 'string' ? meta.version : 'unknown';
+  } catch {
+    return 'unresolvable';
+  }
+}
+
+const BUILD_TIMEOUT_MS = 60_000;
+const BENCH_MEMORY_CAP_MB = 2_048;
+
 function measure(name: string, build: (rs: Route[]) => unknown, match: (router: unknown, path: string) => unknown): void {
+  const meta = adapterMeta[name];
   const sc = scenario();
-  console.log(`baseline=${name} scenario=${scenarioName} routes=${COUNT}`);
-  const rs = sc.routes;
+  const version = meta !== undefined ? resolveAdapterVersion(meta.pkg) : 'unknown';
+  console.log(
+    `baseline=${name} version=${version} scenario=${scenarioName} routes=${COUNT}` +
+    ` buildTimeoutMs=${BUILD_TIMEOUT_MS} memCapMB=${BENCH_MEMORY_CAP_MB}`,
+  );
+  if (meta === undefined) {
+    console.log('skip=true reason=no-adapter-meta');
+    return;
+  }
+  if (!meta.scenarios.has(scenarioName as 'static' | 'param' | 'wildcard' | 'mixed')) {
+    console.log(`skip=true reason=scenario-unsupported note=${JSON.stringify(meta.notes)}`);
+    return;
+  }
+  const rewrite = meta.rewritePath;
+  const rs = rewrite === undefined
+    ? sc.routes
+    : sc.routes.map(([m, p, v]) => [m, rewrite(p), v] as Route);
   const before = mem();
   const start = performance.now();
   let router: unknown;
@@ -114,7 +270,15 @@ function measure(name: string, build: (rs: Route[]) => unknown, match: (router: 
     return;
   }
   const buildMs = performance.now() - start;
+  if (buildMs > BUILD_TIMEOUT_MS) {
+    console.log(`build=${buildMs.toFixed(2)}ms timeoutClass=build phase exceeded ${BUILD_TIMEOUT_MS}ms`);
+    return;
+  }
   const after = mem();
+  if (after.rss / 1024 / 1024 > BENCH_MEMORY_CAP_MB) {
+    console.log(`build=${buildMs.toFixed(2)}ms memCapClass=exceeded rss=${(after.rss / 1024 / 1024).toFixed(2)}MB`);
+    return;
+  }
   console.log(`build=${buildMs.toFixed(2)}ms mem=${fmtMem(before, after)}`);
   bench('hit first', () => match(router, sc.hits[0]!));
   bench('hit middle', () => match(router, sc.hits[1]!));
