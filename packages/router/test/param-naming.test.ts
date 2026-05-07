@@ -34,7 +34,9 @@ describe('Parameter Naming Strictness (Bun Only)', () => {
       throw new Error('Should have thrown');
     } catch (e: any) {
       const error = e.data.errors[0].error;
-      expect(error.message).toMatch(/start with a letter|alphanumeric characters/);
+      // Either the path-level non-ASCII gate or the param-name grammar
+      // rejects this; both are correct.
+      expect(error.message).toMatch(/start with a letter|alphanumeric characters|raw non-ASCII/);
     }
   });
 

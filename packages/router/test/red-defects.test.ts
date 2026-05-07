@@ -1,37 +1,7 @@
-/**
- * RED test fixtures for ULTIMATE.md §5.1 reproduced defects.
- *
- * Each `test` here is expected to FAIL on current code (RED). When the
- * corresponding §13 Phase implementation lands, the test must turn GREEN.
- *
- * Mapping:
- *   1. empty method                    → §13 Phase 1 (method-policy)
- *   2. whitespace method               → §13 Phase 1
- *   3. control-char method             → §13 Phase 1
- *   4. registration query `?`          → §13 Phase 1 (path-policy)
- *   5. registration fragment `#`       → §13 Phase 1
- *   6. registration control char       → §13 Phase 1
- *   7. registration dot segment        → §13 Phase 1
- *   8. registration encoded-dot        → §13 Phase 1
- *   9. registration malformed percent  → §13 Phase 1
- *  10. runtime malformed percent       → §13 Phase 2 (runtime-path-policy)
- *  11. runtime fragment `#`            → §13 Phase 2
- *  12. runtime encoded slash %2F       → §13 Phase 2
- *  13. runtime dot segment             → §13 Phase 2
- *  14. optionalParamBehavior:'omit'    → §13 Phase 3
- *  15. params cache mutation safety    → §13 Phase 3 (lock current behavior)
- *
- * To run only these:
- *   bun test test/red-defects.test.ts
- */
-
 import { describe, test, expect } from 'bun:test';
 import { Router } from '../src/router';
 
-// ────────────────────────────────────────────────────────────────────────
-// §13 Phase 1 — method-policy
-// ────────────────────────────────────────────────────────────────────────
-describe('RED: method token validation (Phase 1)', () => {
+describe('method token validation', () => {
   test('empty method must throw on add()/build()', () => {
     const r = new Router<string>();
     expect(() => {
@@ -73,10 +43,7 @@ describe('RED: method token validation (Phase 1)', () => {
   });
 });
 
-// ────────────────────────────────────────────────────────────────────────
-// §13 Phase 1 — path-policy at registration time
-// ────────────────────────────────────────────────────────────────────────
-describe('RED: registration path validation (Phase 1)', () => {
+describe('registration path validation', () => {
   test('path with raw query "/a?b" must throw', () => {
     const r = new Router<string>();
     expect(() => {
@@ -142,10 +109,7 @@ describe('RED: registration path validation (Phase 1)', () => {
   });
 });
 
-// ────────────────────────────────────────────────────────────────────────
-// §13 Phase 2 — runtime path scanner (secure/default)
-// ────────────────────────────────────────────────────────────────────────
-describe('RED: runtime secure path policy (Phase 2)', () => {
+describe('runtime secure path policy', () => {
   test('runtime malformed percent must no-match', () => {
     const r = new Router<string>();
     r.add('GET', '/a/:x', 'h');
@@ -189,10 +153,7 @@ describe('RED: runtime secure path policy (Phase 2)', () => {
   });
 });
 
-// ────────────────────────────────────────────────────────────────────────
-// §13 Phase 3 — optional behavior + clone-on-hit
-// ────────────────────────────────────────────────────────────────────────
-describe('RED: optionalParamBehavior:"omit" (Phase 3)', () => {
+describe('optionalParamBehavior: "omit"', () => {
   test('omit mode: missing optional must NOT appear as undefined key', () => {
     const r = new Router<{ id?: string }>({ optionalParamBehavior: 'omit' });
     r.add('GET', '/users/:id?', { id: undefined });
@@ -214,10 +175,7 @@ describe('RED: optionalParamBehavior:"omit" (Phase 3)', () => {
   });
 });
 
-// ────────────────────────────────────────────────────────────────────────
-// §13 Phase 3 — params cache mutation safety (lock current GREEN behavior)
-// ────────────────────────────────────────────────────────────────────────
-describe('GREEN-lock: params cache mutation safety', () => {
+describe('params cache mutation safety', () => {
   test('caller mutation of returned params must not poison later cache hits', () => {
     const r = new Router<string>();
     r.add('GET', '/users/:id', 'h');

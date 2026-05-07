@@ -60,12 +60,14 @@ describe('MethodRegistry', () => {
   // ── ED: Edge ──
 
   describe('edge cases', () => {
-    it('should assign offset for empty string method name', () => {
+    it('should reject empty string method name', () => {
       const reg = new MethodRegistry();
       const result = reg.getOrCreate('');
 
-      expect(isErr(result)).toBe(false);
-      expect(result).toBe(7);
+      expect(isErr(result)).toBe(true);
+      if (isErr(result)) {
+        expect(result.data.kind).toBe('route-parse');
+      }
     });
 
     it('should return undefined from get() for non-existent method', () => {
@@ -74,13 +76,15 @@ describe('MethodRegistry', () => {
       expect(reg.get('NONEXISTENT')).toBeUndefined();
     });
 
-    it('should assign offset for very long method name', () => {
+    it('should reject method name longer than the 64-byte cap', () => {
       const reg = new MethodRegistry();
       const longName = 'X'.repeat(1000);
       const result = reg.getOrCreate(longName);
 
-      expect(isErr(result)).toBe(false);
-      expect(result).toBe(7);
+      expect(isErr(result)).toBe(true);
+      if (isErr(result)) {
+        expect(result.data.kind).toBe('route-parse');
+      }
     });
 
     it('should allow exactly 32 methods and all be accessible via get()', () => {

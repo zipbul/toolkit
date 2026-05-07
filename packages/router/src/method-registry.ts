@@ -13,6 +13,27 @@ const DEFAULT_METHODS: ReadonlyArray<readonly [string, number]> = [
 ] as const;
 
 const MAX_METHODS = 32;
+const MAX_METHOD_LENGTH = 64;
+
+// RFC 9110 token grammar: 1*tchar where tchar = ALPHA / DIGIT /
+// "!" / "#" / "$" / "%" / "&" / "'" / "*" / "+" / "-" / "." /
+// "^" / "_" / "`" / "|" / "~". Inlined as char-code switch instead of
+// regex to keep the per-add gate allocation-free.
+function isValidMethodToken(method: string): boolean {
+  const len = method.length;
+  if (len === 0 || len > MAX_METHOD_LENGTH) return false;
+  for (let i = 0; i < len; i++) {
+    const c = method.charCodeAt(i);
+    // ALPHA / DIGIT
+    if ((c >= 0x41 && c <= 0x5a) || (c >= 0x61 && c <= 0x7a) || (c >= 0x30 && c <= 0x39)) continue;
+    // tchar special: ! # $ % & ' * + - . ^ _ ` | ~
+    if (c === 0x21 || c === 0x23 || c === 0x24 || c === 0x25 || c === 0x26 ||
+        c === 0x27 || c === 0x2a || c === 0x2b || c === 0x2d || c === 0x2e ||
+        c === 0x5e || c === 0x5f || c === 0x60 || c === 0x7c || c === 0x7e) continue;
+    return false;
+  }
+  return true;
+}
 
 interface MethodRegistrySnapshot {
   entries: Array<readonly [string, number]>;
@@ -41,6 +62,19 @@ export class MethodRegistry {
   }
 
   getOrCreate(method: string): Result<number, RouterErrorData> {
+    if (!isValidMethodToken(method)) {
+      return err({
+        kind: 'route-parse',
+        message: method.length === 0
+          ? 'HTTP method must not be empty.'
+          : method.length > MAX_METHOD_LENGTH
+            ? `HTTP method exceeds ${MAX_METHOD_LENGTH} ASCII bytes: '${method.slice(0, 16)}...'`
+            : `HTTP method contains invalid character (RFC 9110 token grammar): '${method}'`,
+        method,
+        suggestion: 'Use only RFC 9110 token characters: alphanumerics + ! # $ % & \' * + - . ^ _ ` | ~. Length 1-64 ASCII bytes.',
+      });
+    }
+
     const existing = this.methodToOffset.get(method);
 
     if (existing !== undefined) {

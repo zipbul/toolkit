@@ -4,10 +4,7 @@ import type { RouterErrorData } from '../types';
 import { err, isErr } from '@zipbul/result';
 import {
   CC_COLON,
-  CC_LPAREN,
   CC_PLUS,
-  CC_QUESTION,
-  CC_RPAREN,
   CC_SLASH,
   CC_STAR,
   MAX_PARAMS,
@@ -66,7 +63,13 @@ export class PathParser {
     return this.parseTokens(segments, normalized, path);
   }
 
-  /** Stage 1 — structural sanity. Fails fast on `''`, missing `/`. */
+  // Single-pass char-code scan covering the structural-sanity check (leading
+  // `/`, non-empty) plus the secure-profile rejects: raw `?`/`#`, C0/DEL,
+  // non-ASCII, malformed percent, dot segments. Router grammar tokens
+  // (`:`, `*`, `(`, `)`, `+`) are intentionally accepted here so that
+  // tokenize/parseTokens can resolve them. The `?` byte is permitted only
+  // when it directly follows an identifier char and ends the segment, which
+  // is the `:name?` optional decorator.
   private validatePath(path: string): Result<never, RouterErrorData> | null {
     if (path.length === 0 || path.charCodeAt(0) !== CC_SLASH) {
       return err({
@@ -74,6 +77,92 @@ export class PathParser {
         message: `Path must start with '/': ${path}`,
         path,
       });
+    }
+
+    // Single-pass scan for control / non-ASCII / fragment / malformed-percent / dot-segment.
+    // Track segment boundaries via slash position tracking for dot-segment detection.
+    let segStart = 1; // skip leading `/`
+    const len = path.length;
+    for (let i = 0; i < len; i++) {
+      const c = path.charCodeAt(i);
+
+      // Raw fragment `#` (0x23) — never valid in registered path
+      if (c === 0x23) {
+        return err({
+          kind: 'route-parse',
+          message: `Path must not contain raw fragment '#': ${path}`,
+          path,
+          suggestion: 'Use percent-encoded form `%23` for literal `#`.',
+        });
+      }
+
+      // Raw query `?` (0x3f) — only valid as `:name?` decorator suffix.
+      // After `?`, next char must be `/` or end-of-path.
+      if (c === 0x3f) {
+        // Acceptable when preceded by an identifier-like name and at segment-end.
+        // Conservative: require previous char alnum or `_` and next char `/` or end.
+        const prev = i > 0 ? path.charCodeAt(i - 1) : 0;
+        const isIdentChar = (prev >= 0x30 && prev <= 0x39) || (prev >= 0x41 && prev <= 0x5a) ||
+                            (prev >= 0x61 && prev <= 0x7a) || prev === 0x5f;
+        const next = i + 1 < len ? path.charCodeAt(i + 1) : 0;
+        const isSegEnd = next === 0 || next === CC_SLASH;
+        if (!isIdentChar || !isSegEnd) {
+          return err({
+            kind: 'route-parse',
+            message: `Path must not contain raw query '?' (use \`:name?\` decorator only): ${path}`,
+            path,
+            suggestion: 'Optional param decorator `?` must follow a param name and end the segment.',
+          });
+        }
+      }
+
+      // C0 control (0x00-0x1f) and DEL (0x7f)
+      if ((c >= 0x00 && c <= 0x1f) || c === 0x7f) {
+        return err({
+          kind: 'route-parse',
+          message: `Path must not contain control characters (charCode 0x${c.toString(16).padStart(2, '0')}): ${path}`,
+          path,
+          suggestion: 'Remove control characters from the route pattern.',
+        });
+      }
+
+      // Raw non-ASCII (0x80+)
+      if (c >= 0x80) {
+        return err({
+          kind: 'route-parse',
+          message: `Path must not contain raw non-ASCII bytes (charCode 0x${c.toString(16)}): ${path}`,
+          path,
+          suggestion: 'Represent non-ASCII characters as percent-encoded UTF-8 (e.g. `%ED%95%9C` for `한`).',
+        });
+      }
+
+      // Malformed percent (`%` not followed by 2 hex)
+      if (c === 0x25) {
+        if (i + 2 >= len || !isHex(path.charCodeAt(i + 1)) || !isHex(path.charCodeAt(i + 2))) {
+          return err({
+            kind: 'route-parse',
+            message: `Path contains malformed percent-escape: ${path}`,
+            path,
+            suggestion: 'Every `%` must be followed by exactly two hex digits (0-9, A-F, a-f).',
+          });
+        }
+      }
+
+      // Segment boundary check for dot segment detection
+      if (c === CC_SLASH || i === len - 1) {
+        const segEnd = c === CC_SLASH ? i : i + 1;
+        if (segEnd > segStart) {
+          if (isDotSegment(path, segStart, segEnd)) {
+            return err({
+              kind: 'route-parse',
+              message: `Path must not contain dot segments '.' or '..' (literal or percent-encoded): ${path}`,
+              path,
+              suggestion: 'Remove dot segments. Encoded forms `%2e`, `%2E`, `%2e%2e` are also rejected.',
+            });
+          }
+        }
+        segStart = i + 1;
+      }
     }
 
     return null;
@@ -502,4 +591,37 @@ function validateParamName(
   }
 
   return null;
+}
+
+function isHex(c: number): boolean {
+  return (c >= 0x30 && c <= 0x39) || (c >= 0x41 && c <= 0x46) || (c >= 0x61 && c <= 0x66);
+}
+
+// True only when the segment, after decoding `%2e`/`%2E` to `.`, is exactly
+// `.` or `..`. `.well-known`, `a..`, `...`, `%2e%2e%2e` are not dot segments.
+function isDotSegment(path: string, segStart: number, segEnd: number): boolean {
+  let dotCount = 0;
+  let nonDot = false;
+  let i = segStart;
+  while (i < segEnd) {
+    const c = path.charCodeAt(i);
+    if (c === 0x2e) { // '.'
+      dotCount++;
+      i++;
+      continue;
+    }
+    if (c === 0x25 && i + 2 < segEnd) { // '%' + 2 hex
+      const h1 = path.charCodeAt(i + 1);
+      const h2 = path.charCodeAt(i + 2);
+      if ((h1 === 0x32) && (h2 === 0x65 || h2 === 0x45)) { // '%2e' or '%2E'
+        dotCount++;
+        i += 3;
+        continue;
+      }
+    }
+    nonDot = true;
+    break;
+  }
+  if (nonDot) return false;
+  return dotCount === 1 || dotCount === 2;
 }
