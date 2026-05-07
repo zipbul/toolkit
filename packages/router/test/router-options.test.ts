@@ -105,14 +105,22 @@ describe('Router<T> options', () => {
     }
   });
 
-  it('should pass through malformed encoding as-is in param values', () => {
-    const router = new Router<string>();
+  it('compat profile passes malformed encoding through as raw bytes', () => {
+    const router = new Router<string>({ profile: 'compat' });
     router.add('GET', '/files/:name', 'files');
     router.build();
 
     const result = router.match('GET', '/files/bad%GG');
     expect(result).not.toBeNull();
     expect(result!.params.name).toBe('bad%GG');
+  });
+
+  it('secure profile rejects malformed encoding', () => {
+    const router = new Router<string>();
+    router.add('GET', '/files/:name', 'files');
+    router.build();
+
+    expect(router.match('GET', '/files/bad%GG')).toBeNull();
   });
 
   it('should handle optionalParamBehavior=\'set-undefined\'', () => {
@@ -127,14 +135,12 @@ describe('Router<T> options', () => {
     expect(result!.params.id).toBeUndefined();
   });
 
-  it('should decode %2F in param values to /', () => {
+  it('secure profile rejects %2F in param values (path traversal guard)', () => {
     const router = new Router<string>();
     router.add('GET', '/files/:name', 'files');
     router.build();
 
-    const result = router.match('GET', '/files/a%2Fb');
-    expect(result).not.toBeNull();
-    expect(result!.params.name).toBe('a/b');
+    expect(router.match('GET', '/files/a%2Fb')).toBeNull();
   });
 
 });

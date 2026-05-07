@@ -257,8 +257,8 @@ describe('decoding under fallback walkers', () => {
     expect(m!.params).toEqual({ user: 'hello world' });
   });
 
-  it('keeps raw value when decodeURIComponent throws (malformed %)', () => {
-    const r = new Router<string>();
+  it('compat profile keeps raw value when decodeURIComponent would throw (malformed %)', () => {
+    const r = new Router<string>({ profile: 'compat' });
     r.add('GET', '/api/v1/:user', 'v1');
     r.add('GET', '/api/:ver/users', 'pv');
     r.build();
@@ -267,8 +267,15 @@ describe('decoding under fallback walkers', () => {
 
     expect(m).not.toBeNull();
     expect(m!.value).toBe('v1');
-    // Either decoded or raw — but must not throw, must not be null.
     expect(typeof m!.params.user).toBe('string');
+  });
+
+  it('secure profile rejects malformed % at runtime', () => {
+    const r = new Router<string>();
+    r.add('GET', '/api/v1/:user', 'v1');
+    r.build();
+
+    expect(r.match('GET', '/api/v1/%E0%A4%A')).toBeNull();
   });
 });
 

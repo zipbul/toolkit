@@ -423,8 +423,8 @@ describe('sibling-param expansion under large trees', () => {
 // ── Edge URLs ─────────────────────────────────────────────────────────────
 
 describe('edge case URLs', () => {
-  it('handles unicode characters in param values', () => {
-    const r = new Router<string>();
+  it('handles unicode characters in param values (compat profile passes raw bytes through)', () => {
+    const r = new Router<string>({ profile: 'compat' });
     r.add('GET', '/users/:name', 'u');
     r.build();
 
@@ -432,6 +432,14 @@ describe('edge case URLs', () => {
 
     expect(m).not.toBeNull();
     expect(m!.params.name).toBe('한글');
+  });
+
+  it('rejects raw unicode in secure profile (URL must be percent-encoded)', () => {
+    const r = new Router<string>();
+    r.add('GET', '/users/:name', 'u');
+    r.build();
+
+    expect(r.match('GET', '/users/한글')).toBeNull();
   });
 
   it('handles percent-encoded multi-byte sequences', () => {

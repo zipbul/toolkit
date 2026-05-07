@@ -230,6 +230,7 @@ export class Router<T = unknown> implements RouterPublicApi<T> {
       }
 
       const cfg: MatchConfig<T> = {
+        profile: routerOptions.profile ?? 'secure',
         trimSlash: r.ignoreTrailingSlash,
         lowerCase: !r.caseSensitive,
         maxPathLen: r.maxPathLength,
