@@ -143,6 +143,16 @@ function skipCharClass(pattern: string, start: number): number {
 }
 
 export function assessRegexSafety(pattern: string): RegexSafetyAssessment {
+  // Group construct whitelist (RFC §7.2 line 1123-1125): only `(?:...)`
+  // non-capturing groups are allowed. Capturing `(`, named `(?<x>)`,
+  // lookaround `(?=)/(?!)/(?<=)/(?<!)`, and inline-flag `(?i)/(?m)/(?s)`
+  // groups are all rejected. Run before the structural checks below so
+  // unsafe constructs surface a clear reason.
+  const groupFault = scanGroupConstructs(pattern);
+  if (groupFault !== null) {
+    return { safe: false, reason: groupFault };
+  }
+
   if (BACKREFERENCE_PATTERN.test(pattern)) {
     return { safe: false, reason: 'Backreferences are not allowed in route params' };
   }
@@ -156,6 +166,44 @@ export function assessRegexSafety(pattern: string): RegexSafetyAssessment {
   }
 
   return { safe: true };
+}
+
+/**
+ * Walk the pattern and reject any `(` that is not the start of a
+ * non-capturing group `(?:`. Returns `null` when every group is `(?:...)`
+ * or when there are no groups.
+ */
+function scanGroupConstructs(pattern: string): string | null {
+  const len = pattern.length;
+  let i = 0;
+  while (i < len) {
+    const ch = pattern[i];
+    if (ch === '\\') { i += 2; continue; }
+    if (ch === '[') { i = skipCharClassExternal(pattern, i) + 1; continue; }
+    if (ch !== '(') { i++; continue; }
+
+    // Got a `(`. Must be followed by `?:` to be allowed.
+    if (pattern[i + 1] !== '?') {
+      return 'Capturing groups are not allowed; use `(?:...)` instead';
+    }
+    const c2 = pattern[i + 2];
+    if (c2 === ':') { i += 3; continue; }
+    if (c2 === '=' || c2 === '!') {
+      return 'Lookahead `(?=...)` / `(?!...)` is not allowed';
+    }
+    if (c2 === '<') {
+      const c3 = pattern[i + 3];
+      if (c3 === '=' || c3 === '!') {
+        return 'Lookbehind `(?<=...)` / `(?<!...)` is not allowed';
+      }
+      return 'Named capture groups `(?<name>...)` are not allowed; use `(?:...)` instead';
+    }
+    if (c2 === 'i' || c2 === 'm' || c2 === 's' || c2 === 'x' || c2 === 'u') {
+      return 'Inline flag groups `(?i)` / `(?m)` / `(?s)` are not allowed';
+    }
+    return `Unknown group construct '(?${c2 ?? ''}' is not allowed; only \`(?:...)\` is supported`;
+  }
+  return null;
 }
 
 /**

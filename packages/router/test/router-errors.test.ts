@@ -277,7 +277,7 @@ describe('Router<T> errors', () => {
   it('should throw regex-unsafe error when pattern contains backreference (always-on guard)', () => {
     const router = new Router<string>();
 
-    router.add('GET', '/users/:id(([a-z])\\1)', 'handler');
+    router.add('GET', '/users/:id((?:[a-z])\\1)', 'handler');
     const issue = firstBuildIssue(router);
     expect(issue.kind).toBe('regex-unsafe');
     expect(issue.message).toContain('Backreferences');

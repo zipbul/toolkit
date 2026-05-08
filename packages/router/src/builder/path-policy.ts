@@ -49,31 +49,7 @@ export function validatePathChars(
     if (c === 0x28) parenDepth++;
     else if (c === 0x29 && parenDepth > 0) parenDepth--;
 
-    if (c === 0x23) {
-      return err({
-        kind: 'path-fragment',
-        message: `Path must not contain raw fragment '#': ${path}`,
-        path,
-        suggestion: 'Use percent-encoded form `%23` for literal `#`.',
-      });
-    }
-
-    if (c === 0x3f) {
-      const prev = i > 0 ? path.charCodeAt(i - 1) : 0;
-      const isIdentChar = (prev >= 0x30 && prev <= 0x39) || (prev >= 0x41 && prev <= 0x5a) ||
-                          (prev >= 0x61 && prev <= 0x7a) || prev === 0x5f;
-      const next = i + 1 < len ? path.charCodeAt(i + 1) : 0;
-      const isSegEnd = next === 0 || next === CC_SLASH;
-      if (!isIdentChar || !isSegEnd) {
-        return err({
-          kind: 'path-query',
-          message: `Path must not contain raw query '?' (use \`:name?\` decorator only): ${path}`,
-          path,
-          suggestion: 'Optional param decorator `?` must follow a param name and end the segment.',
-        });
-      }
-    }
-
+    // Universal byte rules — apply both inside and outside regex groups.
     if ((c >= 0x00 && c <= 0x1f) || c === 0x7f) {
       return err({
         kind: 'path-control-char',
@@ -103,6 +79,52 @@ export function validatePathChars(
       }
     }
 
+    // Inside a regex group `(...)` the router-grammar tokens `?` `#` and
+    // the pchar-restriction are skipped — those bytes are part of the
+    // user's regex AST, which is validated separately by regex-safety.
+    if (parenDepth > 0) {
+      if (c === CC_SLASH || i === len - 1) {
+        // Dot-segment / segStart bookkeeping still runs so a regex group
+        // crossing a `/` is still classified correctly afterwards.
+        const segEnd = c === CC_SLASH ? i : i + 1;
+        if (segEnd > segStart && isDotSegment(path, segStart, segEnd)) {
+          return err({
+            kind: 'path-dot-segment',
+            message: `Path must not contain dot segments '.' or '..' (literal or percent-encoded): ${path}`,
+            path,
+            suggestion: 'Remove dot segments. Encoded forms `%2e`, `%2E`, `%2e%2e` are also rejected.',
+          });
+        }
+        segStart = i + 1;
+      }
+      continue;
+    }
+
+    if (c === 0x23) {
+      return err({
+        kind: 'path-fragment',
+        message: `Path must not contain raw fragment '#': ${path}`,
+        path,
+        suggestion: 'Use percent-encoded form `%23` for literal `#`.',
+      });
+    }
+
+    if (c === 0x3f) {
+      const prev = i > 0 ? path.charCodeAt(i - 1) : 0;
+      const isIdentChar = (prev >= 0x30 && prev <= 0x39) || (prev >= 0x41 && prev <= 0x5a) ||
+                          (prev >= 0x61 && prev <= 0x7a) || prev === 0x5f;
+      const next = i + 1 < len ? path.charCodeAt(i + 1) : 0;
+      const isSegEnd = next === 0 || next === CC_SLASH;
+      if (!isIdentChar || !isSegEnd) {
+        return err({
+          kind: 'path-query',
+          message: `Path must not contain raw query '?' (use \`:name?\` decorator only): ${path}`,
+          path,
+          suggestion: 'Optional param decorator `?` must follow a param name and end the segment.',
+        });
+      }
+    }
+
     if (c === CC_SLASH || i === len - 1) {
       const segEnd = c === CC_SLASH ? i : i + 1;
       if (segEnd > segStart) {
@@ -118,7 +140,6 @@ export function validatePathChars(
       segStart = i + 1;
     }
 
-    if (parenDepth > 0) continue;
     if (!isAcceptablePathChar(c)) {
       return err({
         kind: 'path-invalid-pchar',
@@ -129,11 +150,144 @@ export function validatePathChars(
     }
   }
 
-  return undefined;
+  // Single-pass percent-decode validation: classify each decoded byte
+  // and verify the resulting byte stream as well-formed UTF-8.
+  return validateDecodedBytes(path);
 }
 
 function isHex(c: number): boolean {
   return (c >= 0x30 && c <= 0x39) || (c >= 0x41 && c <= 0x46) || (c >= 0x61 && c <= 0x66);
+}
+
+function hexValue(c: number): number {
+  if (c >= 0x30 && c <= 0x39) return c - 0x30;
+  if (c >= 0x41 && c <= 0x46) return c - 0x41 + 10;
+  return c - 0x61 + 10;
+}
+
+/**
+ * Single-pass percent-decode of a registered path. Walks each `%xx`
+ * exactly once (no recursion / re-decoding of decoded bytes), classifies
+ * every produced byte, and validates the resulting raw byte stream as
+ * well-formed UTF-8.
+ *
+ * Rejects:
+ *   - `%00`-`%1F`, `%7F`        → `path-encoded-control`
+ *   - `%2F` (encoded `/`)        → `path-encoded-slash`
+ *   - overlong / surrogate /
+ *     truncated UTF-8 sequences  → `path-invalid-utf8`
+ *
+ * Dot-segment detection (`.`, `..`, `%2e`, etc.) already happens in the
+ * earlier pass via `isDotSegment`, so it is intentionally not duplicated
+ * here; double-encoded forms like `%252F` decode once to `%2F` and
+ * remain a literal three-char sequence — they are *not* re-decoded into
+ * a slash, which is the entire point of single-pass.
+ *
+ * Bytes inside a regex group `(...)` are skipped: their contents are
+ * the user's regex AST and are validated by `assessRegexSafety`.
+ */
+export function validateDecodedBytes(path: string): Result<void, RouterErrorData> {
+  const len = path.length;
+  let parenDepth = 0;
+  let i = 0;
+  // UTF-8 continuation tracking. When `expect > 0` we are mid-sequence
+  // and the next decoded byte must be `0b10xxxxxx`. `seqVal` accumulates
+  // the codepoint to detect overlongs and surrogates on completion.
+  let expect = 0;
+  let seqVal = 0;
+  let seqMin = 0;
+
+  const fail = (kind: 'path-encoded-control' | 'path-encoded-slash' | 'path-invalid-utf8',
+                msg: string, suggestion: string) =>
+    err({ kind, message: `${msg}: ${path}`, path, suggestion });
+
+  while (i < len) {
+    const ch = path.charCodeAt(i);
+    if (ch === 0x28) { parenDepth++; i++; continue; }
+    if (ch === 0x29 && parenDepth > 0) { parenDepth--; i++; continue; }
+    if (parenDepth > 0) { i++; continue; }
+
+    if (ch !== 0x25) {
+      // Literal ASCII byte. If we were inside a UTF-8 sequence, the
+      // sequence is incomplete (a non-continuation byte appeared).
+      if (expect !== 0) {
+        return fail('path-invalid-utf8',
+          'Path percent-encoding decodes to a truncated UTF-8 sequence',
+          'Each `%xx` continuation byte must complete the surrounding UTF-8 codepoint.');
+      }
+      i++;
+      continue;
+    }
+
+    // `%xx` — well-formed-percent already enforced by validatePathChars.
+    const b = (hexValue(path.charCodeAt(i + 1)) << 4) | hexValue(path.charCodeAt(i + 2));
+    i += 3;
+
+    if (expect === 0) {
+      // Starting a new byte. Classify ASCII first.
+      if ((b >= 0x00 && b <= 0x1f) || b === 0x7f) {
+        return fail('path-encoded-control',
+          `Path contains percent-encoded control byte %${b.toString(16).padStart(2, '0').toUpperCase()}`,
+          'Control bytes (0x00-0x1F, 0x7F) are not permitted in registered paths.');
+      }
+      if (b === 0x2f) {
+        return fail('path-encoded-slash',
+          'Path contains percent-encoded `/` (%2F)',
+          'Encoded slashes are not allowed; the path grammar reserves `/` as the segment separator.');
+      }
+      if (b < 0x80) { continue; }
+
+      // Multi-byte UTF-8 lead byte.
+      if (b < 0xc2) {
+        // 0x80-0xbf: stray continuation. 0xc0-0xc1: overlong 2-byte.
+        return fail('path-invalid-utf8',
+          `Path percent-encoding produced invalid UTF-8 lead byte %${b.toString(16).toUpperCase()}`,
+          'Lead bytes 0x80-0xbf and 0xc0-0xc1 are not valid in well-formed UTF-8.');
+      }
+      if (b < 0xe0) { expect = 1; seqVal = b & 0x1f; seqMin = 0x80; }
+      else if (b < 0xf0) { expect = 2; seqVal = b & 0x0f; seqMin = 0x800; }
+      else if (b < 0xf5) { expect = 3; seqVal = b & 0x07; seqMin = 0x10000; }
+      else {
+        return fail('path-invalid-utf8',
+          `Path percent-encoding produced invalid UTF-8 lead byte %${b.toString(16).toUpperCase()}`,
+          'Lead bytes 0xf5-0xff are outside the Unicode range.');
+      }
+      continue;
+    }
+
+    // Continuation byte expected.
+    if ((b & 0xc0) !== 0x80) {
+      return fail('path-invalid-utf8',
+        `Path percent-encoding produced invalid UTF-8 continuation byte %${b.toString(16).toUpperCase()}`,
+        'Continuation bytes must match `0b10xxxxxx`.');
+    }
+    seqVal = (seqVal << 6) | (b & 0x3f);
+    expect--;
+    if (expect === 0) {
+      if (seqVal < seqMin) {
+        return fail('path-invalid-utf8',
+          `Path percent-encoding produced an overlong UTF-8 sequence (codepoint U+${seqVal.toString(16).toUpperCase()})`,
+          'Overlong encodings are forbidden by RFC 3629 §3.');
+      }
+      if (seqVal >= 0xd800 && seqVal <= 0xdfff) {
+        return fail('path-invalid-utf8',
+          `Path percent-encoding produced a surrogate codepoint U+${seqVal.toString(16).toUpperCase()}`,
+          'UTF-16 surrogate halves are not valid Unicode scalars.');
+      }
+      if (seqVal > 0x10ffff) {
+        return fail('path-invalid-utf8',
+          `Path percent-encoding produced a codepoint above U+10FFFF`,
+          'The Unicode range tops out at U+10FFFF.');
+      }
+    }
+  }
+
+  if (expect !== 0) {
+    return fail('path-invalid-utf8',
+      'Path ends with an incomplete UTF-8 sequence',
+      'Provide all continuation bytes for the trailing UTF-8 codepoint.');
+  }
+  return undefined;
 }
 
 function isDotSegment(path: string, segStart: number, segEnd: number): boolean {

@@ -2,6 +2,13 @@ import { describe, it, expect } from 'bun:test';
 
 import { assessRegexSafety } from './regex-safety';
 
+// Capturing groups `(...)`, named captures `(?<name>...)`, lookaround
+// `(?=...)/(?!...)/(?<=...)/(?<!...)`, and inline-flag groups `(?i)/(?m)/(?s)`
+// are all rejected by the group-construct whitelist. The structural
+// hazard checks (backref, nested unlimited quantifier, overlapping
+// alternation under repeat) run *after* the whitelist, so all fixtures
+// that test them use `(?:...)` non-capturing groups.
+
 describe('assessRegexSafety', () => {
   // ── Basic safe/unsafe ──
 
@@ -11,17 +18,67 @@ describe('assessRegexSafety', () => {
     expect(result.safe).toBe(true);
   });
 
+  // ── Group construct whitelist ──
+
+  it('rejects bare capturing group `(a)`', () => {
+    const result = assessRegexSafety('(a)');
+
+    expect(result.safe).toBe(false);
+    expect(result.reason).toContain('Capturing groups');
+  });
+
+  it('rejects named capture `(?<x>a)`', () => {
+    const result = assessRegexSafety('(?<x>a)');
+
+    expect(result.safe).toBe(false);
+    expect(result.reason).toContain('Named capture');
+  });
+
+  it('rejects lookahead `(?=a)`', () => {
+    const result = assessRegexSafety('(?=a)');
+
+    expect(result.safe).toBe(false);
+    expect(result.reason).toContain('Lookahead');
+  });
+
+  it('rejects negative lookahead `(?!a)`', () => {
+    const result = assessRegexSafety('(?!a)');
+
+    expect(result.safe).toBe(false);
+    expect(result.reason).toContain('Lookahead');
+  });
+
+  it('rejects lookbehind `(?<=a)`', () => {
+    const result = assessRegexSafety('(?<=a)');
+
+    expect(result.safe).toBe(false);
+    expect(result.reason).toContain('Lookbehind');
+  });
+
+  it('rejects negative lookbehind `(?<!a)`', () => {
+    const result = assessRegexSafety('(?<!a)');
+
+    expect(result.safe).toBe(false);
+    expect(result.reason).toContain('Lookbehind');
+  });
+
+  it('rejects inline flag `(?i)abc`', () => {
+    const result = assessRegexSafety('(?i)abc');
+
+    expect(result.safe).toBe(false);
+    expect(result.reason).toContain('Inline flag');
+  });
+
+  it('accepts non-capturing group `(?:a)`', () => {
+    const result = assessRegexSafety('(?:a)');
+
+    expect(result.safe).toBe(true);
+  });
+
   // ── Backreferences ──
 
   it('should reject numeric backreference', () => {
-    const result = assessRegexSafety('(\\w+)\\1');
-
-    expect(result.safe).toBe(false);
-    expect(result.reason).toContain('Backreferences');
-  });
-
-  it('should reject named backreference', () => {
-    const result = assessRegexSafety('(?<word>\\w+)\\k<word>');
+    const result = assessRegexSafety('(?:\\w+)\\1');
 
     expect(result.safe).toBe(false);
     expect(result.reason).toContain('Backreferences');
@@ -29,15 +86,15 @@ describe('assessRegexSafety', () => {
 
   // ── Nested unlimited quantifiers (* / +) ──
 
-  it('should reject nested unlimited quantifiers (a+)+', () => {
-    const result = assessRegexSafety('(a+)+');
+  it('should reject nested unlimited quantifiers (?:a+)+', () => {
+    const result = assessRegexSafety('(?:a+)+');
 
     expect(result.safe).toBe(false);
     expect(result.reason).toContain('Nested unlimited');
   });
 
-  it('should reject nested unlimited quantifiers (a*)*', () => {
-    const result = assessRegexSafety('(a*)*');
+  it('should reject nested unlimited quantifiers (?:a*)*', () => {
+    const result = assessRegexSafety('(?:a*)*');
 
     expect(result.safe).toBe(false);
     expect(result.reason).toContain('Nested unlimited');
@@ -75,8 +132,8 @@ describe('assessRegexSafety', () => {
     expect(result.safe).toBe(true);
   });
 
-  it('should detect nested unlimited through character class: ([a-z]+)*', () => {
-    const result = assessRegexSafety('([a-z]+)*');
+  it('should detect nested unlimited through character class: (?:[a-z]+)*', () => {
+    const result = assessRegexSafety('(?:[a-z]+)*');
 
     expect(result.safe).toBe(false);
     expect(result.reason).toContain('Nested unlimited');
@@ -84,8 +141,8 @@ describe('assessRegexSafety', () => {
 
   // ── Curly brace quantifiers ──
 
-  it('should detect nested unlimited with {n,} quantifier: (a{1,})+', () => {
-    const result = assessRegexSafety('(a{1,})+');
+  it('should detect nested unlimited with {n,} quantifier: (?:a{1,})+', () => {
+    const result = assessRegexSafety('(?:a{1,})+');
 
     expect(result.safe).toBe(false);
     expect(result.reason).toContain('Nested unlimited');
@@ -111,7 +168,7 @@ describe('assessRegexSafety', () => {
   });
 
   it('should detect {n,m} as unlimited quantifier', () => {
-    const result = assessRegexSafety('(a{1,3})+');
+    const result = assessRegexSafety('(?:a{1,3})+');
 
     expect(result.safe).toBe(false);
     expect(result.reason).toContain('Nested unlimited');
@@ -120,19 +177,19 @@ describe('assessRegexSafety', () => {
   // ── Group nesting with stack propagation ──
 
   it('inner group with unlimited that has no outer quantifier is still safe', () => {
-    const result = assessRegexSafety('((a+)b)');
+    const result = assessRegexSafety('(?:(?:a+)b)');
 
     expect(result.safe).toBe(true);
   });
 
-  it('should detect deeply nested unlimited: ((a+)+)', () => {
-    const result = assessRegexSafety('((a+)+)');
+  it('should detect deeply nested unlimited: (?:(?:a+)+)', () => {
+    const result = assessRegexSafety('(?:(?:a+)+)');
 
     expect(result.safe).toBe(false);
   });
 
-  it('should detect triple nested with propagation: ((a+)+)+', () => {
-    const result = assessRegexSafety('((a+)+)+');
+  it('should detect triple nested with propagation: (?:(?:a+)+)+', () => {
+    const result = assessRegexSafety('(?:(?:a+)+)+');
 
     expect(result.safe).toBe(false);
   });
@@ -165,14 +222,8 @@ describe('assessRegexSafety', () => {
     expect(result.safe).toBe(true);
   });
 
-  it('should handle pattern with only a group: (a)', () => {
-    const result = assessRegexSafety('(a)');
-
-    expect(result.safe).toBe(true);
-  });
-
-  it('should handle alternation inside group: (a|b)+', () => {
-    const result = assessRegexSafety('(a|b)+');
+  it('should handle non-capturing group with alternation: (?:a|b)+', () => {
+    const result = assessRegexSafety('(?:a|b)+');
 
     expect(result.safe).toBe(true);
   });
