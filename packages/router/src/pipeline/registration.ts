@@ -48,9 +48,15 @@ export interface ParamMetadata {
  * registered table; that allocated two 1-entry arrays per path and ran
  * ~160ms over a 100k high-fanout build. Method-major keeps allocation to
  * one Record per active method (plus the terminal value entries themselves).
+ *
+ * `staticPathMethodMask` accumulates a 32-bit bitmask of method codes
+ * registered for each static path. `allowedMethods()` reads it as a
+ * single property + popcount + bit-iteration via `Math.clz32`, avoiding
+ * the per-active-method bucket probe loop.
  */
 export interface RegistrationSnapshot<T> {
   staticByMethod: Array<Record<string, T> | undefined>;
+  staticPathMethodMask: Record<string, number>;
   segmentTrees: Array<SegmentNode | null>;
   handlers: T[];
   terminalHandlers: number[];
@@ -62,6 +68,7 @@ export interface RegistrationSnapshot<T> {
 
 interface BuildState<T> {
   staticByMethod: Array<Record<string, T> | undefined>;
+  staticPathMethodMask: Record<string, number>;
   segmentTrees: Array<SegmentNode | null>;
   handlers: T[];
   terminalHandlers: number[];
@@ -303,6 +310,7 @@ export class Registration<T> {
     const snapshotStart = nowMs();
     const snapshot: RegistrationSnapshot<T> = {
       staticByMethod: state.staticByMethod,
+      staticPathMethodMask: state.staticPathMethodMask,
       segmentTrees: Object.freeze([...state.segmentTrees]) as Array<SegmentNode | null>,
       handlers: state.handlers,
       terminalHandlers: state.terminalHandlers,
@@ -437,12 +445,23 @@ export class Registration<T> {
     }
 
     bucket[normalized] = route.value;
+    const prevMask = state.staticPathMethodMask[normalized] ?? 0;
+    state.staticPathMethodMask[normalized] = prevMask | (1 << methodCode);
     undo.push({
       k: UndoKind.StaticMapDelete,
       map: bucket as unknown as Record<string, unknown>,
       reg: bucket as unknown as Record<string, unknown>,
       key: normalized,
     });
+    // Restore the path's method-mask bit on rollback. Closure carries
+    // the prior mask so a duplicate-route failure leaves the surviving
+    // routes' bits intact.
+    const maskMap = state.staticPathMethodMask;
+    const maskKey = normalized;
+    undo.push((() => {
+      if (prevMask === 0) delete maskMap[maskKey];
+      else maskMap[maskKey] = prevMask;
+    }) as () => void);
     addMs(state.diagnostics, 'staticInsertMs', insertStart);
   }
 
@@ -639,6 +658,7 @@ export class Registration<T> {
 function createBuildState<T>(withDiagnostics = false): BuildState<T> {
   return {
     staticByMethod: [],
+    staticPathMethodMask: Object.create(null) as Record<string, number>,
     segmentTrees: [],
     handlers: [],
     terminalHandlers: [],

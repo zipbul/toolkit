@@ -17,6 +17,8 @@ interface MatchLayerDeps<T> {
   activeMethodCodes: ReadonlyArray<readonly [string, number]>;
   staticOutputsByMethod: Array<Record<string, MatchOutput<T>> | undefined>;
   trees: Array<MatchFn | null>;
+  /** Per-static-path 32-bit mask of registered method codes. */
+  staticPathMethodMask: Record<string, number>;
 }
 
 /**
@@ -39,6 +41,13 @@ export class MatchLayer<T> {
   private readonly activeMethodCodes: ReadonlyArray<readonly [string, number]>;
   private readonly staticOutputsByMethod: Array<Record<string, MatchOutput<T>> | undefined>;
   private readonly trees: Array<MatchFn | null>;
+  private readonly staticPathMethodMask: Record<string, number>;
+  /**
+   * Method-code → method-name lookup table. Built once from
+   * `activeMethodCodes` so the bitmask iteration in `allowedMethods()`
+   * can resolve a bit position to a name in O(1) without scanning.
+   */
+  private readonly methodNameByCode: string[];
 
   constructor(deps: MatchLayerDeps<T>) {
     this.normalizePath = deps.normalizePath;
@@ -46,6 +55,10 @@ export class MatchLayer<T> {
     this.activeMethodCodes = deps.activeMethodCodes;
     this.staticOutputsByMethod = deps.staticOutputsByMethod;
     this.trees = deps.trees;
+    this.staticPathMethodMask = deps.staticPathMethodMask;
+    const names: string[] = [];
+    for (const [name, code] of deps.activeMethodCodes) names[code] = name;
+    this.methodNameByCode = names;
   }
 
   /**
@@ -77,23 +90,31 @@ export class MatchLayer<T> {
     if (sp === null) return [];
 
     const out: string[] = [];
+
+    // Static fast path — single 32-bit mask lookup; iterate via lowest
+    // set bit (`mask & -mask`) so each loop iteration is O(1) regardless
+    // of how many methods are registered for the path.
+    let mask = (this.staticPathMethodMask[sp] ?? 0) | 0;
+    while (mask !== 0) {
+      const lowest = mask & -mask;
+      const code = 31 - Math.clz32(lowest);
+      const name = this.methodNameByCode[code];
+      if (name !== undefined) out.push(name);
+      mask ^= lowest;
+    }
+
+    // Dynamic walker fallback — only methods that actually have a tree
+    // contribute, and only when the static mask did not already include
+    // them. Trees are sparse so the loop is at most O(active methods).
     const state = this.matchState;
     const active = this.activeMethodCodes;
-
+    const staticMask = (this.staticPathMethodMask[sp] ?? 0) | 0;
     for (let i = 0; i < active.length; i++) {
       const entry = active[i]!;
       const methodCode = entry[1];
-      const bucket = this.staticOutputsByMethod[methodCode];
-
-      if (bucket !== undefined && bucket[sp] !== undefined) {
-        out.push(entry[0]);
-        continue;
-      }
-
+      if ((staticMask & (1 << methodCode)) !== 0) continue;
       const tr = this.trees[methodCode];
-
       if (tr === null || tr === undefined) continue;
-
       if (tr(sp, state)) {
         out.push(entry[0]);
       }

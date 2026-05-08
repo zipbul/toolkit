@@ -257,8 +257,8 @@ describe('optionalParamBehavior × cache', () => {
 // ── maxPathLength + maxSegmentLength interactions ────────────────────────
 
 describe('length limits × route type', () => {
-  it('maxPathLength=Infinity (with matching segment limit) accepts very long paths', () => {
-    const r = new Router<string>({ maxPathLength: Infinity, maxSegmentLength: Infinity, unsafeAllowUnboundedLimits: true });
+  it('a generous maxPathLength + maxSegmentLength accept very long paths', () => {
+    const r = new Router<string>({ maxPathLength: 200_000, maxSegmentLength: 200_000 });
     r.add('GET', '/files/*p', 'f');
     r.build();
 
@@ -269,8 +269,8 @@ describe('length limits × route type', () => {
     expect(m!.params.p?.length).toBe(100_000);
   });
 
-  it('maxSegmentLength=Infinity disables the segment scan', () => {
-    const r = new Router<string>({ maxSegmentLength: Infinity, maxPathLength: Infinity, unsafeAllowUnboundedLimits: true });
+  it('a generous maxSegmentLength accepts long single-segment param values', () => {
+    const r = new Router<string>({ maxSegmentLength: 200_000, maxPathLength: 200_000 });
     r.add('GET', '/users/:id', 'u');
     r.build();
 
@@ -281,16 +281,16 @@ describe('length limits × route type', () => {
     expect(m!.params.id?.length).toBe(100_000);
   });
 
-  it('finite maxPathLength but Infinity maxSegmentLength: long single segment in long path is rejected by path check', () => {
-    const r = new Router<string>({ maxPathLength: 1000, maxSegmentLength: Infinity, unsafeAllowUnboundedLimits: true });
+  it('finite maxPathLength rejects oversized paths via the path-length gate', () => {
+    const r = new Router<string>({ maxPathLength: 1000, maxSegmentLength: 200_000 });
     r.add('GET', '/users/:id', 'u');
     r.build();
 
     expect(r.match('GET', '/users/' + 'x'.repeat(2000))).toBeNull();
   });
 
-  it('Infinity maxPathLength but finite maxSegmentLength: long single segment is rejected by segment scan', () => {
-    const r = new Router<string>({ maxPathLength: Infinity, maxSegmentLength: 100, unsafeAllowUnboundedLimits: true });
+  it('finite maxSegmentLength rejects oversized single segments via the segment scan', () => {
+    const r = new Router<string>({ maxPathLength: 200_000, maxSegmentLength: 100 });
     r.add('GET', '/users/:id', 'u');
     r.build();
 

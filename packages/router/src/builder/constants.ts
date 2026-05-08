@@ -13,11 +13,12 @@ export const CC_PLUS = 43;         // '+'
 export const CC_COLON = 58;        // ':'
 export const CC_QUESTION = 63;     // '?'
 
-// Hard limits — single source for builder validation and matcher pre-allocation.
-// MAX_PARAMS must equal the matcher's pre-allocated paramNames/paramValues
-// length in src/matcher/match-state.ts; changing one without the other
-// silently corrupts dynamic-match output for paths above the threshold.
-export const MAX_PARAMS = 32;
+// Hard limits — single source for builder validation. The matcher's
+// `paramOffsets` Int32Array is now sized at `createMatchState(maxParams)`
+// time from the resolved option (default 64), so this constant is the
+// builder-side default only and no longer pinned to the matcher
+// allocation width.
+export const MAX_PARAMS = 64;
 // Each optional param doubles the expansion count (2^N). At N=20 the build
 // hangs ~5s; N=25 allocates 33M parts arrays. Capped at 10 (1024 expansions,
 // milliseconds-level build) — far above realistic APIs and below pathological

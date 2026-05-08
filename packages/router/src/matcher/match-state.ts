@@ -1,5 +1,3 @@
-import { MAX_PARAMS } from '../builder/constants';
-
 /**
  * Hot-path match state. Shared across synchronous allowedMethods() lookups,
  * and pre-allocated per Router instance for match() hot-path.
@@ -21,9 +19,13 @@ export interface MatchState {
  */
 export type MatchFn = (url: string, state: MatchState) => boolean;
 
-export function createMatchState(): MatchState {
-  // 32 parameters max, 2 slots per parameter (start, end)
-  const paramOffsets = new Int32Array(MAX_PARAMS * 2);
+const DEFAULT_MAX_PARAMS = 64;
+
+export function createMatchState(maxParams: number = DEFAULT_MAX_PARAMS): MatchState {
+  // Two slots per parameter (start, end) plus a small headroom slot so
+  // codegen-emitted writes that index `paramCount * 2 + 1` cannot fall
+  // off the end on the last param.
+  const paramOffsets = new Int32Array(Math.max(2, maxParams * 2 + 2));
 
   return {
     handlerIndex: -1,

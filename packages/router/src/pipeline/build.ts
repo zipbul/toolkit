@@ -17,6 +17,8 @@ export interface BuildResult<T> {
   trees: Array<MatchFn | null>;
   anyTester: boolean;
   staticOutputsByMethod: Array<Record<string, MatchOutput<T>> | undefined>;
+  /** Per-static-path 32-bit method-availability mask (bit `methodCode`). */
+  staticPathMethodMask: Record<string, number>;
   activeMethodCodes: ReadonlyArray<readonly [string, number]>;
   methodCodes: Record<string, number>;
   matchState: MatchState;
@@ -97,9 +99,10 @@ export function buildFromRegistration<T>(
     trees,
     anyTester,
     staticOutputsByMethod,
+    staticPathMethodMask: snapshot.staticPathMethodMask,
     activeMethodCodes,
     methodCodes,
-    matchState: createMatchState(),
+    matchState: createMatchState(options.maxParams ?? 64),
     normalizePath,
     terminalHandlers: snapshot.terminalHandlers,
     isWildcardByTerminal: snapshot.isWildcardByTerminal,

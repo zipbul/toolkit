@@ -14,10 +14,16 @@ describe('MatchState', () => {
       expect(state.paramCount).toBe(0);
     });
 
-    it('should pre-allocate paramOffsets Int32Array with 64 slots', () => {
+    it('should pre-allocate paramOffsets Int32Array sized for the default 64-param cap', () => {
       const state = createMatchState();
       expect(state.paramOffsets).toBeInstanceOf(Int32Array);
-      expect(state.paramOffsets.length).toBe(64);
+      // 64 params × 2 slots + 2 headroom slots (see createMatchState).
+      expect(state.paramOffsets.length).toBe(64 * 2 + 2);
+    });
+
+    it('should size paramOffsets from the maxParams argument when provided', () => {
+      const state = createMatchState(8);
+      expect(state.paramOffsets.length).toBe(8 * 2 + 2);
     });
 
     it('should create independent state objects', () => {

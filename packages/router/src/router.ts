@@ -84,7 +84,22 @@ function validateOptions(options: RouterOptions): void {
       issues.push({ option: key, message: `${key} must be a positive number (received ${String(v)}).` });
       continue;
     }
-    if (Number.isFinite(v) && !Number.isInteger(v)) {
+    if (!Number.isFinite(v)) {
+      issues.push({
+        option: key,
+        message: `${key} must be a finite number (received ${String(v)}).`,
+        suggestion: 'Provide a finite integer cap; Infinity removes the protective limit.',
+      });
+      continue;
+    }
+    if (v >= Number.MAX_SAFE_INTEGER) {
+      issues.push({
+        option: key,
+        message: `${key} = ${String(v)} is treated as unbounded; provide a finite cap below Number.MAX_SAFE_INTEGER.`,
+      });
+      continue;
+    }
+    if (!Number.isInteger(v)) {
       issues.push({ option: key, message: `${key} must be an integer (received ${String(v)}).` });
       continue;
     }
@@ -233,6 +248,7 @@ export class Router<T = unknown> implements RouterPublicApi<T> {
         activeMethodCodes: r.activeMethodCodes,
         staticOutputsByMethod: r.staticOutputsByMethod,
         trees: r.trees,
+        staticPathMethodMask: r.staticPathMethodMask,
       });
 
       // Build-only tables are frozen as a partition.
