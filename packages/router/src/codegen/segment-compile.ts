@@ -1,7 +1,7 @@
 import type { SegmentNode } from '../matcher/segment-tree';
 import type { MatchFn } from '../matcher/match-state';
 import { performance } from 'node:perf_hooks';
-import { hasAmbiguousNode } from '../matcher/segment-tree';
+import { forEachStaticChild, hasAmbiguousNode, hasAnyStaticChild } from '../matcher/segment-tree';
 import {
   recordBail,
   recordCompile,
@@ -51,12 +51,10 @@ function estimateSegmentTreeCodegen(
     const node = stack.pop()!;
     nodes++;
     let fanoutHere = 0;
-    if (node.staticChildren !== null) {
-      for (const k in node.staticChildren) {
-        stack.push(node.staticChildren[k]!);
-        fanoutHere++;
-      }
-    }
+    forEachStaticChild(node, (_, child) => {
+      stack.push(child);
+      fanoutHere++;
+    });
     let p = node.paramChild;
     while (p !== null) {
       stack.push(p.next);
@@ -92,32 +90,36 @@ function estimateSegmentTreeCodegen(
 export function collectWarmupPaths(root: SegmentNode, max = 8): string[] {
   const out: string[] = [];
 
+  const firstStaticChild = (n: SegmentNode): { key: string; child: SegmentNode } | null => {
+    if (n.singleChildKey !== null && n.singleChildNext !== null) {
+      return { key: n.singleChildKey, child: n.singleChildNext };
+    }
+    if (n.staticChildren !== null) {
+      for (const seg in n.staticChildren) return { key: seg, child: n.staticChildren[seg]! };
+    }
+    return null;
+  };
+
   const synthForNode = (node: SegmentNode, prefix: string): string => {
     if (out.length >= max) return prefix;
     let path = prefix;
     let n: SegmentNode | null = node;
     let guard = 0;
     while (n !== null && guard++ < 16) {
-      let advanced = false;
-      if (n.staticChildren !== null) {
-        for (const seg in n.staticChildren) {
-          path += '/' + seg;
-          n = n.staticChildren[seg]!;
-          advanced = true;
-          break;
-        }
-        if (advanced) continue;
+      const first = firstStaticChild(n);
+      if (first !== null) {
+        path += '/' + first.key;
+        n = first.child;
+        continue;
       }
       if (n.paramChild !== null) {
         path += '/__warm__';
         n = n.paramChild.next;
-        advanced = true;
         continue;
       }
       if (n.wildcardStore !== null) {
         path += '/__warm__/__warm__';
         n = null;
-        advanced = true;
         continue;
       }
       break;
@@ -125,12 +127,10 @@ export function collectWarmupPaths(root: SegmentNode, max = 8): string[] {
     return path;
   };
 
-  if (root.staticChildren !== null) {
-    for (const seg in root.staticChildren) {
-      if (out.length >= max) break;
-      out.push(synthForNode(root.staticChildren[seg]!, '/' + seg));
-    }
-  }
+  forEachStaticChild(root, (seg, child) => {
+    if (out.length >= max) return;
+    out.push(synthForNode(child, '/' + seg));
+  });
   if (root.paramChild !== null && out.length < max) {
     out.push(synthForNode(root.paramChild.next, '/__warm__'));
   }
@@ -307,14 +307,12 @@ function emitNode(
   const slashVar = `s${posVar.slice(3).replace(/[^0-9]/g, '')}`;
   const innerPos = `pos${parseInt(posVar.slice(3).split('_')[0] ?? '0') + 1}`;
 
-  // 1. Static children
-  if (node.staticChildren !== null) {
-    for (const seg in node.staticChildren) {
-      const child = node.staticChildren[seg]!;
-      const segLen = seg.length;
-      const nextPos = `${innerPos}_s${seg.replace(/[^a-z0-9]/gi, '_')}`;
+  // 1. Static children — iterate the inline cache and the Record uniformly.
+  forEachStaticChild(node, (seg, child) => {
+    const segLen = seg.length;
+    const nextPos = `${innerPos}_s${seg.replace(/[^a-z0-9]/gi, '_')}`;
 
-      code += `
+    code += `
     if (url.startsWith(${JSON.stringify(seg)}, ${posVar})) {
       var c = url.charCodeAt(${posVar} + ${segLen});
       if (c === 47) { // '/'
@@ -324,21 +322,21 @@ ${emitNode(ctx, child, nextPos)}
 ${emitTerminalAt(child)}
       }
     }`;
-    }
-  }
+  });
 
   // 2. Param child
   const param = node.paramChild;
   if (param !== null) {
     if (param.nextSibling !== null) {
-      ctx.bail = true; 
+      ctx.bail = true;
       return '';
     }
 
     const next = param.next;
+    const nextHasNoStatic = !hasAnyStaticChild(next);
+    const strictTerminal = nextHasNoStatic && next.paramChild === null && next.wildcardStore === null && next.store !== null;
+    const wildcardTerminal = nextHasNoStatic && next.paramChild === null && next.wildcardStore !== null;
     const testerIdx = param.tester !== null ? ctx.testers.push(param.tester) - 1 : -1;
-    const strictTerminal = next.staticChildren === null && next.paramChild === null && next.wildcardStore === null && next.store !== null;
-    const wildcardTerminal = next.staticChildren === null && next.paramChild === null && next.wildcardStore !== null;
 
     code += `
     var ${slashVar} = url.indexOf('/', ${posVar});`;

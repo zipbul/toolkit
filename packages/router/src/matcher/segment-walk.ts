@@ -205,7 +205,10 @@ export function createSegmentWalker(
     const end = nextSlash === -1 ? len : nextSlash;
     const seg = path.substring(pos, end);
 
-    if (node.staticChildren !== null) {
+    // Inline single-static-child cache hit (string compare, no Record).
+    if (node.singleChildKey === seg && node.singleChildNext !== null) {
+      if (match(node.singleChildNext, path, end === len ? len : end + 1, state, decoder)) return true;
+    } else if (node.staticChildren !== null) {
       const child = node.staticChildren[seg];
       if (child !== undefined) {
         if (match(child, path, end === len ? len : end + 1, state, decoder)) return true;
@@ -301,6 +304,12 @@ function createIterativeWalker(root: SegmentNode, decoder: DecoderFn): MatchFn {
       const end = nextSlash === -1 ? len : nextSlash;
       const seg = url.substring(pos, end);
 
+      // Inline single-static-child cache hit (string compare, no Record).
+      if (node.singleChildKey === seg && node.singleChildNext !== null) {
+        node = node.singleChildNext;
+        pos = end === len ? len : end + 1;
+        continue;
+      }
       if (node.staticChildren !== null) {
         const child = node.staticChildren[seg];
         if (child !== undefined) {

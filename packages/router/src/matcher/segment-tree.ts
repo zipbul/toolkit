@@ -17,8 +17,19 @@ export interface SegmentNode {
   /** Terminal handler index when the URL ends here exactly. */
   store: number | null;
   /** Static children keyed by segment literal. NullProtoObj for property-access
-   *  speed (no Map.get function-call dispatch, no prototype-chain lookup). */
+   *  speed. `null` when the node has no static children OR when the only
+   *  static child is held in the inline `singleChildKey` slot below. */
   staticChildren: Record<string, SegmentNode> | null;
+  /**
+   * Inline single-static-child cache. When a node has exactly one static
+   * child, the key/next pair lives here rather than in a 1-entry
+   * `staticChildren` Record. Saves one `Object.create(null)` per such
+   * node and lets the walker resolve via a single string compare instead
+   * of a hash lookup. On the second static-child insertion the inline
+   * entry is promoted into `staticChildren` and these slots are cleared.
+   */
+  singleChildKey: string | null;
+  singleChildNext: SegmentNode | null;
   /** Head of the param-alternative chain at this position. */
   paramChild: ParamSegment | null;
   /** Wildcard at this position. */
@@ -33,6 +44,33 @@ export interface SegmentNode {
    * for un-compacted nodes.
    */
   staticPrefix: string[] | null;
+}
+
+/** True when the node holds at least one static child (inline or Record). */
+export function hasAnyStaticChild(node: SegmentNode): boolean {
+  return node.singleChildKey !== null || node.staticChildren !== null;
+}
+
+/** Iterate every static child of `node` regardless of whether the entry
+ *  is in the inline cache or the promoted `staticChildren` Record. */
+export function forEachStaticChild(
+  node: SegmentNode,
+  fn: (key: string, child: SegmentNode) => void,
+): void {
+  if (node.singleChildKey !== null && node.singleChildNext !== null) {
+    fn(node.singleChildKey, node.singleChildNext);
+  }
+  if (node.staticChildren !== null) {
+    for (const k in node.staticChildren) fn(k, node.staticChildren[k]!);
+  }
+}
+
+/** Look up a static child by key — checks the inline cache first, then
+ *  falls back to the Record. Returns `undefined` when the key is absent. */
+export function lookupStaticChild(node: SegmentNode, key: string): SegmentNode | undefined {
+  if (node.singleChildKey === key && node.singleChildNext !== null) return node.singleChildNext;
+  if (node.staticChildren !== null) return node.staticChildren[key];
+  return undefined;
 }
 
 export interface ParamSegment {
@@ -174,6 +212,8 @@ export function createSegmentNode(): SegmentNode {
   return {
     store: null,
     staticChildren: null,
+    singleChildKey: null,
+    singleChildNext: null,
     paramChild: null,
     wildcardStore: null,
     wildcardName: null,
@@ -204,36 +244,55 @@ export function compactSegmentTree(root: SegmentNode): { foldedNodes: number; ch
     return frozen;
   };
 
-  // Single-static-child passthrough probe that avoids `Object.keys()`
-  // allocations: peeks the staticChildren record via `for-in` and bails as
-  // soon as more than one key is observed.
-  function peekSingleStatic(children: Record<string, SegmentNode>): { key: string | null; many: boolean } {
-    let only: string | null = null;
-    let many = false;
-    for (const k in children) {
-      if (only === null) only = k;
-      else { many = true; break; }
+  // Single-static-child passthrough probe — peeks the inline cache first,
+  // then the Record. Avoids any `Object.keys()` allocation.
+  function peekSingleStatic(target: SegmentNode): { key: string | null; child: SegmentNode | null; many: boolean } {
+    if (target.singleChildKey !== null && target.singleChildNext !== null && target.staticChildren === null) {
+      return { key: target.singleChildKey, child: target.singleChildNext, many: false };
     }
-    return { key: only, many };
+    if (target.staticChildren !== null) {
+      let only: string | null = null;
+      let onlyChild: SegmentNode | null = null;
+      let many = false;
+      // The Record may contain entries even when an inline child also exists
+      // (during build, before promotion); count both.
+      if (target.singleChildKey !== null) { only = target.singleChildKey; onlyChild = target.singleChildNext; }
+      for (const k in target.staticChildren) {
+        if (only === null) { only = k; onlyChild = target.staticChildren[k]!; }
+        else { many = true; break; }
+      }
+      return { key: only, child: onlyChild, many };
+    }
+    return { key: null, child: null, many: false };
   }
 
   function foldChainFrom(start: SegmentNode): { target: SegmentNode; folded: string[] } {
     const folded: string[] = [];
     let target = start;
     while (
-      target.staticChildren !== null &&
+      hasAnyStaticChild(target) &&
       target.paramChild === null &&
       target.wildcardStore === null &&
       target.store === null &&
       (target.staticPrefix === null || target.staticPrefix.length === 0)
     ) {
-      const peek = peekSingleStatic(target.staticChildren);
-      if (peek.many || peek.key === null) break;
+      const peek = peekSingleStatic(target);
+      if (peek.many || peek.key === null || peek.child === null) break;
       folded.push(peek.key);
-      target = target.staticChildren[peek.key]!;
+      target = peek.child;
       foldedNodes++;
     }
     return { target, folded };
+  }
+
+  function rewireStaticChild(parent: SegmentNode, key: string, target: SegmentNode): void {
+    if (parent.singleChildKey === key) {
+      parent.singleChildNext = target;
+      return;
+    }
+    if (parent.staticChildren !== null && key in parent.staticChildren) {
+      parent.staticChildren[key] = target;
+    }
   }
 
   const stack: SegmentNode[] = [root];
@@ -243,21 +302,18 @@ export function compactSegmentTree(root: SegmentNode): { foldedNodes: number; ch
     if (visited.has(node)) continue;
     visited.add(node);
 
-    if (node.staticChildren !== null) {
-      const sc = node.staticChildren;
-      for (const key in sc) {
-        const { target, folded } = foldChainFrom(sc[key]!);
-        if (folded.length > 0) {
-          chains++;
-          const merged = target.staticPrefix === null
-            ? internPrefix(folded)
-            : internPrefix([...folded, ...target.staticPrefix]);
-          target.staticPrefix = merged;
-          (sc as Record<string, SegmentNode>)[key] = target;
-        }
-        stack.push(target);
+    forEachStaticChild(node, (key, child) => {
+      const { target, folded } = foldChainFrom(child);
+      if (folded.length > 0) {
+        chains++;
+        const merged = target.staticPrefix === null
+          ? internPrefix(folded)
+          : internPrefix([...folded, ...target.staticPrefix]);
+        target.staticPrefix = merged;
+        rewireStaticChild(node, key, target);
       }
-    }
+      stack.push(target);
+    });
 
     let p = node.paramChild;
     while (p !== null) {
@@ -290,7 +346,7 @@ export function hasAmbiguousNode(root: SegmentNode): boolean {
   while (stack.length > 0) {
     const node = stack.pop()!;
 
-    if (node.staticChildren !== null && (node.paramChild !== null || node.wildcardStore !== null)) {
+    if (hasAnyStaticChild(node) && (node.paramChild !== null || node.wildcardStore !== null)) {
       return true;
     }
 
@@ -298,9 +354,7 @@ export function hasAmbiguousNode(root: SegmentNode): boolean {
       return true;
     }
 
-    if (node.staticChildren !== null) {
-      for (const k in node.staticChildren) stack.push(node.staticChildren[k]!);
-    }
+    forEachStaticChild(node, (_, child) => { stack.push(child); });
 
     let p = node.paramChild;
 
@@ -349,7 +403,12 @@ export function insertIntoSegmentTree(
 
       for (let s = 0; s < segs.length; s++) {
         const seg = segs[s]!;
-        // Fast path: existing literal child on a non-wildcard node.
+        // Fast path 1: inline single-static-child cache hit (string compare).
+        if (node.singleChildKey === seg && node.singleChildNext !== null && node.wildcardStore === null) {
+          node = node.singleChildNext;
+          continue;
+        }
+        // Fast path 2: promoted staticChildren Record hit.
         const sc = node.staticChildren;
         if (sc !== null && node.wildcardStore === null) {
           const child = sc[seg];
@@ -366,11 +425,44 @@ export function insertIntoSegmentTree(
           });
         }
 
+        // Inline-cache slot is empty AND no Record yet: store the child
+        // inline so a node with exactly one static child never allocates
+        // a Record.
+        if (node.singleChildKey === null && node.staticChildren === null) {
+          const fresh = createSegmentNode();
+          const owner = node;
+          owner.singleChildKey = seg;
+          owner.singleChildNext = fresh;
+          undo.push((() => {
+            owner.singleChildKey = null;
+            owner.singleChildNext = null;
+          }) as () => void);
+          node = fresh;
+          continue;
+        }
+
+        // Either a different inline-cache key already occupies the slot,
+        // or the Record was previously promoted. Promote the inline entry
+        // (if any) into the Record before adding this new sibling so the
+        // walker only has to consult one of inline/Record per node.
         let children = node.staticChildren;
         if (children === null) {
           children = Object.create(null) as Record<string, SegmentNode>;
           node.staticChildren = children;
           undo.push({ k: UndoKind.StaticChildrenInit, n: node });
+        }
+        if (node.singleChildKey !== null && node.singleChildNext !== null) {
+          const promotedKey = node.singleChildKey;
+          const promotedNext = node.singleChildNext;
+          children[promotedKey] = promotedNext;
+          const owner = node;
+          owner.singleChildKey = null;
+          owner.singleChildNext = null;
+          undo.push((() => {
+            owner.singleChildKey = promotedKey;
+            owner.singleChildNext = promotedNext;
+          }) as () => void);
+          undo.push({ k: UndoKind.StaticChildAdd, p: children, key: promotedKey });
         }
 
         const fresh = createSegmentNode();
