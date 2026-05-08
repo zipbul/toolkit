@@ -23,8 +23,7 @@ export interface BuildResult<T> {
   methodCodes: Record<string, number>;
   matchState: MatchState;
   normalizePath: PathNormalizer;
-  terminalHandlers: number[];
-  isWildcardByTerminal: boolean[];
+  terminalSlab: Int32Array;
   paramsFactories: Array<((u: string, v: Int32Array) => RouteParams) | null>;
   ignoreTrailingSlash: boolean;
   caseSensitive: boolean;
@@ -104,8 +103,7 @@ export function buildFromRegistration<T>(
     methodCodes,
     matchState: createMatchState(options.maxParams ?? 64),
     normalizePath,
-    terminalHandlers: snapshot.terminalHandlers,
-    isWildcardByTerminal: snapshot.isWildcardByTerminal,
+    terminalSlab: snapshot.terminalSlab.data,
     paramsFactories: snapshot.paramsFactories,
     ignoreTrailingSlash,
     caseSensitive,

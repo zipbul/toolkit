@@ -236,8 +236,7 @@ export class Router<T = unknown> implements RouterPublicApi<T> {
         missCacheByMethod: cache.miss,
         cacheMaxSize: cache.maxSize,
         activeMethodCodes: r.activeMethodCodes,
-        terminalHandlers: r.terminalHandlers,
-        isWildcardByTerminal: r.isWildcardByTerminal,
+        terminalSlab: r.terminalSlab,
         paramsFactories: r.paramsFactories,
       };
 

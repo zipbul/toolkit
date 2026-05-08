@@ -54,13 +54,28 @@ export interface ParamMetadata {
  * single property + popcount + bit-iteration via `Math.clz32`, avoiding
  * the per-active-method bucket probe loop.
  */
+/**
+ * Per-terminal metadata slab. Two `Int32` slots per terminal index `t`:
+ *   - slot 0: handler index into `handlers[]`
+ *   - slot 1: 1 if the terminal corresponds to a wildcard match, 0 otherwise
+ * `terminalCount` is the number of populated terminals; the slab is sized
+ * once at seal-time from the build-state arrays.
+ */
+export interface TerminalSlab {
+  data: Int32Array;
+  count: number;
+}
+
+export const TERMINAL_SLOTS = 2;
+export const TERMINAL_HANDLER_OFFSET = 0;
+export const TERMINAL_IS_WILDCARD_OFFSET = 1;
+
 export interface RegistrationSnapshot<T> {
   staticByMethod: Array<Record<string, T> | undefined>;
   staticPathMethodMask: Record<string, number>;
   segmentTrees: Array<SegmentNode | null>;
   handlers: T[];
-  terminalHandlers: number[];
-  isWildcardByTerminal: boolean[];
+  terminalSlab: TerminalSlab;
   paramsFactories: Array<((u: string, v: Int32Array) => RouteParams) | null>;
   testerCache: Map<string, PatternTesterFn>;
   wildcardNamesByMethod: Map<number, Map<string, string>>;
@@ -71,6 +86,9 @@ interface BuildState<T> {
   staticPathMethodMask: Record<string, number>;
   segmentTrees: Array<SegmentNode | null>;
   handlers: T[];
+  /** Build-time growable parallel arrays — converted to a packed
+   *  Int32Array slab at seal time. Kept as plain JS arrays during build
+   *  so per-route insertion stays O(1) without resizing TypedArrays. */
   terminalHandlers: number[];
   isWildcardByTerminal: boolean[];
   paramsFactories: Array<((u: string, v: Int32Array) => RouteParams) | null>;
@@ -156,12 +174,8 @@ export class Registration<T> {
     return this.snapshot?.handlers;
   }
 
-  get terminalHandlers(): RegistrationSnapshot<T>['terminalHandlers'] | undefined {
-    return this.snapshot?.terminalHandlers;
-  }
-
-  get isWildcardByTerminal(): RegistrationSnapshot<T>['isWildcardByTerminal'] | undefined {
-    return this.snapshot?.isWildcardByTerminal;
+  get terminalSlab(): RegistrationSnapshot<T>['terminalSlab'] | undefined {
+    return this.snapshot?.terminalSlab;
   }
 
   get paramsFactories(): RegistrationSnapshot<T>['paramsFactories'] | undefined {
@@ -308,13 +322,23 @@ export class Registration<T> {
     this.pendingRoutes.length = 0; 
 
     const snapshotStart = nowMs();
+    // Pack the per-terminal parallel arrays into a single Int32Array slab
+    // so the runtime walker reads contiguous memory rather than chasing
+    // two JS arrays. 2 slots per terminal: handlerIdx, isWildcard.
+    const terminalCount = state.terminalHandlers.length;
+    const terminalData = new Int32Array(terminalCount * TERMINAL_SLOTS);
+    for (let t = 0; t < terminalCount; t++) {
+      terminalData[t * TERMINAL_SLOTS + TERMINAL_HANDLER_OFFSET] = state.terminalHandlers[t]!;
+      terminalData[t * TERMINAL_SLOTS + TERMINAL_IS_WILDCARD_OFFSET] = state.isWildcardByTerminal[t] ? 1 : 0;
+    }
+    const terminalSlab: TerminalSlab = { data: terminalData, count: terminalCount };
+
     const snapshot: RegistrationSnapshot<T> = {
       staticByMethod: state.staticByMethod,
       staticPathMethodMask: state.staticPathMethodMask,
       segmentTrees: Object.freeze([...state.segmentTrees]) as Array<SegmentNode | null>,
       handlers: state.handlers,
-      terminalHandlers: state.terminalHandlers,
-      isWildcardByTerminal: state.isWildcardByTerminal,
+      terminalSlab,
       paramsFactories: state.paramsFactories,
       testerCache: state.testerCache,
       wildcardNamesByMethod: Object.freeze(new Map(

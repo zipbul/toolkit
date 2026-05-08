@@ -53,8 +53,15 @@ export interface MatchConfig<T> {
   readonly missCacheByMethod: Map<number, RouterMissCache> | undefined;
   readonly cacheMaxSize: number;
   readonly activeMethodCodes: ReadonlyArray<readonly [string, number]>;
-  readonly terminalHandlers: number[];
-  readonly isWildcardByTerminal: boolean[];
+  /**
+   * Packed `Int32Array` slab carrying per-terminal metadata. Two slots
+   * per terminal index `t`: `terminalSlab[t*2]` is the handler index,
+   * `terminalSlab[t*2+1]` is `1` for wildcard terminals and `0` for
+   * regular ones. Replaces the prior `terminalHandlers: number[]` +
+   * `isWildcardByTerminal: boolean[]` parallel arrays so the hot path
+   * reads contiguous typed memory.
+   */
+  readonly terminalSlab: Int32Array;
   readonly paramsFactories: Array<((u: string, v: Int32Array) => RouteParams) | null>;
 }
 
@@ -227,7 +234,8 @@ function emitGenericMatchImpl<T>(cfg: MatchConfig<T>): CompiledMatch<T> {
     src.push(`
       if (ok) {
         var tIdx = matchState.handlerIndex;
-        if (!${cfg.trimSlash} && sp.length > 1 && sp.charCodeAt(sp.length - 1) === 47 && !isWildcardByTerminal[tIdx]) {
+        var slabBase = tIdx << 1;
+        if (!${cfg.trimSlash} && sp.length > 1 && sp.charCodeAt(sp.length - 1) === 47 && terminalSlab[slabBase + 1] === 0) {
           ok = false;
         }
       }
@@ -238,7 +246,8 @@ function emitGenericMatchImpl<T>(cfg: MatchConfig<T>): CompiledMatch<T> {
       }
 
       var tIdx = matchState.handlerIndex;
-      var hIdx = terminalHandlers[tIdx];
+      var slabBase = tIdx << 1;
+      var hIdx = terminalSlab[slabBase];
       var factory = paramsFactories[tIdx];
       var params = (factory !== undefined && factory !== null)
         ? factory(sp, matchState.paramOffsets)
@@ -265,7 +274,7 @@ function emitGenericMatchImpl<T>(cfg: MatchConfig<T>): CompiledMatch<T> {
   const factory = new Function(
     'activeBucket', 'tr0', 'staticOutputsByMethod', 'methodCodes', 'trees', 'matchState', 'handlers',
     'hitCacheByMethod', 'missCacheByMethod', 'RouterCache', 'RouterMissCache',
-    'EMPTY_PARAMS', 'CACHE_META', 'DYNAMIC_META', 'terminalHandlers', 'isWildcardByTerminal', 'paramsFactories',
+    'EMPTY_PARAMS', 'CACHE_META', 'DYNAMIC_META', 'terminalSlab', 'paramsFactories',
     'NullProtoObj',
     `return function match(method, path) {\n${body}\n};`,
   );
@@ -278,7 +287,7 @@ function emitGenericMatchImpl<T>(cfg: MatchConfig<T>): CompiledMatch<T> {
   const compiled = factory(
     activeBucket, tr0, cfg.staticOutputsByMethod, cfg.methodCodes, cfg.trees, cfg.matchState, cfg.handlers,
     cfg.hitCacheByMethod, cfg.missCacheByMethod, RouterCache, RouterMissCache,
-    EMPTY_PARAMS, CACHE_META, DYNAMIC_META, cfg.terminalHandlers, cfg.isWildcardByTerminal, cfg.paramsFactories,
+    EMPTY_PARAMS, CACHE_META, DYNAMIC_META, cfg.terminalSlab, cfg.paramsFactories,
     NullProtoObj,
   ) as CompiledMatch<T>;
 
