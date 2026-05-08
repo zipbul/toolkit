@@ -109,20 +109,30 @@ function emitGenericMatchImpl<T>(cfg: MatchConfig<T>): CompiledMatch<T> {
     src.push(`var mc = methodCodes[method]; if (mc === undefined) return null;`);
   }
 
-  // Inline path normalization (no function call): query strip, optional
-  // trailing slash trim, optional case fold.
-  src.push(emitQueryStrip('path', 'sp'));
-  const trimJs = emitTrailingSlashTrim(normCfg, 'sp');
-  if (trimJs !== '') src.push(trimJs);
-  const lowerJs = emitLowerCase(normCfg, 'sp');
-  if (lowerJs !== '') src.push(lowerJs);
-
   // Single-method static-only fast path: closure-captures the bucket
   // resolved for that method so the lookup is a single property access.
+  //
+  // Bun/JSC optimization: the overwhelmingly common case is that callers
+  // pass canonical paths — no `?` query, no trailing slash, no uppercase.
+  // We probe `activeBucket[path]` *before* paying any normalization cost
+  // so that path becomes a single object property load with zero
+  // substring/indexOf/toLowerCase work. Only on miss do we run the full
+  // normalization and retry.
   if (cfg.hasAnyStatic && !cfg.hasAnyTree && singleMethod !== null) {
     src.push(`
-      var out = activeBucket[sp];
+      var out = activeBucket[path];
       if (out !== undefined) return out;
+    `);
+    src.push(emitQueryStrip('path', 'sp'));
+    const trimJs0 = emitTrailingSlashTrim(normCfg, 'sp');
+    if (trimJs0 !== '') src.push(trimJs0);
+    const lowerJs0 = emitLowerCase(normCfg, 'sp');
+    if (lowerJs0 !== '') src.push(lowerJs0);
+    src.push(`
+      if (sp !== path) {
+        out = activeBucket[sp];
+        if (out !== undefined) return out;
+      }
       return null;
     `);
 
@@ -141,6 +151,38 @@ function emitGenericMatchImpl<T>(cfg: MatchConfig<T>): CompiledMatch<T> {
     runWarmup(compiled, cfg, shapeSignature(activeMethodCount, 0, cfg.handlers.length));
     return compiled;
   }
+
+  // Bun/JSC fast path for mixed (static + dynamic) routers: try the
+  // canonical-path static bucket *before* normalization so static hits
+  // skip the indexOf/substring/Map.get chain entirely. Object property
+  // load is one IC slot; on miss we fall through to the existing
+  // normalize → cache → walker pipeline with `sp` populated identically.
+  // Single-method case uses the closure-captured `activeBucket`; multi-
+  // method case must resolve the per-method bucket from the dispatched mc.
+  if (cfg.hasAnyStatic && cfg.hasAnyTree) {
+    if (singleMethod !== null) {
+      src.push(`
+        var preOut = activeBucket[path];
+        if (preOut !== undefined) return preOut;
+      `);
+    } else {
+      src.push(`
+        var preBucket = staticOutputsByMethod[mc];
+        if (preBucket !== undefined) {
+          var preOut = preBucket[path];
+          if (preOut !== undefined) return preOut;
+        }
+      `);
+    }
+  }
+
+  // Inline path normalization (no function call): query strip, optional
+  // trailing slash trim, optional case fold.
+  src.push(emitQueryStrip('path', 'sp'));
+  const trimJs = emitTrailingSlashTrim(normCfg, 'sp');
+  if (trimJs !== '') src.push(trimJs);
+  const lowerJs = emitLowerCase(normCfg, 'sp');
+  if (lowerJs !== '') src.push(lowerJs);
 
   // Static-only, multi-method.
   if (cfg.hasAnyStatic && !cfg.hasAnyTree) {
