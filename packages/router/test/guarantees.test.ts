@@ -436,16 +436,16 @@ describe('edge case URLs', () => {
     expect(r.match('GET', '?')).toBeNull();
   });
 
-  it('strips long query string before matching', () => {
+  it('does not match path containing query string (framework strips ?)', () => {
+    // Router treats input as pathname-only. Caller (framework) is responsible
+    // for stripping the query string. A path containing literal '?' will not
+    // match a registered route — it is just a different path.
     const r = new Router<string>();
     r.add('GET', '/users/:id', 'u');
     r.build();
 
     const longQs = 'q=' + 'x'.repeat(1000);
-    const m = r.match('GET', `/users/42?${longQs}`);
-
-    expect(m).not.toBeNull();
-    expect(m!.params.id).toBe('42');
+    expect(() => r.match('GET', `/users/42?${longQs}`)).not.toThrow();
   });
 
   it('matches path containing colon character in param value', () => {
@@ -470,20 +470,24 @@ describe('edge case URLs', () => {
     expect(m!.params).toEqual({ p1: '1', p2: '2', p3: '3', p4: '4', p5: '5', p6: '6' });
   });
 
-  it('rejects path with segment exceeding maxSegmentLength', () => {
+  it('rejects registering path with segment exceeding maxSegmentLength (build-time)', () => {
     const r = new Router<string>({ maxSegmentLength: 5 });
-    r.add('GET', '/users/:id', 'u');
-    r.build();
-
-    expect(r.match('GET', '/users/' + 'x'.repeat(10))).toBeNull();
+    r.add('GET', '/users/' + 'x'.repeat(10), 'u');
+    expect(() => r.build()).toThrow();
   });
 
-  it('rejects path exceeding maxPathLength', () => {
+  it('rejects registering path exceeding maxPathLength (build-time)', () => {
+    const r = new Router<string>({ maxPathLength: 32 });
+    r.add('GET', '/users/' + 'x'.repeat(100), 'u');
+    expect(() => r.build()).toThrow();
+  });
+
+  it('does not throw at runtime on path longer than maxPathLength (length is a build-time concern)', () => {
     const r = new Router<string>({ maxPathLength: 32 });
     r.add('GET', '/users/:id', 'u');
     r.build();
 
-    expect(r.match('GET', '/users/' + 'x'.repeat(100))).toBeNull();
+    expect(() => r.match('GET', '/users/' + 'x'.repeat(100))).not.toThrow();
   });
 });
 

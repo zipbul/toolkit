@@ -340,14 +340,15 @@ describe('Router<T>', () => {
       expect(result!.params.id).toBe('hello-world_v2.0');
     });
 
-    it('should strip query string from match path', () => {
+    it('does not strip query string from match path (framework concern)', () => {
+      // Router treats input as pathname-only — query stripping is the
+      // caller / framework's responsibility.
       const router = new Router<string>();
       router.add('GET', '/hello', 'world');
       router.build();
 
-      const result = router.match('GET', '/hello?foo=bar&baz=1');
-      expect(result).not.toBeNull();
-      expect(result!.value).toBe('world');
+      expect(router.match('GET', '/hello?foo=bar&baz=1')).toBeNull();
+      expect(router.match('GET', '/hello')!.value).toBe('world');
     });
   });
 

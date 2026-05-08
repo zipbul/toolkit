@@ -17,9 +17,6 @@ import {
 } from '../internal/null-proto-obj';
 import {
   emitLowerCase,
-  emitPathLenCheck,
-  emitQueryStrip,
-  emitSegLenCheck,
   emitTrailingSlashTrim,
 } from '../matcher/path-normalize';
 
@@ -37,10 +34,6 @@ export interface MatchCacheEntry<T> {
 export interface MatchConfig<T> {
   readonly trimSlash: boolean;
   readonly lowerCase: boolean;
-  readonly maxPathLen: number;
-  readonly maxSegLen: number;
-  readonly checkPathLen: boolean;
-  readonly checkSegLen: boolean;
   readonly hasAnyTree: boolean;
   readonly anyTester: boolean;
   readonly hasAnyStatic: boolean;
@@ -95,9 +88,11 @@ function emitGenericMatchImpl<T>(cfg: MatchConfig<T>): CompiledMatch<T> {
 
   const src: string[] = [];
   const normCfg: NormalizeCfg = cfg;
-  const pathLenJs = emitPathLenCheck(normCfg, 'path', 'return null;');
 
-  if (pathLenJs !== '') src.push(pathLenJs);
+  // Path validation (length, percent encoding, etc.) is the upstream
+  // framework / HTTP server's responsibility. The router accepts the
+  // pathname as given and normalizes only what is policy: trailing slash
+  // and case folding. No `?` stripping; no per-call length guards.
 
   // Method dispatch — specialised when only one method is active so JSC
   // can fold the literal compare and the `mc` constant.
@@ -123,7 +118,7 @@ function emitGenericMatchImpl<T>(cfg: MatchConfig<T>): CompiledMatch<T> {
       var out = activeBucket[path];
       if (out !== undefined) return out;
     `);
-    src.push(emitQueryStrip('path', 'sp'));
+    src.push('var sp = path;');
     const trimJs0 = emitTrailingSlashTrim(normCfg, 'sp');
     if (trimJs0 !== '') src.push(trimJs0);
     const lowerJs0 = emitLowerCase(normCfg, 'sp');
@@ -176,9 +171,10 @@ function emitGenericMatchImpl<T>(cfg: MatchConfig<T>): CompiledMatch<T> {
     }
   }
 
-  // Inline path normalization (no function call): query strip, optional
-  // trailing slash trim, optional case fold.
-  src.push(emitQueryStrip('path', 'sp'));
+  // Inline path normalization: only router-policy steps run here
+  // (trailing-slash trim and case folding). Query stripping is not the
+  // router's job — the framework hands us a pathname.
+  src.push('var sp = path;');
   const trimJs = emitTrailingSlashTrim(normCfg, 'sp');
   if (trimJs !== '') src.push(trimJs);
   const lowerJs = emitLowerCase(normCfg, 'sp');
@@ -261,8 +257,6 @@ function emitGenericMatchImpl<T>(cfg: MatchConfig<T>): CompiledMatch<T> {
   `;
 
   if (cfg.hasAnyTree) {
-    if (cfg.checkSegLen) src.push(emitSegLenCheck(normCfg, 'sp', 'return null;'));
-
     // Single-method router: closure-capture the per-method walker as a
     // constant `tr0` so JSC folds the dispatch and inlines the call site.
     // Multi-method router still indexes into the trees array per call.

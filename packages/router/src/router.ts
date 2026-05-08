@@ -225,10 +225,6 @@ export class Router<T = unknown> implements RouterPublicApi<T> {
       const cfg: MatchConfig<T> = {
         trimSlash: r.ignoreTrailingSlash,
         lowerCase: !r.caseSensitive,
-        maxPathLen: r.maxPathLength,
-        maxSegLen: r.maxSegmentLength,
-        checkPathLen: Number.isFinite(r.maxPathLength),
-        checkSegLen: Number.isFinite(r.maxSegmentLength),
         hasAnyTree: r.trees.some(t => t != null),
         anyTester: r.anyTester,
         hasAnyStatic,

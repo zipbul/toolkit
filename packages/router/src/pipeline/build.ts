@@ -27,8 +27,6 @@ export interface BuildResult<T> {
   paramsFactories: Array<((u: string, v: Int32Array) => RouteParams) | null>;
   ignoreTrailingSlash: boolean;
   caseSensitive: boolean;
-  maxPathLength: number;
-  maxSegmentLength: number;
 }
 
 /**
@@ -82,16 +80,10 @@ export function buildFromRegistration<T>(
 
   const ignoreTrailingSlash = options.trailingSlash !== 'strict';
   const caseSensitive = options.pathCaseSensitive ?? true;
-  const maxPathLength = options.maxPathLength ?? 2048;
-  const maxSegmentLength = options.maxSegmentLength ?? 1024;
 
   const normalizePath = buildPathNormalizer({
-    checkPathLen: Number.isFinite(maxPathLength),
-    maxPathLen: maxPathLength,
     trimSlash: ignoreTrailingSlash,
     lowerCase: !caseSensitive,
-    checkSegLen: Number.isFinite(maxSegmentLength),
-    maxSegLen: maxSegmentLength,
   });
 
   return {
@@ -107,7 +99,5 @@ export function buildFromRegistration<T>(
     paramsFactories: snapshot.paramsFactories,
     ignoreTrailingSlash,
     caseSensitive,
-    maxPathLength,
-    maxSegmentLength,
   };
 }

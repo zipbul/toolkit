@@ -281,33 +281,31 @@ describe('length limits × route type', () => {
     expect(m!.params.id?.length).toBe(100_000);
   });
 
-  it('finite maxPathLength rejects oversized paths via the path-length gate', () => {
+  it('finite maxPathLength rejects oversized paths at build-time', () => {
     const r = new Router<string>({ maxPathLength: 1000, maxSegmentLength: 200_000 });
-    r.add('GET', '/users/:id', 'u');
-    r.build();
-
-    expect(r.match('GET', '/users/' + 'x'.repeat(2000))).toBeNull();
+    r.add('GET', '/users/' + 'x'.repeat(2000), 'u');
+    expect(() => r.build()).toThrow();
   });
 
-  it('finite maxSegmentLength rejects oversized single segments via the segment scan', () => {
+  it('finite maxSegmentLength rejects oversized single segments at build-time', () => {
     const r = new Router<string>({ maxPathLength: 200_000, maxSegmentLength: 100 });
-    r.add('GET', '/users/:id', 'u');
-    r.build();
-
-    expect(r.match('GET', '/users/' + 'x'.repeat(200))).toBeNull();
+    r.add('GET', '/users/' + 'x'.repeat(200), 'u');
+    expect(() => r.build()).toThrow();
   });
 
-  it('finite maxPathLength rejects long paths regardless of route type', () => {
+  it('does not gate runtime input length: long paths still go through matching', () => {
+    // maxPathLength is a build-time constraint. At runtime, the router does
+    // not throw or short-circuit on long inputs — it just matches normally.
     const r = new Router<string>({ maxPathLength: 64 });
     r.add('GET', '/users/:id', 'u');
     r.add('GET', '/files/*p', 'f');
     r.add('GET', '/health', 'h');
     r.build();
 
-    const long = '/users/' + 'x'.repeat(100);
-
-    expect(r.match('GET', long)).toBeNull();
-    // /health (within limit) still works
+    const longId = 'x'.repeat(100);
+    // /users/<long> still matches the dynamic param.
+    expect(r.match('GET', '/users/' + longId)!.params.id).toBe(longId);
+    // /health (within limit) still works.
     expect(r.match('GET', '/health')!.value).toBe('h');
   });
 });

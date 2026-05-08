@@ -367,12 +367,13 @@ describe('shape-specialized wildcard matchImpl', () => {
     expect(r.match('GET', '/static/foo/')!.params).toEqual({ path: 'foo' });
   });
 
-  it('strips query string before probe', () => {
+  it('treats query string as part of path (framework strips ?)', () => {
+    // Router no longer strips '?' — wildcard captures it verbatim.
     const r = new Router<number>();
     r.add('GET', '/static/*path', 1);
     r.build();
 
-    expect(r.match('GET', '/static/foo?v=1')!.params).toEqual({ path: 'foo' });
+    expect(r.match('GET', '/static/foo?v=1')!.params).toEqual({ path: 'foo?v=1' });
   });
 
   it('rejects when method does not match', () => {
@@ -383,22 +384,25 @@ describe('shape-specialized wildcard matchImpl', () => {
     expect(r.match('POST', '/static/foo')).toBeNull();
   });
 
-  it('rejects path longer than maxPathLength', () => {
+  it('does not gate runtime length against maxPathLength (length is a build-time concern)', () => {
+    // Router no longer enforces maxPathLength on match() input. The wildcard
+    // happily captures the long suffix.
     const r = new Router<number>({ maxPathLength: 32 });
     r.add('GET', '/static/*path', 1);
     r.build();
 
-    expect(r.match('GET', '/static/' + 'x'.repeat(100))).toBeNull();
+    const long = 'x'.repeat(100);
+    expect(r.match('GET', '/static/' + long)!.params).toEqual({ path: long });
   });
 
-  it('rejects path with a segment longer than maxSegmentLength', () => {
+  it('does not gate runtime segment length against maxSegmentLength', () => {
+    // Same: segment-length is enforced at register-time, not match-time.
     const r = new Router<number>({ maxSegmentLength: 8 });
     r.add('GET', '/files/*filepath', 1);
     r.build();
 
-    // /files/<256-char single segment> — trips the segLen scan inside the
-    // specialized matchImpl, not the wildcard probe.
-    expect(r.match('GET', '/files/' + 'x'.repeat(256))).toBeNull();
+    const long = 'x'.repeat(256);
+    expect(r.match('GET', '/files/' + long)!.params).toEqual({ filepath: long });
   });
 
   it('multi-wildcard rejects exact prefix and bare-prefix paths', () => {
