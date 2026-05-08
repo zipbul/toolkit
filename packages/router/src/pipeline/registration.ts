@@ -78,8 +78,9 @@ export interface RegistrationSnapshot<T> {
   handlers: T[];
   terminalSlab: TerminalSlab;
   paramsFactories: Array<((u: string, v: Int32Array) => RouteParams) | null>;
-  testerCache: Map<string, PatternTesterFn>;
-  wildcardNamesByMethod: Map<number, Map<string, string>>;
+  /** True iff any registered route declared a regex pattern tester. The
+   *  full tester cache is build-only and not retained on the snapshot. */
+  anyTester: boolean;
 }
 
 interface BuildState<T> {
@@ -93,8 +94,10 @@ interface BuildState<T> {
   terminalHandlers: number[];
   isWildcardByTerminal: boolean[];
   paramsFactories: Array<((u: string, v: Int32Array) => RouteParams) | null>;
+  /** Build-only tester cache (deduped by pattern source). Not retained
+   *  on the snapshot — runtime only needs the resulting per-route
+   *  testers attached to ParamSegment. */
   testerCache: Map<string, PatternTesterFn>;
-  wildcardNamesByMethod: Map<number, Map<string, string>>;
   routeCounter: number;
   diagnostics: RegistrationDiagnostics | null;
 }
@@ -181,14 +184,6 @@ export class Registration<T> {
 
   get paramsFactories(): RegistrationSnapshot<T>['paramsFactories'] | undefined {
     return this.snapshot?.paramsFactories;
-  }
-
-  get testerCache(): RegistrationSnapshot<T>['testerCache'] | undefined {
-    return this.snapshot?.testerCache;
-  }
-
-  get wildcardNamesByMethod(): RegistrationSnapshot<T>['wildcardNamesByMethod'] | undefined {
-    return this.snapshot?.wildcardNamesByMethod;
   }
 
   getDiagnostics(): RegistrationDiagnostics | null {
@@ -341,10 +336,7 @@ export class Registration<T> {
       handlers: state.handlers,
       terminalSlab,
       paramsFactories: state.paramsFactories,
-      testerCache: state.testerCache,
-      wildcardNamesByMethod: Object.freeze(new Map(
-        [...state.wildcardNamesByMethod].map(([mc, names]) => [mc, Object.freeze(new Map(names))]),
-      )),
+      anyTester: state.testerCache.size > 0,
     };
     addMs(state.diagnostics, 'snapshotMs', snapshotStart);
 
@@ -690,7 +682,6 @@ function createBuildState<T>(withDiagnostics = false): BuildState<T> {
     isWildcardByTerminal: [],
     paramsFactories: [],
     testerCache: new Map(),
-    wildcardNamesByMethod: new Map(),
     routeCounter: 0,
     diagnostics: withDiagnostics ? createDiagnostics() : null,
   };
@@ -749,6 +740,10 @@ function countSegmentTree(root: SegmentNode): { nodes: number; staticMaps: numbe
   while (stack.length > 0) {
     const node = stack.pop()!;
     nodes++;
+    // Inline single-static-child cache (T32). The diagnostic must
+    // follow it, otherwise the reported node count silently undercounts
+    // every compacted chain.
+    if (node.singleChildNext !== null) stack.push(node.singleChildNext);
     if (node.staticChildren !== null) {
       staticMaps++;
       for (const key in node.staticChildren) stack.push(node.staticChildren[key]!);

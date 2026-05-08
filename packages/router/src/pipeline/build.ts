@@ -51,7 +51,7 @@ export function buildFromRegistration<T>(
     trees[code] = null;
   }
 
-  const anyTester = snapshot.testerCache.size > 0;
+  const anyTester = snapshot.anyTester;
   
   const staticOutputsByMethod: Array<Record<string, MatchOutput<T>> | undefined> = [];
 

@@ -263,17 +263,16 @@ describe('sealed state', () => {
     // Internal-state-inspection pattern (already used across this file).
     // After B5, Router itself only retains the matchImpl + matchLayer
     // entry points. Frozen build-only tables now live on `registration`
-    // (segmentTrees / handlers / staticMap / staticRegistered /
-    // wildcardNamesByMethod) and `matchLayer` (activeMethodCodes,
-    // staticOutputsByMethod, trees). Hot-path tables stay mutable for
-    // JSC IC perf — freezing them costs 5-10 ns per dynamic match.
+    // (segmentTrees / handlers / staticMap / staticRegistered) and
+    // `matchLayer` (activeMethodCodes, staticOutputsByMethod, trees).
+    // Hot-path tables stay mutable for JSC IC perf — freezing them
+    // costs 5-10 ns per dynamic match.
     const internal = getRouterInternals(r) as unknown as {
       registration: {
         segmentTrees: unknown[];
         handlers: unknown[];
         staticMap: Record<string, unknown>;
         staticRegistered: Record<string, unknown>;
-        wildcardNamesByMethod: Map<number, Map<string, string>>;
       };
       matchLayer: {
         activeMethodCodes: ReadonlyArray<readonly [string, number]>;
@@ -287,8 +286,6 @@ describe('sealed state', () => {
     expect(Object.isFrozen(internal.registration.staticMap)).toBe(true);
     expect(Object.isFrozen(internal.registration.staticRegistered)).toBe(true);
     expect(Object.isFrozen(internal.matchLayer.activeMethodCodes)).toBe(true);
-    expect(internal.registration.wildcardNamesByMethod).toBeInstanceOf(Map);
-    expect(Object.isFrozen(internal.registration.wildcardNamesByMethod)).toBe(true);
 
     // Hot-path tables stay mutable. `handlers` is read by the emitted
     // matchImpl as `handlers[state.handlerIndex]` on every dynamic
