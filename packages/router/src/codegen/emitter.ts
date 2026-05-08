@@ -234,6 +234,11 @@ function emitGenericMatchImpl<T>(cfg: MatchConfig<T>): CompiledMatch<T> {
   // Cache probe (after static). Static hits already returned above; only
   // dynamic results live in the cache. Sparse-array indexing by mc keeps
   // each lookup as a typed-array load rather than a `Map.get` dispatch.
+  // Cache entries are frozen at write time so subsequent hits can return
+  // their `params` reference directly without paying for a per-match
+  // clone. `EMPTY_PARAMS` is already frozen module-init. Caller mutation
+  // of returned params throws TypeError instead of silently corrupting
+  // the cached entry.
   src.push(`
     var ms = missCacheByMethod[mc];
     if (ms !== undefined && ms.has(sp)) return null;
@@ -241,10 +246,9 @@ function emitGenericMatchImpl<T>(cfg: MatchConfig<T>): CompiledMatch<T> {
     if (hc !== undefined) {
       var cached = hc.get(sp);
       if (cached !== undefined) {
-        var cp = cached.params;
         return {
           value: cached.value,
-          params: cp === EMPTY_PARAMS ? cp : objectAssign(new NullProtoObj(), cp),
+          params: cached.params,
           meta: CACHE_META,
         };
       }
@@ -304,10 +308,11 @@ function emitGenericMatchImpl<T>(cfg: MatchConfig<T>): CompiledMatch<T> {
         hc = new RouterCache(${cacheMaxSize});
         hitCacheByMethod[mc] = hc;
       }
+      if (params !== EMPTY_PARAMS) Object.freeze(params);
       hc.set(sp, { value: val, params: params });
       return {
         value: val,
-        params: params === EMPTY_PARAMS ? params : objectAssign(new NullProtoObj(), params),
+        params: params,
         meta: DYNAMIC_META,
       };
     `);

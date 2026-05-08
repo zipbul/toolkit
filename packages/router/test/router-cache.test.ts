@@ -44,15 +44,18 @@ describe('Router<T> cache', () => {
     expect(miss2).toBeNull();
   });
 
-  it('should return cloned params from cache (not shared references)', () => {
+  it('returns frozen params from cache; caller mutation is rejected', () => {
     const router = new Router<string>({});
     router.add('GET', '/users/:id', 'user');
     router.build();
 
     const first = router.match('GET', '/users/1');
-    if (first !== null) {
-      first.params.id = 'mutated';
-    }
+    expect(first).not.toBeNull();
+    expect(Object.isFrozen(first!.params)).toBe(true);
+    expect(() => {
+      'use strict';
+      (first!.params as Record<string, string>).id = 'mutated';
+    }).toThrow(TypeError);
 
     const second = router.match('GET', '/users/1');
     expect(second).not.toBeNull();
@@ -194,7 +197,7 @@ describe('Router<T> cache', () => {
     expect(last!.params.id).toBe('9');
   });
 
-  it('caller mutation of returned params must not poison later cache hits', () => {
+  it('cached params are frozen so mutation cannot poison later hits', () => {
     const r = new Router<string>();
     r.add('GET', '/users/:id', 'h');
     r.build();
@@ -202,8 +205,12 @@ describe('Router<T> cache', () => {
     const a = r.match('GET', '/users/42');
     expect(a).not.toBeNull();
     expect(a!.params.id).toBe('42');
+    expect(Object.isFrozen(a!.params)).toBe(true);
 
-    (a!.params as any).id = 'POISONED';
+    expect(() => {
+      'use strict';
+      (a!.params as any).id = 'POISONED';
+    }).toThrow(TypeError);
 
     const b = r.match('GET', '/users/42');
     expect(b).not.toBeNull();

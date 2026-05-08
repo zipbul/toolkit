@@ -130,17 +130,21 @@ describe('API guarantees', () => {
     expect(m.meta.source).toBe('cache');
   });
 
-  it('cache returns fresh params object — caller may mutate without affecting cache', () => {
+  it('cache returns frozen params; caller mutation throws and cache is preserved', () => {
     const r = new Router<string>({});
     r.add('GET', '/users/:id', 'd');
     r.build();
 
     const a = r.match('GET', '/users/1')!;
-    (a.params as Record<string, string>).id = 'mutated';
+    expect(Object.isFrozen(a.params)).toBe(true);
+    expect(() => {
+      'use strict';
+      (a.params as Record<string, string>).id = 'mutated';
+    }).toThrow(TypeError);
 
     const b = r.match('GET', '/users/1')!; // cache hit
 
-    expect(b.params.id).not.toBe('mutated');
+    expect(b.params.id).toBe('1');
   });
 });
 
