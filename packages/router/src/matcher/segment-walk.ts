@@ -177,10 +177,15 @@ export function createSegmentWalker(
     if (node.staticPrefix !== null) {
       const sp = node.staticPrefix;
       for (let i = 0; i < sp.length; i++) {
-        const ns = path.indexOf('/', pos);
-        const segEnd = ns === -1 ? len : ns;
-        if (path.substring(pos, segEnd) !== sp[i]) return false;
-        pos = segEnd === len ? len : segEnd + 1;
+        const seg = sp[i]!;
+        const segLen = seg.length;
+        const after = pos + segLen;
+        if (after > len) return false;
+        if (!path.startsWith(seg, pos)) return false;
+        // The segment must be followed by `/` or end-of-string —
+        // otherwise we'd accept `seg` as a prefix of a longer segment.
+        if (after < len && path.charCodeAt(after) !== 47) return false;
+        pos = after === len ? len : after + 1;
       }
     }
 
@@ -299,10 +304,13 @@ function createIterativeWalker(root: SegmentNode, decoder: DecoderFn): MatchFn {
         const sp = node.staticPrefix;
         let ok = true;
         for (let i = 0; i < sp.length; i++) {
-          const ns2 = url.indexOf('/', pos);
-          const segEnd = ns2 === -1 ? len : ns2;
-          if (url.substring(pos, segEnd) !== sp[i]) { ok = false; break; }
-          pos = segEnd === len ? len : segEnd + 1;
+          const seg = sp[i]!;
+          const segLen = seg.length;
+          const after = pos + segLen;
+          if (after > len) { ok = false; break; }
+          if (!url.startsWith(seg, pos)) { ok = false; break; }
+          if (after < len && url.charCodeAt(after) !== 47) { ok = false; break; }
+          pos = after === len ? len : after + 1;
         }
         if (!ok) return false;
         if (pos >= len) break;

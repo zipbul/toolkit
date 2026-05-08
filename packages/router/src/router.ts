@@ -69,7 +69,6 @@ function createCacheContainers<T>(options: RouterOptions): CacheContainers<T> {
 }
 
 const NUMERIC_OPTION_KEYS = [
-  'maxMethodLength',
   'maxPathLength',
   'maxSegmentLength',
   'maxSegmentCount',

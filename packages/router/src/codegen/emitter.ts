@@ -13,7 +13,6 @@ import {
   CACHE_META,
   DYNAMIC_META,
   EMPTY_PARAMS,
-  NullProtoObj,
 } from '../internal/null-proto-obj';
 import {
   emitLowerCase,
@@ -320,7 +319,6 @@ function emitGenericMatchImpl<T>(cfg: MatchConfig<T>): CompiledMatch<T> {
     'activeBucket', 'tr0', 'staticOutputsByMethod', 'methodCodes', 'trees', 'matchState', 'handlers',
     'hitCacheByMethod', 'missCacheByMethod', 'RouterCache', 'RouterMissCache',
     'EMPTY_PARAMS', 'CACHE_META', 'DYNAMIC_META', 'terminalSlab', 'paramsFactories',
-    'NullProtoObj', 'objectAssign',
     `return function match(method, path) {\n${body}\n};`,
   );
 
@@ -333,7 +331,6 @@ function emitGenericMatchImpl<T>(cfg: MatchConfig<T>): CompiledMatch<T> {
     activeBucket, tr0, cfg.staticOutputsByMethod, cfg.methodCodes, cfg.trees, cfg.matchState, cfg.handlers,
     cfg.hitCacheByMethod, cfg.missCacheByMethod, RouterCache, RouterMissCache,
     EMPTY_PARAMS, CACHE_META, DYNAMIC_META, cfg.terminalSlab, cfg.paramsFactories,
-    NullProtoObj, Object.assign,
   ) as CompiledMatch<T>;
 
   runWarmup(
