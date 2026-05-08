@@ -46,7 +46,7 @@ describe('expandOptional', () => {
 
       expect(isErr(result)).toBe(true);
       if (isErr(result)) {
-        expect(result.data.kind).toBe('segment-limit');
+        expect(result.data.kind).toBe('optional-expansion-limit');
       }
     });
 

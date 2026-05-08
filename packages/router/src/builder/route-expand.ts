@@ -81,7 +81,7 @@ function validateOptionalCount(
 ): Result<never, RouterErrorData> | null {
   if (count > cap) {
     return err({
-      kind: 'segment-limit',
+      kind: 'optional-expansion-limit',
       message: `Path has more than ${cap} optional parameters (cartesian expansion would explode).`,
       suggestion: 'Reduce optionals or split into multiple explicit routes.',
     });
@@ -91,7 +91,7 @@ function validateOptionalCount(
   // check below covers caps that are smaller than 2^count for tight caps.
   if (count > 0 && Math.pow(2, count) > cap) {
     return err({
-      kind: 'segment-limit',
+      kind: 'optional-expansion-limit',
       message: `Path's 2^${count} optional expansion exceeds maxOptionalExpansions cap ${cap}.`,
       suggestion: 'Reduce optionals or raise maxOptionalExpansions explicitly.',
     });

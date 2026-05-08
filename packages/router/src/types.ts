@@ -68,6 +68,7 @@ export type RouterErrorKind =
   | 'path-empty-segment' // interior empty `/a//b`
   | 'path-too-long'      // maxPathLength 초과
   | 'segment-limit'      // 빌드 시 세그먼트 길이/수/파라미터 수 상한 초과
+  | 'optional-expansion-limit' // 단일 path의 maxOptionalExpansions 초과
   | 'expansion-total-limit'   // maxExpandedRoutes 초과
   | 'regex-sibling-limit'     // maxRegexSiblingsPerSegment 초과
   | 'option-invalid'     // 옵션 numeric/조합 violation
@@ -124,6 +125,7 @@ export type RouterErrorData = {
   | { kind: 'path-empty-segment'; message: string; suggestion?: string }
   | { kind: 'path-too-long'; message: string; suggestion?: string }
   | { kind: 'segment-limit'; message: string; segment?: string; suggestion?: string }
+  | { kind: 'optional-expansion-limit'; message: string; suggestion?: string }
   | { kind: 'expansion-total-limit'; message: string; suggestion?: string }
   | { kind: 'regex-sibling-limit'; message: string; segment?: string; suggestion?: string }
   | { kind: 'option-invalid'; message: string; option?: string; suggestion?: string }

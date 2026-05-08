@@ -39,7 +39,7 @@ describe('optional-param expansion guard', () => {
     expect(err).toBeInstanceOf(RouterError);
     expect(err!.data.kind).toBe('route-validation');
     if (err!.data.kind === 'route-validation') {
-      expect(err!.data.errors[0]?.error.kind).toBe('segment-limit');
+      expect(err!.data.errors[0]?.error.kind).toBe('optional-expansion-limit');
       expect(err!.data.errors[0]?.error.message).toContain('optional');
     }
   });
