@@ -206,14 +206,25 @@ function emitGenericMatchImpl<T>(cfg: MatchConfig<T>): CompiledMatch<T> {
   if (cfg.hasAnyTree) {
     if (cfg.checkSegLen) src.push(emitSegLenCheck(normCfg, 'sp', 'return null;'));
 
-    src.push(`
-      var tr = trees[mc];
-      if (!tr) {
-        ${emitMissCacheWrite()}
-        return null;
-      }
-      var ok = tr(sp, matchState);
+    // Single-method router: closure-capture the per-method walker as a
+    // constant `tr0` so JSC folds the dispatch and inlines the call site.
+    // Multi-method router still indexes into the trees array per call.
+    if (singleMethod !== null) {
+      src.push(`
+        var ok = tr0 !== null ? tr0(sp, matchState) : false;
+      `);
+    } else {
+      src.push(`
+        var tr = trees[mc];
+        if (!tr) {
+          ${emitMissCacheWrite()}
+          return null;
+        }
+        var ok = tr(sp, matchState);
+      `);
+    }
 
+    src.push(`
       if (ok) {
         var tIdx = matchState.handlerIndex;
         if (!${cfg.trimSlash} && sp.length > 1 && sp.charCodeAt(sp.length - 1) === 47 && !isWildcardByTerminal[tIdx]) {
@@ -252,7 +263,7 @@ function emitGenericMatchImpl<T>(cfg: MatchConfig<T>): CompiledMatch<T> {
 
   const body = src.join('\n');
   const factory = new Function(
-    'activeBucket', 'staticOutputsByMethod', 'methodCodes', 'trees', 'matchState', 'handlers',
+    'activeBucket', 'tr0', 'staticOutputsByMethod', 'methodCodes', 'trees', 'matchState', 'handlers',
     'hitCacheByMethod', 'missCacheByMethod', 'RouterCache', 'RouterMissCache',
     'EMPTY_PARAMS', 'CACHE_META', 'DYNAMIC_META', 'terminalHandlers', 'isWildcardByTerminal', 'paramsFactories',
     'NullProtoObj',
@@ -262,9 +273,10 @@ function emitGenericMatchImpl<T>(cfg: MatchConfig<T>): CompiledMatch<T> {
   const activeBucket = singleMethod !== null
     ? cfg.staticOutputsByMethod[singleMethod[1]] ?? Object.create(null)
     : Object.create(null);
+  const tr0 = singleMethod !== null ? (cfg.trees[singleMethod[1]] ?? null) : null;
 
   const compiled = factory(
-    activeBucket, cfg.staticOutputsByMethod, cfg.methodCodes, cfg.trees, cfg.matchState, cfg.handlers,
+    activeBucket, tr0, cfg.staticOutputsByMethod, cfg.methodCodes, cfg.trees, cfg.matchState, cfg.handlers,
     cfg.hitCacheByMethod, cfg.missCacheByMethod, RouterCache, RouterMissCache,
     EMPTY_PARAMS, CACHE_META, DYNAMIC_META, cfg.terminalHandlers, cfg.isWildcardByTerminal, cfg.paramsFactories,
     NullProtoObj,
