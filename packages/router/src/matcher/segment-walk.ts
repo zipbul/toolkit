@@ -177,7 +177,6 @@ export function createSegmentWalker(
     if (node.staticPrefix !== null) {
       const sp = node.staticPrefix;
       for (let i = 0; i < sp.length; i++) {
-        if (pos > len) return false;
         const ns = path.indexOf('/', pos);
         const segEnd = ns === -1 ? len : ns;
         if (path.substring(pos, segEnd) !== sp[i]) return false;
@@ -290,7 +289,6 @@ function createIterativeWalker(root: SegmentNode, decoder: DecoderFn): MatchFn {
         const sp = node.staticPrefix;
         let ok = true;
         for (let i = 0; i < sp.length; i++) {
-          if (pos > len) { ok = false; break; }
           const ns2 = url.indexOf('/', pos);
           const segEnd = ns2 === -1 ? len : ns2;
           if (url.substring(pos, segEnd) !== sp[i]) { ok = false; break; }
@@ -320,8 +318,8 @@ function createIterativeWalker(root: SegmentNode, decoder: DecoderFn): MatchFn {
       }
 
       if (node.paramChild !== null && seg.length > 0) {
-        const decoded = decoder(seg);
         if (node.paramChild.tester !== null) {
+          const decoded = decoder(seg);
           if (node.paramChild.tester(decoded) !== TESTER_PASS) return false;
         }
         const pc = state.paramCount * 2;

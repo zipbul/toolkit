@@ -15,6 +15,7 @@ import { RouterError } from '../error';
 import { MethodRegistry } from '../method-registry';
 import { createSegmentNode, insertIntoSegmentTree } from '../matcher/segment-tree';
 import { buildDecoder } from '../matcher/decoder';
+import { NullProtoObj } from '../internal/null-proto-obj';
 import { WildcardPrefixIndex, rollbackPlan, type RouteMeta, type CommitPlan } from './wildcard-prefix-index';
 
 // One-time wiring: dispatch UndoKind.PrefixIndexPlan from segment-tree's
@@ -569,7 +570,7 @@ export class Registration<T> {
         if (cached === undefined) {
           let body: string;
           if (omitBehavior) {
-            body = 'var p = { __proto__: null };\n';
+            body = 'var p = new NullProtoObj();\n';
             for (let j = 0; j < present.length; j++) {
               const pInfo = present[j]!;
               const start = j * 2;
@@ -579,8 +580,8 @@ export class Registration<T> {
             }
             body += 'return p;';
           } else {
-            const entries: string[] = ['__proto__: null'];
             const presentNames = present.map(p => p.name);
+            body = 'var p = new NullProtoObj();\n';
             for (const name of originalNames) {
               const idx = presentNames.indexOf(name);
               if (idx !== -1) {
@@ -588,14 +589,14 @@ export class Registration<T> {
                 const start = idx * 2;
                 const end = idx * 2 + 1;
                 const val = `u.substring(v[${start}], v[${end}])`;
-                entries.push(`${JSON.stringify(name)}: ${pInfo.type === 'param' ? `decoder(${val})` : val}`);
+                body += `p[${JSON.stringify(name)}] = ${pInfo.type === 'param' ? `decoder(${val})` : val};\n`;
               } else {
-                entries.push(`${JSON.stringify(name)}: undefined`);
+                body += `p[${JSON.stringify(name)}] = undefined;\n`;
               }
             }
-            body = `return { ${entries.join(', ')} };`;
+            body += 'return p;';
           }
-          cached = new Function('decoder', 'u', 'v', body).bind(null, decoder) as any;
+          cached = new Function('decoder', 'NullProtoObj', 'u', 'v', body).bind(null, decoder, NullProtoObj) as any;
           factoryCache.set(cacheKey, cached!);
         }
         factory = cached!;

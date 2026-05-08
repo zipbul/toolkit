@@ -49,8 +49,8 @@ export interface MatchConfig<T> {
   readonly trees: Array<MatchFn | null>;
   readonly matchState: MatchState;
   readonly handlers: T[];
-  readonly hitCacheByMethod: Map<number, RouterCache<MatchCacheEntry<T>>> | undefined;
-  readonly missCacheByMethod: Map<number, RouterMissCache> | undefined;
+  readonly hitCacheByMethod: Array<RouterCache<MatchCacheEntry<T>> | undefined>;
+  readonly missCacheByMethod: Array<RouterMissCache | undefined>;
   readonly cacheMaxSize: number;
   readonly activeMethodCodes: ReadonlyArray<readonly [string, number]>;
   /**
@@ -211,18 +211,20 @@ function emitGenericMatchImpl<T>(cfg: MatchConfig<T>): CompiledMatch<T> {
 
   // Dynamic walker present — cache-first ordering. Cache hits skip the
   // static lookup entirely; dynamic-only routers never pay a static-bucket
-  // miss on the hot path.
+  // miss on the hot path. The cache containers are sparse arrays indexed
+  // by `mc` (method code, SMI 0-31) so JSC compiles each access as a
+  // typed array load instead of a polymorphic `Map.get`.
   src.push(`
-    var ms = missCacheByMethod.get(mc);
+    var ms = missCacheByMethod[mc];
     if (ms !== undefined && ms.has(sp)) return null;
-    var hc = hitCacheByMethod.get(mc);
+    var hc = hitCacheByMethod[mc];
     if (hc !== undefined) {
       var cached = hc.get(sp);
       if (cached !== undefined) {
         var cp = cached.params;
         return {
           value: cached.value,
-          params: cp === EMPTY_PARAMS ? cp : Object.assign(new NullProtoObj(), cp),
+          params: cp === EMPTY_PARAMS ? cp : objectAssign(new NullProtoObj(), cp),
           meta: CACHE_META,
         };
       }
@@ -248,7 +250,7 @@ function emitGenericMatchImpl<T>(cfg: MatchConfig<T>): CompiledMatch<T> {
   }
 
   const emitMissCacheWrite = (): string => `
-    if (ms === undefined) { ms = new RouterMissCache(${cacheMaxSize}); missCacheByMethod.set(mc, ms); }
+    if (ms === undefined) { ms = new RouterMissCache(${cacheMaxSize}); missCacheByMethod[mc] = ms; }
     ms.add(sp);
   `;
 
@@ -298,12 +300,12 @@ function emitGenericMatchImpl<T>(cfg: MatchConfig<T>): CompiledMatch<T> {
       var val = handlers[hIdx];
       if (hc === undefined) {
         hc = new RouterCache(${cacheMaxSize});
-        hitCacheByMethod.set(mc, hc);
+        hitCacheByMethod[mc] = hc;
       }
       hc.set(sp, { value: val, params: params });
       return {
         value: val,
-        params: params === EMPTY_PARAMS ? params : Object.assign(new NullProtoObj(), params),
+        params: params === EMPTY_PARAMS ? params : objectAssign(new NullProtoObj(), params),
         meta: DYNAMIC_META,
       };
     `);
@@ -317,7 +319,7 @@ function emitGenericMatchImpl<T>(cfg: MatchConfig<T>): CompiledMatch<T> {
     'activeBucket', 'tr0', 'staticOutputsByMethod', 'methodCodes', 'trees', 'matchState', 'handlers',
     'hitCacheByMethod', 'missCacheByMethod', 'RouterCache', 'RouterMissCache',
     'EMPTY_PARAMS', 'CACHE_META', 'DYNAMIC_META', 'terminalSlab', 'paramsFactories',
-    'NullProtoObj',
+    'NullProtoObj', 'objectAssign',
     `return function match(method, path) {\n${body}\n};`,
   );
 
@@ -330,7 +332,7 @@ function emitGenericMatchImpl<T>(cfg: MatchConfig<T>): CompiledMatch<T> {
     activeBucket, tr0, cfg.staticOutputsByMethod, cfg.methodCodes, cfg.trees, cfg.matchState, cfg.handlers,
     cfg.hitCacheByMethod, cfg.missCacheByMethod, RouterCache, RouterMissCache,
     EMPTY_PARAMS, CACHE_META, DYNAMIC_META, cfg.terminalSlab, cfg.paramsFactories,
-    NullProtoObj,
+    NullProtoObj, Object.assign,
   ) as CompiledMatch<T>;
 
   runWarmup(

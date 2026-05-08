@@ -36,8 +36,13 @@ export interface RouterInternals<T> {
 }
 
 interface CacheContainers<T> {
-  hit: Map<number, RouterCache<MatchCacheEntry<T>>>;
-  miss: Map<number, RouterMissCache>;
+  /**
+   * Per-method-code sparse array of hit caches. Indexing by `mc` (a small
+   * SMI 0-31) gives the JIT a typed array load instead of the polymorphic
+   * `Map<number, …>.get` it would otherwise compile.
+   */
+  hit: Array<RouterCache<MatchCacheEntry<T>> | undefined>;
+  miss: Array<RouterMissCache | undefined>;
   maxSize: number;
 }
 
@@ -57,8 +62,8 @@ function createCacheContainers<T>(options: RouterOptions): CacheContainers<T> {
   const maxSize = options.cacheSize ?? DEFAULT_CACHE_SIZE;
 
   return {
-    hit: new Map(),
-    miss: new Map(),
+    hit: [],
+    miss: [],
     maxSize,
   };
 }
