@@ -202,12 +202,22 @@ export function createSegmentWalker(
 
     const nextSlash = path.indexOf('/', pos);
     const end = nextSlash === -1 ? len : nextSlash;
-    const seg = path.substring(pos, end);
+    const segLen = end - pos;
 
-    // Inline single-static-child cache hit (string compare, no Record).
-    if (node.singleChildKey === seg && node.singleChildNext !== null) {
+    // Single-static-child fast path: probe via offset-based startsWith
+    // before paying for `path.substring(pos, end)`. The substring is only
+    // allocated when we fall through to the staticChildren Record (which
+    // needs the string as an object key).
+    const sck = node.singleChildKey;
+    if (
+      sck !== null &&
+      node.singleChildNext !== null &&
+      sck.length === segLen &&
+      path.startsWith(sck, pos)
+    ) {
       if (match(node.singleChildNext, path, end === len ? len : end + 1, state, decoder)) return true;
     } else if (node.staticChildren !== null) {
+      const seg = path.substring(pos, end);
       const child = node.staticChildren[seg];
       if (child !== undefined) {
         if (match(child, path, end === len ? len : end + 1, state, decoder)) return true;
@@ -215,7 +225,7 @@ export function createSegmentWalker(
     }
 
     const head = node.paramChild;
-    if (head !== null && seg.length > 0) {
+    if (head !== null && segLen > 0) {
       if (tryMatchParam(head, path, pos, end, state, decoder)) return true;
 
       let p: ParamSegment | null = head.nextSibling;
@@ -300,15 +310,23 @@ function createIterativeWalker(root: SegmentNode, decoder: DecoderFn): MatchFn {
 
       const nextSlash = url.indexOf('/', pos);
       const end = nextSlash === -1 ? len : nextSlash;
-      const seg = url.substring(pos, end);
+      const segLen = end - pos;
 
-      // Inline single-static-child cache hit (string compare, no Record).
-      if (node.singleChildKey === seg && node.singleChildNext !== null) {
+      // Single-static-child offset fast path: avoid substring alloc on
+      // the most common shape (single static child per node).
+      const sck = node.singleChildKey;
+      if (
+        sck !== null &&
+        node.singleChildNext !== null &&
+        sck.length === segLen &&
+        url.startsWith(sck, pos)
+      ) {
         node = node.singleChildNext;
         pos = end === len ? len : end + 1;
         continue;
       }
       if (node.staticChildren !== null) {
+        const seg = url.substring(pos, end);
         const child = node.staticChildren[seg];
         if (child !== undefined) {
           node = child;
@@ -317,9 +335,9 @@ function createIterativeWalker(root: SegmentNode, decoder: DecoderFn): MatchFn {
         }
       }
 
-      if (node.paramChild !== null && seg.length > 0) {
+      if (node.paramChild !== null && segLen > 0) {
         if (node.paramChild.tester !== null) {
-          const decoded = decoder(seg);
+          const decoded = decoder(url.substring(pos, end));
           if (node.paramChild.tester(decoded) !== TESTER_PASS) return false;
         }
         const pc = state.paramCount * 2;

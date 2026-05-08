@@ -209,29 +209,11 @@ function emitGenericMatchImpl<T>(cfg: MatchConfig<T>): CompiledMatch<T> {
     return compiled;
   }
 
-  // Dynamic walker present — cache-first ordering. Cache hits skip the
-  // static lookup entirely; dynamic-only routers never pay a static-bucket
-  // miss on the hot path. The cache containers are sparse arrays indexed
-  // by `mc` (method code, SMI 0-31) so JSC compiles each access as a
-  // typed array load instead of a polymorphic `Map.get`.
-  src.push(`
-    var ms = missCacheByMethod[mc];
-    if (ms !== undefined && ms.has(sp)) return null;
-    var hc = hitCacheByMethod[mc];
-    if (hc !== undefined) {
-      var cached = hc.get(sp);
-      if (cached !== undefined) {
-        var cp = cached.params;
-        return {
-          value: cached.value,
-          params: cp === EMPTY_PARAMS ? cp : objectAssign(new NullProtoObj(), cp),
-          meta: CACHE_META,
-        };
-      }
-    }
-  `);
-
-  // Cache miss: try static once before invoking the walker.
+  // Static-first on the normalized path: an object property load (one IC
+  // slot) beats both branches of the cache check, and static results are
+  // never stored in the cache, so probing static before the cache costs
+  // nothing on a cache hit and saves the cache lookups on a static hit
+  // for non-canonical inputs (e.g., trailing slash that got trimmed).
   if (cfg.hasAnyStatic) {
     if (singleMethod !== null) {
       src.push(`
@@ -248,6 +230,26 @@ function emitGenericMatchImpl<T>(cfg: MatchConfig<T>): CompiledMatch<T> {
       `);
     }
   }
+
+  // Cache probe (after static). Static hits already returned above; only
+  // dynamic results live in the cache. Sparse-array indexing by mc keeps
+  // each lookup as a typed-array load rather than a `Map.get` dispatch.
+  src.push(`
+    var ms = missCacheByMethod[mc];
+    if (ms !== undefined && ms.has(sp)) return null;
+    var hc = hitCacheByMethod[mc];
+    if (hc !== undefined) {
+      var cached = hc.get(sp);
+      if (cached !== undefined) {
+        var cp = cached.params;
+        return {
+          value: cached.value,
+          params: cp === EMPTY_PARAMS ? cp : objectAssign(new NullProtoObj(), cp),
+          meta: CACHE_META,
+        };
+      }
+    }
+  `);
 
   const emitMissCacheWrite = (): string => `
     if (ms === undefined) { ms = new RouterMissCache(${cacheMaxSize}); missCacheByMethod[mc] = ms; }
