@@ -1,14 +1,18 @@
 import { HttpHeader } from '@zipbul/shared';
 
-import { LIMITS, RESERVED_KEYS } from '../constants';
+import { LIMITS } from '../constants';
 import { HelmetErrorReason } from '../enums';
+import { checkPrototypeChain, checkReservedKey } from '../internal/reserved-key-guard';
 import type { NelOptions, ReportingEndpointsOptions, ViolationDetail } from '../interfaces';
 import { serializeString } from '../structured-fields/serialize';
 import type { ResolvedNelOptions, ResolvedReportingEndpointsOptions } from '../types';
 
 import type { HeaderEntry } from '../header-entry';
 
-const ENDPOINT_NAME_RE = /^[A-Za-z0-9_-]{1,64}$/;
+// Reporting-Endpoints is an sf-dictionary (RFC 9651 §3.2). Dictionary keys
+// must match `lcalpha *( lcalpha / DIGIT / "_" / "-" / "." / "*" )` — i.e.
+// lowercase only. Cap at 64 chars to bound on-wire size.
+const ENDPOINT_NAME_RE = /^[a-z][a-z0-9_.\-*]{0,63}$/;
 
 export function resolveReportingEndpoints(
   input: ReportingEndpointsOptions | undefined,
@@ -18,17 +22,7 @@ export function resolveReportingEndpoints(
   if (input === undefined) return undefined;
   const map = new Map<string, string>();
   const raw = input.endpoints ?? {};
-  // Detect prototype pollution attempts: object literal `{__proto__: x}` sets
-  // the prototype rather than an own property, so Object.entries misses it.
-  // Inspect the prototype chain explicitly.
-  const proto = Object.getPrototypeOf(raw);
-  if (proto !== null && proto !== Object.prototype) {
-    violations.push({
-      reason: HelmetErrorReason.ReservedKeyDenied,
-      path: `${path}.endpoints.__proto__`,
-      message: 'reserved key denied (__proto__ override on input object)',
-    });
-  }
+  checkPrototypeChain(raw, `${path}.endpoints`, violations);
   const entries = Object.entries(raw);
   if (entries.length > LIMITS.reportingEndpoints) {
     violations.push({
@@ -38,19 +32,15 @@ export function resolveReportingEndpoints(
     });
   }
   for (const [name, url] of entries) {
-    if (RESERVED_KEYS.has(name)) {
-      violations.push({
-        reason: HelmetErrorReason.ReservedKeyDenied,
-        path: `${path}.endpoints.${name}`,
-        message: 'reserved key denied (prototype pollution guard)',
-      });
+    if (!checkReservedKey(name, `${path}.endpoints.${name}`, violations)) {
       continue;
     }
     if (!ENDPOINT_NAME_RE.test(name)) {
       violations.push({
         reason: HelmetErrorReason.InvalidReportingEndpointName,
         path: `${path}.endpoints.${name}`,
-        message: 'reporting endpoint name must match [A-Za-z0-9_-]{1,64}',
+        message:
+          'reporting endpoint name must match RFC 9651 sf-dict key grammar [a-z][a-z0-9_.\\-*]{0,63}',
       });
       continue;
     }

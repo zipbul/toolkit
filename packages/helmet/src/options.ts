@@ -1,5 +1,5 @@
 import { LIMITS } from './constants';
-import { HelmetErrorReason } from './enums';
+import { HelmetErrorReason, HelmetWarningReason } from './enums';
 import type { HelmetOptions, HelmetWarning, ViolationDetail } from './interfaces';
 import type {
   CoepValue,
@@ -10,7 +10,7 @@ import type {
   XFrameOptionsValue,
 } from './types';
 
-import { resolveCacheControl } from './cache-control/serialize';
+import { resolveCacheControl, validateCacheControl } from './cache-control/serialize';
 import { resolveClearSiteData, validateClearSiteData } from './clear-site-data/serialize';
 import { resolveCsp, validateCsp } from './csp/serialize';
 import { resolveDocumentPolicy } from './document-policy/serialize';
@@ -79,41 +79,18 @@ export function resolveHelmetOptions(
           false | undefined
         >)
       : undefined,
-    crossOriginOpenerPolicy: ((): ResolvedHelmetOptions['crossOriginOpenerPolicy'] => {
-      const v = opts.crossOriginOpenerPolicy;
-      if (v === false) return false;
-      if (v === undefined || v === true) return { value: 'same-origin' };
-      if (typeof v === 'string') return { value: v };
-      // Object form { value, reportTo }
-      return v.reportTo !== undefined
-        ? { value: v.value, reportTo: v.reportTo }
-        : { value: v.value };
-    })(),
-    crossOriginOpenerPolicyReportOnly: ((): ResolvedHelmetOptions['crossOriginOpenerPolicyReportOnly'] => {
-      const v = opts.crossOriginOpenerPolicyReportOnly;
-      if (v === undefined) return undefined;
-      if (typeof v === 'string') return { value: v };
-      return v.reportTo !== undefined
-        ? { value: v.value, reportTo: v.reportTo }
-        : { value: v.value };
-    })(),
-    crossOriginEmbedderPolicy: ((): ResolvedHelmetOptions['crossOriginEmbedderPolicy'] => {
-      const v = opts.crossOriginEmbedderPolicy;
-      if (v === undefined || v === false) return false;
-      if (v === true) return { value: 'require-corp' };
-      if (typeof v === 'string') return { value: v };
-      return v.reportTo !== undefined
-        ? { value: v.value, reportTo: v.reportTo }
-        : { value: v.value };
-    })(),
-    crossOriginEmbedderPolicyReportOnly: ((): ResolvedHelmetOptions['crossOriginEmbedderPolicyReportOnly'] => {
-      const v = opts.crossOriginEmbedderPolicyReportOnly;
-      if (v === undefined) return undefined;
-      if (typeof v === 'string') return { value: v };
-      return v.reportTo !== undefined
-        ? { value: v.value, reportTo: v.reportTo }
-        : { value: v.value };
-    })(),
+    crossOriginOpenerPolicy: resolveCoopCoep(opts.crossOriginOpenerPolicy, 'same-origin'),
+    crossOriginOpenerPolicyReportOnly: resolveCoopCoepReportOnly(
+      opts.crossOriginOpenerPolicyReportOnly,
+    ),
+    crossOriginEmbedderPolicy: resolveCoopCoep(
+      opts.crossOriginEmbedderPolicy,
+      'require-corp',
+      'off',
+    ),
+    crossOriginEmbedderPolicyReportOnly: resolveCoopCoepReportOnly(
+      opts.crossOriginEmbedderPolicyReportOnly,
+    ),
     crossOriginResourcePolicy:
       opts.crossOriginResourcePolicy === false
         ? false
@@ -228,6 +205,13 @@ export function validateHelmetOptions(
         knownEndpoints,
       ),
     );
+    if (resolved.contentSecurityPolicy !== false) {
+      compareCspStrength(
+        resolved.contentSecurityPolicy,
+        resolved.contentSecurityPolicyReportOnly,
+        warnings,
+      );
+    }
   }
 
   validateCoopOrCoep(
@@ -246,7 +230,7 @@ export function validateHelmetOptions(
   );
   if (resolved.crossOriginResourcePolicy !== false && !VALID_CORP.has(resolved.crossOriginResourcePolicy)) {
     violations.push({
-      reason: HelmetErrorReason.InvalidCspKeyword,
+      reason: HelmetErrorReason.InvalidCorpValue,
       path: 'crossOriginResourcePolicy',
       message: 'invalid Cross-Origin-Resource-Policy value',
     });
@@ -268,7 +252,7 @@ export function validateHelmetOptions(
 
   if (resolved.documentIsolationPolicy !== undefined && !VALID_DOC_ISO.has(resolved.documentIsolationPolicy)) {
     violations.push({
-      reason: HelmetErrorReason.InvalidCspKeyword,
+      reason: HelmetErrorReason.InvalidDocumentIsolationPolicyValue,
       path: 'documentIsolationPolicy',
       message: 'invalid Document-Isolation-Policy value',
     });
@@ -337,6 +321,9 @@ export function validateHelmetOptions(
   if (resolved.clearSiteData !== false && resolved.clearSiteData !== undefined) {
     violations.push(...validateClearSiteData(resolved.clearSiteData, 'clearSiteData', warnings));
   }
+  if (resolved.cacheControl !== false && resolved.cacheControl !== undefined) {
+    violations.push(...validateCacheControl(resolved.cacheControl, 'cacheControl'));
+  }
 
   // Cap violations at LIMITS.violations with sentinel.
   if (violations.length > LIMITS.violations) {
@@ -369,7 +356,7 @@ function validateCoopOrCoep<V extends string>(
   if (policy === false || policy === undefined) return;
   if (!validValues.has(policy.value)) {
     out.push({
-      reason: HelmetErrorReason.InvalidCspKeyword,
+      reason: HelmetErrorReason.InvalidCoopCoepValue,
       path: `${path}.value`,
       message: `invalid policy value "${policy.value}"`,
     });
@@ -379,7 +366,8 @@ function validateCoopOrCoep<V extends string>(
       out.push({
         reason: HelmetErrorReason.InvalidReportingEndpointName,
         path: `${path}.reportTo`,
-        message: 'report-to value must match [A-Za-z0-9_-]{1,64}',
+        message:
+          'report-to value must match RFC 9651 sf-dict key grammar [a-z][a-z0-9_.\\-*]{0,63}',
       });
     } else if (!knownEndpoints.has(policy.reportTo)) {
       out.push({
@@ -391,4 +379,67 @@ function validateCoopOrCoep<V extends string>(
   }
 }
 
-const REPORTING_ENDPOINT_NAME_RE = /^[A-Za-z0-9_-]{1,64}$/;
+// Mirrors reporting/serialize.ts ENDPOINT_NAME_RE — must agree.
+const REPORTING_ENDPOINT_NAME_RE = /^[a-z][a-z0-9_.\-*]{0,63}$/;
+
+/**
+ * Warn when the `Content-Security-Policy-Report-Only` header is *more permissive*
+ * than the enforcing policy on any directive. A weaker RO is a known data
+ * exfiltration channel — an attacker bypassing enforcement can still trigger
+ * RO violations to leak intent through the violation report.
+ */
+function compareCspStrength(
+  enforcing: ResolvedHelmetOptions['contentSecurityPolicy'],
+  reportOnly: ResolvedHelmetOptions['contentSecurityPolicyReportOnly'],
+  warnings: HelmetWarning[],
+): void {
+  if (enforcing === false || reportOnly === undefined) return;
+  for (const [name, roValue] of reportOnly.directives) {
+    const enfValue = enforcing.directives.get(name);
+    if (!Array.isArray(roValue) || !Array.isArray(enfValue)) continue;
+    const enfSet = new Set(enfValue);
+    const extra: string[] = [];
+    for (const v of roValue) if (!enfSet.has(v)) extra.push(v);
+    if (extra.length > 0) {
+      warnings.push({
+        reason: HelmetWarningReason.CspReportOnlyWeakerThanEnforcing,
+        path: `contentSecurityPolicyReportOnly.directives.${name}`,
+        message: `report-only "${name}" allows sources not present in enforcing CSP: ${extra.join(', ').slice(0, 80)} — exfiltration risk via violation reports`,
+      });
+    }
+  }
+}
+
+/**
+ * Normalise a COOP/COEP-like input to its resolved `{ value, reportTo? }` shape.
+ *
+ *   `false` → `false`  (header omitted)
+ *   `undefined` → `defaultWhenUndefined` ('on' = use default value, 'off' = false)
+ *   `true` → `{ value: defaultValue }`
+ *   bare token → `{ value: token }`
+ *   object `{ value, reportTo? }` → preserved
+ */
+function resolveCoopCoep<V extends string>(
+  input: boolean | V | { value: V; reportTo?: string } | undefined,
+  defaultValue: V,
+  defaultWhenUndefined: 'on' | 'off' = 'on',
+): false | { value: V; reportTo?: string } {
+  if (input === false) return false;
+  if (input === undefined) return defaultWhenUndefined === 'on' ? { value: defaultValue } : false;
+  if (input === true) return { value: defaultValue };
+  if (typeof input === 'string') return { value: input };
+  return input.reportTo !== undefined
+    ? { value: input.value, reportTo: input.reportTo }
+    : { value: input.value };
+}
+
+/** Same as {@link resolveCoopCoep} but for the report-only variant (no `false`/`true`/default). */
+function resolveCoopCoepReportOnly<V extends string>(
+  input: V | { value: V; reportTo?: string } | undefined,
+): undefined | { value: V; reportTo?: string } {
+  if (input === undefined) return undefined;
+  if (typeof input === 'string') return { value: input };
+  return input.reportTo !== undefined
+    ? { value: input.value, reportTo: input.reportTo }
+    : { value: input.value };
+}

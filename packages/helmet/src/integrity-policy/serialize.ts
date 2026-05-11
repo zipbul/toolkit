@@ -2,7 +2,11 @@ import { HttpHeader } from '@zipbul/shared';
 
 import { HelmetErrorReason } from '../enums';
 import type { IntegrityPolicyOptions, ViolationDetail } from '../interfaces';
-import { serializeDictionary, token } from '../structured-fields/serialize';
+import {
+  serializeDictionary,
+  token,
+  type DictionaryValue,
+} from '../structured-fields/serialize';
 import type { ResolvedIntegrityPolicyOptions } from '../types';
 
 import type { HeaderEntry } from '../header-entry';
@@ -74,17 +78,17 @@ export function validateIntegrityPolicy(
 }
 
 export function serializeIntegrityPolicy(opts: ResolvedIntegrityPolicyOptions): HeaderEntry {
-  const dict = new Map<string, never>();
+  const dict = new Map<string, DictionaryValue>();
   dict.set('blocked-destinations', {
     innerList: opts.blockedDestinations.map(d => token(d)),
-  } as never);
+  });
   if (opts.sources.length > 0) {
-    dict.set('sources', { innerList: opts.sources.map(s => token(s)) } as never);
+    dict.set('sources', { innerList: opts.sources.map(s => token(s)) });
   }
   if (opts.endpoints.length > 0) {
-    dict.set('endpoints', { innerList: opts.endpoints.map(e => token(e)) } as never);
+    dict.set('endpoints', { innerList: opts.endpoints.map(e => token(e)) });
   }
-  return [HttpHeader.IntegrityPolicy, serializeDictionary(dict as never)];
+  return [HttpHeader.IntegrityPolicy, serializeDictionary(dict)];
 }
 
 export function serializeIntegrityPolicyReportOnly(

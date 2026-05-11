@@ -10,8 +10,8 @@ export function validateXFrameOptions(value: string, path: string): ViolationDet
       {
         reason: HelmetErrorReason.InvalidXFrameOptionsValue,
         path,
-        message: 'invalid X-Frame-Options value',
-        remedy: "use 'deny' or 'sameorigin' (or uppercase variants for WAF compatibility)",
+        message:
+          "invalid X-Frame-Options value — use 'deny' or 'sameorigin' (or uppercase variants for WAF compatibility)",
       },
     ];
   }

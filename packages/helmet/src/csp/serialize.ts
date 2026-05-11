@@ -1,6 +1,7 @@
 import { HttpHeader } from '@zipbul/shared';
 
-import { LIMITS, NONCE_PLACEHOLDER, RESERVED_KEYS } from '../constants';
+import { LIMITS, NONCE_PLACEHOLDER } from '../constants';
+import { checkReservedKey } from '../internal/reserved-key-guard';
 import { HelmetErrorReason, HelmetWarningReason } from '../enums';
 import type {
   ContentSecurityPolicyOptions,
@@ -98,149 +99,192 @@ export function validateCsp(
     });
   }
   for (const [name, value] of resolved.directives) {
-    if (RESERVED_KEYS.has(name)) {
-      out.push({
-        reason: HelmetErrorReason.ReservedKeyDenied,
-        path: `${path}.directives.${name}`,
-        message: 'reserved key denied',
-      });
-      continue;
-    }
-    if (DEPRECATED_DIRECTIVES.has(name)) {
-      out.push({
-        reason: HelmetErrorReason.DeprecatedCspDirective,
-        path: `${path}.directives.${name}`,
-        message: `CSP directive "${name}" is deprecated/removed`,
-      });
-      continue;
-    }
-
-    if (name === 'sandbox') {
-      validateSandbox(value, `${path}.directives.${name}`, out);
-      continue;
-    }
-    if (name === 'webrtc') {
-      if (value !== 'allow' && value !== 'block') {
-        out.push({
-          reason: HelmetErrorReason.InvalidWebRtcDirective,
-          path: `${path}.directives.${name}`,
-          message: "webrtc must be 'allow' or 'block'",
-        });
-      }
-      continue;
-    }
-    if (name === 'upgrade-insecure-requests') {
-      if (typeof value !== 'boolean') {
-        out.push({
-          reason: HelmetErrorReason.InvalidCspKeyword,
-          path: `${path}.directives.${name}`,
-          message: 'upgrade-insecure-requests must be boolean',
-        });
-      }
-      continue;
-    }
-    if (name === 'report-to') {
-      if (typeof value !== 'string' || !REPORT_TO_NAME_RE.test(value)) {
-        out.push({
-          reason: HelmetErrorReason.InvalidReportToGroupName,
-          path: `${path}.directives.${name}`,
-          message: 'report-to value must match [A-Za-z0-9_-]+',
-        });
-      } else if (!knownEndpoints.has(value)) {
-        out.push({
-          reason: HelmetErrorReason.UnknownReportingEndpoint,
-          path: `${path}.directives.${name}`,
-          message: 'report-to references undefined Reporting-Endpoints name',
-        });
-      }
-      continue;
-    }
-    if (name === 'report-uri') {
-      if (typeof value !== 'string' || value.trim().length === 0) {
-        out.push({
-          reason: HelmetErrorReason.InvalidReportUri,
-          path: `${path}.directives.${name}`,
-          message: 'report-uri must be a non-empty string',
-        });
-      } else if (value.length > LIMITS.hostSourceLength) {
-        out.push({
-          reason: HelmetErrorReason.InputTooLarge,
-          path: `${path}.directives.${name}`,
-          message: `report-uri exceeds ${LIMITS.hostSourceLength} chars`,
-        });
-      } else if (REPORT_URI_FORBIDDEN_RE.test(value)) {
-        out.push({
-          reason: HelmetErrorReason.ControlCharRejected,
-          path: `${path}.directives.${name}`,
-          message: 'report-uri contains forbidden whitespace or control characters',
-        });
-      }
-      continue;
-    }
-    if (name === 'require-trusted-types-for') {
-      validateRequireTt(value, `${path}.directives.${name}`, out);
-      continue;
-    }
-    if (name === 'trusted-types') {
-      validateTrustedTypes(value, `${path}.directives.${name}`, out, warnings);
-      continue;
-    }
-
-    // Source-list directive
-    if (!Array.isArray(value)) {
-      out.push({
-        reason: HelmetErrorReason.InvalidCspKeyword,
-        path: `${path}.directives.${name}`,
-        message: 'expected an array of CSP sources',
-      });
-      continue;
-    }
-    if (FETCH_DIRECTIVES.has(toCamel(name) as keyof CspDirectives) && value.length === 0) {
-      out.push({
-        reason: HelmetErrorReason.EmptyFetchDirective,
-        path: `${path}.directives.${name}`,
-        message: `${name} must have at least one source — use ['none'] explicitly`,
-      });
-      continue;
-    }
-    if (value.length > LIMITS.cspSourcesPerDirective) {
-      out.push({
-        reason: HelmetErrorReason.InputTooLarge,
-        path: `${path}.directives.${name}`,
-        message: `too many sources (${value.length} > ${LIMITS.cspSourcesPerDirective})`,
-      });
-    }
-    for (let i = 0; i < value.length; i++) {
-      const v = value[i] ?? '';
-      validateCspSource(v, `${path}.directives.${name}[${i}]`, out);
-      if (name === 'frame-ancestors') {
-        if (FRAME_ANCESTORS_FORBIDDEN.has(v)) {
-          out.push({
-            reason: HelmetErrorReason.InvalidFrameAncestorsKeyword,
-            path: `${path}.directives.${name}[${i}]`,
-            message: `frame-ancestors does not allow ${v} (CSP3 §6.4.2)`,
-          });
-        } else if (isNonceOrHashSource(v)) {
-          out.push({
-            reason: HelmetErrorReason.InvalidFrameAncestorsKeyword,
-            path: `${path}.directives.${name}[${i}]`,
-            message:
-              'frame-ancestors does not allow nonce or hash sources (CSP3 §6.4.2 — only host/scheme/self/none)',
-          });
-        }
-      }
-    }
-    if (NON_FETCH_LIST_DIRECTIVES.has(toCamel(name) as keyof CspDirectives) && value.length === 0) {
-      out.push({
-        reason: HelmetErrorReason.EmptyFetchDirective,
-        path: `${path}.directives.${name}`,
-        message: `${name} must have at least one source`,
-      });
-    }
+    validateCspDirective(name, value, path, out, warnings, knownEndpoints);
   }
-
   semanticWarnings(resolved, path, warnings);
   return out;
+}
+
+/** Dispatch a single directive to its specialised validator. */
+function validateCspDirective(
+  name: string,
+  value: ResolvedCspValue,
+  path: string,
+  out: ViolationDetail[],
+  warnings: HelmetWarning[],
+  knownEndpoints: ReadonlySet<string>,
+): void {
+  const localPath = `${path}.directives.${name}`;
+  if (!checkReservedKey(name, localPath, out)) return;
+  if (DEPRECATED_DIRECTIVES.has(name)) {
+    out.push({
+      reason: HelmetErrorReason.DeprecatedCspDirective,
+      path: localPath,
+      message: `CSP directive "${name}" is deprecated/removed`,
+    });
+    return;
+  }
+
+  switch (name) {
+    case 'sandbox':
+      validateSandbox(value, localPath, out);
+      return;
+    case 'webrtc':
+      validateWebrtc(value, localPath, out);
+      return;
+    case 'upgrade-insecure-requests':
+      validateUpgradeInsecureRequests(value, localPath, out);
+      return;
+    case 'report-to':
+      validateReportTo(value, localPath, out, knownEndpoints);
+      return;
+    case 'report-uri':
+      validateReportUri(value, localPath, out);
+      return;
+    case 'require-trusted-types-for':
+      validateRequireTt(value, localPath, out);
+      return;
+    case 'trusted-types':
+      validateTrustedTypes(value, localPath, out, warnings);
+      return;
+    default:
+      validateSourceListDirective(name, value, localPath, out);
+  }
+}
+
+type ResolvedCspValue = readonly string[] | string | boolean;
+
+function validateWebrtc(value: ResolvedCspValue, path: string, out: ViolationDetail[]): void {
+  if (value !== 'allow' && value !== 'block') {
+    out.push({
+      reason: HelmetErrorReason.InvalidWebRtcDirective,
+      path,
+      message: "webrtc must be 'allow' or 'block'",
+    });
+  }
+}
+
+function validateUpgradeInsecureRequests(
+  value: ResolvedCspValue,
+  path: string,
+  out: ViolationDetail[],
+): void {
+  if (typeof value !== 'boolean') {
+    out.push({
+      reason: HelmetErrorReason.InvalidCspKeyword,
+      path,
+      message: 'upgrade-insecure-requests must be boolean',
+    });
+  }
+}
+
+function validateReportTo(
+  value: ResolvedCspValue,
+  path: string,
+  out: ViolationDetail[],
+  knownEndpoints: ReadonlySet<string>,
+): void {
+  if (typeof value !== 'string' || !REPORT_TO_NAME_RE.test(value)) {
+    out.push({
+      reason: HelmetErrorReason.InvalidReportToGroupName,
+      path,
+      message: 'report-to value must match [A-Za-z0-9_-]+',
+    });
+  } else if (!knownEndpoints.has(value)) {
+    out.push({
+      reason: HelmetErrorReason.UnknownReportingEndpoint,
+      path,
+      message: 'report-to references undefined Reporting-Endpoints name',
+    });
+  }
+}
+
+function validateReportUri(value: ResolvedCspValue, path: string, out: ViolationDetail[]): void {
+  if (typeof value !== 'string' || value.trim().length === 0) {
+    out.push({
+      reason: HelmetErrorReason.InvalidReportUri,
+      path,
+      message: 'report-uri must be a non-empty string',
+    });
+  } else if (value.length > LIMITS.hostSourceLength) {
+    out.push({
+      reason: HelmetErrorReason.InputTooLarge,
+      path,
+      message: `report-uri exceeds ${LIMITS.hostSourceLength} chars`,
+    });
+  } else if (REPORT_URI_FORBIDDEN_RE.test(value)) {
+    out.push({
+      reason: HelmetErrorReason.ControlCharRejected,
+      path,
+      message: 'report-uri contains forbidden whitespace or control characters',
+    });
+  }
+}
+
+function validateSourceListDirective(
+  name: string,
+  value: ResolvedCspValue,
+  path: string,
+  out: ViolationDetail[],
+): void {
+  if (!Array.isArray(value)) {
+    out.push({
+      reason: HelmetErrorReason.InvalidCspKeyword,
+      path,
+      message: 'expected an array of CSP sources',
+    });
+    return;
+  }
+  const camel = toCamel(name) as keyof CspDirectives;
+  if (FETCH_DIRECTIVES.has(camel) && value.length === 0) {
+    out.push({
+      reason: HelmetErrorReason.EmptyFetchDirective,
+      path,
+      message: `${name} must have at least one source — use ['none'] explicitly`,
+    });
+    return;
+  }
+  if (value.length > LIMITS.cspSourcesPerDirective) {
+    out.push({
+      reason: HelmetErrorReason.InputTooLarge,
+      path,
+      message: `too many sources (${value.length} > ${LIMITS.cspSourcesPerDirective})`,
+    });
+  }
+  for (let i = 0; i < value.length; i++) {
+    const v = value[i] ?? '';
+    const itemPath = `${path}[${i}]`;
+    validateCspSource(v, itemPath, out);
+    if (name === 'frame-ancestors') validateFrameAncestorsSource(v, itemPath, out);
+  }
+  if (NON_FETCH_LIST_DIRECTIVES.has(camel) && value.length === 0) {
+    out.push({
+      reason: HelmetErrorReason.EmptyFetchDirective,
+      path,
+      message: `${name} must have at least one source`,
+    });
+  }
+}
+
+function validateFrameAncestorsSource(
+  source: string,
+  path: string,
+  out: ViolationDetail[],
+): void {
+  if (FRAME_ANCESTORS_FORBIDDEN.has(source)) {
+    out.push({
+      reason: HelmetErrorReason.InvalidFrameAncestorsKeyword,
+      path,
+      message: `frame-ancestors does not allow ${source} (CSP3 §6.4.2)`,
+    });
+  } else if (isNonceOrHashSource(source)) {
+    out.push({
+      reason: HelmetErrorReason.InvalidFrameAncestorsKeyword,
+      path,
+      message:
+        'frame-ancestors does not allow nonce or hash sources (CSP3 §6.4.2 — only host/scheme/self/none)',
+    });
+  }
 }
 
 function validateSandbox(

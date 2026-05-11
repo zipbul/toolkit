@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'bun:test';
 
+import { Helmet, HelmetError } from '../../index';
+
 import { resolveCacheControl, serializeCacheControl } from './serialize';
 
 describe('cache-control', () => {
@@ -25,5 +27,26 @@ describe('cache-control', () => {
 
   it('undefined remains undefined', () => {
     expect(resolveCacheControl(undefined)).toBe(undefined);
+  });
+});
+
+describe('cache-control eager validation', () => {
+  it('rejects CRLF in user-supplied value at create-time (header injection guard)', () => {
+    expect(() =>
+      Helmet.create({ cacheControl: { value: 'no-store\r\nX-Injected: yes' } }),
+    ).toThrow(HelmetError);
+  });
+  it('rejects oversized value', () => {
+    expect(() =>
+      Helmet.create({ cacheControl: { value: 'a'.repeat(20_000) } }),
+    ).toThrow(HelmetError);
+  });
+  it('rejects empty string', () => {
+    expect(() => Helmet.create({ cacheControl: { value: '' } })).toThrow(HelmetError);
+  });
+  it('accepts a normal RFC 9111 directive list', () => {
+    expect(() =>
+      Helmet.create({ cacheControl: { value: 'public, max-age=3600, must-revalidate' } }),
+    ).not.toThrow();
   });
 });

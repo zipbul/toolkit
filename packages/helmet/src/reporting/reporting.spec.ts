@@ -52,6 +52,20 @@ describe('reporting/endpoints', () => {
     expect((violations as never[]).some((v: never) => (v as { reason: string }).reason === 'invalid_reporting_endpoint_name')).toBe(true);
   });
 
+  it('rejects uppercase endpoint name (RFC 9651 §3.2 sf-dict key must be lcalpha)', () => {
+    const violations: never[] = [];
+    resolveReportingEndpoints(
+      { endpoints: { Default: 'https://r.example/' as never } },
+      'reportingEndpoints',
+      violations as never,
+    );
+    expect(
+      (violations as never[]).some(
+        (v: never) => (v as { reason: string }).reason === 'invalid_reporting_endpoint_name',
+      ),
+    ).toBe(true);
+  });
+
   it('detects __proto__ override on input object (real prototype pollution attack)', () => {
     const violations: never[] = [];
     // Real attack vector: setting prototype to a malicious object via parsed JSON

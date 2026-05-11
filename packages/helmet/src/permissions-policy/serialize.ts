@@ -1,9 +1,15 @@
 import { HttpHeader } from '@zipbul/shared';
 
-import { LIMITS, RESERVED_KEYS } from '../constants';
+import { LIMITS } from '../constants';
 import { HelmetErrorReason, HelmetWarningReason } from '../enums';
 import type { HelmetWarning, PermissionsPolicyOptions, ViolationDetail } from '../interfaces';
-import { serializeDictionary, serializeString, token } from '../structured-fields/serialize';
+import { checkReservedKey } from '../internal/reserved-key-guard';
+import {
+  serializeDictionary,
+  token,
+  type DictionaryValue,
+  type SfBareItem,
+} from '../structured-fields/serialize';
 import type { ResolvedPermissionsPolicyOptions } from '../types';
 
 import type { HeaderEntry } from '../header-entry';
@@ -48,12 +54,7 @@ export function validatePermissionsPolicy(
     });
   }
   for (const [name, allowlist] of resolved.features) {
-    if (RESERVED_KEYS.has(name)) {
-      out.push({
-        reason: HelmetErrorReason.ReservedKeyDenied,
-        path: `${path}.features.${name}`,
-        message: 'reserved key denied (prototype pollution guard)',
-      });
+    if (!checkReservedKey(name, `${path}.features.${name}`, out)) {
       continue;
     }
     if (!FEATURE_NAME_RE.test(name)) {
@@ -114,17 +115,17 @@ export function serializePermissionsPolicy(
   opts: ResolvedPermissionsPolicyOptions,
 ): HeaderEntry | undefined {
   if (opts.features.size === 0) return undefined;
-  const dict = new Map<string, never>();
+  const dict = new Map<string, DictionaryValue>();
   for (const [name, allowlist] of opts.features) {
     if (allowlist.length === 0) {
-      dict.set(name, { innerList: [] } as never);
+      dict.set(name, { innerList: [] });
       continue;
     }
     if (allowlist.length === 1 && allowlist[0] === '*') {
-      dict.set(name, token('*') as never);
+      dict.set(name, token('*'));
       continue;
     }
-    const items: unknown[] = [];
+    const items: SfBareItem[] = [];
     for (const v of allowlist) {
       if (v === 'self' || v === '*') items.push(token(v));
       else {
@@ -132,9 +133,9 @@ export function serializePermissionsPolicy(
         items.push(new URL(v).origin);
       }
     }
-    dict.set(name, { innerList: items } as never);
+    dict.set(name, { innerList: items });
   }
-  return [HttpHeader.PermissionsPolicy, serializeDictionary(dict as never)];
+  return [HttpHeader.PermissionsPolicy, serializeDictionary(dict)];
 }
 
 export function serializePermissionsPolicyReportOnly(
@@ -144,7 +145,3 @@ export function serializePermissionsPolicyReportOnly(
   if (entry === undefined) return undefined;
   return [HttpHeader.PermissionsPolicyReportOnly, entry[1]];
 }
-
-// Strings appear in inner lists via serializeItem dispatch — re-export
-// serializeString to keep the import surface tidy.
-export { serializeString };

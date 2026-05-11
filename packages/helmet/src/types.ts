@@ -266,8 +266,19 @@ export interface ResolvedNelOptions {
   failureFraction: number | undefined;
 }
 
+/** Internal — resolved Document-Policy entry value. */
+export type ResolvedDocumentPolicyValue =
+  | string
+  | boolean
+  | number
+  | readonly (string | boolean | number)[]
+  | {
+      value: string | boolean | number | readonly (string | boolean | number)[];
+      parameters: ReadonlyMap<string, string | number | boolean | { __sfToken: string }>;
+    };
+
 export interface ResolvedDocumentPolicyOptions {
-  policies: ReadonlyMap<string, string | boolean | number | readonly (string | boolean | number)[]>;
+  policies: ReadonlyMap<string, ResolvedDocumentPolicyValue>;
 }
 
 export interface ResolvedXRobotsTagOptions {

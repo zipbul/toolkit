@@ -364,6 +364,45 @@ describe('Helmet option resolution branches', () => {
   });
 });
 
+describe('Helmet — CSP enforcing vs report-only strength', () => {
+  it('warns when report-only allows sources missing from enforcing', () => {
+    const helmet = Helmet.create({
+      contentSecurityPolicy: { directives: { scriptSrc: [Csp.Self] } },
+      contentSecurityPolicyReportOnly: {
+        directives: { scriptSrc: [Csp.Self, "'unsafe-inline'"] },
+      },
+    });
+    expect(
+      helmet.warnings.some(w => w.reason === 'csp_report_only_weaker_than_enforcing'),
+    ).toBe(true);
+  });
+  it('does not warn when RO is at least as strict as enforcing', () => {
+    const helmet = Helmet.create({
+      contentSecurityPolicy: {
+        directives: { scriptSrc: [Csp.Self, 'https://cdn.example'] },
+      },
+      contentSecurityPolicyReportOnly: { directives: { scriptSrc: [Csp.Self] } },
+    });
+    expect(
+      helmet.warnings.some(w => w.reason === 'csp_report_only_weaker_than_enforcing'),
+    ).toBe(false);
+  });
+});
+
+describe('Helmet — header value byte cap', () => {
+  it('rejects compiled header that exceeds LIMITS.headerValueBytes', () => {
+    // Build a CSP that exceeds 16 KB via Permissions-Policy origins (each emitted
+    // as quoted sf-string, so 64 origins × ~500 chars > 16 KB).
+    const origins = Array.from(
+      { length: 32 },
+      (_, i) => `https://${'a'.repeat(600)}-${i}.example`,
+    );
+    expect(() =>
+      Helmet.create({ permissionsPolicy: { features: { camera: origins } } }),
+    ).toThrow(HelmetError);
+  });
+});
+
 describe('Helmet — option subsystem wiring', () => {
   it('integrityPolicy: true → defaults validated', () => {
     const helmet = Helmet.create({ integrityPolicy: true });

@@ -72,8 +72,7 @@ export function validateCspSource(
     out.push({
       reason: HelmetErrorReason.UnquotedCspKeyword,
       path,
-      message: `unquoted CSP keyword "${source}" — use Csp.${capitalize(source)} or "'${source}'"`,
-      remedy: "wrap CSP keywords in single quotes (e.g., \"'self'\") or import { Csp }",
+      message: `unquoted CSP keyword "${source}" — wrap in single quotes ("'${source}'") or use Csp.${capitalize(source)}`,
     });
     return false;
   }

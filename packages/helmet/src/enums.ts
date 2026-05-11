@@ -8,9 +8,7 @@ export enum HelmetErrorReason {
   // ── CSP ──
   InvalidCspKeyword = 'invalid_csp_keyword',
   UnquotedCspKeyword = 'unquoted_csp_keyword',
-  InvalidCspScheme = 'invalid_csp_scheme',
   InvalidCspHost = 'invalid_csp_host',
-  InvalidCspNonceCharset = 'invalid_csp_nonce_charset',
   InvalidCspHashLength = 'invalid_csp_hash_length',
   EmptyFetchDirective = 'empty_fetch_directive',
   DeprecatedCspDirective = 'deprecated_csp_directive',
@@ -21,6 +19,11 @@ export enum HelmetErrorReason {
   InvalidReportToGroupName = 'invalid_report_to_group_name',
   InvalidReportUri = 'invalid_report_uri',
   InvalidWebRtcDirective = 'invalid_webrtc_directive',
+
+  // ── Cross-Origin policy values ──
+  InvalidCorpValue = 'invalid_corp_value',
+  InvalidCoopCoepValue = 'invalid_coop_coep_value',
+  InvalidDocumentIsolationPolicyValue = 'invalid_document_isolation_policy_value',
 
   // ── Permissions-Policy ──
   InvalidPermissionsPolicyOrigin = 'invalid_permissions_policy_origin',
@@ -44,9 +47,6 @@ export enum HelmetErrorReason {
   // ── Clear-Site-Data ──
   InvalidClearSiteDataDirective = 'invalid_clear_site_data_directive',
 
-  // ── Document-Policy ──
-  InvalidDocumentPolicyValue = 'invalid_document_policy_value',
-
   // ── NEL ──
   NelMissingReportingEndpoint = 'nel_missing_reporting_endpoint',
   NelInvalidMaxAge = 'nel_invalid_max_age',
@@ -64,19 +64,17 @@ export enum HelmetErrorReason {
   InvalidTimingAllowOrigin = 'invalid_timing_allow_origin',
   InvalidXRobotsTagDirective = 'invalid_x_robots_tag_directive',
 
-  // ── Headers Options ──
-  InvalidNonceCharset = 'invalid_nonce_charset',
-  NonceCallbackUnsupported = 'nonce_callback_unsupported',
-
-  // ── apply() ──
-  ResponseBodyConsumed = 'response_body_consumed',
-  OpaqueResponseUnsupported = 'opaque_response_unsupported',
-
   // ── Input limits / hardening ──
   InputTooLarge = 'input_too_large',
   ReservedKeyDenied = 'reserved_key_denied',
   ControlCharRejected = 'control_char_rejected',
   TooManyViolations = 'too_many_violations',
+  HeaderValueTooLarge = 'header_value_too_large',
+  InvalidNonceCharset = 'invalid_nonce_charset',
+
+  // ── apply() / Response ──
+  ResponseBodyConsumed = 'response_body_consumed',
+  OpaqueResponseUnsupported = 'opaque_response_unsupported',
 
   // ── CSP report parsing ──
   UnsupportedCspReportContentType = 'unsupported_csp_report_content_type',
@@ -92,22 +90,13 @@ export enum HelmetErrorReason {
 export enum HelmetWarningReason {
   // ── CSP semantics ──
   UnsafeInlineWithNonce = 'unsafe_inline_with_nonce',
-  UnsafeEvalWithWasm = 'unsafe_eval_with_wasm',
   CoopWithoutCoep = 'coop_without_coep',
-  CoopBreaksOauthPopup = 'coop_breaks_oauth_popup',
-  ReportingDefaultEndpointMissing = 'reporting_default_endpoint_missing',
   UnknownPermissionsPolicyFeature = 'unknown_permissions_policy_feature',
   NonStandardClearSiteDataToken = 'non_standard_clear_site_data_token',
-  SandboxInReportOnly = 'sandbox_in_report_only',
-  UnsafeAllowRedirectsDeadGrammar = 'unsafe_allow_redirects_dead_grammar',
   TrustedTypesDefaultPolicy = 'trusted_types_default_policy',
   ManifestSrcNoFallback = 'manifest_src_no_fallback',
-  SelfDoesNotMatchWebSocketScheme = 'self_does_not_match_websocket_scheme',
-  ApplyOnSwitchingProtocols = 'apply_on_switching_protocols',
+  CspReportOnlyWeakerThanEnforcing = 'csp_report_only_weaker_than_enforcing',
 
   // ── i18n / user callback fallback ──
   MessageFormatterFailed = 'message_formatter_failed',
-
-  // ── Input limit sentinel ──
-  TooManyWarnings = 'too_many_warnings',
 }

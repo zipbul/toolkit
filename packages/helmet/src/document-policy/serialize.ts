@@ -1,18 +1,29 @@
 import { HttpHeader } from '@zipbul/shared';
 
-import { LIMITS, RESERVED_KEYS } from '../constants';
+import { LIMITS } from '../constants';
 import { HelmetErrorReason } from '../enums';
-import type { DocumentPolicyOptions, ViolationDetail } from '../interfaces';
+import type {
+  DocumentPolicyEntry,
+  DocumentPolicyOptions,
+  ViolationDetail,
+} from '../interfaces';
+import { checkPrototypeChain, checkReservedKey } from '../internal/reserved-key-guard';
 import {
   serializeDictionary,
-  serializeItem,
   token,
   type DictionaryValue,
   type SfBareItem,
 } from '../structured-fields/serialize';
-import type { ResolvedDocumentPolicyOptions } from '../types';
+import type {
+  ResolvedDocumentPolicyOptions,
+  ResolvedDocumentPolicyValue,
+} from '../types';
 
 import type { HeaderEntry } from '../header-entry';
+
+function isEntryShape(v: unknown): v is DocumentPolicyEntry {
+  return typeof v === 'object' && v !== null && 'value' in (v as Record<string, unknown>);
+}
 
 export function resolveDocumentPolicy(
   input: DocumentPolicyOptions | undefined,
@@ -20,18 +31,9 @@ export function resolveDocumentPolicy(
   violations: ViolationDetail[],
 ): ResolvedDocumentPolicyOptions | undefined {
   if (input === undefined) return undefined;
-  const map = new Map<string, string | boolean | number | readonly (string | boolean | number)[]>();
+  const map = new Map<string, ResolvedDocumentPolicyValue>();
   const raw = input.policies ?? {};
-  // `{ __proto__: x }` literal sets the prototype rather than an own property,
-  // so Object.entries misses it. Inspect the prototype chain explicitly.
-  const proto = Object.getPrototypeOf(raw);
-  if (proto !== null && proto !== Object.prototype) {
-    violations.push({
-      reason: HelmetErrorReason.ReservedKeyDenied,
-      path: `${path}.policies.__proto__`,
-      message: 'reserved key denied (__proto__ override on input object)',
-    });
-  }
+  checkPrototypeChain(raw, `${path}.policies`, violations);
   const entries = Object.entries(raw);
   if (entries.length > LIMITS.documentPolicyEntries) {
     violations.push({
@@ -41,25 +43,48 @@ export function resolveDocumentPolicy(
     });
   }
   for (const [k, v] of entries) {
-    if (RESERVED_KEYS.has(k)) {
-      violations.push({
-        reason: HelmetErrorReason.ReservedKeyDenied,
-        path: `${path}.policies.${k}`,
-        message: 'reserved key denied (prototype pollution guard)',
-      });
-      continue;
+    if (!checkReservedKey(k, `${path}.policies.${k}`, violations)) continue;
+    if (isEntryShape(v)) {
+      const params = resolveParameters(v.parameters);
+      const value = Array.isArray(v.value) ? Object.freeze(v.value.slice()) : v.value;
+      map.set(k, { value, parameters: params });
+    } else {
+      map.set(k, Array.isArray(v) ? Object.freeze(v.slice()) : v);
     }
-    map.set(k, Array.isArray(v) ? Object.freeze(v.slice()) : v);
   }
   return Object.freeze({ policies: map });
+}
+
+function resolveParameters(
+  params: Record<string, string | number | boolean> | undefined,
+): ReadonlyMap<string, SfBareItem> {
+  const out = new Map<string, SfBareItem>();
+  if (params === undefined) return out;
+  for (const [pk, pv] of Object.entries(params)) {
+    if (typeof pv === 'string') out.set(pk, token(pv));
+    else out.set(pk, pv);
+  }
+  return out;
 }
 
 export function serializeDocumentPolicy(opts: ResolvedDocumentPolicyOptions): HeaderEntry {
   const dict = new Map<string, DictionaryValue>();
   for (const [k, v] of opts.policies) {
-    if (Array.isArray(v)) {
-      const arr = v as readonly (string | boolean | number)[];
-      dict.set(k, { innerList: arr.map(toBareItem) });
+    if (typeof v === 'object' && v !== null && 'parameters' in v && 'value' in v) {
+      const inner = v.value;
+      if (Array.isArray(inner)) {
+        dict.set(k, {
+          innerList: inner.map(toBareItem),
+          parameters: v.parameters,
+        });
+      } else {
+        dict.set(k, {
+          item: toBareItem(inner as string | boolean | number),
+          parameters: v.parameters,
+        });
+      }
+    } else if (Array.isArray(v)) {
+      dict.set(k, { innerList: v.map(toBareItem) });
     } else {
       dict.set(k, toBareItem(v as string | boolean | number));
     }
@@ -76,5 +101,3 @@ function toBareItem(v: string | boolean | number): SfBareItem {
   return v;
 }
 
-// Helpful for serializeItem only: re-exported to satisfy unused-import lint
-void serializeItem;

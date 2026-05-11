@@ -104,4 +104,47 @@ describe('document-policy/serialize', () => {
       'lossless-images-strategy=(inline noimage)',
     );
   });
+
+  it('emits per-key parameters when an entry has the {value, parameters} shape', () => {
+    // W3C Document-Policy: `oversized-images=2.0;report-to=ep`
+    const r = resolveDocumentPolicy(
+      {
+        policies: {
+          'oversized-images': { value: 2.5, parameters: { 'report-to': 'ep' } },
+        },
+      },
+      'dp',
+      [],
+    )!;
+    expect(serializeDocumentPolicy(r)[1]).toBe('oversized-images=2.5;report-to=ep');
+  });
+
+  it('emits inner-list with parameters', () => {
+    const r = resolveDocumentPolicy(
+      {
+        policies: {
+          'lossless-images-strategy': {
+            value: ['inline', 'noimage'],
+            parameters: { 'report-to': 'ep' },
+          },
+        },
+      },
+      'dp',
+      [],
+    )!;
+    expect(serializeDocumentPolicy(r)[1]).toBe(
+      'lossless-images-strategy=(inline noimage);report-to=ep',
+    );
+  });
+
+  it('boolean true with parameters sugars to bare key', () => {
+    const r = resolveDocumentPolicy(
+      {
+        policies: { 'force-load-at-top': { value: true, parameters: { 'report-to': 'ep' } } },
+      },
+      'dp',
+      [],
+    )!;
+    expect(serializeDocumentPolicy(r)[1]).toBe('force-load-at-top;report-to=ep');
+  });
 });

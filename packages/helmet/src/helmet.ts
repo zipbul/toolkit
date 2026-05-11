@@ -1,6 +1,14 @@
 import { LIMITS, NONCE_PLACEHOLDER } from './constants';
+import { HelmetErrorReason } from './enums';
 import { HelmetError } from './interfaces';
-import type { HelmetOptions, HelmetWarning, HeadersOptions, ViolationDetail } from './interfaces';
+import type {
+  ClearSiteDataDirective,
+  CspDirectives,
+  HelmetOptions,
+  HelmetWarning,
+  HeadersOptions,
+  ViolationDetail,
+} from './interfaces';
 import { resolveHelmetOptions, validateHelmetOptions } from './options';
 import type { Nonce, ResolvedHelmetOptions } from './types';
 
@@ -77,8 +85,12 @@ interface CompiledHeaders {
   readonly entries: readonly HeaderEntry[];
   /** Pre-tokenised CSP body containing nonce placeholder, or undefined when no CSP. */
   readonly cspTemplate: string | undefined;
+  /** Same body with the nonce placeholder removed — returned verbatim when the
+   * caller passes no nonce, avoiding repeated `replaceAll`/`trim` per request. */
+  readonly cspBodyNoNonce: string | undefined;
   /** Pre-tokenised CSP-RO body containing nonce placeholder. */
   readonly cspReportOnlyTemplate: string | undefined;
+  readonly cspReportOnlyBodyNoNonce: string | undefined;
 }
 
 /**
@@ -93,10 +105,14 @@ export class Helmet {
   private readonly compiled: CompiledHeaders;
   public readonly warnings: readonly HelmetWarning[];
 
-  private constructor(resolved: ResolvedHelmetOptions, warnings: readonly HelmetWarning[]) {
+  private constructor(
+    resolved: ResolvedHelmetOptions,
+    compiled: CompiledHeaders,
+    warnings: readonly HelmetWarning[],
+  ) {
     this.resolved = resolved;
+    this.compiled = compiled;
     this.warnings = Object.freeze(warnings.slice());
-    this.compiled = compileHeaders(resolved);
     Object.freeze(this);
   }
 
@@ -110,7 +126,10 @@ export class Helmet {
     const resolved = resolveHelmetOptions(options, violations);
     validateHelmetOptions(resolved, violations, warnings);
     if (violations.length > 0) throw new HelmetError(violations);
-    return new Helmet(resolved, warnings);
+    const compiled = compileHeaders(resolved);
+    enforceHeaderValueBytes(compiled, violations);
+    if (violations.length > 0) throw new HelmetError(violations);
+    return new Helmet(resolved, compiled, warnings);
   }
 
   /** Generate a 16-byte base64url branded nonce (CSP3 §2.3.1). */
@@ -125,22 +144,22 @@ export class Helmet {
   // Each returns a single [name, value] tuple after a one-shot validate.
 
   public static csp(input?: HelmetOptions['contentSecurityPolicy']): HeaderEntry {
-    return Helmet.create({ contentSecurityPolicy: input as never })
+    return Helmet.create({ contentSecurityPolicy: input })
       .__entriesByName(HttpHeader.ContentSecurityPolicy)!;
   }
 
   public static hsts(input?: HelmetOptions['strictTransportSecurity']): HeaderEntry {
-    return Helmet.create({ strictTransportSecurity: input as never })
+    return Helmet.create({ strictTransportSecurity: input })
       .__entriesByName(HttpHeader.StrictTransportSecurity)!;
   }
 
   public static permissionsPolicy(input?: HelmetOptions['permissionsPolicy']): HeaderEntry {
-    const helmet = Helmet.create({ permissionsPolicy: input as never });
+    const helmet = Helmet.create({ permissionsPolicy: input });
     const entry = helmet.__entriesByName(HttpHeader.PermissionsPolicy);
     if (entry === undefined) {
       throw new HelmetError([
         {
-          reason: 'input_too_large' as never,
+          reason: HelmetErrorReason.InvalidPermissionsPolicyToken,
           path: 'permissionsPolicy',
           message: 'permissionsPolicy resolved to no header — provide at least one feature',
         },
@@ -150,12 +169,12 @@ export class Helmet {
   }
 
   public static referrerPolicy(input?: HelmetOptions['referrerPolicy']): HeaderEntry {
-    return Helmet.create({ referrerPolicy: input as never })
+    return Helmet.create({ referrerPolicy: input })
       .__entriesByName(HttpHeader.ReferrerPolicy)!;
   }
 
   public static xFrameOptions(input?: HelmetOptions['xFrameOptions']): HeaderEntry {
-    return Helmet.create({ xFrameOptions: input as never })
+    return Helmet.create({ xFrameOptions: input })
       .__entriesByName(HttpHeader.XFrameOptions)!;
   }
 
@@ -164,22 +183,22 @@ export class Helmet {
   }
 
   public static crossOriginOpenerPolicy(input?: HelmetOptions['crossOriginOpenerPolicy']): HeaderEntry {
-    return Helmet.create({ crossOriginOpenerPolicy: input as never })
+    return Helmet.create({ crossOriginOpenerPolicy: input })
       .__entriesByName(HttpHeader.CrossOriginOpenerPolicy)!;
   }
 
   public static crossOriginResourcePolicy(input?: HelmetOptions['crossOriginResourcePolicy']): HeaderEntry {
-    return Helmet.create({ crossOriginResourcePolicy: input as never })
+    return Helmet.create({ crossOriginResourcePolicy: input })
       .__entriesByName(HttpHeader.CrossOriginResourcePolicy)!;
   }
 
   public static crossOriginEmbedderPolicy(input?: HelmetOptions['crossOriginEmbedderPolicy']): HeaderEntry {
-    const helmet = Helmet.create({ crossOriginEmbedderPolicy: input as never });
+    const helmet = Helmet.create({ crossOriginEmbedderPolicy: input });
     return helmet.__entriesByName(HttpHeader.CrossOriginEmbedderPolicy)!;
   }
 
   public static originAgentCluster(input?: HelmetOptions['originAgentCluster']): HeaderEntry {
-    return Helmet.create({ originAgentCluster: input as never })
+    return Helmet.create({ originAgentCluster: input })
       .__entriesByName(HttpHeader.OriginAgentCluster)!;
   }
 
@@ -285,7 +304,7 @@ export class Helmet {
     if (response.bodyUsed) {
       throw new HelmetError([
         {
-          reason: 'response_body_consumed' as never,
+          reason: HelmetErrorReason.ResponseBodyConsumed,
           path: 'response',
           message: 'cannot apply Helmet headers to a Response whose body has already been consumed',
         },
@@ -294,7 +313,7 @@ export class Helmet {
     if (response.type === 'error' || response.type === 'opaqueredirect') {
       throw new HelmetError([
         {
-          reason: 'opaque_response_unsupported' as never,
+          reason: HelmetErrorReason.OpaqueResponseUnsupported,
           path: 'response',
           message: 'cannot apply Helmet headers to opaque/error Response',
         },
@@ -341,13 +360,42 @@ export class Helmet {
   private cspBody(options?: HeadersOptions): string {
     const tpl = this.compiled.cspTemplate;
     if (tpl === undefined) return '';
-    return injectNonce(tpl, options?.nonce);
+    return injectNonce(tpl, this.compiled.cspBodyNoNonce ?? '', options?.nonce);
   }
 
   private cspReportOnlyBody(options?: HeadersOptions): string {
     const tpl = this.compiled.cspReportOnlyTemplate;
     if (tpl === undefined) return '';
-    return injectNonce(tpl, options?.nonce);
+    return injectNonce(tpl, this.compiled.cspReportOnlyBodyNoNonce ?? '', options?.nonce);
+  }
+}
+
+/**
+ * Cap each compiled header value at LIMITS.headerValueBytes. Many proxies
+ * and HTTP/2 implementations reject or truncate oversize values; failing
+ * loud at create-time is preferable to silent on-wire breakage.
+ *
+ * Byte length is measured as UTF-8 — sf-string serialisation already restricts
+ * values to ASCII (RFC 9651 §3.3.3) so `string.length` would coincide for
+ * security-relevant headers, but TextEncoder is used for correctness.
+ */
+function enforceHeaderValueBytes(compiled: CompiledHeaders, violations: ViolationDetail[]): void {
+  const enc = new TextEncoder();
+  const check = (name: string, value: string): void => {
+    if (enc.encode(value).byteLength > LIMITS.headerValueBytes) {
+      violations.push({
+        reason: HelmetErrorReason.HeaderValueTooLarge,
+        path: name,
+        message: `header "${name}" value exceeds ${LIMITS.headerValueBytes} bytes`,
+      });
+    }
+  };
+  for (const [name, value] of compiled.entries) check(name, value);
+  if (compiled.cspTemplate !== undefined) {
+    check(HttpHeader.ContentSecurityPolicy, compiled.cspTemplate);
+  }
+  if (compiled.cspReportOnlyTemplate !== undefined) {
+    check(HttpHeader.ContentSecurityPolicyReportOnly, compiled.cspReportOnlyTemplate);
   }
 }
 
@@ -437,30 +485,42 @@ function compileHeaders(r: ResolvedHelmetOptions): CompiledHeaders {
   return Object.freeze({
     entries: Object.freeze(entries),
     cspTemplate,
+    cspBodyNoNonce: cspTemplate !== undefined ? stripNoncePlaceholder(cspTemplate) : undefined,
     cspReportOnlyTemplate,
+    cspReportOnlyBodyNoNonce:
+      cspReportOnlyTemplate !== undefined ? stripNoncePlaceholder(cspReportOnlyTemplate) : undefined,
   });
 }
 
-function injectNonce(template: string, nonce: string | undefined): string {
-  if (nonce === undefined) {
-    // Strip any nonce placeholders if no nonce is supplied — leaving the
-    // placeholder in the live header would be a security failure.
-    return template
-      .replaceAll(`'nonce-${NONCE_PLACEHOLDER}'`, '')
-      .replaceAll(/ +;/g, ';')
-      .replaceAll(/  +/g, ' ')
-      .trim();
-  }
+/**
+ * Pre-compute the nonce-stripped variant of a CSP template once at compile
+ * time. Per-request `headers()` calls without a nonce then return the cached
+ * string — avoiding 3 `replaceAll` + 1 `trim` per request.
+ */
+function stripNoncePlaceholder(template: string): string {
+  return template
+    .replaceAll(`'nonce-${NONCE_PLACEHOLDER}'`, '')
+    .replaceAll(/ +;/g, ';')
+    .replaceAll(/  +/g, ' ')
+    .trim();
+}
+
+function injectNonce(
+  template: string,
+  templateNoNonce: string,
+  nonce: string | undefined,
+): string {
+  if (nonce === undefined) return templateNoNonce;
   if (!NONCE_VALIDATE_RE.test(nonce) || nonce.length > LIMITS.nonceMax) {
     throw new HelmetError([
       {
-        reason: 'invalid_nonce_charset' as never,
+        reason: HelmetErrorReason.InvalidNonceCharset,
         path: 'options.nonce',
         message: 'nonce must match base64url charset and be 16-256 chars',
       },
     ]);
   }
-  // PLAN §캐싱 전략: function-form replaceAll guards against $-meta cache poisoning.
+  // function-form replaceAll guards against $-meta cache poisoning.
   return template.replaceAll(NONCE_PLACEHOLDER, () => nonce);
 }
 
@@ -495,21 +555,28 @@ function base64url(buf: Uint8Array): string {
  */
 function rebuildOptions(r: ResolvedHelmetOptions): HelmetOptions {
   const opts: HelmetOptions = {};
+  // Resolved CSP carries values as `readonly string[] | string | boolean`
+  // (a discriminated union over directive name) — narrowing per-directive
+  // back into the precise CspDirectives shape would duplicate the entire
+  // discriminator. The cast is local to this rebuild and is exercised by
+  // the round-trip derive() tests.
   if (r.contentSecurityPolicy !== false) {
-    const directives: Record<string, unknown> = {};
+    const cspDirectives: Record<string, unknown> = {};
     for (const [k, v] of r.contentSecurityPolicy.directives) {
-      directives[kebabToCamel(k)] = Array.isArray(v) ? [...v] : v;
+      cspDirectives[kebabToCamel(k)] = Array.isArray(v) ? [...v] : v;
     }
-    opts.contentSecurityPolicy = { directives: directives as never };
+    opts.contentSecurityPolicy = { directives: cspDirectives as CspDirectives };
   } else {
     opts.contentSecurityPolicy = false;
   }
   if (r.contentSecurityPolicyReportOnly !== undefined) {
-    const directives: Record<string, unknown> = {};
+    const cspRoDirectives: Record<string, unknown> = {};
     for (const [k, v] of r.contentSecurityPolicyReportOnly.directives) {
-      directives[kebabToCamel(k)] = Array.isArray(v) ? [...v] : v;
+      cspRoDirectives[kebabToCamel(k)] = Array.isArray(v) ? [...v] : v;
     }
-    opts.contentSecurityPolicyReportOnly = { directives: directives as never };
+    opts.contentSecurityPolicyReportOnly = {
+      directives: cspRoDirectives as CspDirectives,
+    };
   }
   opts.crossOriginOpenerPolicy = r.crossOriginOpenerPolicy === false ? false : r.crossOriginOpenerPolicy;
   opts.crossOriginOpenerPolicyReportOnly = r.crossOriginOpenerPolicyReportOnly;
@@ -518,16 +585,16 @@ function rebuildOptions(r: ResolvedHelmetOptions): HelmetOptions {
   opts.crossOriginResourcePolicy = r.crossOriginResourcePolicy === false ? false : r.crossOriginResourcePolicy;
   opts.originAgentCluster = r.originAgentCluster;
   if (r.permissionsPolicy !== false) {
-    const features: Record<string, string[]> = {};
-    for (const [k, v] of r.permissionsPolicy.features) features[k] = [...v];
-    opts.permissionsPolicy = { features };
+    const ppFeatures: Record<string, string[]> = {};
+    for (const [k, v] of r.permissionsPolicy.features) ppFeatures[k] = [...v];
+    opts.permissionsPolicy = { features: ppFeatures };
   } else {
     opts.permissionsPolicy = false;
   }
   if (r.permissionsPolicyReportOnly !== undefined) {
-    const features: Record<string, string[]> = {};
-    for (const [k, v] of r.permissionsPolicyReportOnly.features) features[k] = [...v];
-    opts.permissionsPolicyReportOnly = { features };
+    const ppRoFeatures: Record<string, string[]> = {};
+    for (const [k, v] of r.permissionsPolicyReportOnly.features) ppRoFeatures[k] = [...v];
+    opts.permissionsPolicyReportOnly = { features: ppRoFeatures };
   }
   opts.referrerPolicy = r.referrerPolicy === false ? false : [...r.referrerPolicy];
   opts.strictTransportSecurity =
@@ -560,7 +627,9 @@ function rebuildOptions(r: ResolvedHelmetOptions): HelmetOptions {
     };
   }
   if (r.clearSiteData !== false && r.clearSiteData !== undefined) {
-    opts.clearSiteData = { directives: [...r.clearSiteData.directives] as never };
+    opts.clearSiteData = {
+      directives: [...r.clearSiteData.directives] as ClearSiteDataDirective[],
+    };
   }
   if (r.cacheControl !== false && r.cacheControl !== undefined) {
     opts.cacheControl = { ...r.cacheControl };

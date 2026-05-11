@@ -22,8 +22,8 @@ export interface ViolationDetail {
   reason: HelmetErrorReason;
   /** Structural path, e.g. `'contentSecurityPolicy.directives.scriptSrc[2]'` */
   path: string;
+  /** Human-readable description. Includes actionable remedy when one is short and concrete. */
   message: string;
-  remedy?: string;
 }
 
 /**
@@ -191,8 +191,20 @@ export interface NelOptions {
 
 export type DocumentPolicyValue = string | boolean | number | (string | boolean | number)[];
 
+/**
+ * Document-Policy entry with optional per-key parameters (W3C Document
+ * Policy spec §"Header Syntax"). Example:
+ *   `{ value: 2.0, parameters: { reportTo: 'ep' } }`
+ *   serialises to `oversized-images=2.0;reportTo=ep`
+ */
+export interface DocumentPolicyEntry {
+  value: DocumentPolicyValue;
+  /** Parameter name → bare item. `true` is sugared to a bare-key parameter. */
+  parameters?: Record<string, string | number | boolean>;
+}
+
 export interface DocumentPolicyOptions {
-  policies: Record<string, DocumentPolicyValue>;
+  policies: Record<string, DocumentPolicyValue | DocumentPolicyEntry>;
 }
 
 export interface XRobotsTagOptions {

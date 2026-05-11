@@ -93,7 +93,39 @@ export function serializeInnerList(items: readonly SfBareItem[]): string {
   return `(${items.map(serializeItem).join(' ')})`;
 }
 
-export type DictionaryValue = SfBareItem | { innerList: readonly SfBareItem[] };
+/** RFC 9651 §3.1.2 — `;key=value` parameter chain. */
+export function serializeParameters(params: ReadonlyMap<string, SfBareItem>): string {
+  let out = '';
+  for (const [key, value] of params) {
+    if (!KEY_RE.test(key)) {
+      throw new Error(`structured-fields: invalid parameter key "${truncate(key)}"`);
+    }
+    // Per §3.1.2: boolean `true` sugars to the bare key (no `=`).
+    if (typeof value === 'boolean' && value === true) {
+      out += `;${key}`;
+    } else {
+      out += `;${key}=${serializeItem(value)}`;
+    }
+  }
+  return out;
+}
+
+export type DictionaryValue =
+  | SfBareItem
+  | { innerList: readonly SfBareItem[] }
+  | { item: SfBareItem; parameters: ReadonlyMap<string, SfBareItem> }
+  | { innerList: readonly SfBareItem[]; parameters: ReadonlyMap<string, SfBareItem> };
+
+function isInnerList(
+  v: DictionaryValue,
+): v is { innerList: readonly SfBareItem[]; parameters?: ReadonlyMap<string, SfBareItem> } {
+  return typeof v === 'object' && v !== null && 'innerList' in v;
+}
+function hasParameters(
+  v: DictionaryValue,
+): v is { item: SfBareItem; parameters: ReadonlyMap<string, SfBareItem> } {
+  return typeof v === 'object' && v !== null && 'parameters' in v && 'item' in v;
+}
 
 /** RFC 9651 §3.2 — dictionary. Order is preserved (Map insertion order). */
 export function serializeDictionary(dict: ReadonlyMap<string, DictionaryValue>): string {
@@ -102,13 +134,21 @@ export function serializeDictionary(dict: ReadonlyMap<string, DictionaryValue>):
     if (!KEY_RE.test(key)) {
       throw new Error(`structured-fields: invalid dictionary key "${truncate(key)}"`);
     }
-    if (typeof value === 'object' && value !== null && 'innerList' in value) {
-      parts.push(`${key}=${serializeInnerList(value.innerList)}`);
+    if (isInnerList(value)) {
+      const tail = value.parameters !== undefined ? serializeParameters(value.parameters) : '';
+      parts.push(`${key}=${serializeInnerList(value.innerList)}${tail}`);
+    } else if (hasParameters(value)) {
+      // Boolean true with parameters: emit as `key;param` (RFC 9651 §3.2 sugar).
+      const head =
+        typeof value.item === 'boolean' && value.item === true
+          ? key
+          : `${key}=${serializeItem(value.item)}`;
+      parts.push(`${head}${serializeParameters(value.parameters)}`);
     } else if (typeof value === 'boolean' && value === true) {
       // Boolean true sugars to the bare key per RFC 9651 §3.2.
       parts.push(key);
     } else {
-      parts.push(`${key}=${serializeItem(value)}`);
+      parts.push(`${key}=${serializeItem(value as SfBareItem)}`);
     }
   }
   return parts.join(', ');

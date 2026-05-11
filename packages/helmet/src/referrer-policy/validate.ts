@@ -32,9 +32,8 @@ export function validateReferrerPolicy(
       out.push({
         reason: HelmetErrorReason.InvalidReferrerPolicyToken,
         path: `${path}[${i}]`,
-        message: 'invalid Referrer-Policy token',
-        remedy:
-          'use one of: no-referrer, no-referrer-when-downgrade, origin, origin-when-cross-origin, same-origin, strict-origin, strict-origin-when-cross-origin, unsafe-url',
+        message:
+          'invalid Referrer-Policy token — use one of: no-referrer, no-referrer-when-downgrade, origin, origin-when-cross-origin, same-origin, strict-origin, strict-origin-when-cross-origin, unsafe-url',
       });
     }
   }
