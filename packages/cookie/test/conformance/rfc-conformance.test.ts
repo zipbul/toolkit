@@ -7,8 +7,8 @@ import { Cookie } from 'bun';
 
 import { CookieParser, CookieJar, CookieError, CookieErrorReason } from '../../index';
 
-const SECRET = 'qwerty1234567890asdfghjklzxcvbnm-';
-const ENC = 'POIUYTREWQlkjhgfdsamnbvcxz98765-';
+const SECRET = 'yiLuooc8t1iy7BDCaU2eExB60URL8zacnqb1mA66aIo';
+const ENC = 'v3MALRP-T0CO2gZ46D5As25K-U1D74PDhsdQJGjk4QQ';
 
 describe('RFC 9110 §5.6.2 — token grammar', () => {
   const cp = CookieParser.create();
@@ -132,18 +132,6 @@ describe('CHIPS — Partitioned requires Secure', () => {
   });
 });
 
-describe('RFC 6265bis §5.4 — 400-day Max-Age cap', () => {
-  const cp = CookieParser.create();
-  it('accepts exactly 400 days', () => {
-    expect(() => cp.serialize(new Cookie('s', 'v', { maxAge: 400 * 86400 }))).not.toThrow();
-  });
-  it('rejects 400-day + 1 second', () => {
-    let caught: unknown;
-    try { cp.serialize(new Cookie('s', 'v', { maxAge: 400 * 86400 + 1 })); } catch (e) { caught = e; }
-    expect((caught as CookieError).reason).toBe(CookieErrorReason.MaxLifetimeExceeded);
-  });
-});
-
 describe('RFC 6265 §6.1 — 4096 octet limit', () => {
   const cp = CookieParser.create();
   it('rejects serialized header > 4096 octets', () => {
@@ -188,7 +176,7 @@ describe('NIST SP 800-38D — AES-256-GCM parameters', () => {
 
 describe('FIPS 198-1 §A — HMAC key minimum length L/2', () => {
   it('SHA-256 (L=32, L/2=16) accepts 32-byte key', () => {
-    expect(() => CookieParser.create({ secrets: ['qwerty1234567890asdfghjklzxcvbnm-'], algorithm: 'sha256' })).not.toThrow();
+    expect(() => CookieParser.create({ secrets: ['yiLuooc8t1iy7BDCaU2eExB60URL8zacnqb1mA66aIo'], algorithm: 'sha256' })).not.toThrow();
   });
   it('rejects key shorter than 32 (configured minimum)', () => {
     let caught: unknown;
@@ -214,16 +202,16 @@ describe('RFC 6265 §5.4 — cookie header parsing', () => {
 
 describe('Cross-instance isolation guarantees', () => {
   it('encrypted cookie from instance A cannot be decrypted by instance B with different key', async () => {
-    const a = CookieParser.create({ encryptionSecret: 'qwerty1234567890asdfghjklzxcvbnm-' });
-    const b = CookieParser.create({ encryptionSecret: 'POIUYTREWQlkjhgfdsamnbvcxz98765-' });
+    const a = CookieParser.create({ encryptionSecret: 'yiLuooc8t1iy7BDCaU2eExB60URL8zacnqb1mA66aIo' });
+    const b = CookieParser.create({ encryptionSecret: 'v3MALRP-T0CO2gZ46D5As25K-U1D74PDhsdQJGjk4QQ' });
     const enc = await a.encrypt(new Cookie('s', 'secret'));
     let caught: unknown;
     try { await b.decrypt(enc); } catch (e) { caught = e; }
     expect((caught as CookieError).reason).toBe(CookieErrorReason.DecryptionFailed);
   });
   it('signed cookie from instance A cannot be unsigned by instance B with different key', async () => {
-    const a = CookieParser.create({ secrets: ['qwerty1234567890asdfghjklzxcvbnm-'] });
-    const b = CookieParser.create({ secrets: ['POIUYTREWQlkjhgfdsamnbvcxz98765-'] });
+    const a = CookieParser.create({ secrets: ['yiLuooc8t1iy7BDCaU2eExB60URL8zacnqb1mA66aIo'] });
+    const b = CookieParser.create({ secrets: ['v3MALRP-T0CO2gZ46D5As25K-U1D74PDhsdQJGjk4QQ'] });
     const signed = a.sign(new Cookie('s', 'v'));
     let caught: unknown;
     try { await b.unsign(signed); } catch (e) { caught = e; }
@@ -274,7 +262,7 @@ describe('RFC 6265bis §5.7 — case-insensitive prefix matching (R3)', () => {
   });
 });
 
-describe('RFC 1123 Domain syntax (NEW-4) + PSL (R6)', () => {
+describe('RFC 1123 Domain syntax (NEW-4)', () => {
   const cp = CookieParser.create();
   it('rejects consecutive-dot domain', () => {
     let caught: unknown;
@@ -286,28 +274,13 @@ describe('RFC 1123 Domain syntax (NEW-4) + PSL (R6)', () => {
     try { cp.createCookie('s', 'v', { domain: '-bad.com' }); } catch (e) { caught = e; }
     expect((caught as CookieError).reason).toBe(CookieErrorReason.InvalidDomain);
   });
-  it('rejects single-label domain (TLD-only) as public suffix', () => {
+  it('rejects trailing-hyphen label', () => {
     let caught: unknown;
-    try { cp.createCookie('s', 'v', { domain: 'com' }); } catch (e) { caught = e; }
-    expect((caught as CookieError).reason).toBe(CookieErrorReason.DomainPublicSuffix);
+    try { cp.createCookie('s', 'v', { domain: 'bad-.com' }); } catch (e) { caught = e; }
+    expect((caught as CookieError).reason).toBe(CookieErrorReason.InvalidDomain);
   });
   it('accepts valid two-label domain', () => {
     expect(() => cp.createCookie('s', 'v', { domain: 'example.com' })).not.toThrow();
-  });
-  it('accepts custom publicSuffixCheck', () => {
-    const cpCustom = CookieParser.create({ publicSuffixCheck: (d) => d === 'forbidden.test' });
-    let caught: unknown;
-    try { cpCustom.createCookie('s', 'v', { domain: 'forbidden.test' }); } catch (e) { caught = e; }
-    expect((caught as CookieError).reason).toBe(CookieErrorReason.DomainPublicSuffix);
-  });
-});
-
-describe('RFC 6265bis §4.1.3 — __Http- prefix (2-A)', () => {
-  const cp = CookieParser.create({ prefixValidation: true });
-  it('rejects __Http-x without HttpOnly', () => {
-    let caught: unknown;
-    try { cp.serialize(new Cookie('__Http-x', 'v', { secure: true })); } catch (e) { caught = e; }
-    expect((caught as CookieError).reason).toBe(CookieErrorReason.HttpPrefixRequiresHttpOnly);
   });
 });
 

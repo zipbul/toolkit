@@ -5,8 +5,8 @@ import { isErr } from '@zipbul/result';
 import { CookieParser, CookieJar, CookieError, CookieErrorReason } from '../../index';
 
 describe('CookieParser Integration', () => {
-  const SECRETS = ['primary-key-2024-with-min-length__', 'legacy-key-2023-with-min-length___'];
-  const ENCRYPTION_SECRET = 'aes-256-gcm-secret-for-integration';
+  const SECRETS = ['td3qCKaEjHcSFiD6qbiC5HxGf0HsATsAzh3GKQN1l_w', 'CsstQ4zof6e0zBASss4tkPquUbhzIhA-Nl6OG1EyOxk'];
+  const ENCRYPTION_SECRET = 'Gnx9dw6ZiN_lcu0yfXcYgT1EJfEio3ag4hg5fpQxjrg';
 
   describe('CookieJar full roundtrip', () => {
     it('should set cookies via jar and read them back via another jar', async () => {
@@ -55,25 +55,25 @@ describe('CookieParser Integration', () => {
 
   describe('key rotation via jar', () => {
     it('should read cookie signed with old key after rotation', async () => {
-      const parserOld = CookieParser.create({ secrets: ['old-signing-secret-2023__rotation_x'] });
+      const parserOld = CookieParser.create({ secrets: ['aRABzXyg7c1cSN8g1QuF4vPbqmSGYm5mxWpVKnscYv0'] });
       const outJar = new CookieJar(parserOld, '');
       outJar.set('token', 'jwt-payload');
       const headers = await outJar.getSetCookieHeaders();
       const cookieValue = headers[0]!.split('=').slice(1).join('=').split(';')[0]!;
 
-      const parserNew = CookieParser.create({ secrets: ['new-signing-secret-2024__rotation_x', 'old-signing-secret-2023__rotation_x'] });
+      const parserNew = CookieParser.create({ secrets: ['wGYphHkW_xM6CekJnRk0N8-wrWTMpyjbMzJQTE0gtBY', 'aRABzXyg7c1cSN8g1QuF4vPbqmSGYm5mxWpVKnscYv0'] });
       const inJar = new CookieJar(parserNew, `token=${cookieValue}`);
       expect(await inJar.get('token')).toBe('jwt-payload');
     });
 
     it('should fail to read cookie signed with old key when old key removed', async () => {
-      const parserOld = CookieParser.create({ secrets: ['old-signing-secret-2023__rotation_x'] });
+      const parserOld = CookieParser.create({ secrets: ['aRABzXyg7c1cSN8g1QuF4vPbqmSGYm5mxWpVKnscYv0'] });
       const outJar = new CookieJar(parserOld, '');
       outJar.set('token', 'data');
       const headers = await outJar.getSetCookieHeaders();
       const cookieValue = headers[0]!.split('=').slice(1).join('=').split(';')[0]!;
 
-      const parserNew = CookieParser.create({ secrets: ['new-signing-secret-2024__rotation_x'] });
+      const parserNew = CookieParser.create({ secrets: ['wGYphHkW_xM6CekJnRk0N8-wrWTMpyjbMzJQTE0gtBY'] });
       const inJar = new CookieJar(parserNew, `token=${cookieValue}`);
       const result = await inJar.get('token');
       expect(isErr(result)).toBe(true);
@@ -82,13 +82,13 @@ describe('CookieParser Integration', () => {
 
   describe('cross-instance isolation via jar', () => {
     it('should fail to read cookie encrypted by different instance', async () => {
-      const parserA = CookieParser.create({ encryptionSecret: 'key-a-with-minimum-required-length' });
+      const parserA = CookieParser.create({ encryptionSecret: '15MzBo5XvJ5s4pH6_Qg2rdLQ73O_ZWOyoNT2vsDtN1U' });
       const outJar = new CookieJar(parserA, '');
       outJar.set('session', 'secret');
       const headers = await outJar.getSetCookieHeaders();
       const cookieValue = headers[0]!.split('=').slice(1).join('=').split(';')[0]!;
 
-      const parserB = CookieParser.create({ encryptionSecret: 'key-b-with-minimum-required-length' });
+      const parserB = CookieParser.create({ encryptionSecret: 'G2ChMLgCJsc5VkAXlrN2ZUqgAKHsrASwTplEv5lcS1w' });
       const inJar = new CookieJar(parserB, `session=${cookieValue}`);
       const result = await inJar.get('session');
       expect(isErr(result)).toBe(true);
@@ -144,8 +144,8 @@ describe('CookieParser Integration', () => {
   describe('jar with algorithm', () => {
     it('should sign with sha512 and complete jar roundtrip', async () => {
       const parser = CookieParser.create({
-        secrets: ['signing-key-primary-aaaaaaaaaaaaaaa'],
-        encryptionSecret: 'encryption-key-extra-cccccccccccccc',
+        secrets: ['gHBB3MwkPytgNA9vApSMJRDqJIPMNXgLrHUKSJZy1Kg'],
+        encryptionSecret: '9v7BAwKpXHWZnoKZIHV2XWch22HvF8bleOM6t4nc-A4',
         algorithm: 'sha512',
       });
 

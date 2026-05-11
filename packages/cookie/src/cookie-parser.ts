@@ -14,9 +14,9 @@ const MIN_CIPHERTEXT_LENGTH = KID_LENGTH + IV_LENGTH + AUTH_TAG_BYTES;
 const MAX_NAME_VALUE_OCTETS = 4096;
 const MAX_ATTRIBUTE_OCTETS = 1024;
 const MAX_HEADER_OCTETS = 8190;
-const MAX_LIFETIME_SECONDS = 34560000;
-const MAX_LIFETIME_MS = MAX_LIFETIME_SECONDS * 1000;
 const NAME_VALUE_SEPARATOR = '\x00';
+// NIST SP 800-38D §8.3: per-key invocation cap for AES-GCM with RBG-based 96-bit IV.
+const GCM_MAX_INVOCATIONS = 2 ** 32;
 
 // Cookie name token per RFC 9110 §5.6.2 minus '%' (Bun.CookieMap percent-decodes inbound names; excluding '%' guarantees round-trip).
 const INVALID_TOKEN_CHARS = /[^\x21\x23\x24\x26\x27\x2A\x2B\x2D\x2E\x30-\x39\x41-\x5A\x5E-\x7A\x7C\x7E]/;
@@ -28,7 +28,6 @@ const PRIORITY_VALUES: ReadonlySet<CookiePriority> = new Set(['low', 'medium', '
 
 const HKDF_INFO_HMAC = new TextEncoder().encode('@zipbul/cookie hmac v2');
 const HKDF_INFO_AES = new TextEncoder().encode('@zipbul/cookie aes-gcm v2');
-const HKDF_SALT = new TextEncoder().encode('@zipbul/cookie/2026');
 
 const utf8 = new TextEncoder();
 
@@ -45,10 +44,10 @@ export class CookieParser {
 
   private constructor(private readonly options: ResolvedCookieParserOptions) {
     this.hmacKeyPromises = options.secrets !== null
-      ? options.secrets.map((s) => deriveHmacKey(s, this.hashName()))
+      ? options.secrets.map((s) => deriveHmacKey(s, this.hashName(), options.kdfSalt))
       : [];
     this.aesKeyPromises = options.encryptionSecrets !== null
-      ? options.encryptionSecrets.map((s) => deriveAesKey(s))
+      ? options.encryptionSecrets.map((s) => deriveAesKey(s, options.kdfSalt))
       : [];
     this.encryptCounters = new Map();
   }
@@ -137,15 +136,6 @@ export class CookieParser {
     }
     if (target.maxAge != null) {
       this.assertValidMaxAge(target.maxAge);
-      if (target.maxAge > MAX_LIFETIME_SECONDS) {
-        throw new CookieError({
-          reason: CookieErrorReason.MaxLifetimeExceeded,
-          message: `Max-Age exceeds 400-day limit (${MAX_LIFETIME_SECONDS}s)`,
-        });
-      }
-    }
-    if (target.expires != null) {
-      this.assertExpiresWithinLimit(target.expires);
     }
     if (target.domain != null) this.assertValidDomain(target.domain);
     if (target.path != null) this.assertValidPath(target.path);
@@ -159,6 +149,18 @@ export class CookieParser {
       header = target.serialize();
     } catch (e) {
       throw this.wrapBunError(e);
+    }
+
+    // RFC 7231 §7.1.1.1: IMF-fixdate MUST end with " GMT" and use 2-digit day.
+    // Bun.Cookie emits "Fri, 1 Jan 1970 00:00:00 -0000" — non-conformant. Rewrite using toUTCString().
+    if (target.expires != null) {
+      const ms = target.expires instanceof Date
+        ? target.expires.getTime()
+        : Date.parse(String(target.expires));
+      if (Number.isFinite(ms)) {
+        const canonical = new Date(ms).toUTCString();
+        header = header.replace(/Expires=[^;]+/i, 'Expires=' + canonical);
+      }
     }
 
     const priority = meta?.priority ?? (defaults.priority ?? null);
@@ -260,6 +262,19 @@ export class CookieParser {
     }
     this.assertValidName(cookie.name);
 
+    // Atomically reserve a counter slot BEFORE any await — otherwise concurrent
+    // encrypt() calls would all observe the same `current` and the NIST SP 800-38D §8.3
+    // invocation cap could be exceeded silently.
+    const current = this.encryptCounters.get(0) ?? 0;
+    if (current >= GCM_MAX_INVOCATIONS) {
+      throw new CookieError({
+        reason: CookieErrorReason.EncryptionKeyExhausted,
+        message: `AES-GCM key reached the NIST SP 800-38D §8.3 invocation cap (${GCM_MAX_INVOCATIONS}); rotate the encryption key`,
+      });
+    }
+    const next = current + 1;
+    this.encryptCounters.set(0, next);
+
     const { key, kid } = await this.aesKeyPromises[0]!;
     const iv = crypto.getRandomValues(new Uint8Array(IV_LENGTH));
     const aad = utf8.encode(cookie.name);
@@ -276,8 +291,6 @@ export class CookieParser {
     combined.set(iv, KID_LENGTH);
     combined.set(ctBytes, KID_LENGTH + IV_LENGTH);
 
-    const next = (this.encryptCounters.get(0) ?? 0) + 1;
-    this.encryptCounters.set(0, next);
     if (this.options.onEncrypt !== null) {
       try { this.options.onEncrypt({ keyIndex: 0, counter: next }); } catch { /* swallow */ }
     }
@@ -374,16 +387,6 @@ export class CookieParser {
           message: '__Secure- cookies must have the Secure attribute',
         });
       }
-      return;
-    }
-
-    if (lower.startsWith('__http-') || lower.startsWith('__host-http-')) {
-      if (!cookie.httpOnly) {
-        throw new CookieError({
-          reason: CookieErrorReason.HttpPrefixRequiresHttpOnly,
-          message: '__Http- / __Host-Http- cookies must have the HttpOnly attribute',
-        });
-      }
     }
   }
 
@@ -414,6 +417,12 @@ export class CookieParser {
       }
     }
 
+    // Bun.Cookie throws on capitalized SameSite ('Lax'/'Strict'/'None'); normalize to lowercase
+    // so user input following common spec docs (which use Pascal-case) doesn't crash.
+    if (typeof merged.sameSite === 'string') {
+      merged.sameSite = merged.sameSite.toLowerCase() as typeof merged.sameSite;
+    }
+
     return merged;
   }
 
@@ -426,7 +435,15 @@ export class CookieParser {
 
     let resolvedSecure: boolean | undefined = undefined;
     if (defaults.secure === 'auto' && !explicit.has('secure')) {
-      resolvedSecure = context?.isSecure ?? false;
+      // 'auto' is a security feature; require an explicit channel signal so we never silently
+      // emit an insecure cookie that the caller intended to be Secure.
+      if (context === undefined || context.isSecure === undefined) {
+        throw new CookieError({
+          reason: CookieErrorReason.InvalidAttribute,
+          message: "secure: 'auto' requires SerializeContext.isSecure to be passed (true for HTTPS, false for plain HTTP)",
+        });
+      }
+      resolvedSecure = context.isSecure;
     }
 
     const applyDomain = cookie.domain == null && defaults.domain !== null;
@@ -453,7 +470,7 @@ export class CookieParser {
   private signSync(data: Uint8Array): string {
     const secret = this.options.secrets![0]!;
     const hash = this.hashName();
-    const derivedKey = deriveHmacKeyBytesSync(secret, hash);
+    const derivedKey = deriveHmacKeyBytesSync(secret, hash, this.options.kdfSalt);
     const algoName = hash.toLowerCase().replace('-', '') as 'sha256' | 'sha384' | 'sha512';
     const hasher = new Bun.CryptoHasher(algoName, derivedKey);
     hasher.update(data);
@@ -509,12 +526,6 @@ export class CookieParser {
         message: 'Max-Age must be a finite integer',
       });
     }
-    if (maxAge > MAX_LIFETIME_SECONDS) {
-      throw new CookieError({
-        reason: CookieErrorReason.MaxLifetimeExceeded,
-        message: `Max-Age exceeds 400-day limit (${MAX_LIFETIME_SECONDS}s)`,
-      });
-    }
   }
 
   private assertValidExpires(expires: number | Date | string): void {
@@ -532,22 +543,6 @@ export class CookieParser {
         message: 'expires must be a finite timestamp, Date, or RFC 7231 IMF-fixdate string',
       });
     }
-    this.assertExpiresWithinLimit(expires);
-  }
-
-  private assertExpiresWithinLimit(expires: number | Date | string): void {
-    let ms: number;
-    if (typeof expires === 'number') ms = expires;
-    else if (expires instanceof Date) ms = expires.getTime();
-    else ms = Date.parse(expires);
-    if (!Number.isFinite(ms)) return;
-    const delta = ms - Date.now();
-    if (delta > MAX_LIFETIME_MS) {
-      throw new CookieError({
-        reason: CookieErrorReason.MaxLifetimeExceeded,
-        message: `Expires exceeds 400-day limit from now`,
-      });
-    }
   }
 
   private assertValidDomain(domain: string): void {
@@ -557,10 +552,11 @@ export class CookieParser {
         message: 'Domain attribute must not be an empty string',
       });
     }
-    if (/[;\r\n]/.test(domain)) {
+    // RFC 6265 §4.1.1: subdomain syntax forbids CTLs implicitly via LDH; explicit reject is defense-in-depth.
+    if (/[\x00-\x1F\x7F;]/.test(domain)) {
       throw new CookieError({
         reason: CookieErrorReason.InvalidDomain,
-        message: 'Domain must not contain semicolons or newlines',
+        message: 'Domain must not contain control characters or ";"',
       });
     }
     if (!RFC1123_DOMAIN.test(domain)) {
@@ -569,20 +565,14 @@ export class CookieParser {
         message: 'Domain must be a valid RFC 1123 subdomain (LDH rule)',
       });
     }
-    const stripped = domain.replace(/^\.+/, '').toLowerCase();
-    if (this.options.publicSuffixCheck(stripped)) {
-      throw new CookieError({
-        reason: CookieErrorReason.DomainPublicSuffix,
-        message: 'Domain attribute must not be a public suffix',
-      });
-    }
   }
 
   private assertValidPath(path: string): void {
-    if (/[;\r\n]/.test(path)) {
+    // RFC 6265 §4.1.1: path-value = *<any CHAR except CTLs or ";">. CTLs = %x00-1F / %x7F.
+    if (/[\x00-\x1F\x7F;]/.test(path)) {
       throw new CookieError({
         reason: CookieErrorReason.InvalidPath,
-        message: 'Path must not contain semicolons or newlines',
+        message: 'Path must not contain control characters or ";"',
       });
     }
     if (path !== '' && !path.startsWith('/')) {
@@ -604,23 +594,25 @@ export class CookieParser {
 
   private wrapBunError(e: unknown): CookieError {
     if (e instanceof CookieError) return e;
+    // Use the upstream message ONLY for routing — never re-emit it (defense against future Bun
+    // error formats that might echo input bytes; CWE-117).
     const message = e instanceof Error ? e.message : String(e);
     if (/cookie name/i.test(message)) {
-      return new CookieError({ reason: CookieErrorReason.InvalidCookieName, message });
+      return new CookieError({ reason: CookieErrorReason.InvalidCookieName, message: 'invalid cookie name' });
     }
     if (/expir/i.test(message)) {
-      return new CookieError({ reason: CookieErrorReason.InvalidExpires, message });
+      return new CookieError({ reason: CookieErrorReason.InvalidExpires, message: 'invalid expires attribute' });
     }
     if (/domain/i.test(message)) {
-      return new CookieError({ reason: CookieErrorReason.InvalidDomain, message });
+      return new CookieError({ reason: CookieErrorReason.InvalidDomain, message: 'invalid domain attribute' });
     }
     if (/path/i.test(message)) {
-      return new CookieError({ reason: CookieErrorReason.InvalidPath, message });
+      return new CookieError({ reason: CookieErrorReason.InvalidPath, message: 'invalid path attribute' });
     }
     if (/value/i.test(message)) {
-      return new CookieError({ reason: CookieErrorReason.InvalidCookieValue, message });
+      return new CookieError({ reason: CookieErrorReason.InvalidCookieValue, message: 'invalid cookie value' });
     }
-    return new CookieError({ reason: CookieErrorReason.CookieParserError, message });
+    return new CookieError({ reason: CookieErrorReason.CookieParserError, message: 'cookie parser error' });
   }
 
   private cloneWithValue(source: Cookie, newValue: string): Cookie {
@@ -643,11 +635,11 @@ export class CookieParser {
 
 // --- key derivation ---
 
-async function deriveHmacKey(secret: string, hash: 'SHA-256' | 'SHA-384' | 'SHA-512'): Promise<{ key: CryptoKey; kid: Uint8Array }> {
+async function deriveHmacKey(secret: string, hash: 'SHA-256' | 'SHA-384' | 'SHA-512', salt: Uint8Array): Promise<{ key: CryptoKey; kid: Uint8Array }> {
   const ikm = utf8.encode(secret);
   const baseKey = await crypto.subtle.importKey('raw', ikm, 'HKDF', false, ['deriveBits']);
   const bits = await crypto.subtle.deriveBits(
-    { name: 'HKDF', hash, salt: HKDF_SALT, info: HKDF_INFO_HMAC },
+    { name: 'HKDF', hash, salt: salt as Uint8Array<ArrayBuffer>, info: HKDF_INFO_HMAC },
     baseKey,
     256,
   );
@@ -659,11 +651,11 @@ async function deriveHmacKey(secret: string, hash: 'SHA-256' | 'SHA-384' | 'SHA-
   return { key, kid };
 }
 
-async function deriveAesKey(secret: string): Promise<{ key: CryptoKey; kid: Uint8Array }> {
+async function deriveAesKey(secret: string, salt: Uint8Array): Promise<{ key: CryptoKey; kid: Uint8Array }> {
   const ikm = utf8.encode(secret);
   const baseKey = await crypto.subtle.importKey('raw', ikm, 'HKDF', false, ['deriveBits']);
   const bits = await crypto.subtle.deriveBits(
-    { name: 'HKDF', hash: 'SHA-256', salt: HKDF_SALT, info: HKDF_INFO_AES },
+    { name: 'HKDF', hash: 'SHA-256', salt: salt as Uint8Array<ArrayBuffer>, info: HKDF_INFO_AES },
     baseKey,
     256,
   );
@@ -680,9 +672,9 @@ async function deriveKid(keyBytes: Uint8Array): Promise<Uint8Array> {
   return new Uint8Array(h, 0, KID_LENGTH);
 }
 
-function deriveHmacKeyBytesSync(secret: string, hash: 'SHA-256' | 'SHA-384' | 'SHA-512'): Uint8Array {
+function deriveHmacKeyBytesSync(secret: string, hash: 'SHA-256' | 'SHA-384' | 'SHA-512', salt: Uint8Array): Uint8Array {
   // Sync HKDF derivation that mirrors async deriveHmacKey output exactly.
-  const prk = hkdfExtract(secret, HKDF_SALT, hash);
+  const prk = hkdfExtract(secret, salt, hash);
   return hkdfExpand(prk, HKDF_INFO_HMAC, 32, hash);
 }
 

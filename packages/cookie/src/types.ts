@@ -7,8 +7,8 @@ export type ResolvedCookieParserOptions = {
   algorithm: SigningAlgorithm;
   encryptionSecrets: string[] | null;
   prefixValidation: boolean;
-  publicSuffixCheck: (domain: string) => boolean;
   onEncrypt: ((info: { keyIndex: number; counter: number }) => void) | null;
+  kdfSalt: Uint8Array;
   defaults: ResolvedCookieDefaults;
 };
 

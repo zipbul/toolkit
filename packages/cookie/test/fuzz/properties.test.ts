@@ -19,9 +19,12 @@ const validName: fc.Arbitrary<string> = fc
 const validValue: fc.Arbitrary<string> = fc
   .array(fc.integer({ min: 0x20, max: 0x7e }).map((c) => String.fromCharCode(c)), { minLength: 0, maxLength: 100 })
   .map((arr) => arr.join(''));
+// Use full-byte uint8 arrays (32–64 bytes) base64url-encoded so the entropy floor
+// (Shannon ≥ 128 bits) is always satisfied — single-character shrink targets like
+// "!!!!..." are correctly rejected by the parser and would otherwise fail this property.
 const secret32: fc.Arbitrary<string> = fc
-  .array(fc.integer({ min: 0x21, max: 0x7e }).map((c) => String.fromCharCode(c)), { minLength: 32, maxLength: 64 })
-  .map((arr) => arr.join(''));
+  .uint8Array({ minLength: 32, maxLength: 64 })
+  .map((bytes) => Buffer.from(bytes).toString('base64url'));
 
 describe('Property: HMAC sign/unsign roundtrip', () => {
   it('any value signed then unsigned returns the original', async () => {
@@ -55,7 +58,7 @@ describe('Property: encrypt produces unique ciphertext per call (IV randomness)'
   it('two encrypts of identical input never collide', async () => {
     await fc.assert(
       fc.asyncProperty(validName, validValue, async (name, value) => {
-        const cp = CookieParser.create({ encryptionSecret: 'qwerty1234567890asdfghjklzxcvbnm-' });
+        const cp = CookieParser.create({ encryptionSecret: 'yiLuooc8t1iy7BDCaU2eExB60URL8zacnqb1mA66aIo' });
         const a = await cp.encrypt(new Cookie(name, value));
         const b = await cp.encrypt(new Cookie(name, value));
         return a.value !== b.value;
@@ -70,7 +73,7 @@ describe('Property: HMAC name-binding rejects cross-name replay', () => {
     await fc.assert(
       fc.asyncProperty(validName, validName, validValue, async (n1, n2, value) => {
         fc.pre(n1 !== n2);
-        const cp = CookieParser.create({ secrets: ['qwerty1234567890asdfghjklzxcvbnm-'] });
+        const cp = CookieParser.create({ secrets: ['yiLuooc8t1iy7BDCaU2eExB60URL8zacnqb1mA66aIo'] });
         const signed = cp.sign(new Cookie(n1, value));
         const replayed = new Cookie(n2, signed.value);
         let rejected = false;
@@ -89,7 +92,7 @@ describe('Property: AES-GCM AAD-binding rejects cross-name replay', () => {
     await fc.assert(
       fc.asyncProperty(validName, validName, validValue, async (n1, n2, value) => {
         fc.pre(n1 !== n2);
-        const cp = CookieParser.create({ encryptionSecret: 'qwerty1234567890asdfghjklzxcvbnm-' });
+        const cp = CookieParser.create({ encryptionSecret: 'yiLuooc8t1iy7BDCaU2eExB60URL8zacnqb1mA66aIo' });
         const enc = await cp.encrypt(new Cookie(n1, value));
         const replayed = new Cookie(n2, enc.value);
         let rejected = false;
@@ -107,7 +110,7 @@ describe('Property: ciphertext tampering always fails decryption', () => {
   it('flipping any byte after IV breaks decryption', async () => {
     await fc.assert(
       fc.asyncProperty(validName, validValue, fc.integer({ min: 0, max: 50 }), async (name, value, idx) => {
-        const cp = CookieParser.create({ encryptionSecret: 'qwerty1234567890asdfghjklzxcvbnm-' });
+        const cp = CookieParser.create({ encryptionSecret: 'yiLuooc8t1iy7BDCaU2eExB60URL8zacnqb1mA66aIo' });
         const enc = await cp.encrypt(new Cookie(name, value));
         const buf = Buffer.from(enc.value, 'base64url');
         // Tamper byte after IV (12) + within bounds
@@ -129,7 +132,7 @@ describe('Property: HMAC tampering always fails verification', () => {
   it('flipping any character after the dot breaks verification', async () => {
     await fc.assert(
       fc.asyncProperty(validName, validValue, fc.integer({ min: 0, max: 40 }), async (name, value, idx) => {
-        const cp = CookieParser.create({ secrets: ['qwerty1234567890asdfghjklzxcvbnm-'] });
+        const cp = CookieParser.create({ secrets: ['yiLuooc8t1iy7BDCaU2eExB60URL8zacnqb1mA66aIo'] });
         const signed = cp.sign(new Cookie(name, value));
         const dot = signed.value.lastIndexOf('.');
         const sig = signed.value.slice(dot + 1);
@@ -154,7 +157,7 @@ describe('Property: invalid name is rejected at every entry point', () => {
     await fc.assert(
       fc.asyncProperty(fc.constantFrom(...separators), validName, async (sep, base) => {
         const bad = base + sep + 'x';
-        const cp = CookieParser.create({ secrets: ['qwerty1234567890asdfghjklzxcvbnm-'], encryptionSecret: 'POIUYTREWQlkjhgfdsamnbvcxz98765-' });
+        const cp = CookieParser.create({ secrets: ['yiLuooc8t1iy7BDCaU2eExB60URL8zacnqb1mA66aIo'], encryptionSecret: 'v3MALRP-T0CO2gZ46D5As25K-U1D74PDhsdQJGjk4QQ' });
         const checks = [
           () => cp.createCookie(bad, 'v'),
           () => { const c = (() => { try { return new Cookie(bad, 'v'); } catch { return null; } })(); return c ? cp.serialize(c) : (() => { throw new CookieError({ reason: CookieErrorReason.InvalidCookieName, message: 'rejected at ctor' }); })(); },
@@ -177,7 +180,7 @@ describe('Property: jar set/get roundtrip preserves arbitrary value', () => {
     const { CookieJar } = await import('../../src/cookie-jar');
     await fc.assert(
       fc.asyncProperty(validName, validValue, async (name, value) => {
-        const cp = CookieParser.create({ secrets: ['qwerty1234567890asdfghjklzxcvbnm-'], encryptionSecret: 'POIUYTREWQlkjhgfdsamnbvcxz98765-' });
+        const cp = CookieParser.create({ secrets: ['yiLuooc8t1iy7BDCaU2eExB60URL8zacnqb1mA66aIo'], encryptionSecret: 'v3MALRP-T0CO2gZ46D5As25K-U1D74PDhsdQJGjk4QQ' });
         const out = new CookieJar(cp, '');
         out.set(name, value);
         const headers = await out.getSetCookieHeaders();

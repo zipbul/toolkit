@@ -26,6 +26,9 @@ export class CookieJar {
     if (cookieHeader !== '') {
       const map = new Bun.CookieMap(cookieHeader);
       for (const [name, value] of map) {
+        // Bun.CookieMap silently substitutes U+FFFD for invalid percent-encoding (`%XX` malformed).
+        // Drop those entries — silent corruption of cookie values is unacceptable for crypto / app code.
+        if (value.includes('�') || name.includes('�')) continue;
         parsed.set(name, value);
       }
     }
@@ -72,17 +75,17 @@ export class CookieJar {
 
   public delete(name: string, options?: CookieAttributes): void {
     // For deletion, the parser may have defaults (e.g. sameSite='none' + secure='auto') that would
-    // throw at serialize time when the request is insecure. Override the relevant defaults locally
-    // so the delete instruction always serializes.
+    // throw at serialize time when the request is insecure. We only fill defaults — explicit user
+    // input is honored verbatim so cross-site deletions (sameSite:'none' + secure:true) are possible.
     const overrides: CookieAttributes = {
       ...options,
       maxAge: 0,
       expires: new Date(0),
     };
-    if (overrides.sameSite === 'none' || overrides.sameSite === undefined) {
+    if (options?.sameSite === undefined) {
       overrides.sameSite = 'lax';
     }
-    if (overrides.secure === undefined) {
+    if (options?.secure === undefined) {
       overrides.secure = false;
     }
     const cookie = this.parser.createCookie(name, '', overrides);

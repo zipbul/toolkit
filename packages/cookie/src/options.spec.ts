@@ -6,8 +6,8 @@ import { CookieErrorReason } from './enums';
 import type { CookieErrorData } from './interfaces';
 import { resolveCookieParserOptions, validateCookieParserOptions } from './options';
 
-const VALID_SECRET = 'valid-secret-padded-to-thirty-two_';
-const VALID_ENC_SECRET = 'valid-encryption-secret-padded__';
+const VALID_SECRET = 'zt3oaxqd6dOCT4bNxEsuMoLxbpCnfOyiWBwS4vBWzxM';
+const VALID_ENC_SECRET = '5qly1QnPB1M6tT3thbFxuaY6A7OXv2zS8_O3VTHTAQ8';
 
 describe('resolveCookieParserOptions', () => {
   it('should return all defaults when no options provided', () => {
@@ -160,5 +160,66 @@ describe('validateCookieParserOptions', () => {
   it('should accept sha512 algorithm', () => {
     const resolved = resolveCookieParserOptions({ algorithm: 'sha512' });
     expect(validateCookieParserOptions(resolved)).toBeUndefined();
+  });
+});
+
+describe('kdfSalt option (RFC 5869 §3.1)', () => {
+  it('uses default salt when omitted', () => {
+    const r = resolveCookieParserOptions();
+    expect(r.kdfSalt).toBeInstanceOf(Uint8Array);
+    expect(r.kdfSalt.length).toBeGreaterThanOrEqual(16);
+  });
+  it('accepts string salt', () => {
+    const r = resolveCookieParserOptions({ kdfSalt: 'my-deployment-salt-2026__padding' });
+    expect(new TextDecoder().decode(r.kdfSalt)).toBe('my-deployment-salt-2026__padding');
+  });
+  it('accepts Uint8Array salt', () => {
+    const bytes = new Uint8Array(20).fill(7);
+    const r = resolveCookieParserOptions({ kdfSalt: bytes });
+    expect(r.kdfSalt).toBe(bytes);
+  });
+  it('rejects salt shorter than 16 bytes', () => {
+    const r = validateCookieParserOptions(resolveCookieParserOptions({ kdfSalt: 'short' }));
+    expect(r).toBeDefined();
+    expect((r as Err<CookieErrorData>).data.message).toContain('16 bytes');
+  });
+});
+
+describe('validateSecretStrength entropy floor (NIST SP 800-131A / OWASP)', () => {
+  it('rejects 32-byte low-entropy secret "abcdefgh".repeat(4) (96 bits)', () => {
+    const r = validateCookieParserOptions(resolveCookieParserOptions({ secrets: ['abcdefgh'.repeat(4)] }));
+    expect(r).toBeDefined();
+    const e = (r as Err<CookieErrorData>).data;
+    expect(e.reason).toBe(CookieErrorReason.WeakSecret);
+    expect(e.message).toContain('entropy too low');
+  });
+  it('rejects 32-byte secret of single repeated byte (0 bits)', () => {
+    const r = validateCookieParserOptions(resolveCookieParserOptions({ secrets: ['x'.repeat(40)] }));
+    expect(r).toBeDefined();
+    expect((r as Err<CookieErrorData>).data.reason).toBe(CookieErrorReason.WeakSecret);
+  });
+  it('rejects 31-byte secret regardless of entropy', () => {
+    const r = validateCookieParserOptions(resolveCookieParserOptions({ secrets: [VALID_SECRET.slice(0, 31)] }));
+    expect(r).toBeDefined();
+    const e = (r as Err<CookieErrorData>).data;
+    expect(e.reason).toBe(CookieErrorReason.WeakSecret);
+    expect(e.message).toContain('32 bytes');
+  });
+  it('counts UTF-8 bytes, not UTF-16 code units (32-byte ASCII vs 16 emoji + 16 ASCII)', () => {
+    // 16 emoji = 64 UTF-8 bytes alone, easily over 32 bytes.
+    const r = validateCookieParserOptions(resolveCookieParserOptions({ secrets: ['🔐'.repeat(16) + 'abcdefghijklmnop'] }));
+    expect(r).toBeUndefined();
+  });
+  it('accepts uniform random base64url 32-byte secret', () => {
+    const bytes = new Uint8Array(32);
+    crypto.getRandomValues(bytes);
+    const secret = Buffer.from(bytes).toString('base64url');
+    const r = validateCookieParserOptions(resolveCookieParserOptions({ secrets: [secret] }));
+    expect(r).toBeUndefined();
+  });
+  it('applies the same check to encryptionSecret', () => {
+    const r = validateCookieParserOptions(resolveCookieParserOptions({ encryptionSecret: 'abcdefgh'.repeat(4) }));
+    expect(r).toBeDefined();
+    expect((r as Err<CookieErrorData>).data.reason).toBe(CookieErrorReason.WeakSecret);
   });
 });

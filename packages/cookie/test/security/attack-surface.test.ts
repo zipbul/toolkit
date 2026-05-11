@@ -7,8 +7,8 @@ import { Cookie } from 'bun';
 
 import { CookieParser, CookieJar, CookieError, CookieErrorReason } from '../../index';
 
-const SECRET = 'qwerty1234567890asdfghjklzxcvbnm-';
-const ENC = 'POIUYTREWQlkjhgfdsamnbvcxz98765-';
+const SECRET = 'yiLuooc8t1iy7BDCaU2eExB60URL8zacnqb1mA66aIo';
+const ENC = 'v3MALRP-T0CO2gZ46D5As25K-U1D74PDhsdQJGjk4QQ';
 
 describe('Attack: header injection via attribute values', () => {
   const cp = CookieParser.create();
@@ -207,11 +207,11 @@ describe('Attack: oversized payloads', () => {
 
 describe('Attack: timing-safe HMAC iteration', () => {
   it('verifies regardless of secret position in rotation array', async () => {
-    const k1 = 'qwerty1234567890key1abcdefghjklm';
-    const k2 = 'POIUYTREWQ_key2_lkjhgfdsamnbvcxz';
-    const k3 = 'asdf1234ZXCV5678_key3_qwerASDFmn';
-    const k4 = 'mnbvcxzlkjhgfdsa_key4_QWERTYUIOP';
-    const k5 = '0987654321_key5_qwertyasdfzxcvbn';
+    const k1 = 'DAFa9Tm4TjwbEew6OJ2WjyL4hDkBytmILCPItWAvij8';
+    const k2 = '39bzADCd-pZ69QBXlC2wGBNmKLUWclgkYIPNBDfOEnc';
+    const k3 = 'lU5yqjYisLZ0gXAEbAOiQwcNDKGXoVdLwvnCCNf12fg';
+    const k4 = 'f_58oLMYSRKNGG5vIzRSurZqqZy8bTJaO-d6py0Slms';
+    const k5 = 'nge6Avvzrm8caHPUDLTcI6-Qa_AalZKo0yikksU-iZs';
     const cp = CookieParser.create({ secrets: [k1, k2, k3, k4, k5] });
     const lastOnly = CookieParser.create({ secrets: [k5] });
     const signed = lastOnly.sign(new Cookie('s', 'v'));
@@ -265,5 +265,93 @@ describe('Attack: error type leakage (H-2 fix)', () => {
       try { cp.createCookie('s', 'v', opts); } catch (e) { caught = e; }
       expect(caught).toBeInstanceOf(CookieError);
     }
+  });
+});
+
+describe('Attack: control characters in Path/Domain (RFC 6265 §4.1.1)', () => {
+  const cp = CookieParser.create();
+  const ctls = ['\x00', '\x01', '\x09', '\x0B', '\x1F', '\x7F'];
+  for (const ch of ctls) {
+    const hex = ch.charCodeAt(0).toString(16).padStart(2, '0');
+    it(`rejects path containing CTL byte 0x${hex}`, () => {
+      let caught: unknown;
+      try { cp.createCookie('s', 'v', { path: '/foo' + ch + 'bar' }); } catch (e) { caught = e; }
+      expect(caught).toBeInstanceOf(CookieError);
+      expect((caught as CookieError).reason).toBe(CookieErrorReason.InvalidPath);
+    });
+    it(`rejects domain containing CTL byte 0x${hex}`, () => {
+      let caught: unknown;
+      try { cp.createCookie('s', 'v', { domain: 'ex' + ch + 'ample.com' }); } catch (e) { caught = e; }
+      expect(caught).toBeInstanceOf(CookieError);
+      expect((caught as CookieError).reason).toBe(CookieErrorReason.InvalidDomain);
+    });
+  }
+});
+
+describe('CWE-117 defense: wrapBunError never echoes input in messages', () => {
+  const cp = CookieParser.create();
+  const secretMarker = 'SECRET_INPUT_' + Math.random().toString(36).slice(2);
+  const cases: Array<{ label: string; opts: any; reason: CookieErrorReason }> = [
+    { label: 'invalid expires', opts: { expires: secretMarker }, reason: CookieErrorReason.InvalidExpires },
+  ];
+  for (const c of cases) {
+    it(`canonicalizes ${c.label} message (no input echo)`, () => {
+      let caught: unknown;
+      try { cp.createCookie('s', 'v', c.opts); } catch (e) { caught = e; }
+      expect(caught).toBeInstanceOf(CookieError);
+      expect((caught as CookieError).reason).toBe(c.reason);
+      expect((caught as CookieError).message).not.toContain(secretMarker);
+    });
+  }
+
+  it('canonical fallback for unknown errors', () => {
+    // Direct call to wrap with an unknown-shaped error.
+    const wrap = (cp as any).wrapBunError.bind(cp);
+    const err1 = wrap(new Error('mystery'));
+    expect(err1).toBeInstanceOf(CookieError);
+    expect(err1.message).toBe('cookie parser error');
+    const err2 = wrap('plain string error with secret-token-xyz');
+    expect(err2.message).not.toContain('secret-token-xyz');
+    const err3 = wrap(new Error('unexpected cookie value 42'));
+    expect(err3.reason).toBe(CookieErrorReason.InvalidCookieValue);
+    expect(err3.message).toBe('invalid cookie value');
+    const err4 = wrap(new Error('bad cookie name foo'));
+    expect(err4.reason).toBe(CookieErrorReason.InvalidCookieName);
+    const err5 = wrap(new Error('domain bad'));
+    expect(err5.reason).toBe(CookieErrorReason.InvalidDomain);
+    const err6 = wrap(new Error('path bad'));
+    expect(err6.reason).toBe(CookieErrorReason.InvalidPath);
+  });
+});
+
+describe('DX: sameSite case normalization', () => {
+  const cp = CookieParser.create();
+  for (const v of ['Lax', 'LAX', 'Strict', 'STRICT', 'None']) {
+    it(`accepts "${v}" and normalizes to lowercase output`, () => {
+      const c = cp.createCookie('s', 'v', { sameSite: v as any, secure: true });
+      const h = cp.serialize(c);
+      // Bun emits canonical title case in the header; the point is no crash and SameSite present.
+      expect(h).toMatch(/SameSite=(Lax|Strict|None)/i);
+    });
+  }
+});
+
+describe('Attack: AES-GCM key invocation cap (NIST SP 800-38D §8.3)', () => {
+  it('throws EncryptionKeyExhausted at 2^32 invocations', async () => {
+    const cp = CookieParser.create({ secrets: [SECRET], encryptionSecret: ENC });
+    (cp as unknown as { encryptCounters: Map<number, number> }).encryptCounters.set(0, 2 ** 32);
+    let caught: unknown;
+    try { await cp.encrypt(cp.createCookie('s', 'v')); } catch (e) { caught = e; }
+    expect(caught).toBeInstanceOf(CookieError);
+    expect((caught as CookieError).reason).toBe(CookieErrorReason.EncryptionKeyExhausted);
+  });
+  it('still encrypts at 2^32 - 1 then refuses on the next call', async () => {
+    const cp = CookieParser.create({ secrets: [SECRET], encryptionSecret: ENC });
+    (cp as unknown as { encryptCounters: Map<number, number> }).encryptCounters.set(0, 2 ** 32 - 1);
+    const enc = await cp.encrypt(cp.createCookie('s', 'v'));
+    expect(enc.value).toBeTypeOf('string');
+    let caught: unknown;
+    try { await cp.encrypt(cp.createCookie('s', 'v')); } catch (e) { caught = e; }
+    expect((caught as CookieError).reason).toBe(CookieErrorReason.EncryptionKeyExhausted);
   });
 });

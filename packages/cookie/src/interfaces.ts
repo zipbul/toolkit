@@ -23,8 +23,13 @@ export interface CookieParserOptions {
   algorithm?: 'sha256' | 'sha384' | 'sha512';
   encryptionSecret?: string | string[];
   prefixValidation?: boolean;
-  publicSuffixCheck?: (domain: string) => boolean;
   onEncrypt?: (info: { keyIndex: number; counter: number }) => void;
+  /**
+   * Optional HKDF salt (RFC 5869 §3.1). When omitted, a fixed library default is used.
+   * Supplying a per-deployment salt ensures two installations sharing the same secret derive
+   * independent keys. Must be at least 16 bytes when provided; longer is fine.
+   */
+  kdfSalt?: string | Uint8Array;
   httpOnly?: boolean;
   secure?: boolean | 'auto';
   sameSite?: 'strict' | 'lax' | 'none';

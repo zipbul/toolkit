@@ -7,8 +7,8 @@ describe('CookieParser E2E', () => {
   describe('simulated HTTP request/response cycle via jar', () => {
     it('should handle server setting signed+encrypted cookies and reading them back', async () => {
       const parser = CookieParser.create({
-        secrets: ['prod-secret-2024-with-min-length__', 'prod-secret-2023-with-min-length__'],
-        encryptionSecret: 'aes-256-gcm-production-key-padding',
+        secrets: ['sWnweEbPWws_CcVlQqohqlGEUF462gq79jpEUxUBf6Y', 'BqkEVs6WS76VuKv1lVK-DuxK6fgH3zzFW1Zu7szIqls'],
+        encryptionSecret: 'BKHMtM44ThZwG0Ihx3UzQ8bcsn9iUNVW1QcdzozALfQ',
         httpOnly: true,
         secure: true,
         sameSite: 'strict',
@@ -38,8 +38,8 @@ describe('CookieParser E2E', () => {
 
     it('should handle mixed signed and encrypted cookies', async () => {
       const parser = CookieParser.create({
-        secrets: ['prod-secret-2024-with-min-length__'],
-        encryptionSecret: 'aes-256-gcm-production-key-padding',
+        secrets: ['sWnweEbPWws_CcVlQqohqlGEUF462gq79jpEUxUBf6Y'],
+        encryptionSecret: 'BKHMtM44ThZwG0Ihx3UzQ8bcsn9iUNVW1QcdzozALfQ',
       });
 
       const outJar = new CookieJar(parser, '');
@@ -62,8 +62,8 @@ describe('CookieParser E2E', () => {
   describe('simulated Bun.serve handler via jar', () => {
     it('should work within a Bun.serve-like request handler flow', async () => {
       const parser = CookieParser.create({
-        secrets: ['server-key-with-minimum-length____'],
-        encryptionSecret: 'server-enc-with-minimum-length____',
+        secrets: ['_3gIp5HxBBG0kcL5MNF5cgDjuMMTZUID7fUbGdu1rZE'],
+        encryptionSecret: 'Q10pigFEyHH2ByBTiwWGEqlNolvEbGXl2Zmb3b_AitY',
         httpOnly: true,
         secure: true,
         path: '/',
@@ -103,8 +103,8 @@ describe('CookieParser E2E', () => {
   describe('simulated key rotation scenario via jar', () => {
     it('should migrate cookies from old key to new key', async () => {
       const parserOld = CookieParser.create({
-        secrets: ['rotation-key-year-2023__abcdefghijklmnop'],
-        encryptionSecret: 'encryption-key-2023__paddingpadding',
+        secrets: ['EPw6kC4Y8inFYkU_551drP-BmmjjOblwAuQjvRsaNi0'],
+        encryptionSecret: 'LMT2NcnJHtCSSU7h6JaaUpLdlqvH2bo0h89IkV1-rPI',
       });
 
       const outJar = new CookieJar(parserOld, '');
@@ -114,8 +114,8 @@ describe('CookieParser E2E', () => {
 
       // Migration parser accepts both keys
       const parserMigrate = CookieParser.create({
-        secrets: ['rotation-key-year-2024__abcdefghijklmnop', 'rotation-key-year-2023__abcdefghijklmnop'],
-        encryptionSecret: 'encryption-key-2023__paddingpadding',
+        secrets: ['zMbrG5cQwBFs9FUGYMgHs-j4kUHu0MMWVR61r_nd1Pw', 'EPw6kC4Y8inFYkU_551drP-BmmjjOblwAuQjvRsaNi0'],
+        encryptionSecret: 'LMT2NcnJHtCSSU7h6JaaUpLdlqvH2bo0h89IkV1-rPI',
       });
       const migrateJar = new CookieJar(parserMigrate, `session=${oldValue}`);
       expect(await migrateJar.get('session')).toBe('user-data');
@@ -127,8 +127,8 @@ describe('CookieParser E2E', () => {
 
       // New-only parser can read
       const parserNew = CookieParser.create({
-        secrets: ['rotation-key-year-2024__abcdefghijklmnop'],
-        encryptionSecret: 'encryption-key-2023__paddingpadding',
+        secrets: ['zMbrG5cQwBFs9FUGYMgHs-j4kUHu0MMWVR61r_nd1Pw'],
+        encryptionSecret: 'LMT2NcnJHtCSSU7h6JaaUpLdlqvH2bo0h89IkV1-rPI',
       });
       const newJar = new CookieJar(parserNew, `session=${newValue}`);
       expect(await newJar.get('session')).toBe('user-data');
@@ -138,8 +138,8 @@ describe('CookieParser E2E', () => {
   describe('simulated middleware pattern via jar', () => {
     it('should handle complete middleware lifecycle', async () => {
       const parser = CookieParser.create({
-        secrets: ['signing-key-primary-aaaaaaaaaaaaaaa'],
-        encryptionSecret: 'encryption-key-extra-cccccccccccccc',
+        secrets: ['gHBB3MwkPytgNA9vApSMJRDqJIPMNXgLrHUKSJZy1Kg'],
+        encryptionSecret: '9v7BAwKpXHWZnoKZIHV2XWch22HvF8bleOM6t4nc-A4',
         httpOnly: true,
         secure: 'auto',
         sameSite: 'lax',
