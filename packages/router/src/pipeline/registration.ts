@@ -270,6 +270,15 @@ export class Registration<T> {
     }
 
     const loopStart = state.diagnostics !== null ? nowMs() : 0;
+    // Bun-only: drain transient build allocations every CHUNK routes so
+    // the JSC heap doesn't peak proportionally to the full route count.
+    // The heap-capacity heuristic locks in the high-water mark, so a
+    // controlled-growth loop settles to a smaller capacity than a
+    // single uninterrupted insert burst.
+    const CHUNK = Number(process.env.ZIPBUL_BUILD_CHUNK ?? 10000) | 0;
+    const bunGlobal = (globalThis as { Bun?: { gc?: (sync: boolean) => void; shrink?: () => void } }).Bun;
+    const bunGc = bunGlobal?.gc;
+    const bunShrink = bunGlobal?.shrink;
     for (let i = 0; i < this.pendingRoutes.length; i++) {
       const route = this.pendingRoutes[i]!;
       const mark = undo.length;
@@ -298,6 +307,14 @@ export class Registration<T> {
           path: route.path,
           error: { ...result.data, method: route.method, path: route.path },
         });
+      }
+
+      // Periodic drain: keep the JSC heap below the proportionalHeapSize
+      // threshold so the GC arena settles small. Skip the last batch
+      // (the snapshot/walker phases will allocate again immediately).
+      if (CHUNK > 0 && (i + 1) % CHUNK === 0 && i + 1 < this.pendingRoutes.length) {
+        if (bunGc !== undefined) bunGc(true);
+        if (bunShrink !== undefined) bunShrink();
       }
     }
     if (state.diagnostics !== null) state.diagnostics.routeLoopOverheadMs = nowMs() - loopStart;
