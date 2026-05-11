@@ -94,6 +94,14 @@ export interface RegistrationSnapshot<T> {
   /** True iff any registered route declared a regex pattern tester. The
    *  full tester cache is build-only and not retained on the snapshot. */
   anyTester: boolean;
+  /** True iff seal() applied tenant-prefix factoring on at least one
+   *  method tree. Signals the Router that a post-build compactMemory is
+   *  worth scheduling — the orphaned high-fanout subtree branches need
+   *  libpas to scavenge their pages. Without factoring, build() leaves
+   *  a heap small enough that the auto-compact overhead exceeds its
+   *  payoff (the test suite alone went 4s → 17s when compactMemory
+   *  fired unconditionally on every small-router build). */
+  factorApplied: boolean;
 }
 
 interface BuildState<T> {
@@ -177,6 +185,17 @@ export class Registration<T> {
 
   isSealed(): boolean {
     return this.sealed;
+  }
+
+  /**
+   * True iff seal() applied tenant-prefix factoring on at least one
+   * method tree. Surfaced so the Router constructor can decide whether
+   * to schedule a post-build compactMemory (only worth it when the
+   * factoring orphaned a high-fanout subtree that needs libpas to
+   * scavenge).
+   */
+  factorWasApplied(): boolean {
+    return this.snapshot?.factorApplied === true;
   }
 
   get staticByMethod(): RegistrationSnapshot<T>['staticByMethod'] | undefined {
@@ -371,6 +390,7 @@ export class Registration<T> {
       terminalSlab,
       paramsFactories: state.paramsFactories,
       anyTester: state.testerCache.size > 0,
+      factorApplied: false, // overwritten below if detection fires
     };
     addMs(state.diagnostics, 'snapshotMs', snapshotStart);
 
@@ -404,6 +424,7 @@ export class Registration<T> {
     if (factorApplied) {
       Bun.gc(true);
       Bun.shrink();
+      snapshot.factorApplied = true;
     }
     if (state.diagnostics !== null) {
       const paramsFactorySlots = state.paramsFactories.filter(Boolean);

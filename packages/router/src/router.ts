@@ -310,19 +310,16 @@ export class Router<T = unknown> implements RouterPublicApi<T> {
     this.build = () => {
       if (!registration.isSealed()) {
         performBuild();
-        // Fire-and-forget post-build compaction. `build()` stays
-        // synchronous so the existing user-API contract (and the 366+
-        // existing call sites using `router.build()` directly) doesn't
-        // break. The microtask queues compactMemory's polling loop to
-        // run before the first user request lands — by the time HTTP
-        // traffic arrives, libpas's scavenger has decommitted the
-        // build-transient pages and process.memoryUsage().rss reflects
-        // the steady-state working set. Empirical (100k tenant param +
-        // Algorithm B): 496 MB build peak → ~95 MB stable within
-        // ~300-400 ms of build() returning. Errors are swallowed because
-        // compaction is best-effort and a failure here must never break
-        // the freshly-built router.
-        void this.compactMemory().catch(() => {});
+        // Fire-and-forget compactMemory only when seal() actually applied
+        // tenant-prefix factoring — that's the case where the orphaned
+        // high-fanout subtrees leave libpas pages waiting for the next
+        // scavenger tick. Skipping it on small routers avoids a 4× test-
+        // suite slowdown (4s → 17s measured) for builds whose peak heap
+        // is already small enough that the OS-visible RSS settles within
+        // the next event-loop turn.
+        if (registration.factorWasApplied()) {
+          void this.compactMemory().catch(() => {});
+        }
       }
       return this;
     };
