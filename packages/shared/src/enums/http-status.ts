@@ -4,4 +4,6 @@
 export enum HttpStatus {
   Ok = 200,
   NoContent = 204,
+  ResetContent = 205,
+  NotModified = 304,
 }
