@@ -322,6 +322,14 @@ export class Registration<T> {
       // threshold so the GC arena settles small. Skip the last batch
       // (the snapshot/walker phases will allocate again immediately).
       if ((i + 1) % BUILD_CHUNK_SIZE === 0 && i + 1 < this.pendingRoutes.length) {
+        // If every route in this batch (and every batch before it)
+        // succeeded, the accumulated undo log is dead weight: a later
+        // batch failure throws RouterError and abandons the whole
+        // build state anyway (the local `state` goes out of scope, the
+        // next build() call constructs a fresh prefix index). Drop it
+        // before the GC so the closure-captured PrefixIndex CommitPlan
+        // entries become eligible for collection.
+        if (issues.length === 0) undo.length = 0;
         Bun.gc(true);
         Bun.shrink();
       }
