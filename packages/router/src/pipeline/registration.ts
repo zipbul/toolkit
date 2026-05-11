@@ -27,6 +27,19 @@ import { UndoKind } from '../matcher/segment-tree';
 
 const WILDCARD_METHOD = '*' as const;
 
+/**
+ * How many routes to process between full GC + libpas scavenge cycles
+ * during the seal route loop. JSC's `proportionalHeapSize` heuristic
+ * locks the GC arena capacity to whatever the heap peaks at — letting
+ * 100k routes go uninterrupted causes the arena to settle far higher
+ * than necessary because transient parser/expand/prefix-index data
+ * briefly co-exists with the retained tree. Draining every 10k routes
+ * gives back ~17 MB of steady-state RSS at 100k for ~230 ms of build
+ * time. The threshold trades build latency for memory; below ~5k the
+ * scavenge overhead dominates and below ~1k it explodes the build.
+ */
+const BUILD_CHUNK_SIZE = 10_000;
+
 interface PendingRoute<T> {
   method: string;
   path: string;
@@ -270,15 +283,11 @@ export class Registration<T> {
     }
 
     const loopStart = state.diagnostics !== null ? nowMs() : 0;
-    // Bun-only: drain transient build allocations every CHUNK routes so
-    // the JSC heap doesn't peak proportionally to the full route count.
-    // The heap-capacity heuristic locks in the high-water mark, so a
-    // controlled-growth loop settles to a smaller capacity than a
-    // single uninterrupted insert burst.
-    const CHUNK = Number(process.env.ZIPBUL_BUILD_CHUNK ?? 10000) | 0;
-    const bunGlobal = (globalThis as { Bun?: { gc?: (sync: boolean) => void; shrink?: () => void } }).Bun;
-    const bunGc = bunGlobal?.gc;
-    const bunShrink = bunGlobal?.shrink;
+    // Drain transient build allocations every BUILD_CHUNK_SIZE routes
+    // so the JSC heap doesn't peak proportionally to the full route
+    // count. The heap-capacity heuristic locks in the high-water mark,
+    // so a controlled-growth loop settles to a smaller capacity than
+    // a single uninterrupted insert burst.
     for (let i = 0; i < this.pendingRoutes.length; i++) {
       const route = this.pendingRoutes[i]!;
       const mark = undo.length;
@@ -312,9 +321,9 @@ export class Registration<T> {
       // Periodic drain: keep the JSC heap below the proportionalHeapSize
       // threshold so the GC arena settles small. Skip the last batch
       // (the snapshot/walker phases will allocate again immediately).
-      if (CHUNK > 0 && (i + 1) % CHUNK === 0 && i + 1 < this.pendingRoutes.length) {
-        if (bunGc !== undefined) bunGc(true);
-        if (bunShrink !== undefined) bunShrink();
+      if ((i + 1) % BUILD_CHUNK_SIZE === 0 && i + 1 < this.pendingRoutes.length) {
+        Bun.gc(true);
+        Bun.shrink();
       }
     }
     if (state.diagnostics !== null) state.diagnostics.routeLoopOverheadMs = nowMs() - loopStart;

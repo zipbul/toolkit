@@ -280,17 +280,16 @@ export class Router<T = unknown> implements RouterPublicApi<T> {
       internals.matchLayer = matchLayer;
       internals.codegenAggregate = snapshotBuildAggregate();
 
-      // Bun-only: build pushes JSC heap commit to a high-water mark
-      // (transient parser/expand/prefix-index/insertion allocations on
-      // the order of 100s of MB at 100k routes). `Bun.shrink()` runs
-      // JSC's `deleteAllCode` + `Heap::collectNow(Sync, Full)` +
-      // `MarkedSpace::shrink` + `bmalloc::api::scavenge` synchronously
-      // so the next libpas scavenger tick can return the empty pages
-      // to the OS. Hot path is unaffected — JIT lazily re-tiers on the
-      // next match. Empirical: 100k routes 625 MB peak → ~275 MB after
-      // the libpas threshold elapses (~300ms, asynchronous).
-      const shrinkBun = (globalThis as { Bun?: { shrink?: () => void } }).Bun?.shrink;
-      if (shrinkBun !== undefined) shrinkBun();
+      // Build pushes the JSC heap commit to a high-water mark (transient
+      // parser/expand/prefix-index/insertion allocations on the order of
+      // 100s of MB at 100k routes). `Bun.shrink()` runs JSC's
+      // `deleteAllCode` + `Heap::collectNow(Sync, Full)` +
+      // `MarkedSpace::shrink` + `bmalloc::api::scavenge` synchronously so
+      // the next libpas scavenger tick can return the empty pages to the
+      // OS. Hot path is unaffected — the JIT lazily re-tiers on the next
+      // match. Empirical: 100k routes 625 MB peak → ~275 MB after the
+      // libpas threshold elapses (~300 ms, asynchronous).
+      Bun.shrink();
     };
 
     this.add = (method, path, value) => {
@@ -326,29 +325,16 @@ export class Router<T = unknown> implements RouterPublicApi<T> {
       const stableHits = opts.stableHits ?? 2;
       const minDeltaMb = opts.minDeltaMb ?? 2;
       const minDeltaBytes = minDeltaMb * 1024 * 1024;
-
       const rssBefore = process.memoryUsage().rss;
-      const shrink: (() => void) | undefined =
-        (globalThis as { Bun?: { shrink?: () => void } }).Bun?.shrink;
-      let gcAndSweep: (() => void) | undefined;
-      let fullGC: (() => void) | undefined;
-      try {
-        const jsc = await import('bun:jsc');
-        gcAndSweep = jsc.gcAndSweep;
-        fullGC = jsc.fullGC;
-      } catch {
-        // Non-Bun runtime — degrade gracefully.
-      }
 
       let prev = rssBefore;
       let stable = 0;
       let iters = 0;
       const tStart = performance.now();
       while (performance.now() - tStart < maxMs) {
-        if (shrink !== undefined) shrink();
-        if (gcAndSweep !== undefined) gcAndSweep();
-        if (fullGC !== undefined) fullGC();
-        await new Promise((r) => setTimeout(r, pollMs));
+        Bun.shrink();
+        Bun.gc(true);
+        await Bun.sleep(pollMs);
         iters++;
         const rss = process.memoryUsage().rss;
         if (Math.abs(rss - prev) < minDeltaBytes) {
