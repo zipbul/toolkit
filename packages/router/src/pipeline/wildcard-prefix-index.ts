@@ -8,12 +8,47 @@ export interface PrefixTrieNode {
   literalChildren: Record<string, PrefixTrieNode> | null;
   paramChild: PrefixTrieNode | null;
   paramName: string | null;
-  regexParamChildren: PrefixTrieNode[] | null;
-  regexAst: string | null;
-  wildcardName: string | null;
   terminalMeta: RouteMeta | null;
   subtreeTerminalCount: number;
   subtreeWildcardCount: number;
+}
+
+/**
+ * Sparse-storage extras for the rare nodes that participate in regex or
+ * wildcard validation. Most routers (and most nodes within a regex-bearing
+ * router) never touch these fields, so keeping them off the base shape
+ * shaves a JSC inline slot per node and keeps the hidden class smaller.
+ *   - `regexParamChildren` / `regexAst` are used only when a route segment
+ *     declares a regex constraint, e.g. `:id(\d+)`.
+ *   - `wildcardName` is used only on the terminal-attachment node of a
+ *     wildcard route (`/foo/*tail`).
+ *
+ * Build-only — the entire `WildcardPrefixIndex` instance is nulled out
+ * at the end of `seal()` so the map has no runtime cost.
+ */
+const regexParamChildrenStore = new WeakMap<PrefixTrieNode, PrefixTrieNode[]>();
+const regexAstStore = new WeakMap<PrefixTrieNode, string>();
+const wildcardNameStore = new WeakMap<PrefixTrieNode, string>();
+
+function getRegexParamChildren(node: PrefixTrieNode): PrefixTrieNode[] | null {
+  return regexParamChildrenStore.get(node) ?? null;
+}
+function setRegexParamChildren(node: PrefixTrieNode, value: PrefixTrieNode[] | null): void {
+  if (value === null) regexParamChildrenStore.delete(node);
+  else regexParamChildrenStore.set(node, value);
+}
+function getRegexAst(node: PrefixTrieNode): string | null {
+  return regexAstStore.get(node) ?? null;
+}
+function setRegexAst(node: PrefixTrieNode, value: string): void {
+  regexAstStore.set(node, value);
+}
+function getWildcardName(node: PrefixTrieNode): string | null {
+  return wildcardNameStore.get(node) ?? null;
+}
+function setWildcardName(node: PrefixTrieNode, value: string | null): void {
+  if (value === null) wildcardNameStore.delete(node);
+  else wildcardNameStore.set(node, value);
 }
 
 export interface RouteMeta {
@@ -94,7 +129,7 @@ export class WildcardPrefixIndex {
         for (let si = 0; si < segs.length; si++) {
           const seg = segs[si]!;
           if (seg.length === 0) continue;
-          if (node.wildcardName !== null) {
+          if (getWildcardName(node) !== null) {
             partial.freshLiteralEdges = freshLiteralEdges;
             partial.freshParamParents = freshParamParents;
             partial.freshRegexParents = freshRegexParents;
@@ -120,7 +155,7 @@ export class WildcardPrefixIndex {
           visited.push(node);
         }
       } else if (part.type === 'param') {
-        if (node.wildcardName !== null) {
+        if (getWildcardName(node) !== null) {
           partial.freshLiteralEdges = freshLiteralEdges;
           partial.freshParamParents = freshParamParents;
           partial.freshRegexParents = freshRegexParents;
@@ -135,7 +170,7 @@ export class WildcardPrefixIndex {
             this.revert(partial, false);
             return err(routeConflict('a plain param sibling already covers this segment', routeMeta));
           }
-          let siblings = node.regexParamChildren;
+          let siblings = getRegexParamChildren(node);
           if (siblings !== null && siblings.length >= this.maxRegexSiblingsPerSegment) {
             partial.freshLiteralEdges = freshLiteralEdges;
             partial.freshParamParents = freshParamParents;
@@ -147,13 +182,13 @@ export class WildcardPrefixIndex {
           if (siblings !== null) {
             for (let i = 0; i < siblings.length; i++) {
               const ex = siblings[i]!;
-              if (ex.regexAst === part.pattern) { matched = ex; break; }
+              if (getRegexAst(ex) === part.pattern) { matched = ex; break; }
             }
           }
           if (matched === null && siblings !== null) {
             for (let i = 0; i < siblings.length; i++) {
               const ex = siblings[i]!;
-              if (!safeRegexDisjoint(ex.regexAst!, part.pattern)) {
+              if (!safeRegexDisjoint(getRegexAst(ex)!, part.pattern)) {
                 partial.freshLiteralEdges = freshLiteralEdges;
                 partial.freshParamParents = freshParamParents;
                 partial.freshRegexParents = freshRegexParents;
@@ -169,7 +204,7 @@ export class WildcardPrefixIndex {
             const createdArray = siblings === null;
             if (createdArray) {
               siblings = [];
-              node.regexParamChildren = siblings;
+              setRegexParamChildren(node, siblings);
             }
             siblings!.push(fresh);
             if (freshRegexParents === null) freshRegexParents = [];
@@ -178,7 +213,8 @@ export class WildcardPrefixIndex {
           }
           visited.push(node);
         } else {
-          if (node.regexParamChildren !== null && node.regexParamChildren.length > 0) {
+          const existingRegexSiblings = getRegexParamChildren(node);
+          if (existingRegexSiblings !== null && existingRegexSiblings.length > 0) {
             partial.freshLiteralEdges = freshLiteralEdges;
             partial.freshParamParents = freshParamParents;
             partial.freshRegexParents = freshRegexParents;
@@ -220,7 +256,7 @@ export class WildcardPrefixIndex {
         this.revert(partial, false);
         return err(routeUnreachable('a descendant terminal or wildcard already covers this prefix', routeMeta));
       }
-      node.wildcardName = wildcardTailName;
+      setWildcardName(node, wildcardTailName);
       for (let i = 0; i < visited.length; i++) visited[i]!.subtreeWildcardCount++;
     } else {
       if (node.terminalMeta !== null) {
@@ -236,7 +272,7 @@ export class WildcardPrefixIndex {
         this.revert(partial, false);
         return err(routeConflict('optional-expansion duplicate with different identity', routeMeta));
       }
-      if (node.wildcardName !== null) {
+      if (getWildcardName(node) !== null) {
         this.revert(partial, false);
         return err(routeUnreachable('a wildcard is registered at this exact prefix', routeMeta));
       }
@@ -269,7 +305,7 @@ export class WildcardPrefixIndex {
       }
     }
     const terminalNode = visited[visited.length - 1]!;
-    if (plan.hasWildcardTail) terminalNode.wildcardName = null;
+    if (plan.hasWildcardTail) setWildcardName(terminalNode, null);
     else terminalNode.terminalMeta = null;
     const fle = plan.freshLiteralEdges;
     if (fle !== null) {
@@ -291,9 +327,10 @@ export class WildcardPrefixIndex {
     if (frp !== null) {
       for (let i = frp.length - 1; i >= 0; i--) {
         const r = frp[i]!;
-        if (r.parent.regexParamChildren !== null) {
-          r.parent.regexParamChildren.pop();
-          if (r.createdArray) r.parent.regexParamChildren = null;
+        const siblings = getRegexParamChildren(r.parent);
+        if (siblings !== null) {
+          siblings.pop();
+          if (r.createdArray) setRegexParamChildren(r.parent, null);
         }
       }
     }
@@ -341,9 +378,6 @@ function createNode(): PrefixTrieNode {
     literalChildren: null,
     paramChild: null,
     paramName: null,
-    regexParamChildren: null,
-    regexAst: null,
-    wildcardName: null,
     terminalMeta: null,
     subtreeTerminalCount: 0,
     subtreeWildcardCount: 0,
@@ -352,7 +386,7 @@ function createNode(): PrefixTrieNode {
 
 function createRegexNode(regexAst: string): PrefixTrieNode {
   const n = createNode();
-  n.regexAst = regexAst;
+  setRegexAst(n, regexAst);
   return n;
 }
 
