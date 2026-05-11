@@ -321,11 +321,19 @@ function subtreeShape(node: SegmentNode): string {
   return parts.join('\x02');
 }
 
-/** Walk to the unique terminal node and return its `store`. Returns null
- *  if there is no unique terminal (multiple stores on the path). */
+/**
+ * Walk to the unique terminal node and return its `store`. Returns null
+ * if there is no unique terminal (multiple stores on the path). The depth
+ * bound mirrors `MAX_SEGMENTS` from `builder/constants.ts` (64) — paths
+ * can't legally be deeper than that, so the cap doubles as a defense
+ * against a malformed tree producing a runaway descent.
+ */
 function leafStoreOf(node: SegmentNode): number | null {
   let cur: SegmentNode = node;
   let depth = 0;
+  // 64 = MAX_SEGMENTS (builder/constants). Paths deeper than this are
+  // rejected at registration, so this is just paranoia guarding against a
+  // malformed tree shape; in practice descent terminates much earlier.
   while (depth++ < 64) {
     if (cur.store !== null) return cur.store;
     if (cur.paramChild !== null && cur.paramChild.nextSibling === null) {
