@@ -1,6 +1,6 @@
 {
   "name": "@zipbul/query-parser",
-  "version": "0.2.3",
+  "version": "0.2.4",
   "description": "High-performance, RFC 3986 compliant query string parser with strict security controls",
   "license": "MIT",
   "author": "Junhyung Park (https://github.com/parkrevil)",

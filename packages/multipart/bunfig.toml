@@ -1,0 +1,14 @@
+[test]
+onlyFailures = true
+coverage = true
+coverageReporter = ["text", "lcov"]
+coverageThreshold = 0.95
+coveragePathIgnorePatterns = [
+  "node_modules/**",
+  "dist/**",
+  "../shared/**",
+  "../result/**"
+]
+
+[test.reporter]
+dots = true

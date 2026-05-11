@@ -112,12 +112,10 @@ import { err } from '@zipbul/result';
 // 데이터 없음 — 단순 신호
 const e1 = err();
 // e1.data → never (접근 불가)
-// e1.stack → 캡처된 스택 트레이스
 
 // 데이터 포함 — 에러 상세 정보 전달
 const e2 = err('not found');
 // e2.data → 'not found'
-// e2.stack → 캡처된 스택 트레이스
 
 // 풍부한 에러 객체
 const e3 = err({ code: 'TIMEOUT', retryAfter: 3000 });
@@ -129,7 +127,6 @@ const e3 = err({ code: 'TIMEOUT', retryAfter: 3000 });
 | 프로퍼티 | 타입 | 설명 |
 |:---------|:-----|:-----|
 | `data` | `E` | 첨부된 에러 데이터 |
-| `stack` | `string` | `err()` 호출 지점에서 캡처된 스택 트레이스 |
 
 > **불변성** — 모든 `Err`는 `Object.freeze()`됩니다. strict mode에서 프로퍼티를 수정하면 `TypeError`가 발생합니다.
 
@@ -198,7 +195,6 @@ type ApiResult = Result<User, { code: string; message: string }>;
 
 ```typescript
 type Err<E = never> = {
-  stack: string;
   data: E;
 };
 ```
@@ -373,21 +369,6 @@ async function fetchUser(id: number): Promise<Result<User, ApiError>> {
   }
 }
 ```
-
-### 스택 트레이스
-
-모든 `Err`는 생성 시점에 스택 트레이스를 캡처하여, `throw` 없이 디버깅이 가능합니다:
-
-```typescript
-const e = err('something went wrong');
-console.log(e.stack);
-// Error
-//     at err (/.../err.ts:22:18)
-//     at validate (/.../validate.ts:15:12)
-//     at handleRequest (/.../server.ts:8:20)
-```
-
-<br>
 
 ## 🔌 프레임워크 연동 예시
 
