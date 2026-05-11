@@ -45,6 +45,14 @@
         "safe-regex2": "^5.0.0",
       },
     },
+    "packages/helmet": {
+      "name": "@zipbul/helmet",
+      "version": "0.0.1",
+      "dependencies": {
+        "@zipbul/result": "workspace:*",
+        "@zipbul/shared": "workspace:*",
+      },
+    },
     "packages/multipart": {
       "name": "@zipbul/multipart",
       "version": "0.1.1",
@@ -203,6 +211,8 @@
     "@zipbul/core": ["@zipbul/core@0.1.1", "", { "dependencies": { "@zipbul/baker": "^0.1.0", "@zipbul/common": "0.1.1", "@zipbul/logger": "0.1.1", "dotenv": "^16.4.5", "exponential-backoff": "^3.1.2" } }, "sha512-D1zBxaNB0YDDn2sgPMxsB3Zz5SxH780zTAbURDFKxKeLWXxJIsGusHwYoMRzszDTBi4OpRLLaDqyENQ4dNHCPw=="],
 
     "@zipbul/cors": ["@zipbul/cors@workspace:packages/cors"],
+
+    "@zipbul/helmet": ["@zipbul/helmet@workspace:packages/helmet"],
 
     "@zipbul/http-adapter": ["@zipbul/http-adapter@0.1.1", "", { "dependencies": { "http-status-codes": "^2.3" }, "peerDependencies": { "@zipbul/baker": "^0.1.0", "@zipbul/common": "0.1.1", "@zipbul/core": "0.1.1", "@zipbul/logger": "0.1.1" } }, "sha512-xM2sqWgRSF+D2kQVBmtTea/vxN/E9h7g3/G/c3oVhLApGhBKogu9fcjD/4vp/04qgKSI8eKkEIK8jZi7aXz+dA=="],
 

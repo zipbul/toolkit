@@ -1,0 +1,21 @@
+# Sources (dist/ is the only published artifact via "files")
+src/
+index.ts
+
+# Tests
+test/
+*.spec.ts
+*.test.ts
+
+# Config
+tsconfig.json
+tsconfig.build.json
+bunfig.toml
+
+# Dev
+coverage/
+bench/
+
+# Docs
+README.ko.md
+PLAN.md
