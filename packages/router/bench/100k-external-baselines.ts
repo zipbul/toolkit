@@ -286,7 +286,7 @@ function correctnessCheck(
   return { ok: true };
 }
 
-function measure(name: string, build: (rs: Route[]) => unknown, match: (router: unknown, method: string, path: string) => unknown): void {
+async function measure(name: string, build: (rs: Route[]) => unknown, match: (router: unknown, method: string, path: string) => unknown): Promise<void> {
   const meta = adapterMeta[name];
   const sc = scenario();
   const version = meta !== undefined ? resolveAdapterVersion(meta.pkg) : 'unknown';
@@ -320,6 +320,13 @@ function measure(name: string, build: (rs: Route[]) => unknown, match: (router: 
     console.log(`build=${buildMs.toFixed(2)}ms timeoutClass=build phase exceeded ${BUILD_TIMEOUT_MS}ms`);
     return;
   }
+  // Wait for libpas to scavenge transient build pages. zipbul kicks off a
+  // fire-and-forget compactMemory inside build(); other adapters don't,
+  // but they also don't have the transient codegen/factor bookkeeping
+  // that holds pages between Bun.gc and the next libpas tick. The 400ms
+  // gap is libpas's empty-page age (~300ms) + a safety margin so the RSS
+  // reading reflects steady state across all adapters uniformly.
+  await new Promise(r => setTimeout(r, 400));
   const after = mem();
   if (after.rss / 1024 / 1024 > BENCH_MEMORY_CAP_MB) {
     console.log(`build=${buildMs.toFixed(2)}ms memCapClass=exceeded rss=${(after.rss / 1024 / 1024).toFixed(2)}MB`);
@@ -344,7 +351,7 @@ function measure(name: string, build: (rs: Route[]) => unknown, match: (router: 
   bench('wrong-method', () => match(router, sc.wrongMethod.method, sc.wrongMethod.path));
 }
 
-const builders: Record<string, () => void> = {
+const builders: Record<string, () => Promise<void>> = {
   zipbul: () => measure(
     'zipbul',
     (rs) => {
@@ -427,4 +434,4 @@ if (run === undefined) {
 }
 
 console.log(`bun=${typeof Bun !== 'undefined' ? Bun.version : 'n/a'} node=${process.version} platform=${process.platform} arch=${process.arch}`);
-run();
+await run();

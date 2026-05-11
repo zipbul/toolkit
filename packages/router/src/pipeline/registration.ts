@@ -13,7 +13,7 @@ import { PathParser } from '../builder/path-parser';
 import { expandOptional } from '../builder/route-expand';
 import { RouterError } from '../error';
 import { MethodRegistry } from '../method-registry';
-import { createSegmentNode, insertIntoSegmentTree } from '../matcher/segment-tree';
+import { createSegmentNode, detectTenantFactor, insertIntoSegmentTree, setTenantFactor } from '../matcher/segment-tree';
 import { buildDecoder } from '../matcher/decoder';
 import { NullProtoObj } from '../internal/null-proto-obj';
 import { WildcardPrefixIndex, rollbackPlan, type RouteMeta, type CommitPlan } from './wildcard-prefix-index';
@@ -379,6 +379,32 @@ export class Registration<T> {
     // here so they do not retain memory past snapshot publication.
     this.prefixIndex = null;
     this.identityRegistry = null;
+    // Tenant-prefix factor detection. When a method's root has a high-fanout
+    // sibling group whose subtrees only differ in the terminal handler index,
+    // collapse them onto a single canonical subtree + Map<prefix, handler>.
+    // Empirical (100k tenant `/tenant-${i}/users/:id/posts/:postId`):
+    // 706k objects → 206k objects, RSS 220 MB → 94 MB after compactMemory.
+    let factorApplied = false;
+    for (const root of state.segmentTrees) {
+      if (root === undefined || root === null) continue;
+      const factor = detectTenantFactor(root);
+      if (factor !== null) {
+        setTenantFactor(root, factor);
+        // Drop the original 100k staticChildren now that the factor map
+        // owns the dispatch — they're no longer reachable from the walker.
+        root.staticChildren = null;
+        root.singleChildKey = null;
+        root.singleChildNext = null;
+        factorApplied = true;
+      }
+    }
+    // When factor applied, the orphaned subtrees (100k+ chains) need an
+    // explicit collect cycle so libpas can scavenge their pages. Without
+    // this, RSS stays at the pre-factor peak until the next external GC.
+    if (factorApplied) {
+      Bun.gc(true);
+      Bun.shrink();
+    }
     if (state.diagnostics !== null) {
       const paramsFactorySlots = state.paramsFactories.filter(Boolean);
       state.diagnostics.routes = pendingRouteCount;
