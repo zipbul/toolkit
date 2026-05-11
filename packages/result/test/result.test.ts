@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it } from 'bun:test';
 
 import { DEFAULT_MARKER_KEY, err, isErr, safe, setMarkerKey } from '../index';
-import type { Err, Result, ResultAsync } from '../index';
+import type { Result, ResultAsync } from '../index';
 
 describe('result', () => {
   afterEach(() => {
@@ -75,7 +75,6 @@ describe('result', () => {
     const result = err();
     // Assert
     expect(isErr(result)).toBe(true);
-    expect(typeof result.stack).toBe('string');
   });
 
   it('should handle err() with string data end-to-end', () => {
@@ -116,11 +115,11 @@ describe('result', () => {
     expect((r2 as Record<string, unknown>)[DEFAULT_MARKER_KEY]).toBe(true);
   });
 
-  it('should have string stack on err() results', () => {
+  it('should not have stack property on err() results', () => {
     // Arrange / Act
     const result = err();
     // Assert
-    expect(typeof result.stack).toBe('string');
+    expect((result as Record<string, unknown>)['stack']).toBeUndefined();
   });
 
   describe('marker key configuration', () => {
@@ -164,9 +163,8 @@ describe('result', () => {
   });
 
   it('should distinguish err from success object with same shape', () => {
-    // Arrange — success object that has stack and data fields
-    const success: Result<{ stack: string; data: string }, string> = {
-      stack: 'not an error',
+    // Arrange — success object that has data field
+    const success: Result<{ data: string }, string> = {
       data: 'hello',
     };
     const failure = err('fail');
@@ -195,7 +193,6 @@ describe('result', () => {
       expect(isErr(result)).toBe(true);
       if (isErr(result)) {
         expect(result.data).toBeInstanceOf(Error);
-        expect(typeof result.stack).toBe('string');
       }
     });
 
@@ -221,7 +218,6 @@ describe('result', () => {
       expect(isErr(result)).toBe(true);
       if (isErr<string>(result)) {
         expect(result.data).toBe('async fail');
-        expect(typeof result.stack).toBe('string');
       }
     });
   });

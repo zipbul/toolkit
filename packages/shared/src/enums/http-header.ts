@@ -18,6 +18,15 @@ export enum HttpHeader {
   AccessControlRequestMethod = 'access-control-request-method',
   AccessControlRequestHeaders = 'access-control-request-headers',
 
+  // ── Content / encoding ──
+  ContentType = 'content-type',
+  ContentDisposition = 'content-disposition',
+  ContentEncoding = 'content-encoding',
+  ContentLength = 'content-length',
+  AcceptEncoding = 'accept-encoding',
+  TransferEncoding = 'transfer-encoding',
+  ETag = 'etag',
+
   // ── Helmet: CSP family ──
   ContentSecurityPolicy = 'content-security-policy',
   ContentSecurityPolicyReportOnly = 'content-security-policy-report-only',

@@ -1,0 +1,64 @@
+{
+  "name": "@zipbul/compression",
+  "version": "0.0.1",
+  "description": "Bun-native HTTP response compression middleware for standard Web APIs",
+  "license": "MIT",
+  "author": "Junhyung Park (https://github.com/parkrevil)",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/zipbul/toolkit",
+    "directory": "packages/compression"
+  },
+  "bugs": "https://github.com/zipbul/toolkit/issues",
+  "homepage": "https://github.com/zipbul/toolkit/tree/main/packages/compression#readme",
+  "keywords": [
+    "compression",
+    "gzip",
+    "brotli",
+    "zstd",
+    "deflate",
+    "http",
+    "fetch",
+    "web-api",
+    "bun",
+    "middleware",
+    "typescript",
+    "zipbul"
+  ],
+  "engines": {
+    "bun": ">=1.2.0"
+  },
+  "type": "module",
+  "module": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "sideEffects": false,
+  "publishConfig": {
+    "provenance": true
+  },
+  "scripts": {
+    "build": "bun build index.ts --outdir dist --target bun --format esm --packages external --production && tsc -p tsconfig.build.json",
+    "test": "bun test",
+    "coverage": "bun test --coverage"
+  },
+  "dependencies": {
+    "@zipbul/result": "workspace:*",
+    "@zipbul/shared": "workspace:*"
+  },
+  "peerDependencies": {
+    "@zipbul/common": "^0.1.0",
+    "@zipbul/http-adapter": "^0.1.0"
+  },
+  "devDependencies": {
+    "@zipbul/common": "^0.1.0",
+    "@zipbul/http-adapter": "^0.1.0"
+  }
+}

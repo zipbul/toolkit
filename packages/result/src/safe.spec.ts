@@ -241,7 +241,7 @@ describe('safe', () => {
 
     it('should not inspect return value and return Err-like object as success', () => {
       // Arrange — fn returns object that looks like Err
-      const errLike = { stack: 'fake', data: 'not real' };
+      const errLike = { data: 'not real' };
       const fn = () => errLike;
       // Act
       const result = safe(fn);
