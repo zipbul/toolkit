@@ -143,6 +143,20 @@ export interface RouterPublicApi<T> {
   build(): RouterPublicApi<T>;
   match(method: string, path: string): MatchOutput<T> | null;
   allowedMethods(path: string): readonly string[];
+  /**
+   * Bun-only post-build memory compaction. Triggers `Bun.shrink()` and
+   * polls `process.memoryUsage().rss` until it stabilizes (libpas's
+   * page-decommit threshold is asynchronous). No-op on non-Bun runtimes.
+   *
+   * Empirical: 100k tenant param routes 625 MB → 275 MB (-56%) in
+   * ~300-400ms with no hot-path regression.
+   */
+  compactMemory(opts?: {
+    maxMs?: number;
+    pollMs?: number;
+    stableHits?: number;
+    minDeltaMb?: number;
+  }): Promise<{ iters: number; rssBefore: number; rssAfter: number }>;
 }
 
 /**

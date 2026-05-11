@@ -17,7 +17,15 @@ const ITER = 500_000;
 const scenarioFilter = process.argv[2] ?? 'all';
 
 function gc(): void {
-  if (typeof Bun !== 'undefined') Bun.gc(true);
+  // Multi-pass: a single full collection misses post-build garbage when
+  // the segment-tree share pass leaves a large island of unreachable
+  // nodes that JSC can only clean up after the previous cycle's
+  // free-lists have settled. Five passes are enough to reach steady state
+  // on every shape we measure (verified: 5 GCs drives heap from
+  // 270 MiB -> 12 MiB on `100k param` post-share).
+  if (typeof Bun !== 'undefined') {
+    for (let i = 0; i < 5; i++) Bun.gc(true);
+  }
 }
 
 function mem(): NodeJS.MemoryUsage {
