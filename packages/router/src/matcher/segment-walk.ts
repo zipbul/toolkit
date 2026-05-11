@@ -113,10 +113,12 @@ export function createSegmentWalker(
   // Tenant-factor short-circuit. When the root carries a factor descriptor
   // (post-seal optimization), staticChildren has been moved into a hash
   // map and the codegen would emit a walker against an empty-looking tree.
-  // Skip both wildcard and full-tree codegen and go straight to the
-  // iterative walker, which knows how to dispatch through the factor.
-  if (getTenantFactor(root) !== undefined) {
-    return createIterativeWalker(root, decoder);
+  // Skip both wildcard and full-tree codegen and emit the factored walker
+  // directly so the non-factored iterative path stays bytecode-identical
+  // (zero closure-scope pollution from a factor variable that never fires).
+  const factorAtEntry = getTenantFactor(root);
+  if (factorAtEntry !== undefined) {
+    return createFactoredWalker(root, decoder, factorAtEntry.keyToTerminal, factorAtEntry.sharedNext);
   }
 
   const compiledWild = tryCodegenStaticPrefixWildcard(root);
@@ -284,13 +286,6 @@ export function createSegmentWalker(
 }
 
 function createIterativeWalker(root: SegmentNode, decoder: DecoderFn): MatchFn {
-  // Tenant-factor specialization. When the root carries a factor descriptor,
-  // emit a walker variant that does first-segment Map dispatch + shared-subtree
-  // walk + leaf override. When no factor is present, return the original
-  // walker untouched so non-factored routers pay zero overhead.
-  const factor = getTenantFactor(root);
-  if (factor !== undefined) return createFactoredWalker(root, decoder, factor.keyToTerminal, factor.sharedNext);
-
   return function walk(url: string, state: MatchState): boolean {
     state.paramCount = 0;
     const len = url.length;
