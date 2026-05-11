@@ -29,6 +29,13 @@
         "@zipbul/http-adapter": "^0.1.0",
       },
     },
+    "packages/cookie": {
+      "name": "@zipbul/cookie",
+      "version": "0.0.0",
+      "dependencies": {
+        "@zipbul/result": "workspace:*",
+      },
+    },
     "packages/cors": {
       "name": "@zipbul/cors",
       "version": "0.1.4",
@@ -198,6 +205,8 @@
     "@zipbul/common": ["@zipbul/common@0.1.1", "", { "dependencies": { "@zipbul/baker": "^0.1.0", "@zipbul/result": "^0.1.4" } }, "sha512-z/MDUSQr4BUkNDzhw+zmZSSnD5W4VbN0+jtyuYx5qRdTp1+2OZajvg+QUUeNSun4IyasvJhPTWrHL9w+cCgnSw=="],
 
     "@zipbul/compression": ["@zipbul/compression@workspace:packages/compression"],
+
+    "@zipbul/cookie": ["@zipbul/cookie@workspace:packages/cookie"],
 
     "@zipbul/core": ["@zipbul/core@0.1.1", "", { "dependencies": { "@zipbul/baker": "^0.1.0", "@zipbul/common": "0.1.1", "@zipbul/logger": "0.1.1", "dotenv": "^16.4.5", "exponential-backoff": "^3.1.2" } }, "sha512-D1zBxaNB0YDDn2sgPMxsB3Zz5SxH780zTAbURDFKxKeLWXxJIsGusHwYoMRzszDTBi4OpRLLaDqyENQ4dNHCPw=="],
 
