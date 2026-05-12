@@ -71,7 +71,6 @@ export type RouterErrorKind =
   | 'optional-expansion-limit' // 단일 path의 maxOptionalExpansions 초과
   | 'expansion-total-limit'   // maxExpandedRoutes 초과
   | 'regex-sibling-limit'     // maxRegexSiblingsPerSegment 초과
-  | 'option-invalid'     // 옵션 numeric/조합 violation
   | 'route-validation';  // build()/seal() 일괄 검증 실패
 
 export interface RouteValidationIssue {
@@ -127,7 +126,6 @@ export type RouterErrorData = {
   | { kind: 'optional-expansion-limit'; message: string; suggestion?: string }
   | { kind: 'expansion-total-limit'; message: string; suggestion?: string }
   | { kind: 'regex-sibling-limit'; message: string; segment?: string; suggestion?: string }
-  | { kind: 'option-invalid'; message: string; option?: string; suggestion?: string }
   | { kind: 'route-validation'; message: string; errors: RouteValidationIssue[] }
 );
 

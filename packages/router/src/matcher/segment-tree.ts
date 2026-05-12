@@ -401,11 +401,11 @@ export function compactSegmentTree(root: SegmentNode): { foldedNodes: number; ch
   // Intern shared `staticPrefix` arrays so 100k nodes carrying the same
   // single-element prefix share one array reference instead of allocating
   // 100k 1-entry arrays.
-  const prefixIntern = new Map<string, readonly string[]>();
+  const prefixIntern = new Map<string, string[]>();
   const internPrefix = (parts: string[]): string[] => {
     const key = parts.join('\x00');
     const existing = prefixIntern.get(key);
-    if (existing !== undefined) return existing as string[];
+    if (existing !== undefined) return existing;
     prefixIntern.set(key, parts);
     return parts;
   };
