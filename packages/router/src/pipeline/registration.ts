@@ -94,14 +94,6 @@ export interface RegistrationSnapshot<T> {
   /** True iff any registered route declared a regex pattern tester. The
    *  full tester cache is build-only and not retained on the snapshot. */
   anyTester: boolean;
-  /** True iff seal() applied tenant-prefix factoring on at least one
-   *  method tree. Signals the Router that a post-build compactMemory is
-   *  worth scheduling — the orphaned high-fanout subtree branches need
-   *  libpas to scavenge their pages. Without factoring, build() leaves
-   *  a heap small enough that the auto-compact overhead exceeds its
-   *  payoff (the test suite alone went 4s → 17s when compactMemory
-   *  fired unconditionally on every small-router build). */
-  factorApplied: boolean;
 }
 
 interface BuildState<T> {
@@ -185,17 +177,6 @@ export class Registration<T> {
 
   isSealed(): boolean {
     return this.sealed;
-  }
-
-  /**
-   * True iff seal() applied tenant-prefix factoring on at least one
-   * method tree. Surfaced so the Router constructor can decide whether
-   * to schedule a post-build compactMemory (only worth it when the
-   * factoring orphaned a high-fanout subtree that needs libpas to
-   * scavenge).
-   */
-  factorWasApplied(): boolean {
-    return this.snapshot?.factorApplied === true;
   }
 
   get staticByMethod(): RegistrationSnapshot<T>['staticByMethod'] | undefined {
@@ -394,7 +375,6 @@ export class Registration<T> {
       terminalSlab,
       paramsFactories: state.paramsFactories,
       anyTester: state.testerCache.size > 0,
-      factorApplied: false, // overwritten below if detection fires
     };
     addMs(state.diagnostics, 'snapshotMs', snapshotStart);
 
@@ -407,28 +387,24 @@ export class Registration<T> {
     // sibling group whose subtrees only differ in the terminal handler index,
     // collapse them onto a single canonical subtree + Map<prefix, handler>.
     // Empirical (100k tenant `/tenant-${i}/users/:id/posts/:postId`):
-    // 706k objects → 206k objects, RSS 220 MB → 94 MB after compactMemory.
+    // 706k objects → 206k objects, RSS 220 MB → ~50 MB once libpas scavenges
+    // the orphaned subtrees (~300 ms after Bun.gc).
     let factorApplied = false;
     for (const root of state.segmentTrees) {
       if (root === undefined || root === null) continue;
       const factor = detectTenantFactor(root);
       if (factor !== null) {
         setTenantFactor(root, factor);
-        // Drop the original 100k staticChildren now that the factor map
-        // owns the dispatch — they're no longer reachable from the walker.
+        // Drop the original high-fanout staticChildren now that the
+        // factor map owns the dispatch — they're no longer reachable
+        // from the walker.
         root.staticChildren = null;
         root.singleChildKey = null;
         root.singleChildNext = null;
         factorApplied = true;
       }
     }
-    // When factor applied, the orphaned subtrees (100k+ chains) need an
-    // explicit collect cycle so libpas can scavenge their pages. Without
-    // this, RSS stays at the pre-factor peak until the next external GC.
-    if (factorApplied) {
-      Bun.gc(true);
-      snapshot.factorApplied = true;
-    }
+    if (factorApplied) Bun.gc(true);
     if (state.diagnostics !== null) {
       const paramsFactorySlots = state.paramsFactories.filter(Boolean);
       state.diagnostics.routes = pendingRouteCount;
