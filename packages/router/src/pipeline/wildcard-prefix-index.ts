@@ -120,6 +120,20 @@ export class WildcardPrefixIndex {
     let node = root;
     let wildcardTailName: string | null = null;
 
+    // Mid-walk reject. Sync the in-flight `freshX` carriers onto the plan
+    // (so applyRevert sees every node we attached) and roll back. The
+    // five-line dance is open-coded at every error path otherwise; this
+    // collapses seven copies into one call. Bound method, not a closure
+    // — `planAndCommit` runs once per registered route and we don't want
+    // to mint a captured closure for every entry of a 100k-route build.
+    const abort = (data: RouterErrorData): Result<never, RouterErrorData> => {
+      partial.freshLiteralEdges = freshLiteralEdges;
+      partial.freshParamParents = freshParamParents;
+      partial.freshRegexParents = freshRegexParents;
+      applyRevert(partial, false);
+      return err(data);
+    };
+
     for (let pi = 0; pi < parts.length; pi++) {
       const part = parts[pi]!;
       if (part.type === 'static') {
@@ -128,11 +142,7 @@ export class WildcardPrefixIndex {
           const seg = segs[si]!;
           if (seg.length === 0) continue;
           if (getWildcardName(node) !== null) {
-            partial.freshLiteralEdges = freshLiteralEdges;
-            partial.freshParamParents = freshParamParents;
-            partial.freshRegexParents = freshRegexParents;
-            applyRevert(partial, false);
-            return err(routeUnreachable('ancestor wildcard makes this route unreachable', routeMeta));
+            return abort(routeUnreachable('ancestor wildcard makes this route unreachable', routeMeta));
           }
           let children = node.literalChildren;
           let child = children !== null ? children[seg] : undefined;
@@ -154,27 +164,15 @@ export class WildcardPrefixIndex {
         }
       } else if (part.type === 'param') {
         if (getWildcardName(node) !== null) {
-          partial.freshLiteralEdges = freshLiteralEdges;
-          partial.freshParamParents = freshParamParents;
-          partial.freshRegexParents = freshRegexParents;
-          applyRevert(partial, false);
-          return err(routeUnreachable('ancestor wildcard makes this route unreachable', routeMeta));
+          return abort(routeUnreachable('ancestor wildcard makes this route unreachable', routeMeta));
         }
         if (part.pattern !== null) {
           if (node.paramChild !== null) {
-            partial.freshLiteralEdges = freshLiteralEdges;
-            partial.freshParamParents = freshParamParents;
-            partial.freshRegexParents = freshRegexParents;
-            applyRevert(partial, false);
-            return err(routeConflict('a plain param sibling already covers this segment', routeMeta));
+            return abort(routeConflict('a plain param sibling already covers this segment', routeMeta));
           }
           let siblings = getRegexParamChildren(node);
           if (siblings !== null && siblings.length >= this.maxRegexSiblingsPerSegment) {
-            partial.freshLiteralEdges = freshLiteralEdges;
-            partial.freshParamParents = freshParamParents;
-            partial.freshRegexParents = freshRegexParents;
-            applyRevert(partial, false);
-            return err(regexSiblingLimit(this.maxRegexSiblingsPerSegment, routeMeta));
+            return abort(regexSiblingLimit(this.maxRegexSiblingsPerSegment, routeMeta));
           }
           let matched: PrefixTrieNode | null = null;
           if (siblings !== null) {
@@ -190,11 +188,7 @@ export class WildcardPrefixIndex {
             // to this branch anyway). Until a real analyzer lands here,
             // any distinct regex sibling is rejected as a conflict so
             // ambiguous matching never reaches the runtime walker.
-            partial.freshLiteralEdges = freshLiteralEdges;
-            partial.freshParamParents = freshParamParents;
-            partial.freshRegexParents = freshRegexParents;
-            applyRevert(partial, false);
-            return err(routeConflict('regex param sibling overlap not provably disjoint', routeMeta));
+            return abort(routeConflict('regex param sibling overlap not provably disjoint', routeMeta));
           }
           if (matched !== null) {
             node = matched;
@@ -214,18 +208,10 @@ export class WildcardPrefixIndex {
         } else {
           const existingRegexSiblings = getRegexParamChildren(node);
           if (existingRegexSiblings !== null && existingRegexSiblings.length > 0) {
-            partial.freshLiteralEdges = freshLiteralEdges;
-            partial.freshParamParents = freshParamParents;
-            partial.freshRegexParents = freshRegexParents;
-            applyRevert(partial, false);
-            return err(routeConflict('a regex param sibling already covers this segment', routeMeta));
+            return abort(routeConflict('a regex param sibling already covers this segment', routeMeta));
           }
           if (node.paramChild !== null && node.paramName !== part.name) {
-            partial.freshLiteralEdges = freshLiteralEdges;
-            partial.freshParamParents = freshParamParents;
-            partial.freshRegexParents = freshRegexParents;
-            applyRevert(partial, false);
-            return err(routeDuplicate(routeMeta));
+            return abort(routeDuplicate(routeMeta));
           }
           if (node.paramChild !== null) {
             node = node.paramChild;

@@ -95,11 +95,11 @@ function tryCodegenStaticPrefixWildcard(root: SegmentNode): MatchFn | null {
     };
   `;
 
-  try {
-    return new Function(body)() as MatchFn;
-  } catch {
-    return null;
-  }
+  // Every interpolated value flows through `JSON.stringify` (literal
+  // prefix) or `Number` (offsets) and the body is a closed template, so
+  // the emitted source is always valid JS — no try/catch SyntaxError
+  // path is reachable here.
+  return new Function(body)() as MatchFn;
 }
 
 /**
