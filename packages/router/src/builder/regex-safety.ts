@@ -1,6 +1,13 @@
-import type { QuantifierFrame, RegexSafetyAssessment } from './types';
-
 import { BACKREFERENCE_PATTERN } from './constants';
+
+interface QuantifierFrame {
+  hadUnlimited: boolean;
+}
+
+interface RegexSafetyAssessment {
+  safe: boolean;
+  reason?: string;
+}
 
 /**
  * Regex 안전 가드.

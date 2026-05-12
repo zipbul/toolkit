@@ -168,26 +168,6 @@ export class Registration<T> {
     return this.sealed;
   }
 
-  get staticByMethod(): RegistrationSnapshot<T>['staticByMethod'] | undefined {
-    return this.snapshot?.staticByMethod;
-  }
-
-  get segmentTrees(): RegistrationSnapshot<T>['segmentTrees'] | undefined {
-    return this.snapshot?.segmentTrees;
-  }
-
-  get handlers(): RegistrationSnapshot<T>['handlers'] | undefined {
-    return this.snapshot?.handlers;
-  }
-
-  get terminalSlab(): RegistrationSnapshot<T>['terminalSlab'] | undefined {
-    return this.snapshot?.terminalSlab;
-  }
-
-  get paramsFactories(): RegistrationSnapshot<T>['paramsFactories'] | undefined {
-    return this.snapshot?.paramsFactories;
-  }
-
   getDiagnostics(): RegistrationDiagnostics | null {
     return this.diagnostics;
   }

@@ -260,42 +260,34 @@ describe('sealed state', () => {
     r.add('GET', '/x', 'x');
     r.build();
 
-    // Internal-state-inspection pattern (already used across this file).
-    // After B5, Router itself only retains the matchImpl + matchLayer
-    // entry points. Frozen build-only tables now live on `registration`
-    // (segmentTrees / handlers / staticMap / staticRegistered) and
-    // `matchLayer` (activeMethodCodes, staticOutputsByMethod, trees).
-    // Hot-path tables stay mutable for JSC IC perf — freezing them
-    // costs 5-10 ns per dynamic match.
-    const internal = getRouterInternals(r) as unknown as {
-      registration: {
-        segmentTrees: unknown[];
-        handlers: unknown[];
-        staticMap: Record<string, unknown>;
-        staticRegistered: Record<string, unknown>;
-      };
-      matchLayer: {
-        activeMethodCodes: ReadonlyArray<readonly [string, number]>;
-        trees: unknown[];
-        staticOutputsByMethod: unknown[];
-      };
+    // Internal-state-inspection pattern. Frozen build-only tables live on
+    // `registration.snapshot`; `matchLayer` carries hot-path tables that
+    // intentionally stay mutable. Earlier revisions of this test referred
+    // to long-removed fields (`staticMap`, `staticRegistered`,
+    // `matchLayer.staticOutputsByMethod`); the cast covered for the
+    // missing fields and `Object.isFrozen(undefined)` is true, so the
+    // asserts passed by accident. Rewritten against the real shape.
+    const internal = getRouterInternals(r);
+    const snapshot = (internal.registration as unknown as {
+      snapshot: { segmentTrees: unknown[]; handlers: unknown[] };
+    }).snapshot;
+    const matchLayer = internal.matchLayer as unknown as {
+      activeMethodCodes: ReadonlyArray<readonly [string, number]>;
+      trees: unknown[];
     };
 
     // Build-only tables must be frozen.
-    expect(Object.isFrozen(internal.registration.segmentTrees)).toBe(true);
-    expect(Object.isFrozen(internal.registration.staticMap)).toBe(true);
-    expect(Object.isFrozen(internal.registration.staticRegistered)).toBe(true);
-    expect(Object.isFrozen(internal.matchLayer.activeMethodCodes)).toBe(true);
+    expect(Object.isFrozen(snapshot.segmentTrees)).toBe(true);
+    expect(Object.isFrozen(matchLayer.activeMethodCodes)).toBe(true);
 
     // Hot-path tables stay mutable. `handlers` is read by the emitted
     // matchImpl as `handlers[state.handlerIndex]` on every dynamic
     // match — freezing it cost 5-10 ns/match in earlier bench runs.
-    expect(Object.isFrozen(internal.registration.handlers)).toBe(false);
-    expect(Object.isFrozen(internal.matchLayer.trees)).toBe(false);
+    expect(Object.isFrozen(snapshot.handlers)).toBe(false);
+    expect(Object.isFrozen(matchLayer.trees)).toBe(false);
 
-    // Frozen object/array mutation throws TypeError in strict mode (ESM = strict).
-    expect(() => internal.registration.segmentTrees.push(null)).toThrow(TypeError);
-    expect(() => { internal.registration.staticMap['/y'] = []; }).toThrow(TypeError);
+    // Frozen array mutation throws TypeError in strict mode (ESM = strict).
+    expect(() => (snapshot.segmentTrees as unknown[]).push(null)).toThrow(TypeError);
   });
 });
 
