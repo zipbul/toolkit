@@ -17,12 +17,6 @@ interface ShapeTelemetry {
   observedFirstCallNs: number;
   generatedFunctionCount: number;
   bailReason: string | null;
-  /**
-   * Set true once an observation crossed the per-shape compile budget
-   * (default 10 ms). Future builds with the same shape skip codegen and
-   * fall back to the iterative walker so they do not pay the regression.
-   */
-  disabled: boolean;
 }
 
 export interface BuildAggregate {
@@ -34,7 +28,11 @@ export interface BuildAggregate {
   warmupTotalNs: number;
 }
 
-const COMPILE_OBSERVED_HARD_MS = 10;
+// `MAX_NODES_DEFAULT = 256` in segment-compile.ts already caps every
+// codegen-eligible tree well under the prior 10 ms compile budget that
+// previously gated `disabled`. Bench `bench/method-research/
+// GG-compile-time-large-trees.bench.ts` measured p99 ≤ 4.33 ms even at
+// the 256-node limit, so the per-shape disable path was provably dead.
 
 const shapeRegistry = new Map<string, ShapeTelemetry>();
 let buildAggregate: BuildAggregate = freshBuildAggregate();
@@ -54,18 +52,12 @@ export function shapeSignature(nodes: number, maxFanout: number, testers: number
   return `n=${nodes}|f=${maxFanout}|t=${testers}`;
 }
 
-export function shouldSkipCodegen(shape: string): boolean {
-  const t = shapeRegistry.get(shape);
-  return t !== undefined && t.disabled;
-}
-
 export function recordCompile(
   shape: string,
   compileMs: number,
   sourceBytes: number,
 ): void {
   const existing = shapeRegistry.get(shape);
-  const disabled = compileMs > COMPILE_OBSERVED_HARD_MS;
   shapeRegistry.set(shape, {
     shape,
     observedCompileMs: compileMs,
@@ -73,7 +65,6 @@ export function recordCompile(
     observedFirstCallNs: existing?.observedFirstCallNs ?? -1,
     generatedFunctionCount: (existing?.generatedFunctionCount ?? 0) + 1,
     bailReason: null,
-    disabled: disabled || (existing?.disabled ?? false),
   });
   buildAggregate.generatedFunctionCount++;
   buildAggregate.totalCompileMs += compileMs;
@@ -88,7 +79,6 @@ export function recordBail(shape: string, reason: string): void {
     observedFirstCallNs: existing?.observedFirstCallNs ?? -1,
     generatedFunctionCount: existing?.generatedFunctionCount ?? 0,
     bailReason: reason,
-    disabled: existing?.disabled ?? false,
   });
   buildAggregate.bailedFunctionCount++;
 }

@@ -7,7 +7,6 @@ import {
   recordCompile,
   recordEmitMs,
   shapeSignature,
-  shouldSkipCodegen,
 } from './codegen-telemetry';
 
 /**
@@ -174,19 +173,6 @@ export function compileSegmentTree(root: SegmentNode): CompiledPackage | null {
     });
     return null;
   }
-  // Per-shape feedback: a previous build for a structurally identical tree
-  // already exceeded the observed-compile budget. Skip codegen.
-  if (shouldSkipCodegen(shape)) {
-    recordBail(shape, 'prior-shape-disabled');
-    logCodegen({
-      event: 'bail',
-      reason: 'prior-shape-disabled',
-      shape,
-      nodes: estimate.nodes,
-    });
-    return null;
-  }
-
   const start = performance.now();
   const ctx: EmitContext = {
     bail: false,
