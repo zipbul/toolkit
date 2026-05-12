@@ -68,18 +68,14 @@ type CompiledMatch<T> = (method: string, path: string) => MatchOutput<T> | null;
  *     becomes a closure-captured constant access.
  *   - Multi-method: dispatch through `methodCodes[method]`.
  *
- * Path normalization is intentionally minimal: query strip, optional
- * trailing-slash trim, optional case-fold, optional length guards. Heavy
- * URL validation (raw `#`, malformed percent, dot segments, encoded
- * slashes, UTF-8 well-formedness, etc.) is not the router's job — it
- * belongs to the HTTP server / framework layer above. The router
- * trusts that match() inputs are already RFC-compliant pathnames.
+ * Path normalization is intentionally minimal: optional trailing-slash
+ * trim and optional case-fold. Heavy URL validation (raw `#`, malformed
+ * percent, dot segments, encoded slashes, UTF-8 well-formedness, etc.)
+ * is not the router's job — it belongs to the HTTP server / framework
+ * layer above. The router trusts that match() inputs are already
+ * RFC-compliant pathnames.
  */
 export function compileMatchFn<T>(cfg: MatchConfig<T>): CompiledMatch<T> {
-  return emitGenericMatchImpl(cfg);
-}
-
-function emitGenericMatchImpl<T>(cfg: MatchConfig<T>): CompiledMatch<T> {
   const cacheMaxSize = cfg.cacheMaxSize;
 
   const activeMethodCount = cfg.activeMethodCodes.length;
@@ -345,12 +341,10 @@ function emitGenericMatchImpl<T>(cfg: MatchConfig<T>): CompiledMatch<T> {
  * baseline-compiled code rather than the cold first-call path.
  */
 function runWarmup<T>(compiled: CompiledMatch<T>, cfg: MatchConfig<T>, shape: string): void {
-  // Telemetry receives the *warmup* duration as a stand-in for the
-  // matchImpl's compile cost. The actual `new Function()` compile happens
-  // inside `emitGenericMatchImpl` and isn't easily threaded back here, so
-  // we report the warmup loop as a coarse proxy — better than the prior
-  // unconditional `0` which made the per-shape disable threshold unable
-  // to fire on slow compiles.
+  // Telemetry receives the warmup-loop duration as a coarse proxy for the
+  // matchImpl's compile cost. The per-shape disable feedback that this
+  // figure used to gate has been removed (see GG bench), so the value is
+  // now diagnostic-only.
   const warmStart = performance.now();
   const warmPaths = ['/__zipbul_warmup__', '/__zipbul_warmup__/sub'];
   const WARMUP_ITERATIONS = 20;

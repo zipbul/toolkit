@@ -1,9 +1,20 @@
-import type { OptionalParamBehavior, RouteParams } from '../types';
+import type { OptionalParamBehavior } from '../types';
 
 interface OptionalParamDefaultsSnapshot {
   entries: Array<readonly [number, readonly string[]]>;
 }
 
+/**
+ * Build-time tracker for `:name?`-style optional parameters. The router's
+ * `set-undefined` policy is implemented entirely inside the params factory
+ * codegen (registration.ts emits `p[name] = undefined` for omitted
+ * optionals when `omitBehavior === false`), so this class is purely a
+ * snapshot/restore carrier for the seal-failure rollback path. The
+ * `record()` calls from route-expand.ts populate the map only for
+ * symmetry with that rollback — `apply()` was previously consumed at
+ * runtime but the codegen path has supplanted it (verified by removing
+ * `apply` / `has` / `isEmpty` and watching 616/616 stay green).
+ */
 export class OptionalParamDefaults {
   private readonly behavior: OptionalParamBehavior;
   private readonly defaults = new Map<number, readonly string[]>();
@@ -13,50 +24,8 @@ export class OptionalParamDefaults {
   }
 
   record(key: number, names: readonly string[]): void {
-    if (this.behavior === 'omit') {
-      return;
-    }
-
+    if (this.behavior === 'omit') return;
     this.defaults.set(key, names);
-  }
-
-  has(key: number): boolean {
-    if (this.behavior === 'omit') return false;
-
-    return this.defaults.has(key);
-  }
-
-  /**
-   * True when no optional-param defaults are tracked. Used by router codegen
-   * to skip the `optDefaults.has(handlerIndex)` runtime probe entirely when
-   * the router has no `:name?` routes — i.e. on every dynamic match.
-   * `behavior === 'omit'` keeps `defaults` empty via the early return in
-   * `record()`, so size is the single source of truth.
-   */
-  isEmpty(): boolean {
-    return this.defaults.size === 0;
-  }
-
-  apply(key: number, params: RouteParams): void {
-    if (this.behavior === 'omit') {
-      return;
-    }
-
-    const defaults = this.defaults.get(key);
-
-    if (defaults === undefined) {
-      return;
-    }
-
-    const len = defaults.length;
-
-    for (let i = 0; i < len; i++) {
-      const name = defaults[i];
-
-      if (typeof name === 'string' && name.length > 0 && !(name in params)) {
-        params[name] = undefined;
-      }
-    }
   }
 
   /** Sentinel reused across all snapshots taken when the defaults map is
@@ -66,14 +35,11 @@ export class OptionalParamDefaults {
 
   snapshot(): OptionalParamDefaultsSnapshot {
     if (this.defaults.size === 0) return OptionalParamDefaults.EMPTY_SNAPSHOT;
-    return {
-      entries: [...this.defaults],
-    };
+    return { entries: [...this.defaults] };
   }
 
   restore(snapshot: OptionalParamDefaultsSnapshot): void {
     this.defaults.clear();
-
     for (const [key, names] of snapshot.entries) {
       this.defaults.set(key, names);
     }

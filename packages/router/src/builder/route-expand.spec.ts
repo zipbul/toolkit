@@ -28,7 +28,7 @@ describe('expandOptional', () => {
 
       expect(isErr(result)).toBe(false);
       expect(result).toEqual([{ parts, handlerIndex: 7, isOptionalExpansion: false }]);
-      expect(defaults.has(7)).toBe(false);
+      expect(defaults.snapshot().entries.find(([k]) => k === 7)).toBeUndefined();
     });
   });
 
@@ -87,7 +87,7 @@ describe('expandOptional', () => {
 
       expandOptional(parts, 42, defaults);
 
-      expect(defaults.has(42)).toBe(true);
+      expect(defaults.snapshot().entries.find(([k]) => k === 42)).toBeDefined();
     });
 
     it('should mark optionals as required (optional=false) inside each variant for insertion', () => {
