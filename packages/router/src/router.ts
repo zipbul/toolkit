@@ -170,9 +170,8 @@ export class Router<T = unknown> implements RouterPublicApi<T> {
   readonly match: (method: string, path: string) => MatchOutput<T> | null;
   readonly allowedMethods: (path: string) => readonly string[];
   /**
-   * Bun-only post-build memory compaction. Triggers `Bun.shrink()` (which
-   * runs JSC's `deleteAllCode` + `Heap::collectNow(Sync, Full)` +
-   * `MarkedSpace::shrink` + `bmalloc::api::scavenge`), then polls
+   * Bun-only post-build memory compaction. Triggers `Bun.gc(true)`
+   * (full JSC collect + mimalloc fragmented-memory cleanup), then polls
    * `process.memoryUsage().rss` until it stops decreasing. libpas's
    * page-decommit threshold is asynchronous (100ms tick + ~300ms empty-
    * page age), so we wait until the OS-visible RSS settles instead of
@@ -289,14 +288,12 @@ export class Router<T = unknown> implements RouterPublicApi<T> {
 
       // Build pushes the JSC heap commit to a high-water mark (transient
       // parser/expand/prefix-index/insertion allocations on the order of
-      // 100s of MB at 100k routes). `Bun.shrink()` runs JSC's
-      // `deleteAllCode` + `Heap::collectNow(Sync, Full)` +
-      // `MarkedSpace::shrink` + `bmalloc::api::scavenge` synchronously so
-      // the next libpas scavenger tick can return the empty pages to the
-      // OS. Hot path is unaffected — the JIT lazily re-tiers on the next
-      // match. Empirical: 100k routes 625 MB peak → ~275 MB after the
-      // libpas threshold elapses (~300 ms, asynchronous).
-      Bun.shrink();
+      // 100s of MB at 100k routes). `Bun.gc(true)` runs JSC's full
+      // collect AND mimalloc's fragmented-memory cleanup in one call;
+      // libpas's scavenger tick then returns the empty pages to the OS
+      // asynchronously. Hot path is unaffected — the JIT lazily re-tiers
+      // on the next match.
+      Bun.gc(true);
     };
 
     this.add = (method, path, value) => {
@@ -351,7 +348,6 @@ export class Router<T = unknown> implements RouterPublicApi<T> {
       let iters = 0;
       const tStart = performance.now();
       while (performance.now() - tStart < maxMs) {
-        Bun.shrink();
         Bun.gc(true);
         await Bun.sleep(pollMs);
         iters++;

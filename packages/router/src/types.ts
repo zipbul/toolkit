@@ -144,7 +144,7 @@ export interface RouterPublicApi<T> {
   match(method: string, path: string): MatchOutput<T> | null;
   allowedMethods(path: string): readonly string[];
   /**
-   * Bun-only post-build memory compaction. Triggers `Bun.shrink()` and
+   * Bun-only post-build memory compaction. Triggers `Bun.gc(true)` and
    * polls `process.memoryUsage().rss` until it stabilizes (libpas's
    * page-decommit threshold is asynchronous). No-op on non-Bun runtimes.
    *

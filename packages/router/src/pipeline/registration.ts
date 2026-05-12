@@ -349,8 +349,12 @@ export class Registration<T> {
         // before the GC so the closure-captured PrefixIndex CommitPlan
         // entries become eligible for collection.
         if (issues.length === 0) undo.length = 0;
+        // Bun.gc(true) runs JSC's full collect AND mimalloc's fragmented-
+        // memory cleanup in one call. Bun.shrink() saved an extra ~8 MB
+        // historically but is `@deprecated` in bun-types 1.3.13 and may
+        // disappear in a future release; we accept the marginal RSS cost
+        // in exchange for forward compatibility.
         Bun.gc(true);
-        Bun.shrink();
       }
     }
     if (state.diagnostics !== null) state.diagnostics.routeLoopOverheadMs = nowMs() - loopStart;
@@ -423,7 +427,6 @@ export class Registration<T> {
     // this, RSS stays at the pre-factor peak until the next external GC.
     if (factorApplied) {
       Bun.gc(true);
-      Bun.shrink();
       snapshot.factorApplied = true;
     }
     if (state.diagnostics !== null) {
