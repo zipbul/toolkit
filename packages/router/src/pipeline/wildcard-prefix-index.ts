@@ -183,17 +183,18 @@ export class WildcardPrefixIndex {
               if (getRegexAst(ex) === part.pattern) { matched = ex; break; }
             }
           }
-          if (matched === null && siblings !== null) {
-            for (let i = 0; i < siblings.length; i++) {
-              const ex = siblings[i]!;
-              if (!safeRegexDisjoint(getRegexAst(ex)!, part.pattern)) {
-                partial.freshLiteralEdges = freshLiteralEdges;
-                partial.freshParamParents = freshParamParents;
-                partial.freshRegexParents = freshRegexParents;
-                applyRevert(partial, false);
-                return err(routeConflict('regex param sibling overlap not provably disjoint', routeMeta));
-              }
-            }
+          if (matched === null && siblings !== null && siblings.length > 0) {
+            // Disjointness analysis between two distinct regex sources is
+            // a hard problem (the prior `safeRegexDisjoint` stub returned
+            // false unconditionally, so every distinct sibling fell through
+            // to this branch anyway). Until a real analyzer lands here,
+            // any distinct regex sibling is rejected as a conflict so
+            // ambiguous matching never reaches the runtime walker.
+            partial.freshLiteralEdges = freshLiteralEdges;
+            partial.freshParamParents = freshParamParents;
+            partial.freshRegexParents = freshRegexParents;
+            applyRevert(partial, false);
+            return err(routeConflict('regex param sibling overlap not provably disjoint', routeMeta));
           }
           if (matched !== null) {
             node = matched;
@@ -370,13 +371,6 @@ function createRegexNode(regexAst: string): PrefixTrieNode {
   const n = createNode();
   setRegexAst(n, regexAst);
   return n;
-}
-
-// Conservative disjointness gate: returns true only when overlap is provably
-// impossible. Any uncertain case returns false so the caller emits
-// route-conflict rather than admitting a possibly ambiguous regex sibling.
-function safeRegexDisjoint(_a: string, _b: string): boolean {
-  return false;
 }
 
 function sameTerminalIdentity(a: RouteMeta, b: RouteMeta): boolean {

@@ -6,7 +6,14 @@ import type { PathPart } from '../builder/path-parser';
 import { err } from '@zipbul/result';
 import { buildPatternTester } from './pattern-tester';
 
-const MAX_REGEX_SIBLINGS_PER_SEGMENT = 32;
+// Insert-time sibling cap. The default mirrors `ROUTER_DEFAULTS.
+// maxRegexSiblingsPerSegment` so a registration that doesn't set the
+// option matches the historical 32. Callers pass the option-resolved
+// value via `insertIntoSegmentTree`'s `regexSiblingCap` parameter so the
+// hard limit can be raised (the prior file-scope const ignored the
+// option and produced a `regex-sibling-limit` reject even when the
+// option was set to a larger value).
+const DEFAULT_REGEX_SIBLING_CAP = 32;
 
 /**
  * Segment-based route tree. Each node corresponds to one URL segment
@@ -111,6 +118,8 @@ export const enum UndoKind {
   HandlersTruncate = 10,
   /** Truncate state.segmentTrees[mc] back to undefined. */
   SegmentTreeReset = 11,
+  /** Truncate state.staticByMethod[mc] back to undefined. */
+  StaticBucketReset = 17,
   /** Restore static-map slot prior values. */
   StaticMapRestore = 12,
   /** Static-map slot delete (was undefined before). */
@@ -135,6 +144,7 @@ export type UndoRecord =
   | { k: UndoKind.TerminalArraysTruncate; t: number[]; w: boolean[]; f: Array<unknown>; len: number }
   | { k: UndoKind.HandlersTruncate; arr: unknown[]; len: number }
   | { k: UndoKind.SegmentTreeReset; trees: Array<SegmentNode | null | undefined>; mc: number }
+  | { k: UndoKind.StaticBucketReset; buckets: Array<Record<string, unknown> | undefined>; mc: number }
   | { k: UndoKind.StaticMapRestore; arr: unknown[]; reg: boolean[]; mc: number; prevValue: unknown; prevReg: boolean }
   | { k: UndoKind.StaticMapDelete; map: Record<string, unknown>; reg: Record<string, unknown>; key: string }
   | { k: UndoKind.SingleChildClear; n: SegmentNode }
@@ -197,6 +207,9 @@ export function applyUndo(entry: UndoRecord): void {
       return;
     case UndoKind.SegmentTreeReset:
       delete entry.trees[entry.mc];
+      return;
+    case UndoKind.StaticBucketReset:
+      delete entry.buckets[entry.mc];
       return;
     case UndoKind.StaticMapRestore:
       entry.arr[entry.mc] = entry.prevValue;
@@ -543,6 +556,7 @@ export function insertIntoSegmentTree(
   testerCache: Map<string, PatternTesterFn>,
   routeID: number,
   undoLog?: SegmentTreeUndoLog,
+  regexSiblingCap: number = DEFAULT_REGEX_SIBLING_CAP,
 ): Result<void, RouterErrorData> {
   let node = root;
   const undo = undoLog ?? [];
@@ -703,13 +717,13 @@ export function insertIntoSegmentTree(
           let siblingCount = 1;
           let cursor: ParamSegment | null = node.paramChild;
           while (cursor !== null) { siblingCount++; cursor = cursor.nextSibling; }
-          if (siblingCount > MAX_REGEX_SIBLINGS_PER_SEGMENT) {
+          if (siblingCount > regexSiblingCap) {
             rollbackUndo(undo, undoStart);
             return err({
               kind: 'regex-sibling-limit',
-              message: `Too many regex/param siblings at the same position (cap ${MAX_REGEX_SIBLINGS_PER_SEGMENT}).`,
+              message: `Too many regex/param siblings at the same position (cap ${regexSiblingCap}).`,
               segment: part.name,
-              suggestion: `Reduce the number of distinct regex constraints sharing this segment to ${MAX_REGEX_SIBLINGS_PER_SEGMENT} or fewer.`,
+              suggestion: `Reduce the number of distinct regex constraints sharing this segment to ${regexSiblingCap} or fewer.`,
             });
           }
           const fresh: ParamSegment = {
