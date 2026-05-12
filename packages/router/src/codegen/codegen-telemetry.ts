@@ -10,7 +10,7 @@
  * different routers with structurally similar trees share a feedback row.
  */
 
-export interface ShapeTelemetry {
+interface ShapeTelemetry {
   shape: string;
   observedCompileMs: number;
   observedSourceBytes: number;
