@@ -216,8 +216,9 @@ export function createSegmentWalker(
       return false;
     }
 
-    const nextSlash = path.indexOf('/', pos);
-    const end = nextSlash === -1 ? len : nextSlash;
+    // See the comment at the iterative walker for charCodeAt rationale.
+    let end = pos;
+    while (end < len && path.charCodeAt(end) !== 47) end++;
     const segLen = end - pos;
 
     // Single-static-child fast path: probe via offset-based startsWith
@@ -327,8 +328,13 @@ function createIterativeWalker(root: SegmentNode, decoder: DecoderFn): MatchFn {
         if (pos >= len) break;
       }
 
-      const nextSlash = url.indexOf('/', pos);
-      const end = nextSlash === -1 ? len : nextSlash;
+      // charCodeAt scan for the next '/' beats `indexOf('/', pos)` on
+      // short HTTP paths (< 64 chars), which dominate production
+      // workloads. Bench `bench/method-research/P-indexof-vs-charcode.bench.ts`
+      // measures 1.29-2.44× wins for 4-36 char paths; indexOf wins past
+      // ~65 chars but those are rare for HTTP request paths.
+      let end = pos;
+      while (end < len && url.charCodeAt(end) !== 47) end++;
       const segLen = end - pos;
 
       // Single-static-child offset fast path: avoid substring alloc on
@@ -425,14 +431,17 @@ function createFactoredWalker(
       return false;
     }
 
-    const slash1 = url.indexOf('/', 1);
-    const firstSeg = slash1 === -1 ? url.substring(1) : url.substring(1, slash1);
+    // Locate first '/' after the leading one via charCodeAt scan — same
+    // rationale as the per-segment scan inside the walker body.
+    let slash1 = 1;
+    while (slash1 < len && url.charCodeAt(slash1) !== 47) slash1++;
+    const firstSeg = slash1 === len ? url.substring(1) : url.substring(1, slash1);
     const looked = keyToTerminal.get(firstSeg);
     if (looked === undefined) return false;
     const storeOverride = looked;
 
     let node = sharedNext;
-    let pos = slash1 === -1 ? len : slash1 + 1;
+    let pos = slash1 === len ? len : slash1 + 1;
 
     while (pos < len) {
       if (node.staticPrefix !== null) {
@@ -451,8 +460,13 @@ function createFactoredWalker(
         if (pos >= len) break;
       }
 
-      const nextSlash = url.indexOf('/', pos);
-      const end = nextSlash === -1 ? len : nextSlash;
+      // charCodeAt scan for the next '/' beats `indexOf('/', pos)` on
+      // short HTTP paths (< 64 chars), which dominate production
+      // workloads. Bench `bench/method-research/P-indexof-vs-charcode.bench.ts`
+      // measures 1.29-2.44× wins for 4-36 char paths; indexOf wins past
+      // ~65 chars but those are rare for HTTP request paths.
+      let end = pos;
+      while (end < len && url.charCodeAt(end) !== 47) end++;
       const segLen = end - pos;
 
       const sck = node.singleChildKey;
