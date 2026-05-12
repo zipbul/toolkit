@@ -275,9 +275,9 @@ function emitGenericMatchImpl<T>(cfg: MatchConfig<T>): CompiledMatch<T> {
     }
 
     src.push(`
+      var tIdx = matchState.handlerIndex;
+      var slabBase = tIdx << 1;
       if (ok) {
-        var tIdx = matchState.handlerIndex;
-        var slabBase = tIdx << 1;
         if (!${cfg.trimSlash} && sp.length > 1 && sp.charCodeAt(sp.length - 1) === 47 && terminalSlab[slabBase + 1] === 0) {
           ok = false;
         }
@@ -288,8 +288,6 @@ function emitGenericMatchImpl<T>(cfg: MatchConfig<T>): CompiledMatch<T> {
         return null;
       }
 
-      var tIdx = matchState.handlerIndex;
-      var slabBase = tIdx << 1;
       var hIdx = terminalSlab[slabBase];
       var factory = paramsFactories[tIdx];
       var params = (factory !== undefined && factory !== null)
@@ -347,9 +345,13 @@ function emitGenericMatchImpl<T>(cfg: MatchConfig<T>): CompiledMatch<T> {
  * baseline-compiled code rather than the cold first-call path.
  */
 function runWarmup<T>(compiled: CompiledMatch<T>, cfg: MatchConfig<T>, shape: string): void {
-  const compileMs = 0;
-  recordCompile(shape, compileMs, 0);
-
+  // Telemetry receives the *warmup* duration as a stand-in for the
+  // matchImpl's compile cost. The actual `new Function()` compile happens
+  // inside `emitGenericMatchImpl` and isn't easily threaded back here, so
+  // we report the warmup loop as a coarse proxy — better than the prior
+  // unconditional `0` which made the per-shape disable threshold unable
+  // to fire on slow compiles.
+  const warmStart = performance.now();
   const warmPaths = ['/__zipbul_warmup__', '/__zipbul_warmup__/sub'];
   const WARMUP_ITERATIONS = 20;
   for (let it = 0; it < WARMUP_ITERATIONS; it++) {
@@ -359,6 +361,7 @@ function runWarmup<T>(compiled: CompiledMatch<T>, cfg: MatchConfig<T>, shape: st
       }
     }
   }
+  recordCompile(shape, performance.now() - warmStart, 0);
   for (const [methodName] of cfg.activeMethodCodes) {
     for (const p of warmPaths) {
       const t0 = performance.now();
