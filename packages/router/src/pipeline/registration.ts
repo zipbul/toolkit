@@ -537,15 +537,16 @@ export class Registration<T> {
       reg: bucket as unknown as Record<string, unknown>,
       key: normalized,
     });
-    // Restore the path's method-mask bit on rollback. Closure carries
-    // the prior mask so a duplicate-route failure leaves the surviving
-    // routes' bits intact.
-    const maskMap = state.staticPathMethodMask;
-    const maskKey = normalized;
-    undo.push((() => {
-      if (prevMask === 0) delete maskMap[maskKey];
-      else maskMap[maskKey] = prevMask;
-    }) as () => void);
+    // Restore the path's method-mask bit on rollback. Tagged record keeps
+    // the prior mask in a monomorphic shape so 100k static-route builds
+    // don't allocate 100k distinct closures (each freshly capturing
+    // `maskMap`/`maskKey`/`prevMask` in its own scope chain).
+    undo.push({
+      k: UndoKind.StaticPathMaskRestore,
+      map: state.staticPathMethodMask,
+      key: normalized,
+      prevMask,
+    });
     addMs(state.diagnostics, 'staticInsertMs', insertStart);
   }
 

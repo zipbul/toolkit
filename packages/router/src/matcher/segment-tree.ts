@@ -115,6 +115,12 @@ export const enum UndoKind {
   StaticMapRestore = 12,
   /** Static-map slot delete (was undefined before). */
   StaticMapDelete = 13,
+  /** Inverse of inline single-static-child set: clear key + next on the parent. */
+  SingleChildClear = 14,
+  /** Inverse of single-static-child promotion to Record: re-set key + next. */
+  SingleChildRestore = 15,
+  /** Restore a `staticPathMethodMask` entry — set to prevMask (0 means delete). */
+  StaticPathMaskRestore = 16,
 }
 
 export type UndoRecord =
@@ -130,10 +136,14 @@ export type UndoRecord =
   | { k: UndoKind.HandlersTruncate; arr: unknown[]; len: number }
   | { k: UndoKind.SegmentTreeReset; trees: Array<SegmentNode | null | undefined>; mc: number }
   | { k: UndoKind.StaticMapRestore; arr: unknown[]; reg: boolean[]; mc: number; prevValue: unknown; prevReg: boolean }
-  | { k: UndoKind.StaticMapDelete; map: Record<string, unknown>; reg: Record<string, unknown>; key: string };
+  | { k: UndoKind.StaticMapDelete; map: Record<string, unknown>; reg: Record<string, unknown>; key: string }
+  | { k: UndoKind.SingleChildClear; n: SegmentNode }
+  | { k: UndoKind.SingleChildRestore; n: SegmentNode; key: string; next: SegmentNode }
+  | { k: UndoKind.StaticPathMaskRestore; map: Record<string, number>; key: string; prevMask: number };
 
-type SegmentTreeUndoEntry = UndoRecord | (() => void);
-export type SegmentTreeUndoLog = SegmentTreeUndoEntry[];
+// All undo entries are tagged records — closures were eliminated to
+// keep the entry shape monomorphic and avoid per-entry scope alloc.
+export type SegmentTreeUndoLog = UndoRecord[];
 
 let prefixIndexRollback: ((plan: unknown) => void) | null = null;
 
@@ -146,8 +156,7 @@ export function setPrefixIndexRollback(fn: (plan: unknown) => void): void {
   prefixIndexRollback = fn;
 }
 
-export function applyUndo(entry: SegmentTreeUndoEntry): void {
-  if (typeof entry === 'function') { entry(); return; }
+export function applyUndo(entry: UndoRecord): void {
   switch (entry.k) {
     case UndoKind.StaticChildrenInit:
       entry.n.staticChildren = null;
@@ -196,6 +205,18 @@ export function applyUndo(entry: SegmentTreeUndoEntry): void {
     case UndoKind.StaticMapDelete:
       delete entry.map[entry.key];
       delete entry.reg[entry.key];
+      return;
+    case UndoKind.SingleChildClear:
+      entry.n.singleChildKey = null;
+      entry.n.singleChildNext = null;
+      return;
+    case UndoKind.SingleChildRestore:
+      entry.n.singleChildKey = entry.key;
+      entry.n.singleChildNext = entry.next;
+      return;
+    case UndoKind.StaticPathMaskRestore:
+      if (entry.prevMask === 0) delete entry.map[entry.key];
+      else entry.map[entry.key] = entry.prevMask;
       return;
   }
 }
@@ -560,13 +581,9 @@ export function insertIntoSegmentTree(
         // a Record.
         if (node.singleChildKey === null && node.staticChildren === null) {
           const fresh = createSegmentNode();
-          const owner = node;
-          owner.singleChildKey = seg;
-          owner.singleChildNext = fresh;
-          undo.push((() => {
-            owner.singleChildKey = null;
-            owner.singleChildNext = null;
-          }) as () => void);
+          node.singleChildKey = seg;
+          node.singleChildNext = fresh;
+          undo.push({ k: UndoKind.SingleChildClear, n: node });
           node = fresh;
           continue;
         }
@@ -585,13 +602,9 @@ export function insertIntoSegmentTree(
           const promotedKey = node.singleChildKey;
           const promotedNext = node.singleChildNext;
           children[promotedKey] = promotedNext;
-          const owner = node;
-          owner.singleChildKey = null;
-          owner.singleChildNext = null;
-          undo.push((() => {
-            owner.singleChildKey = promotedKey;
-            owner.singleChildNext = promotedNext;
-          }) as () => void);
+          node.singleChildKey = null;
+          node.singleChildNext = null;
+          undo.push({ k: UndoKind.SingleChildRestore, n: node, key: promotedKey, next: promotedNext });
           undo.push({ k: UndoKind.StaticChildAdd, p: children, key: promotedKey });
         }
 
