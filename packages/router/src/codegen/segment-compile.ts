@@ -338,8 +338,16 @@ ${emitTerminalAt(child)}
     const wildcardTerminal = nextHasNoStatic && next.paramChild === null && next.wildcardStore !== null;
     const testerIdx = param.tester !== null ? ctx.testers.push(param.tester) - 1 : -1;
 
+    // charCodeAt scan beats `indexOf('/', pos)` on short HTTP paths (the
+    // common case); see bench/method-research/P-indexof-vs-charcode.bench.ts.
+    // The walker uses the same shape — keep emitter aligned. The "no slash
+    // found" sentinel is `len` here (matches what the walker emits) instead
+    // of `-1`, but we keep `-1` to preserve the wildcardTerminal branch's
+    // existing arithmetic guards.
     code += `
-    var ${slashVar} = url.indexOf('/', ${posVar});`;
+    var ${slashVar} = ${posVar};
+    while (${slashVar} < len && url.charCodeAt(${slashVar}) !== 47) ${slashVar}++;
+    if (${slashVar} === len) ${slashVar} = -1;`;
 
     const testerCheck = testerIdx === -1 ? '' : `
       if (testers[${testerIdx}](decoder(url.substring(${posVar}, ${slashVar} === -1 ? len : ${slashVar}))) !== TESTER_PASS) return false;`;
