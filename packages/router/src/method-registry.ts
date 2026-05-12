@@ -38,8 +38,16 @@ export class MethodRegistry {
    * off the `Object.prototype` walk so hot-path access is one IC slot.
    * Measured Map+Record vs Record-only: construction 4.7×, iteration 1.5×,
    * lookup unchanged (within noise) — see `bench/method-research/`.
+   *
+   * Mutable (not `readonly`) because `restore()` swaps in a fresh
+   * Object.create(null) — `delete`-then-reinsert was demonstrated by
+   * `bench/method-research/I-restore-dictionary-fix.bench.ts` to push
+   * the codeMap into JSC's `UncacheableDictionary` mode after ~10 cycles
+   * (StructureID changes, IC chain forks); the swap keeps every fresh
+   * registry on the same PropertyAddition chain and makes restore()
+   * itself 17.8× faster (1.02µs → 57ns).
    */
-  private readonly codeMap: Record<string, number> = Object.create(null) as Record<string, number>;
+  private codeMap: Record<string, number> = Object.create(null) as Record<string, number>;
   private nextOffset: number;
   private codeCount = 0;
 
@@ -118,12 +126,18 @@ export class MethodRegistry {
   }
 
   restore(snapshot: MethodRegistrySnapshot): void {
-    for (const key in this.codeMap) delete this.codeMap[key];
-    this.codeCount = 0;
+    // Swap in a fresh prototype-less object instead of `delete`-ing keys.
+    // The delete approach demoted the codeMap to UncacheableDictionary
+    // after ~10 cycles (see bench I); a fresh swap keeps it on the
+    // PropertyAddition chain and is 17.8× faster (1.02µs → 57ns).
+    const fresh = Object.create(null) as Record<string, number>;
+    let count = 0;
     for (const [method, offset] of snapshot.entries) {
-      this.codeMap[method] = offset;
-      this.codeCount++;
+      fresh[method] = offset;
+      count++;
     }
+    this.codeMap = fresh;
+    this.codeCount = count;
     this.nextOffset = snapshot.nextOffset;
   }
 }

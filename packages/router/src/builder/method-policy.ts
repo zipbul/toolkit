@@ -14,17 +14,28 @@ import { err } from '@zipbul/result';
 // cap (32-bit bitmask ceiling) already prevents unbounded growth, and
 // `add()` is developer-controlled code, not external input, so an
 // adversarial-length method string is not a meaningful threat model.
-// Char-code switch (instead of regex) keeps the per-add gate alloc-free.
+//
+// Implementation: a 256-byte lookup table indexed by `charCodeAt(i)`.
+// Bench `bench/method-research/L-validate-alternatives.bench.ts` shows
+// 1.4-1.74× faster than the prior char-code branch chain across short /
+// long / invalid token mixes (and 2-4× faster than a regex).
+const TCHAR_TABLE = (() => {
+  const t = new Uint8Array(256);
+  for (let c = 0x41; c <= 0x5a; c++) t[c] = 1;          // A-Z
+  for (let c = 0x61; c <= 0x7a; c++) t[c] = 1;          // a-z
+  for (let c = 0x30; c <= 0x39; c++) t[c] = 1;          // 0-9
+  for (const c of [0x21,0x23,0x24,0x25,0x26,0x27,0x2a,0x2b,
+                   0x2d,0x2e,0x5e,0x5f,0x60,0x7c,0x7e]) {
+    t[c] = 1;
+  }
+  return t;
+})();
+
 function isValidMethodToken(method: string): boolean {
   const len = method.length;
   if (len === 0) return false;
   for (let i = 0; i < len; i++) {
-    const c = method.charCodeAt(i);
-    if ((c >= 0x41 && c <= 0x5a) || (c >= 0x61 && c <= 0x7a) || (c >= 0x30 && c <= 0x39)) continue;
-    if (c === 0x21 || c === 0x23 || c === 0x24 || c === 0x25 || c === 0x26 ||
-        c === 0x27 || c === 0x2a || c === 0x2b || c === 0x2d || c === 0x2e ||
-        c === 0x5e || c === 0x5f || c === 0x60 || c === 0x7c || c === 0x7e) continue;
-    return false;
+    if (TCHAR_TABLE[method.charCodeAt(i)] === 0) return false;
   }
   return true;
 }
