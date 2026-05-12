@@ -6,29 +6,13 @@ import { END_ANCHOR_PATTERN, START_ANCHOR_PATTERN } from './constants';
  * user-supplied anchors are redundant at best and silently shadow the
  * wrapping at worst. Always strip silently.
  *
- * Contract: callers must filter out empty / whitespace-only pattern sources
- * before invoking this function — `PathParser.parseParam` already collapses
- * `:name(   )` to a no-pattern param (`pattern = null`) so this only runs
- * for non-empty patterns. The empty-trim branch is a defensive fallback.
+ * Contract: `PathParser.parseParam` collapses `:name(   )` to a no-pattern
+ * param (`pattern = null`) before reaching this function, so `patternSrc`
+ * is always non-empty. The post-strip empty check (e.g. user wrote `^$`)
+ * still falls back to `.*` so we don't pass an empty pattern downstream.
  */
 export function normalizeParamPatternSource(patternSrc: string): string {
-  let normalized = patternSrc.trim();
-
-  if (!normalized) {
-    return '.*';
-  }
-
-  if (START_ANCHOR_PATTERN.test(normalized)) {
-    normalized = normalized.replace(START_ANCHOR_PATTERN, '');
-  }
-
-  if (END_ANCHOR_PATTERN.test(normalized)) {
-    normalized = normalized.replace(END_ANCHOR_PATTERN, '');
-  }
-
-  if (!normalized) {
-    return '.*';
-  }
-
+  let normalized = patternSrc.trim().replace(START_ANCHOR_PATTERN, '').replace(END_ANCHOR_PATTERN, '');
+  if (normalized === '') return '.*';
   return normalized;
 }

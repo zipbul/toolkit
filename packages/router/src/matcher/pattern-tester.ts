@@ -26,10 +26,10 @@ const ALPHANUM_PATTERNS = new Set([
 ]);
 
 function buildPatternTester(
-  source: string | undefined,
+  source: string,
   compiled: RegExp,
 ): PatternTesterFn {
-  if (source !== undefined && source.length > 0) {
+  if (source.length > 0) {
     if (DIGIT_PATTERNS.has(source)) {
       return value => (isAllDigits(value) ? TESTER_PASS : TESTER_FAIL);
     }

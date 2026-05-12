@@ -336,17 +336,20 @@ function subtreeShape(node: SegmentNode): string {
 
 /**
  * Walk to the unique terminal node and return its `store`. Returns null
- * if there is no unique terminal (multiple stores on the path). The depth
- * bound mirrors `MAX_SEGMENTS` from `builder/constants.ts` (64) — paths
- * can't legally be deeper than that, so the cap doubles as a defense
- * against a malformed tree producing a runaway descent.
+ * if there is no unique terminal (multiple stores on the path). The
+ * depth bound is a malformed-tree safety net only; the registration
+ * layer caps actual segment count via the `maxSegmentCount` option
+ * (default 256 in `router.ts:createPathParser`). 64 here doesn't have
+ * to match the option — it just bounds the loop.
  */
 function leafStoreOf(node: SegmentNode): number | null {
   let cur: SegmentNode = node;
   let depth = 0;
-  // 64 = MAX_SEGMENTS (builder/constants). Paths deeper than this are
-  // rejected at registration, so this is just paranoia guarding against a
-  // malformed tree shape; in practice descent terminates much earlier.
+  // Malformed-tree safety net only. The actual segment-count limit is
+  // enforced by `maxSegmentCount` (router.ts:createPathParser default
+  // 256); we cap descent at 64 here because no valid registered tree
+  // can chain a single-static-only path that deep without `store`/
+  // multi-child branching breaking the loop sooner.
   while (depth++ < 64) {
     if (cur.store !== null) return cur.store;
     if (cur.paramChild !== null && cur.paramChild.nextSibling === null) {
@@ -390,9 +393,8 @@ export function compactSegmentTree(root: SegmentNode): { foldedNodes: number; ch
     const key = parts.join('\x00');
     const existing = prefixIntern.get(key);
     if (existing !== undefined) return existing as string[];
-    const frozen = parts;
-    prefixIntern.set(key, frozen);
-    return frozen;
+    prefixIntern.set(key, parts);
+    return parts;
   };
 
   // Single-static-child passthrough probe — peeks the inline cache first,

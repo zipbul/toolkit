@@ -8,6 +8,7 @@ import {
   recordCompile,
   recordWarmupCall,
   shapeSignature,
+  WARMUP_ITERATIONS,
 } from './codegen-telemetry';
 import {
   CACHE_META,
@@ -347,7 +348,6 @@ function runWarmup<T>(compiled: CompiledMatch<T>, cfg: MatchConfig<T>, shape: st
   // now diagnostic-only.
   const warmStart = performance.now();
   const warmPaths = ['/__zipbul_warmup__', '/__zipbul_warmup__/sub'];
-  const WARMUP_ITERATIONS = 20;
   for (let it = 0; it < WARMUP_ITERATIONS; it++) {
     for (const [methodName] of cfg.activeMethodCodes) {
       for (const p of warmPaths) {

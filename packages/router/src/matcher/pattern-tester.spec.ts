@@ -137,12 +137,10 @@ describe('buildPatternTester', () => {
     expect(tester('not-a-date')).toBe(TESTER_FAIL);
   });
 
-  it('should use compiled.test() when source is undefined', () => {
-    const tester = buildPatternTester(undefined, /^[A-Z]{2}$/);
-
-    expect(tester('AB')).toBe(TESTER_PASS);
-    expect(tester('abc')).toBe(TESTER_FAIL);
-  });
+  // (Dropped a unit test that exercised `buildPatternTester(undefined, …)`.
+  // The production signature is `(source: string, compiled)` — callers
+  // never pass undefined, so the prior shape was widening the type for a
+  // case that didn't exist.)
 
   it('should use compiled.test() when source is empty string', () => {
     const tester = buildPatternTester('', /^.*$/);

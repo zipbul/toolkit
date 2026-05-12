@@ -38,7 +38,8 @@ export type RouteParams = Record<string, string | undefined>;
 
 /**
  * 라우터 에러 종류 (discriminant).
- * 총 8개 — 상태 전이 1, 빌드타임 7. match() 는 throw 하지 않으므로 매치타임 kind 는 없다.
+ * 상태 전이 1 + 빌드 타임 28 + 옵션/일괄검증 2. match() 는 throw 하지 않으므로
+ * 매치 타임 kind 는 없다.
  */
 export type RouterErrorKind =
   // 상태 전이
@@ -134,14 +135,9 @@ export type RouterErrorData = {
 
 // Public API surface a built router exposes. Match/allowedMethods accept any
 // HTTP method token as the method argument; the runtime token gate handles
-// validation.
-//
-// Memory compaction is intentionally not part of this surface. `build()`
-// schedules a fire-and-forget compactMemory cycle internally (only when
-// tenant-prefix factoring orphaned a high-fanout subtree); users do not
-// need to call it directly. Exposing it would invite calls during traffic
-// where the synchronous `Bun.gc(true)` would pause the entire host
-// process — see the side-effect notes in `router.ts`.
+// validation. `build()` runs one synchronous `Bun.gc(true)` to drop the
+// transient build heap and lets libpas's scavenger return the freed pages
+// to the OS asynchronously — no `compactMemory` lever is exposed.
 export interface RouterPublicApi<T> {
   add(method: string | readonly string[], path: string, value: T): void;
   addAll(entries: ReadonlyArray<readonly [string, string, T]>): void;

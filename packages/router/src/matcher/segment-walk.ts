@@ -8,7 +8,7 @@ import { compactSegmentTree, getTenantFactor, hasAmbiguousNode } from './segment
 import { compileSegmentTree, collectWarmupPaths } from '../codegen/segment-compile';
 import { detectWildCodegenSpec } from '../codegen/walker-strategy';
 import { createMatchState } from './match-state';
-import { recordWarmupCall } from '../codegen/codegen-telemetry';
+import { recordWarmupCall, WARMUP_ITERATIONS } from '../codegen/codegen-telemetry';
 
 /**
  * Run the freshly-compiled walker once per major branch so JSC IC reaches
@@ -33,7 +33,6 @@ function warmupCompiledWalker(
   const state = createMatchState();
   // Drive JSC IC past its baseline thresholds so the walker is at least
   // baseline-compiled before the first user request lands on it.
-  const WARMUP_ITERATIONS = 20;
   for (let it = 0; it < WARMUP_ITERATIONS; it++) {
     for (const p of paths) {
       try { walker(p, state); } catch { /* warmup failures are non-fatal */ }

@@ -2,8 +2,7 @@ import type { Result } from '@zipbul/result';
 import type { RouterErrorData } from '../types';
 
 import { err } from '@zipbul/result';
-
-const CC_SLASH = 0x2f;
+import { CC_SLASH } from './constants';
 
 /**
  * Single-pass scan over a registered path. Rejects bytes the path
