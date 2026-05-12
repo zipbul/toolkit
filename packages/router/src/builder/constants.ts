@@ -6,12 +6,9 @@ export const BACKREFERENCE_PATTERN = /\\(?:\d+|k<[^>]+>)/;
 // Path-syntax char codes — single source for hot-path charCodeAt comparisons.
 // These mirror the ASCII code points so do NOT renumber.
 export const CC_SLASH = 47;        // '/'
-export const CC_LPAREN = 40;       // '('
-export const CC_RPAREN = 41;       // ')'
 export const CC_STAR = 42;         // '*'
 export const CC_PLUS = 43;         // '+'
 export const CC_COLON = 58;        // ':'
-export const CC_QUESTION = 63;     // '?'
 
 // Hard limits — single source for builder validation. The matcher's
 // `paramOffsets` Int32Array is now sized at `createMatchState(maxParams)`

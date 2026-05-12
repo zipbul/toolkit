@@ -54,10 +54,6 @@ export function shapeSignature(nodes: number, maxFanout: number, testers: number
   return `n=${nodes}|f=${maxFanout}|t=${testers}`;
 }
 
-export function lookupShape(shape: string): ShapeTelemetry | undefined {
-  return shapeRegistry.get(shape);
-}
-
 export function shouldSkipCodegen(shape: string): boolean {
   const t = shapeRegistry.get(shape);
   return t !== undefined && t.disabled;
@@ -120,6 +116,3 @@ export function resetBuildAggregate(): void {
   buildAggregate = freshBuildAggregate();
 }
 
-export function clearShapeRegistry(): void {
-  shapeRegistry.clear();
-}

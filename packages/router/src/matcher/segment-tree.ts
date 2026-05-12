@@ -65,14 +65,6 @@ export function forEachStaticChild(
   }
 }
 
-/** Look up a static child by key — checks the inline cache first, then
- *  falls back to the Record. Returns `undefined` when the key is absent. */
-export function lookupStaticChild(node: SegmentNode, key: string): SegmentNode | undefined {
-  if (node.singleChildKey === key && node.singleChildNext !== null) return node.singleChildNext;
-  if (node.staticChildren !== null) return node.staticChildren[key];
-  return undefined;
-}
-
 export interface ParamSegment {
   name: string;
   tester: PatternTesterFn | null;
@@ -140,7 +132,7 @@ export type UndoRecord =
   | { k: UndoKind.StaticMapRestore; arr: unknown[]; reg: boolean[]; mc: number; prevValue: unknown; prevReg: boolean }
   | { k: UndoKind.StaticMapDelete; map: Record<string, unknown>; reg: Record<string, unknown>; key: string };
 
-export type SegmentTreeUndoEntry = UndoRecord | (() => void);
+type SegmentTreeUndoEntry = UndoRecord | (() => void);
 export type SegmentTreeUndoLog = SegmentTreeUndoEntry[];
 
 let prefixIndexRollback: ((plan: unknown) => void) | null = null;

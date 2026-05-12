@@ -1,7 +1,7 @@
 export const TESTER_FAIL = 0 as const;
 export const TESTER_PASS = 1 as const;
 
-export type TesterResult = typeof TESTER_FAIL | typeof TESTER_PASS;
+type TesterResult = typeof TESTER_FAIL | typeof TESTER_PASS;
 
 /**
  * Pattern tester closure. Hot-path matcher invokes this to validate a
