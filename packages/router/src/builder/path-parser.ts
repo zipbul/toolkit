@@ -92,46 +92,8 @@ export class PathParser {
       }
     }
 
-    for (const seg of segments) {
-      if (seg === '') {
-        return err({
-          kind: 'path-empty-segment',
-          message: `Path must not contain empty segments: ${path}`,
-          path,
-          suggestion: 'Collapse repeated slashes or register a single canonical path.',
-        });
-      }
-    }
-
-    // Case fold (static segments only — dynamic ones keep original case for param names)
-    if (!this.config.caseSensitive) {
-      for (let i = 0; i < segments.length; i++) {
-        const seg = segments[i]!;
-        const firstChar = seg.charCodeAt(0);
-
-        if (firstChar !== CC_COLON && firstChar !== CC_STAR) {
-          segments[i] = seg.toLowerCase();
-        }
-      }
-    }
-
-    // Validate segment lengths (static segments only)
-    const maxLen = this.config.maxSegmentLength;
-
-    for (const seg of segments) {
-      const firstChar = seg.charCodeAt(0);
-
-      if (firstChar !== CC_COLON && firstChar !== CC_STAR && seg.length > maxLen) {
-        return err({
-          kind: 'segment-limit',
-          message: `Segment length exceeds limit: ${seg.substring(0, 20)}...`,
-          segment: seg.substring(0, 40),
-          suggestion: `Shorten the path segment to ${maxLen} characters or fewer.`,
-        });
-      }
-    }
-
-    // Validate segment count
+    // Validate segment count up front so the per-segment loop below sees
+    // a bounded array (the count limit is the most likely fail-fast gate).
     const maxSegments = this.config.maxSegmentCount;
     if (Number.isFinite(maxSegments) && segments.length > maxSegments) {
       return err({
@@ -142,25 +104,56 @@ export class PathParser {
       });
     }
 
-    // Validate param count
+    // Single-pass walk: empty-segment check, case-fold static segments,
+    // segment-length validation, and param-count tally. Three earlier
+    // separate loops collapsed into one — same charCode lookups, one
+    // iteration over the segments array.
+    const caseSensitive = this.config.caseSensitive;
+    const maxLen = this.config.maxSegmentLength;
+    const maxParams = this.config.maxParams;
+    const paramsBounded = Number.isFinite(maxParams);
     let paramCount = 0;
 
-    for (const seg of segments) {
-      const fc = seg.charCodeAt(0);
+    for (let i = 0; i < segments.length; i++) {
+      const seg = segments[i]!;
 
-      if (fc === CC_COLON || fc === CC_STAR) {
-        paramCount++;
+      if (seg === '') {
+        return err({
+          kind: 'path-empty-segment',
+          message: `Path must not contain empty segments: ${path}`,
+          path,
+          suggestion: 'Collapse repeated slashes or register a single canonical path.',
+        });
       }
-    }
 
-    const maxParams = this.config.maxParams;
-    if (Number.isFinite(maxParams) && paramCount > maxParams) {
-      return err({
-        kind: 'segment-limit',
-        message: `Path has ${paramCount} parameters, exceeding the maximum of ${maxParams}: ${path}`,
-        path,
-        suggestion: `Reduce the number of named parameters in this path (limit is ${maxParams}).`,
-      });
+      const firstChar = seg.charCodeAt(0);
+      const isDynamic = firstChar === CC_COLON || firstChar === CC_STAR;
+
+      if (isDynamic) {
+        paramCount++;
+        if (paramsBounded && paramCount > maxParams) {
+          return err({
+            kind: 'segment-limit',
+            message: `Path has ${paramCount} parameters, exceeding the maximum of ${maxParams}: ${path}`,
+            path,
+            suggestion: `Reduce the number of named parameters in this path (limit is ${maxParams}).`,
+          });
+        }
+        continue;
+      }
+
+      if (seg.length > maxLen) {
+        return err({
+          kind: 'segment-limit',
+          message: `Segment length exceeds limit: ${seg.substring(0, 20)}...`,
+          segment: seg.substring(0, 40),
+          suggestion: `Shorten the path segment to ${maxLen} characters or fewer.`,
+        });
+      }
+
+      if (!caseSensitive) {
+        segments[i] = seg.toLowerCase();
+      }
     }
 
     const normalized = segments.length > 0 ? '/' + segments.join('/') : '/';

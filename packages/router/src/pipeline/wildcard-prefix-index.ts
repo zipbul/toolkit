@@ -1,5 +1,5 @@
 import type { Result } from '@zipbul/result';
-import type { RouterErrorData, RouterErrorKind } from '../types';
+import type { RouterErrorData } from '../types';
 import type { PathPart } from '../builder/path-parser';
 
 import { err } from '@zipbul/result';
@@ -131,7 +131,7 @@ export class WildcardPrefixIndex {
             partial.freshLiteralEdges = freshLiteralEdges;
             partial.freshParamParents = freshParamParents;
             partial.freshRegexParents = freshRegexParents;
-            this.revert(partial, false);
+            applyRevert(partial, false);
             return err(routeUnreachable('ancestor wildcard makes this route unreachable', routeMeta));
           }
           let children = node.literalChildren;
@@ -157,7 +157,7 @@ export class WildcardPrefixIndex {
           partial.freshLiteralEdges = freshLiteralEdges;
           partial.freshParamParents = freshParamParents;
           partial.freshRegexParents = freshRegexParents;
-          this.revert(partial, false);
+          applyRevert(partial, false);
           return err(routeUnreachable('ancestor wildcard makes this route unreachable', routeMeta));
         }
         if (part.pattern !== null) {
@@ -165,7 +165,7 @@ export class WildcardPrefixIndex {
             partial.freshLiteralEdges = freshLiteralEdges;
             partial.freshParamParents = freshParamParents;
             partial.freshRegexParents = freshRegexParents;
-            this.revert(partial, false);
+            applyRevert(partial, false);
             return err(routeConflict('a plain param sibling already covers this segment', routeMeta));
           }
           let siblings = getRegexParamChildren(node);
@@ -173,7 +173,7 @@ export class WildcardPrefixIndex {
             partial.freshLiteralEdges = freshLiteralEdges;
             partial.freshParamParents = freshParamParents;
             partial.freshRegexParents = freshRegexParents;
-            this.revert(partial, false);
+            applyRevert(partial, false);
             return err(regexSiblingLimit(this.maxRegexSiblingsPerSegment, routeMeta));
           }
           let matched: PrefixTrieNode | null = null;
@@ -190,7 +190,7 @@ export class WildcardPrefixIndex {
                 partial.freshLiteralEdges = freshLiteralEdges;
                 partial.freshParamParents = freshParamParents;
                 partial.freshRegexParents = freshRegexParents;
-                this.revert(partial, false);
+                applyRevert(partial, false);
                 return err(routeConflict('regex param sibling overlap not provably disjoint', routeMeta));
               }
             }
@@ -216,14 +216,14 @@ export class WildcardPrefixIndex {
             partial.freshLiteralEdges = freshLiteralEdges;
             partial.freshParamParents = freshParamParents;
             partial.freshRegexParents = freshRegexParents;
-            this.revert(partial, false);
+            applyRevert(partial, false);
             return err(routeConflict('a regex param sibling already covers this segment', routeMeta));
           }
           if (node.paramChild !== null && node.paramName !== part.name) {
             partial.freshLiteralEdges = freshLiteralEdges;
             partial.freshParamParents = freshParamParents;
             partial.freshRegexParents = freshRegexParents;
-            this.revert(partial, false);
+            applyRevert(partial, false);
             return err(routeDuplicate(routeMeta));
           }
           if (node.paramChild !== null) {
@@ -251,7 +251,7 @@ export class WildcardPrefixIndex {
 
     if (wildcardTailName !== null) {
       if (node.subtreeTerminalCount > 0 || node.subtreeWildcardCount > 0) {
-        this.revert(partial, false);
+        applyRevert(partial, false);
         return err(routeUnreachable('a descendant terminal or wildcard already covers this prefix', routeMeta));
       }
       setWildcardName(node, wildcardTailName);
@@ -259,18 +259,18 @@ export class WildcardPrefixIndex {
     } else {
       if (node.terminalMeta !== null) {
         if (!routeMeta.isOptionalExpansion) {
-          this.revert(partial, false);
+          applyRevert(partial, false);
           return err(routeDuplicate(routeMeta));
         }
         if (sameTerminalIdentity(node.terminalMeta, routeMeta)) {
-          this.revert(partial, false);
+          applyRevert(partial, false);
           return 'alias';
         }
-        this.revert(partial, false);
+        applyRevert(partial, false);
         return err(routeConflict('optional-expansion duplicate with different identity', routeMeta));
       }
       if (getWildcardName(node) !== null) {
-        this.revert(partial, false);
+        applyRevert(partial, false);
         return err(routeUnreachable('a wildcard is registered at this exact prefix', routeMeta));
       }
       node.terminalMeta = routeMeta;
@@ -278,59 +278,6 @@ export class WildcardPrefixIndex {
     }
 
     return partial;
-  }
-
-  /**
-   * Roll back the mutations made during the planning walk. `decrementCounters`
-   * is true only when a successful commit had already bumped subtreeTerminalCount
-   * / subtreeWildcardCount on every visited node. During in-walk failures the
-   * counters were not yet bumped, so they must NOT be decremented.
-   */
-  revert(plan: CommitPlan, decrementCounters: boolean): void {
-    const visited = plan.visited;
-    if (decrementCounters) {
-      if (plan.hasWildcardTail) {
-        for (let i = 0; i < visited.length; i++) {
-          const seen = visited[i]!;
-          seen.subtreeWildcardCount = Math.max(0, seen.subtreeWildcardCount - 1);
-        }
-      } else {
-        for (let i = 0; i < visited.length; i++) {
-          const seen = visited[i]!;
-          seen.subtreeTerminalCount = Math.max(0, seen.subtreeTerminalCount - 1);
-        }
-      }
-    }
-    const terminalNode = visited[visited.length - 1]!;
-    if (plan.hasWildcardTail) setWildcardName(terminalNode, null);
-    else terminalNode.terminalMeta = null;
-    const fle = plan.freshLiteralEdges;
-    if (fle !== null) {
-      for (let i = fle.length - 1; i >= 0; i--) {
-        const e = fle[i]!;
-        if (e.parent.literalChildren !== null) delete e.parent.literalChildren[e.key];
-        if (e.literalChildrenWasNull) e.parent.literalChildren = null;
-      }
-    }
-    const fpp = plan.freshParamParents;
-    if (fpp !== null) {
-      for (let i = fpp.length - 1; i >= 0; i--) {
-        const p = fpp[i]!;
-        p.paramChild = null;
-        p.paramName = null;
-      }
-    }
-    const frp = plan.freshRegexParents;
-    if (frp !== null) {
-      for (let i = frp.length - 1; i >= 0; i--) {
-        const r = frp[i]!;
-        const siblings = getRegexParamChildren(r.parent);
-        if (siblings !== null) {
-          siblings.pop();
-          if (r.createdArray) setRegexParamChildren(r.parent, null);
-        }
-      }
-    }
   }
 
   private rootFor(methodCode: number): PrefixTrieNode {
@@ -344,6 +291,60 @@ export class WildcardPrefixIndex {
 }
 
 /**
+ * Roll back the mutations made during a planning walk. `decrementCounters`
+ * is true only when a successful commit had already bumped
+ * `subtreeTerminalCount` / `subtreeWildcardCount` on every visited node.
+ * During in-walk failures the counters were not yet bumped, so they must
+ * NOT be decremented.
+ */
+function applyRevert(plan: CommitPlan, decrementCounters: boolean): void {
+  const visited = plan.visited;
+  if (decrementCounters) {
+    if (plan.hasWildcardTail) {
+      for (let i = 0; i < visited.length; i++) {
+        const seen = visited[i]!;
+        seen.subtreeWildcardCount = Math.max(0, seen.subtreeWildcardCount - 1);
+      }
+    } else {
+      for (let i = 0; i < visited.length; i++) {
+        const seen = visited[i]!;
+        seen.subtreeTerminalCount = Math.max(0, seen.subtreeTerminalCount - 1);
+      }
+    }
+  }
+  const terminalNode = visited[visited.length - 1]!;
+  if (plan.hasWildcardTail) setWildcardName(terminalNode, null);
+  else terminalNode.terminalMeta = null;
+  const fle = plan.freshLiteralEdges;
+  if (fle !== null) {
+    for (let i = fle.length - 1; i >= 0; i--) {
+      const e = fle[i]!;
+      if (e.parent.literalChildren !== null) delete e.parent.literalChildren[e.key];
+      if (e.literalChildrenWasNull) e.parent.literalChildren = null;
+    }
+  }
+  const fpp = plan.freshParamParents;
+  if (fpp !== null) {
+    for (let i = fpp.length - 1; i >= 0; i--) {
+      const p = fpp[i]!;
+      p.paramChild = null;
+      p.paramName = null;
+    }
+  }
+  const frp = plan.freshRegexParents;
+  if (frp !== null) {
+    for (let i = frp.length - 1; i >= 0; i--) {
+      const r = frp[i]!;
+      const siblings = getRegexParamChildren(r.parent);
+      if (siblings !== null) {
+        siblings.pop();
+        if (r.createdArray) setRegexParamChildren(r.parent, null);
+      }
+    }
+  }
+}
+
+/**
  * Apply the inverse of a previously-committed plan: detaches every newly-
  * planned edge from its parent and decrements the subtree counters that the
  * commit incremented. Used by registration's rollback path; pushing the
@@ -351,10 +352,7 @@ export class WildcardPrefixIndex {
  * `plan`) avoids one closure allocation per route during high-volume builds.
  */
 export function rollbackPlan(plan: CommitPlan): void {
-  // The shared revert helper handles decrementCounters=true: a committed plan
-  // had its counters bumped, so rollback decrements.
-  const idx = WildcardPrefixIndex.prototype.revert as (this: unknown, p: CommitPlan, dec: boolean) => void;
-  idx.call(null, plan, true);
+  applyRevert(plan, true);
 }
 
 function createNode(): PrefixTrieNode {
@@ -425,5 +423,3 @@ function regexSiblingLimit(cap: number, meta: RouteMeta): RouterErrorData {
   };
 }
 
-// Re-export local kinds to keep the public RouterErrorKind alignment explicit.
-export type { RouterErrorKind };

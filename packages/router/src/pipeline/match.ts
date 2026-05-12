@@ -1,6 +1,5 @@
 import type { MatchFn, MatchState } from '../matcher/match-state';
 import type { PathNormalizer } from '../matcher/path-normalize';
-import type { MatchOutput } from '../types';
 
 
 /**
@@ -11,11 +10,10 @@ import type { MatchOutput } from '../types';
  * File-local: only `MatchLayer`'s constructor consumes it; not part of
  * the public surface.
  */
-interface MatchLayerDeps<T> {
+interface MatchLayerDeps {
   normalizePath: PathNormalizer;
   matchState: MatchState;
   activeMethodCodes: ReadonlyArray<readonly [string, number]>;
-  staticOutputsByMethod: Array<Record<string, MatchOutput<T>> | undefined>;
   trees: Array<MatchFn | null>;
   /** Per-static-path 32-bit mask of registered method codes. */
   staticPathMethodMask: Record<string, number>;
@@ -35,11 +33,10 @@ interface MatchLayerDeps<T> {
  * Constructed only when `Router.build()` succeeds — its mere existence
  * is the "router is built" signal at the Router boundary.
  */
-export class MatchLayer<T> {
+export class MatchLayer {
   private readonly normalizePath: PathNormalizer;
   private readonly matchState: MatchState;
   private readonly activeMethodCodes: ReadonlyArray<readonly [string, number]>;
-  private readonly staticOutputsByMethod: Array<Record<string, MatchOutput<T>> | undefined>;
   private readonly trees: Array<MatchFn | null>;
   private readonly staticPathMethodMask: Record<string, number>;
   /**
@@ -49,11 +46,10 @@ export class MatchLayer<T> {
    */
   private readonly methodNameByCode: string[];
 
-  constructor(deps: MatchLayerDeps<T>) {
+  constructor(deps: MatchLayerDeps) {
     this.normalizePath = deps.normalizePath;
     this.matchState = deps.matchState;
     this.activeMethodCodes = deps.activeMethodCodes;
-    this.staticOutputsByMethod = deps.staticOutputsByMethod;
     this.trees = deps.trees;
     this.staticPathMethodMask = deps.staticPathMethodMask;
     const names: string[] = [];
@@ -94,7 +90,8 @@ export class MatchLayer<T> {
     // Static fast path — single 32-bit mask lookup; iterate via lowest
     // set bit (`mask & -mask`) so each loop iteration is O(1) regardless
     // of how many methods are registered for the path.
-    let mask = (this.staticPathMethodMask[sp] ?? 0) | 0;
+    const staticMask = (this.staticPathMethodMask[sp] ?? 0) | 0;
+    let mask = staticMask;
     while (mask !== 0) {
       const lowest = mask & -mask;
       const code = 31 - Math.clz32(lowest);
@@ -108,7 +105,6 @@ export class MatchLayer<T> {
     // them. Trees are sparse so the loop is at most O(active methods).
     const state = this.matchState;
     const active = this.activeMethodCodes;
-    const staticMask = (this.staticPathMethodMask[sp] ?? 0) | 0;
     for (let i = 0; i < active.length; i++) {
       const entry = active[i]!;
       const methodCode = entry[1];

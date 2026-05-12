@@ -120,25 +120,23 @@ function hasNestedUnlimitedQuantifiers(pattern: string): boolean {
   return false;
 }
 
+/**
+ * Return the index of the `]` that closes the char-class starting at
+ * `start` (which must point at the opening `[`). When the class is
+ * unterminated, return the last in-bounds index so callers' `i+1` step
+ * lands at `pattern.length` and exits their walk loop cleanly.
+ *
+ * Backslash-escapes inside `[...]` consume the following byte, so `[\]]`
+ * is a class containing a literal `]`.
+ */
 function skipCharClass(pattern: string, start: number): number {
   let i = start + 1;
-
   while (i < pattern.length) {
-    const char = pattern[i];
-
-    if (char === '\\') {
-      i += 2;
-
-      continue;
-    }
-
-    if (char === ']') {
-      return i;
-    }
-
+    const ch = pattern[i];
+    if (ch === '\\') { i += 2; continue; }
+    if (ch === ']') return i;
     i++;
   }
-
   return pattern.length - 1;
 }
 
@@ -179,7 +177,7 @@ function scanGroupConstructs(pattern: string): string | null {
   while (i < len) {
     const ch = pattern[i];
     if (ch === '\\') { i += 2; continue; }
-    if (ch === '[') { i = skipCharClassExternal(pattern, i) + 1; continue; }
+    if (ch === '[') { i = skipCharClass(pattern, i) + 1; continue; }
     if (ch !== '(') { i++; continue; }
 
     // Got a `(`. Must be followed by `?:` to be allowed.
@@ -218,7 +216,7 @@ function hasOverlappingAlternationUnderRepeat(pattern: string): boolean {
   let i = 0;
   while (i < pattern.length) {
     if (pattern[i] === '\\') { i += 2; continue; }
-    if (pattern[i] === '[') { i = skipCharClassExternal(pattern, i) + 1; continue; }
+    if (pattern[i] === '[') { i = skipCharClass(pattern, i) + 1; continue; }
     if (pattern[i] !== '(') { i++; continue; }
 
     // Scan to matching close paren at the same nesting level, capturing
@@ -230,7 +228,7 @@ function hasOverlappingAlternationUnderRepeat(pattern: string): boolean {
     while (j < pattern.length && depth > 0) {
       const c = pattern[j];
       if (c === '\\') { j += 2; continue; }
-      if (c === '[') { j = skipCharClassExternal(pattern, j) + 1; continue; }
+      if (c === '[') { j = skipCharClass(pattern, j) + 1; continue; }
       if (c === '(') { depth++; j++; continue; }
       if (c === ')') { depth--; if (depth === 0) break; j++; continue; }
       if (c === '|' && depth === 1) splits.push(j);
@@ -296,11 +294,3 @@ function firstLiteralByte(s: string): string | null {
   return s[0]!;
 }
 
-function skipCharClassExternal(pattern: string, i: number): number {
-  let j = i + 1;
-  while (j < pattern.length && pattern[j] !== ']') {
-    if (pattern[j] === '\\') j += 2;
-    else j++;
-  }
-  return j;
-}

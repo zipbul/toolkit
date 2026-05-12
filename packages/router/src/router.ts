@@ -28,7 +28,7 @@ export const ROUTER_INTERNALS_KEY: unique symbol = Symbol.for('@zipbul/router/in
 
 export interface RouterInternals<T> {
   matchImpl: ((method: string, path: string) => MatchOutput<T> | null) | undefined;
-  matchLayer: MatchLayer<T> | undefined;
+  matchLayer: MatchLayer | undefined;
   registration: Registration<T>;
   /**
    * Codegen aggregate for the most recent build pass: counts of generated
@@ -184,7 +184,7 @@ export class Router<T = unknown> implements RouterPublicApi<T> {
     const cache = createCacheContainers<T>(routerOptions);
 
     let matchImpl: ((method: string, path: string) => MatchOutput<T> | null) | undefined;
-    let matchLayer: MatchLayer<T> | undefined;
+    let matchLayer: MatchLayer | undefined;
 
     // Internal inspection hatch for regression guards (walker tier
     // detection, handler rollback, etc). NOT part of the public API —
@@ -248,11 +248,10 @@ export class Router<T = unknown> implements RouterPublicApi<T> {
       // hot-path regression — JSC re-tiers regardless; this just front-
       // loads the cost into build().
       optimizeNextInvocation(matchImpl);
-      matchLayer = new MatchLayer<T>({
+      matchLayer = new MatchLayer({
         normalizePath: r.normalizePath,
         matchState: r.matchState,
         activeMethodCodes: r.activeMethodCodes,
-        staticOutputsByMethod: r.staticOutputsByMethod,
         trees: r.trees,
         staticPathMethodMask: r.staticPathMethodMask,
       });

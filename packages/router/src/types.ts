@@ -53,7 +53,6 @@ export type RouterErrorKind =
   | 'method-limit'       // 32개 메서드 초과 (MethodRegistry)
   | 'method-empty'       // 빈 method 토큰
   | 'method-invalid-token' // method 가 HTTP token 문법을 위반
-  | 'method-too-long'    // 64 ASCII bytes 초과 (RFC 9110 cap)
   | 'path-missing-leading-slash'
   | 'path-query'         // 등록 path에 raw `?`
   | 'path-fragment'      // 등록 path에 raw `#`
@@ -110,7 +109,6 @@ export type RouterErrorData = {
   | { kind: 'method-limit'; message: string; method: string; suggestion: string }
   | { kind: 'method-empty'; message: string; suggestion?: string }
   | { kind: 'method-invalid-token'; message: string; method: string; suggestion?: string }
-  | { kind: 'method-too-long'; message: string; method: string; suggestion?: string }
   | { kind: 'path-missing-leading-slash'; message: string; suggestion?: string }
   | { kind: 'path-query'; message: string; suggestion?: string }
   | { kind: 'path-fragment'; message: string; suggestion?: string }

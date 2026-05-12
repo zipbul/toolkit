@@ -159,6 +159,17 @@ function isHex(c: number): boolean {
   return (c >= 0x30 && c <= 0x39) || (c >= 0x41 && c <= 0x46) || (c >= 0x61 && c <= 0x66);
 }
 
+type DecodeFailKind = 'path-encoded-control' | 'path-encoded-slash' | 'path-invalid-utf8';
+
+function failDecode(
+  kind: DecodeFailKind,
+  msg: string,
+  suggestion: string,
+  path: string,
+): Result<never, RouterErrorData> {
+  return err({ kind, message: `${msg}: ${path}`, path, suggestion });
+}
+
 function hexValue(c: number): number {
   if (c >= 0x30 && c <= 0x39) return c - 0x30;
   if (c >= 0x41 && c <= 0x46) return c - 0x41 + 10;
@@ -197,10 +208,6 @@ export function validateDecodedBytes(path: string): Result<void, RouterErrorData
   let seqVal = 0;
   let seqMin = 0;
 
-  const fail = (kind: 'path-encoded-control' | 'path-encoded-slash' | 'path-invalid-utf8',
-                msg: string, suggestion: string) =>
-    err({ kind, message: `${msg}: ${path}`, path, suggestion });
-
   while (i < len) {
     const ch = path.charCodeAt(i);
     if (ch === 0x28) { parenDepth++; i++; continue; }
@@ -211,9 +218,9 @@ export function validateDecodedBytes(path: string): Result<void, RouterErrorData
       // Literal ASCII byte. If we were inside a UTF-8 sequence, the
       // sequence is incomplete (a non-continuation byte appeared).
       if (expect !== 0) {
-        return fail('path-invalid-utf8',
+        return failDecode('path-invalid-utf8',
           'Path percent-encoding decodes to a truncated UTF-8 sequence',
-          'Each `%xx` continuation byte must complete the surrounding UTF-8 codepoint.');
+          'Each `%xx` continuation byte must complete the surrounding UTF-8 codepoint.', path);
       }
       i++;
       continue;
@@ -226,66 +233,66 @@ export function validateDecodedBytes(path: string): Result<void, RouterErrorData
     if (expect === 0) {
       // Starting a new byte. Classify ASCII first.
       if ((b >= 0x00 && b <= 0x1f) || b === 0x7f) {
-        return fail('path-encoded-control',
+        return failDecode('path-encoded-control',
           `Path contains percent-encoded control byte %${b.toString(16).padStart(2, '0').toUpperCase()}`,
-          'Control bytes (0x00-0x1F, 0x7F) are not permitted in registered paths.');
+          'Control bytes (0x00-0x1F, 0x7F) are not permitted in registered paths.', path);
       }
       if (b === 0x2f) {
-        return fail('path-encoded-slash',
+        return failDecode('path-encoded-slash',
           'Path contains percent-encoded `/` (%2F)',
-          'Encoded slashes are not allowed; the path grammar reserves `/` as the segment separator.');
+          'Encoded slashes are not allowed; the path grammar reserves `/` as the segment separator.', path);
       }
       if (b < 0x80) { continue; }
 
       // Multi-byte UTF-8 lead byte.
       if (b < 0xc2) {
         // 0x80-0xbf: stray continuation. 0xc0-0xc1: overlong 2-byte.
-        return fail('path-invalid-utf8',
+        return failDecode('path-invalid-utf8',
           `Path percent-encoding produced invalid UTF-8 lead byte %${b.toString(16).toUpperCase()}`,
-          'Lead bytes 0x80-0xbf and 0xc0-0xc1 are not valid in well-formed UTF-8.');
+          'Lead bytes 0x80-0xbf and 0xc0-0xc1 are not valid in well-formed UTF-8.', path);
       }
       if (b < 0xe0) { expect = 1; seqVal = b & 0x1f; seqMin = 0x80; }
       else if (b < 0xf0) { expect = 2; seqVal = b & 0x0f; seqMin = 0x800; }
       else if (b < 0xf5) { expect = 3; seqVal = b & 0x07; seqMin = 0x10000; }
       else {
-        return fail('path-invalid-utf8',
+        return failDecode('path-invalid-utf8',
           `Path percent-encoding produced invalid UTF-8 lead byte %${b.toString(16).toUpperCase()}`,
-          'Lead bytes 0xf5-0xff are outside the Unicode range.');
+          'Lead bytes 0xf5-0xff are outside the Unicode range.', path);
       }
       continue;
     }
 
     // Continuation byte expected.
     if ((b & 0xc0) !== 0x80) {
-      return fail('path-invalid-utf8',
+      return failDecode('path-invalid-utf8',
         `Path percent-encoding produced invalid UTF-8 continuation byte %${b.toString(16).toUpperCase()}`,
-        'Continuation bytes must match `0b10xxxxxx`.');
+        'Continuation bytes must match `0b10xxxxxx`.', path);
     }
     seqVal = (seqVal << 6) | (b & 0x3f);
     expect--;
     if (expect === 0) {
       if (seqVal < seqMin) {
-        return fail('path-invalid-utf8',
+        return failDecode('path-invalid-utf8',
           `Path percent-encoding produced an overlong UTF-8 sequence (codepoint U+${seqVal.toString(16).toUpperCase()})`,
-          'Overlong encodings are forbidden by RFC 3629 §3.');
+          'Overlong encodings are forbidden by RFC 3629 §3.', path);
       }
       if (seqVal >= 0xd800 && seqVal <= 0xdfff) {
-        return fail('path-invalid-utf8',
+        return failDecode('path-invalid-utf8',
           `Path percent-encoding produced a surrogate codepoint U+${seqVal.toString(16).toUpperCase()}`,
-          'UTF-16 surrogate halves are not valid Unicode scalars.');
+          'UTF-16 surrogate halves are not valid Unicode scalars.', path);
       }
       if (seqVal > 0x10ffff) {
-        return fail('path-invalid-utf8',
+        return failDecode('path-invalid-utf8',
           `Path percent-encoding produced a codepoint above U+10FFFF`,
-          'The Unicode range tops out at U+10FFFF.');
+          'The Unicode range tops out at U+10FFFF.', path);
       }
     }
   }
 
   if (expect !== 0) {
-    return fail('path-invalid-utf8',
+    return failDecode('path-invalid-utf8',
       'Path ends with an incomplete UTF-8 sequence',
-      'Provide all continuation bytes for the trailing UTF-8 codepoint.');
+      'Provide all continuation bytes for the trailing UTF-8 codepoint.', path);
   }
   return undefined;
 }

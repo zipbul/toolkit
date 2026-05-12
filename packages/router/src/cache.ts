@@ -77,7 +77,16 @@ export class RouterCache<T> {
       slot = this.evict();
     }
 
-    this.entries[slot] = { key, value, used: true };
+    // Reuse the evicted slot's entry object when possible — avoids one
+    // allocation per eviction in the steady-state cache-pressure regime.
+    const existingSlot = this.entries[slot];
+    if (existingSlot !== undefined) {
+      existingSlot.key = key;
+      existingSlot.value = value;
+      existingSlot.used = true;
+    } else {
+      this.entries[slot] = { key, value, used: true };
+    }
     this.index.set(key, slot);
   }
 

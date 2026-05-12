@@ -76,14 +76,15 @@ describe('MethodRegistry', () => {
       expect(reg.get('NONEXISTENT')).toBeUndefined();
     });
 
-    it('should reject method name longer than the 64-byte cap', () => {
+    it('should accept arbitrarily long valid-tchar method names (no length cap; RFC 9110 §2.3)', () => {
       const reg = new MethodRegistry();
-      const longName = 'X'.repeat(1000);
+      const longName = 'X'.repeat(1000); // valid tchar (ALPHA), unbounded length
       const result = reg.getOrCreate(longName);
 
-      expect(isErr(result)).toBe(true);
-      if (isErr(result)) {
-        expect(['method-empty', 'method-too-long', 'method-invalid-token']).toContain(result.data.kind);
+      expect(isErr(result)).toBe(false);
+      if (!isErr(result)) {
+        expect(typeof result).toBe('number');
+        expect(reg.get(longName)).toBe(result);
       }
     });
 

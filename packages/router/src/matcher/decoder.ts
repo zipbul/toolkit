@@ -1,17 +1,17 @@
-/** Function type returned by {@link buildDecoder}. Takes a raw segment and returns decoded string. */
+/** Takes a raw segment and returns the percent-decoded string. */
 export type DecoderFn = (raw: string) => string;
 
 /**
- * Builds a decoder closure for param value decoding.
- * Decodes percent-encoded values. On decode failure, returns raw string as-is.
+ * Module-singleton decoder for param values. Stateless — every router
+ * shares the same function object so JSC can keep call-site ICs
+ * monomorphic across instances. Decodes percent-encoded values; on
+ * decode failure, returns the raw string unchanged.
  */
-export function buildDecoder(): DecoderFn {
-  return (raw: string): string => {
-    if (!raw.includes('%')) return raw;
-    try {
-      return decodeURIComponent(raw);
-    } catch {
-      return raw;
-    }
-  };
-}
+export const decoder: DecoderFn = (raw: string): string => {
+  if (!raw.includes('%')) return raw;
+  try {
+    return decodeURIComponent(raw);
+  } catch {
+    return raw;
+  }
+};

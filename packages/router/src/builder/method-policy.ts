@@ -3,15 +3,21 @@ import type { RouterErrorData } from '../types';
 
 import { err } from '@zipbul/result';
 
-const MAX_METHOD_LENGTH = 64;
-
-// HTTP method token grammar: 1*tchar where tchar = ALPHA / DIGIT /
-// "!" / "#" / "$" / "%" / "&" / "'" / "*" / "+" / "-" / "." /
-// "^" / "_" / "`" / "|" / "~". Char-code switch instead of regex to keep
-// the per-add gate allocation-free.
+// HTTP method token grammar (RFC 9110 §5.6.2 + §9.1, RFC 9112 §3.1):
+//   method = token = 1*tchar
+//   tchar  = ALPHA / DIGIT / "!" / "#" / "$" / "%" / "&" / "'" / "*"
+//          / "+" / "-" / "." / "^" / "_" / "`" / "|" / "~"
+// RFC 9112 §3.1 explicitly: "The request method is case-sensitive." — we
+// therefore do NOT canonicalize case; "GET" and "get" are distinct methods.
+// RFC 9110 §2.3 explicitly states no predefined length limit, so we impose
+// none beyond `1*tchar` (one or more) — `MethodRegistry`'s `MAX_METHODS`
+// cap (32-bit bitmask ceiling) already prevents unbounded growth, and
+// `add()` is developer-controlled code, not external input, so an
+// adversarial-length method string is not a meaningful threat model.
+// Char-code switch (instead of regex) keeps the per-add gate alloc-free.
 function isValidMethodToken(method: string): boolean {
   const len = method.length;
-  if (len === 0 || len > MAX_METHOD_LENGTH) return false;
+  if (len === 0) return false;
   for (let i = 0; i < len; i++) {
     const c = method.charCodeAt(i);
     if ((c >= 0x41 && c <= 0x5a) || (c >= 0x61 && c <= 0x7a) || (c >= 0x30 && c <= 0x39)) continue;
@@ -33,14 +39,6 @@ export function validateMethodToken(method: string): Result<void, RouterErrorDat
       kind: 'method-empty',
       message: 'HTTP method must not be empty.',
       suggestion: 'Provide a non-empty method token (e.g., GET, POST, custom token).',
-    });
-  }
-  if (method.length > MAX_METHOD_LENGTH) {
-    return err({
-      kind: 'method-too-long',
-      message: `HTTP method exceeds ${MAX_METHOD_LENGTH} ASCII bytes: '${method.slice(0, 16)}...'`,
-      method,
-      suggestion: `Method tokens must be 1-${MAX_METHOD_LENGTH} ASCII bytes.`,
     });
   }
   if (!isValidMethodToken(method)) {

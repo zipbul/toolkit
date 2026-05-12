@@ -15,10 +15,11 @@ describe('performance guard invariants', () => {
     const snapshot = (getRouterInternals(r).registration as any).snapshot;
 
     expect(snapshot.handlers.length).toBe(1);
-    const slab = snapshot.terminalSlab;
-    expect(slab.count).toBeGreaterThanOrEqual(1);
-    for (let t = 0; t < slab.count; t++) {
-      expect(slab.data[t * 2]).toBe(0);
+    const slab = snapshot.terminalSlab as Int32Array;
+    const terminals = slab.length / 2;
+    expect(terminals).toBeGreaterThanOrEqual(1);
+    for (let t = 0; t < terminals; t++) {
+      expect(slab[t * 2]).toBe(0);
     }
   });
 

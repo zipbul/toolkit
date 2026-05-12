@@ -13,6 +13,15 @@ const DEFAULT_METHODS: ReadonlyArray<readonly [string, number]> = [
   ['HEAD', 6],
 ] as const;
 
+/**
+ * Method-code upper bound. Imposed by `staticPathMethodMask`'s 32-bit Int
+ * representation: ECMAScript bitwise ops force operands through ToInt32
+ * (ECMA-262 §7.1.7), so `1 << methodCode` for `code ≥ 32` would silently
+ * collide with lower bits. BigInt would lift the cap but cost a hot-path
+ * boxed-Number per mask op. IANA's HTTP Method Registry (~40 methods, longest
+ * `UPDATEREDIRECTREF`) means a tight WebDAV/CalDAV registry plus the 7
+ * defaults can approach this; 32 covers ≥99% of real-world routers.
+ */
 const MAX_METHODS = 32;
 
 interface MethodRegistrySnapshot {
@@ -21,23 +30,24 @@ interface MethodRegistrySnapshot {
 }
 
 export class MethodRegistry {
-  /** Insertion-ordered map — fed to callers that need to iterate `[name, code]`
-   *  pairs (router build() walks this for activeMethodCodes). */
-  private readonly methodToOffset = new Map<string, number>();
-  /** Prototype-less object mirror of `methodToOffset`. router pre-A6 rebuilt
-   *  this on every build() by walking the Map; carrying it as the registry's
-   *  authoritative O(1) lookup table avoids the conversion. Created via
-   *  `Object.create(null)` for the same reason router's NullProtoObj exists —
-   *  no Object.prototype walk on every match. */
+  /**
+   * Single source of truth: prototype-less Record. Method-name strings
+   * ("GET", "POST", …) are non-integer keys, so by ECMA-262 §10.1.11.1
+   * (OrdinaryOwnPropertyKeys) a `for…in` walk yields them in insertion
+   * order — no parallel `Map` needed. `Object.create(null)` keeps lookup
+   * off the `Object.prototype` walk so hot-path access is one IC slot.
+   * Measured Map+Record vs Record-only: construction 4.7×, iteration 1.5×,
+   * lookup unchanged (within noise) — see `bench/method-research/`.
+   */
   private readonly codeMap: Record<string, number> = Object.create(null) as Record<string, number>;
   private nextOffset: number;
+  private codeCount = 0;
 
   constructor() {
     for (const [method, offset] of DEFAULT_METHODS) {
-      this.methodToOffset.set(method, offset);
       this.codeMap[method] = offset;
+      this.codeCount++;
     }
-
     this.nextOffset = DEFAULT_METHODS.length;
   }
 
@@ -45,11 +55,8 @@ export class MethodRegistry {
     const tokenCheck = validateMethodToken(method);
     if (isErr(tokenCheck)) return tokenCheck;
 
-    const existing = this.methodToOffset.get(method);
-
-    if (existing !== undefined) {
-      return existing;
-    }
+    const existing = this.codeMap[method];
+    if (existing !== undefined) return existing;
 
     if (this.nextOffset >= MAX_METHODS) {
       return err({
@@ -61,53 +68,57 @@ export class MethodRegistry {
     }
 
     const offset = this.nextOffset++;
-    this.methodToOffset.set(method, offset);
     this.codeMap[method] = offset;
-
+    this.codeCount++;
     return offset;
   }
 
   get(method: string): number | undefined {
-    return this.methodToOffset.get(method);
+    return this.codeMap[method];
   }
 
   get size(): number {
-    return this.methodToOffset.size;
-  }
-
-  getAllCodes(): ReadonlyMap<string, number> {
-    return this.methodToOffset;
+    return this.codeCount;
   }
 
   /**
-   * Same data as `getAllCodes()` but as a prototype-less Record for hot-path
-   * lookup. The returned object is the registry's internal table — callers
-   * must not freeze or mutate it (router consumes it as a closure-captured
-   * matchImpl input; freeze would tank JSC inline caches per F22 partition).
+   * Snapshot of `[name, code]` pairs in registration order. Backed by
+   * `for…in` over `codeMap` — relies on ECMA-262 §10.1.11.1 insertion-order
+   * guarantee for non-integer string keys (HTTP method names always start
+   * with ALPHA, so they are never array-index-coerced). Returns a freshly
+   * materialized array so callers may iterate it multiple times within a
+   * single `build()` (build pipeline walks it twice — once for trees,
+   * once for activeMethodCodes filtering).
+   */
+  getAllCodes(): ReadonlyArray<readonly [string, number]> {
+    const out: Array<readonly [string, number]> = [];
+    for (const k in this.codeMap) out.push([k, this.codeMap[k]!] as const);
+    return out;
+  }
+
+  /**
+   * Hot-path lookup table — the same prototype-less Record the registry
+   * stores internally. Callers must not freeze or mutate it (router
+   * consumes it as a closure-captured matchImpl input; freeze would tank
+   * JSC inline caches per F22 partition).
    */
   getCodeMap(): Readonly<Record<string, number>> {
     return this.codeMap;
   }
 
   snapshot(): MethodRegistrySnapshot {
-    return {
-      entries: [...this.methodToOffset],
-      nextOffset: this.nextOffset,
-    };
+    const entries: Array<readonly [string, number]> = [];
+    for (const k in this.codeMap) entries.push([k, this.codeMap[k]!]);
+    return { entries, nextOffset: this.nextOffset };
   }
 
   restore(snapshot: MethodRegistrySnapshot): void {
-    this.methodToOffset.clear();
-
-    for (const key in this.codeMap) {
-      delete this.codeMap[key];
-    }
-
+    for (const key in this.codeMap) delete this.codeMap[key];
+    this.codeCount = 0;
     for (const [method, offset] of snapshot.entries) {
-      this.methodToOffset.set(method, offset);
       this.codeMap[method] = offset;
+      this.codeCount++;
     }
-
     this.nextOffset = snapshot.nextOffset;
   }
 }

@@ -111,11 +111,12 @@ describe('method token validation', () => {
     }).toThrow();
   });
 
-  test('method longer than 64 ASCII bytes must throw', () => {
+  test('long valid-tchar method tokens are accepted (no length cap; RFC 9110 §2.3)', () => {
     const r = new Router<string>();
-    expect(() => {
-      r.add('A'.repeat(65) as any, '/x', 'h');
-      r.build();
-    }).toThrow();
+    // No throw expected — only the bitmask-driven 32-method cap applies, and
+    // tchar-grammar invalidity. Length itself is unbounded.
+    r.add('A'.repeat(1024) as any, '/x', 'h');
+    r.build();
+    expect(r.match('A'.repeat(1024) as any, '/x')?.value).toBe('h');
   });
 });

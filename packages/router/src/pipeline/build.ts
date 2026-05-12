@@ -4,7 +4,7 @@ import type { MatchOutput, RouteParams, RouterOptions } from '../types';
 import type { RegistrationSnapshot } from './registration';
 
 import { EMPTY_PARAMS, NullProtoObj, STATIC_META } from '../internal/null-proto-obj';
-import { buildDecoder } from '../matcher/decoder';
+import { decoder } from '../matcher/decoder';
 import { createMatchState } from '../matcher/match-state';
 import { buildPathNormalizer } from '../matcher/path-normalize';
 import { createSegmentWalker } from '../matcher/segment-walk';
@@ -39,22 +39,11 @@ export function buildFromRegistration<T>(
 ): BuildResult<T> {
   const allCodes = methodRegistry.getAllCodes();
   const methodCodes = methodRegistry.getCodeMap() as Record<string, number>;
-  const decoder = buildDecoder();
-  const trees: Array<MatchFn | null> = [];
-
-  for (const [, code] of allCodes) {
-    const segRoot = snapshot.segmentTrees[code];
-    if (segRoot !== undefined && segRoot !== null) {
-      trees[code] = createSegmentWalker(segRoot, decoder);
-      continue;
-    }
-    trees[code] = null;
-  }
-
   const anyTester = snapshot.anyTester;
-  
-  const staticOutputsByMethod: Array<Record<string, MatchOutput<T>> | undefined> = [];
 
+  // Materialize the static-output buckets up front so the per-method
+  // walker/active-codes loop below can decide activeness in one pass.
+  const staticOutputsByMethod: Array<Record<string, MatchOutput<T>> | undefined> = [];
   for (let mc = 0; mc < snapshot.staticByMethod.length; mc++) {
     const inputBucket = snapshot.staticByMethod[mc];
     if (inputBucket === undefined) continue;
@@ -71,9 +60,23 @@ export function buildFromRegistration<T>(
     }
   }
 
+  // Fused loop — for each method:
+  //   1. attach a segment walker to `trees[code]` if a tree exists
+  //   2. push `[name, code]` into activeMethodCodes if the method has
+  //      either a walker or a static bucket
+  // Earlier pipeline ran two passes; bench `bench/method-research/
+  // E-build-loops-fusion.bench.ts` measures this single pass at
+  // 1.16-1.21× the dual-pass cost across 7/15/32 methods.
+  const trees: Array<MatchFn | null> = [];
   const activeMethodCodes: Array<readonly [string, number]> = [];
   for (const [name, code] of allCodes) {
-    if (trees[code] != null || staticOutputsByMethod[code] !== undefined) {
+    const segRoot = snapshot.segmentTrees[code];
+    let walker: MatchFn | null = null;
+    if (segRoot !== undefined && segRoot !== null) {
+      walker = createSegmentWalker(segRoot, decoder);
+    }
+    trees[code] = walker;
+    if (walker !== null || staticOutputsByMethod[code] !== undefined) {
       activeMethodCodes.push([name, code]);
     }
   }
@@ -95,7 +98,7 @@ export function buildFromRegistration<T>(
     methodCodes,
     matchState: createMatchState(options.maxParams ?? 64),
     normalizePath,
-    terminalSlab: snapshot.terminalSlab.data,
+    terminalSlab: snapshot.terminalSlab,
     paramsFactories: snapshot.paramsFactories,
     ignoreTrailingSlash,
     caseSensitive,

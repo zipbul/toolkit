@@ -292,7 +292,6 @@ describe('sealed state', () => {
     // match — freezing it cost 5-10 ns/match in earlier bench runs.
     expect(Object.isFrozen(internal.registration.handlers)).toBe(false);
     expect(Object.isFrozen(internal.matchLayer.trees)).toBe(false);
-    expect(Object.isFrozen(internal.matchLayer.staticOutputsByMethod)).toBe(false);
 
     // Frozen object/array mutation throws TypeError in strict mode (ESM = strict).
     expect(() => internal.registration.segmentTrees.push(null)).toThrow(TypeError);

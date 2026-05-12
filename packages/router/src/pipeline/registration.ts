@@ -14,7 +14,7 @@ import { expandOptional } from '../builder/route-expand';
 import { RouterError } from '../error';
 import { MethodRegistry } from '../method-registry';
 import { createSegmentNode, detectTenantFactor, insertIntoSegmentTree, setTenantFactor } from '../matcher/segment-tree';
-import { buildDecoder } from '../matcher/decoder';
+import { decoder } from '../matcher/decoder';
 import { NullProtoObj } from '../internal/null-proto-obj';
 import { WildcardPrefixIndex, rollbackPlan, type RouteMeta, type CommitPlan } from './wildcard-prefix-index';
 
@@ -63,17 +63,14 @@ interface PendingRoute<T> {
  * the per-active-method bucket probe loop.
  */
 /**
- * Per-terminal metadata slab. Two `Int32` slots per terminal index `t`:
- *   - slot 0: handler index into `handlers[]`
- *   - slot 1: 1 if the terminal corresponds to a wildcard match, 0 otherwise
- * `terminalCount` is the number of populated terminals; the slab is sized
- * once at seal-time from the build-state arrays.
+ * Per-terminal metadata slab packed as `Int32Array`. Two slots per
+ * terminal index `t`:
+ *   - `slab[t*2]` — handler index into `handlers[]`
+ *   - `slab[t*2 + 1]` — `1` if the terminal corresponds to a wildcard
+ *     match, `0` otherwise
+ * The slab is sized once at seal-time from the build-state arrays;
+ * walker reads it as contiguous typed memory.
  */
-export interface TerminalSlab {
-  data: Int32Array;
-  count: number;
-}
-
 export const TERMINAL_SLOTS = 2;
 export const TERMINAL_HANDLER_OFFSET = 0;
 export const TERMINAL_IS_WILDCARD_OFFSET = 1;
@@ -83,7 +80,7 @@ export interface RegistrationSnapshot<T> {
   staticPathMethodMask: Record<string, number>;
   segmentTrees: Array<SegmentNode | null>;
   handlers: T[];
-  terminalSlab: TerminalSlab;
+  terminalSlab: Int32Array;
   paramsFactories: Array<((u: string, v: Int32Array) => RouteParams) | null>;
   /** True iff any registered route declared a regex pattern tester. The
    *  full tester cache is build-only and not retained on the snapshot. */
@@ -238,7 +235,6 @@ export class Registration<T> {
 
     const factoryCache = new Map<string, (u: string, v: Int32Array) => RouteParams>();
     const omitBehavior = (options.optionalParamBehavior ?? 'omit') === 'omit';
-    const decoder = buildDecoder();
     this.maxExpandedRoutes = options.maxExpandedRoutes ?? 200_000;
     this.maxOptionalExpansions = options.maxOptionalExpansions ?? 1024;
     this.totalExpandedRoutes = 0;
@@ -249,16 +245,24 @@ export class Registration<T> {
 
     // Resolve `*`-method registrations against the set of methods present at
     // seal time (built-ins plus any custom token registered before seal).
-    {
+    // Common case (no `*` registrations) skips the whole expansion — at 100k
+    // routes that's 100k avoided allocations and one full array copy.
+    let hasWildcardMethod = false;
+    for (let i = 0; i < this.pendingRoutes.length; i++) {
+      if (this.pendingRoutes[i]!.method === WILDCARD_METHOD) {
+        hasWildcardMethod = true;
+        break;
+      }
+    }
+    if (hasWildcardMethod) {
       const expanded: PendingRoute<T>[] = [];
-      const sealMethods = (() => {
-        const out: string[] = [];
-        for (const [name] of this.methodRegistry.getAllCodes()) out.push(name);
-        for (const r of this.pendingRoutes) {
-          if (r.method !== WILDCARD_METHOD && !out.includes(r.method)) out.push(r.method);
+      const sealMethods: string[] = [];
+      for (const [name] of this.methodRegistry.getAllCodes()) sealMethods.push(name);
+      for (const r of this.pendingRoutes) {
+        if (r.method !== WILDCARD_METHOD && !sealMethods.includes(r.method)) {
+          sealMethods.push(r.method);
         }
-        return out;
-      })();
+      }
       for (const r of this.pendingRoutes) {
         if (r.method === WILDCARD_METHOD) {
           for (const m of sealMethods) expanded.push({ method: m, path: r.path, value: r.value });
@@ -354,12 +358,11 @@ export class Registration<T> {
     // so the runtime walker reads contiguous memory rather than chasing
     // two JS arrays. 2 slots per terminal: handlerIdx, isWildcard.
     const terminalCount = state.terminalHandlers.length;
-    const terminalData = new Int32Array(terminalCount * TERMINAL_SLOTS);
+    const terminalSlab = new Int32Array(terminalCount * TERMINAL_SLOTS);
     for (let t = 0; t < terminalCount; t++) {
-      terminalData[t * TERMINAL_SLOTS + TERMINAL_HANDLER_OFFSET] = state.terminalHandlers[t]!;
-      terminalData[t * TERMINAL_SLOTS + TERMINAL_IS_WILDCARD_OFFSET] = state.isWildcardByTerminal[t] ? 1 : 0;
+      terminalSlab[t * TERMINAL_SLOTS + TERMINAL_HANDLER_OFFSET] = state.terminalHandlers[t]!;
+      terminalSlab[t * TERMINAL_SLOTS + TERMINAL_IS_WILDCARD_OFFSET] = state.isWildcardByTerminal[t] ? 1 : 0;
     }
-    const terminalSlab: TerminalSlab = { data: terminalData, count: terminalCount };
 
     const snapshot: RegistrationSnapshot<T> = {
       staticByMethod: state.staticByMethod,
