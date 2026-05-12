@@ -3,7 +3,7 @@ import type { PathPart } from '../builder/path-parser';
 import type { SegmentNode, SegmentTreeUndoLog } from '../matcher/segment-tree';
 import { applyUndo, setPrefixIndexRollback } from '../matcher/segment-tree';
 import type { RouterErrorData, RouteParams } from '../types';
-import type { RouteValidationIssue } from '../builder/validation-issue';
+import type { RouteValidationIssue } from '../types';
 import type { PatternTesterFn } from '../matcher/pattern-tester';
 
 import { performance } from 'node:perf_hooks';
@@ -71,9 +71,9 @@ interface PendingRoute<T> {
  * The slab is sized once at seal-time from the build-state arrays;
  * walker reads it as contiguous typed memory.
  */
-export const TERMINAL_SLOTS = 2;
-export const TERMINAL_HANDLER_OFFSET = 0;
-export const TERMINAL_IS_WILDCARD_OFFSET = 1;
+const TERMINAL_SLOTS = 2;
+const TERMINAL_HANDLER_OFFSET = 0;
+const TERMINAL_IS_WILDCARD_OFFSET = 1;
 
 export interface RegistrationSnapshot<T> {
   staticByMethod: Array<Record<string, T> | undefined>;
@@ -106,7 +106,7 @@ interface BuildState<T> {
   diagnostics: RegistrationDiagnostics | null;
 }
 
-export interface RegistrationDiagnostics {
+interface RegistrationDiagnostics {
   routes: number;
   staticRoutes: number;
   dynamicRoutes: number;

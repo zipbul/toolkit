@@ -197,7 +197,7 @@ function hexValue(c: number): number {
  * Bytes inside a regex group `(...)` are skipped: their contents are
  * the user's regex AST and are validated by `assessRegexSafety`.
  */
-export function validateDecodedBytes(path: string): Result<void, RouterErrorData> {
+function validateDecodedBytes(path: string): Result<void, RouterErrorData> {
   const len = path.length;
   let parenDepth = 0;
   let i = 0;
