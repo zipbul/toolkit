@@ -318,7 +318,7 @@ function emitNode(
       if (c === 47) { // '/'
         var ${nextPos} = ${posVar} + ${segLen} + 1;
 ${emitNode(ctx, child, nextPos)}
-      } else if (isNaN(c)) { // terminal
+      } else if (c !== c) { // NaN — past end-of-string → terminal
 ${emitTerminalAt(child)}
       }
     }`;
