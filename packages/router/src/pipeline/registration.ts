@@ -3,7 +3,6 @@ import type { PathPart } from '../builder/path-parser';
 import type { SegmentNode, SegmentTreeUndoLog } from '../matcher/segment-tree';
 import { applyUndo, setPrefixIndexRollback } from '../matcher/segment-tree';
 import type { RouterErrorData, RouteParams } from '../types';
-import { ROUTER_DEFAULTS } from '../types';
 import type { RouteValidationIssue } from '../types';
 import type { PatternTesterFn } from '../matcher/pattern-tester';
 
@@ -154,7 +153,7 @@ export class Registration<T> {
   private prefixIndex: WildcardPrefixIndex | null = null;
   private identityRegistry: IdentityRegistry | null = null;
   private routeIdCounter = 0;
-  private regexSiblingCap: number = ROUTER_DEFAULTS.maxRegexSiblingsPerSegment;
+  private regexSiblingCap = 32;
   constructor(
     methodRegistry: MethodRegistry,
     pathParser: PathParser,
@@ -235,11 +234,11 @@ export class Registration<T> {
     const undo: SegmentTreeUndoLog = [];
 
     const factoryCache = new Map<string, (u: string, v: Int32Array) => RouteParams>();
-    const omitBehavior = (options.optionalParamBehavior ?? ROUTER_DEFAULTS.optionalParamBehavior) === 'omit';
-    this.maxExpandedRoutes = options.maxExpandedRoutes ?? ROUTER_DEFAULTS.maxExpandedRoutes;
-    this.maxOptionalExpansions = options.maxOptionalExpansions ?? ROUTER_DEFAULTS.maxOptionalExpansions;
+    const omitBehavior = (options.optionalParamBehavior ?? 'omit') === 'omit';
+    this.maxExpandedRoutes = options.maxExpandedRoutes ?? 200_000;
+    this.maxOptionalExpansions = options.maxOptionalExpansions ?? 1024;
     this.totalExpandedRoutes = 0;
-    this.regexSiblingCap = options.maxRegexSiblingsPerSegment ?? ROUTER_DEFAULTS.maxRegexSiblingsPerSegment;
+    this.regexSiblingCap = options.maxRegexSiblingsPerSegment ?? 32;
     this.prefixIndex = new WildcardPrefixIndex(this.regexSiblingCap);
     this.identityRegistry = new IdentityRegistry();
     this.routeIdCounter = 0;

@@ -1,7 +1,6 @@
 import type { MatchFn, MatchState } from '../matcher/match-state';
 import type { PathNormalizer } from '../matcher/path-normalize';
 import type { MatchOutput, RouteParams, RouterOptions } from '../types';
-import { ROUTER_DEFAULTS } from '../types';
 import type { RegistrationSnapshot } from './registration';
 
 import { EMPTY_PARAMS, NullProtoObj, STATIC_META } from '../internal/null-proto-obj';
@@ -83,7 +82,7 @@ export function buildFromRegistration<T>(
   }
 
   const ignoreTrailingSlash = options.trailingSlash !== 'strict';
-  const caseSensitive = options.pathCaseSensitive ?? ROUTER_DEFAULTS.pathCaseSensitive;
+  const caseSensitive = options.pathCaseSensitive ?? true;
 
   const normalizePath = buildPathNormalizer({
     trimSlash: ignoreTrailingSlash,
@@ -97,7 +96,7 @@ export function buildFromRegistration<T>(
     staticPathMethodMask: snapshot.staticPathMethodMask,
     activeMethodCodes,
     methodCodes,
-    matchState: createMatchState(options.maxParams ?? ROUTER_DEFAULTS.maxParams),
+    matchState: createMatchState(options.maxParams ?? 64),
     normalizePath,
     terminalSlab: snapshot.terminalSlab,
     paramsFactories: snapshot.paramsFactories,

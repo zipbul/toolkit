@@ -1,5 +1,4 @@
 import type { MatchOutput, RouterOptions, RouterPublicApi } from './types';
-import { ROUTER_DEFAULTS } from './types';
 import type { MatchCacheEntry, MatchConfig } from './codegen/emitter';
 import type { RouterCache, RouterMissCache } from './cache';
 
@@ -52,11 +51,11 @@ interface CacheContainers<T> {
 /**
  * 캐시는 항상 켜진다. 빈 라우터는 빈 캐시(메모리 0)이고, lazy 할당이라
  * 토글의 가치가 없다. 유일한 튜너블은 `cacheSize` — 메서드별 엔트리 상한.
- * Default `ROUTER_DEFAULTS.cacheSize = 1000` covers 32 methods × 1000 ×
+ * Default `1000 = 1000` covers 32 methods × 1000 ×
  * ~80B ≈ 2.5 MB worst-case.
  */
 function createCacheContainers<T>(options: RouterOptions): CacheContainers<T> {
-  const maxSize = options.cacheSize ?? ROUTER_DEFAULTS.cacheSize;
+  const maxSize = options.cacheSize ?? 1000;
 
   return {
     hit: [],
@@ -147,17 +146,17 @@ function resolveTrailingSlashIgnore(options: RouterOptions): boolean {
 }
 
 function resolvePathCaseSensitive(options: RouterOptions): boolean {
-  return options.pathCaseSensitive ?? ROUTER_DEFAULTS.pathCaseSensitive;
+  return options.pathCaseSensitive ?? true;
 }
 
 function createPathParser(options: RouterOptions): PathParser {
   return new PathParser({
     caseSensitive: resolvePathCaseSensitive(options),
     ignoreTrailingSlash: resolveTrailingSlashIgnore(options),
-    maxSegmentLength: options.maxSegmentLength ?? ROUTER_DEFAULTS.maxSegmentLength,
-    maxPathLength: options.maxPathLength ?? ROUTER_DEFAULTS.maxPathLength,
-    maxSegmentCount: options.maxSegmentCount ?? ROUTER_DEFAULTS.maxSegmentCount,
-    maxParams: options.maxParams ?? ROUTER_DEFAULTS.maxParams,
+    maxSegmentLength: options.maxSegmentLength ?? 1024,
+    maxPathLength: options.maxPathLength ?? 8192,
+    maxSegmentCount: options.maxSegmentCount ?? 256,
+    maxParams: options.maxParams ?? 64,
   });
 }
 

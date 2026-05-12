@@ -32,33 +32,6 @@ export interface RouterOptions {
 
 export type OptionalParamBehavior = 'omit' | 'set-undefined';
 
-/**
- * Single source for every `RouterOptions` numeric / enum default that
- * production code consumes. Every `?? value` fallback across router.ts,
- * pipeline/registration.ts, pipeline/build.ts, and pipeline/wildcard-
- * prefix-index.ts is wired through this object so a future tuning
- * change touches exactly one line.
- *
- * `match-state.ts:createMatchState`'s own `DEFAULT_MAX_PARAMS = 64` is
- * intentionally separate — that path is the JIT warmup state, not the
- * production matchState (build.ts resolves the real value here from
- * the option below). The two values are equal today but their domains
- * are different.
- */
-export const ROUTER_DEFAULTS = {
-  trailingSlash: 'ignore' as const,
-  pathCaseSensitive: true,
-  maxPathLength: 8192,
-  maxSegmentLength: 1024,
-  maxSegmentCount: 256,
-  maxParams: 64,
-  maxOptionalExpansions: 1024,
-  maxExpandedRoutes: 200_000,
-  maxRegexSiblingsPerSegment: 32,
-  cacheSize: 1000,
-  optionalParamBehavior: 'omit' as OptionalParamBehavior,
-} as const;
-
 export type RouteParams = Record<string, string | undefined>;
 
 // ── Error types ──
