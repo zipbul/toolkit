@@ -320,13 +320,13 @@ async function measure(name: string, build: (rs: Route[]) => unknown, match: (ro
     console.log(`build=${buildMs.toFixed(2)}ms timeoutClass=build phase exceeded ${BUILD_TIMEOUT_MS}ms`);
     return;
   }
-  // Wait for libpas to scavenge transient build pages. zipbul kicks off a
-  // fire-and-forget compactMemory inside build(); other adapters don't,
-  // but they also don't have the transient codegen/factor bookkeeping
-  // that holds pages between Bun.gc and the next libpas tick. The 400ms
-  // gap is libpas's empty-page age (~300ms) + a safety margin so the RSS
-  // reading reflects steady state across all adapters uniformly.
-  await new Promise(r => setTimeout(r, 400));
+  // Wait long enough for libpas's scavenger to run multiple ticks
+  // (~300 ms each) so RSS settles to its steady-state working set.
+  // 400 ms was too tight against the scavenger period — single-run RSS
+  // varied 55 → 222 → 397 MB depending on whether the read landed
+  // before or after the next tick. 800 ms guarantees ≥2 scavenge cycles
+  // for every adapter and stabilises the reading across runs.
+  await new Promise(r => setTimeout(r, 800));
   const after = mem();
   if (after.rss / 1024 / 1024 > BENCH_MEMORY_CAP_MB) {
     console.log(`build=${buildMs.toFixed(2)}ms memCapClass=exceeded rss=${(after.rss / 1024 / 1024).toFixed(2)}MB`);

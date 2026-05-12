@@ -83,7 +83,6 @@ export interface CommitPlan {
 export class WildcardPrefixIndex {
   private readonly roots = new Map<number, PrefixTrieNode>();
   private readonly maxRegexSiblingsPerSegment: number;
-  private readonly aliasJournal: Array<{ existing: RouteMeta; alias: RouteMeta }> = [];
 
   constructor(maxRegexSiblingsPerSegment = 32) {
     this.maxRegexSiblingsPerSegment = maxRegexSiblingsPerSegment;
@@ -265,7 +264,6 @@ export class WildcardPrefixIndex {
           return err(routeDuplicate(routeMeta));
         }
         if (sameTerminalIdentity(node.terminalMeta, routeMeta)) {
-          this.recordAlias(node.terminalMeta, routeMeta);
           this.revert(partial, false);
           return 'alias';
         }
@@ -334,19 +332,6 @@ export class WildcardPrefixIndex {
         }
       }
     }
-  }
-
-  /**
-   * Optional-expansion alias bookkeeping. The snapshot builder consumes the
-   * journal after validation succeeds; the prefix index never mutates
-   * counters for aliases.
-   */
-  recordAlias(existing: RouteMeta, alias: RouteMeta): void {
-    this.aliasJournal.push({ existing, alias });
-  }
-
-  drainAliasJournal(): ReadonlyArray<{ existing: RouteMeta; alias: RouteMeta }> {
-    return this.aliasJournal;
   }
 
   private rootFor(methodCode: number): PrefixTrieNode {
