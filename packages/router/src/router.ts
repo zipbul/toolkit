@@ -4,7 +4,6 @@ import type { RouterCache, RouterMissCache } from './cache';
 
 import { OptionalParamDefaults } from './builder/optional-param-defaults';
 import { PathParser } from './builder/path-parser';
-import { RouterError } from './error';
 import { compileMatchFn } from './codegen/emitter';
 import {
   resetBuildAggregate,
@@ -49,102 +48,6 @@ interface CacheContainers<T> {
 }
 
 /**
- * 캐시는 항상 켜진다. 빈 라우터는 빈 캐시(메모리 0)이고, lazy 할당이라
- * 토글의 가치가 없다. 유일한 튜너블은 `cacheSize` — 메서드별 엔트리 상한.
- * Default `1000 = 1000` covers 32 methods × 1000 ×
- * ~80B ≈ 2.5 MB worst-case.
- */
-function createCacheContainers<T>(options: RouterOptions): CacheContainers<T> {
-  const maxSize = options.cacheSize ?? 1000;
-
-  return {
-    hit: [],
-    miss: [],
-    maxSize,
-  };
-}
-
-const NUMERIC_OPTION_KEYS = [
-  'maxPathLength',
-  'maxSegmentLength',
-  'maxSegmentCount',
-  'maxParams',
-  'maxOptionalExpansions',
-  'maxExpandedRoutes',
-  'maxRegexSiblingsPerSegment',
-  'cacheSize',
-] as const;
-
-function validateOptions(options: RouterOptions): void {
-  const issues: Array<{ option: string; message: string; suggestion?: string }> = [];
-  for (const key of NUMERIC_OPTION_KEYS) {
-    const v = options[key];
-    if (v === undefined) continue;
-    if (typeof v !== 'number' || Number.isNaN(v) || v <= 0) {
-      issues.push({ option: key, message: `${key} must be a positive number (received ${String(v)}).` });
-      continue;
-    }
-    if (!Number.isFinite(v)) {
-      issues.push({
-        option: key,
-        message: `${key} must be a finite number (received ${String(v)}).`,
-        suggestion: 'Provide a finite integer cap; Infinity removes the protective limit.',
-      });
-      continue;
-    }
-    if (v >= Number.MAX_SAFE_INTEGER) {
-      issues.push({
-        option: key,
-        message: `${key} = ${String(v)} is treated as unbounded; provide a finite cap below Number.MAX_SAFE_INTEGER.`,
-      });
-      continue;
-    }
-    if (!Number.isInteger(v)) {
-      issues.push({ option: key, message: `${key} must be an integer (received ${String(v)}).` });
-      continue;
-    }
-  }
-  if (options.trailingSlash !== undefined && options.trailingSlash !== 'strict' && options.trailingSlash !== 'ignore') {
-    issues.push({
-      option: 'trailingSlash',
-      message: `trailingSlash must be 'strict' | 'ignore' (received '${String(options.trailingSlash)}').`,
-    });
-  }
-  if (issues.length === 0) return;
-  throw new RouterError({
-    kind: 'route-validation',
-    message: `${issues.length} option(s) failed validation.`,
-    errors: issues.map((i, idx) => ({
-      index: idx,
-      method: '',
-      path: '',
-      error: { kind: 'option-invalid' as const, message: i.message, option: i.option, suggestion: i.suggestion },
-    })),
-  });
-}
-
-function resolveTrailingSlashIgnore(options: RouterOptions): boolean {
-  // Default is 'ignore' so `/foo/` and `/foo` map to the same route.
-  // Set `trailingSlash: 'strict'` for byte-exact matching.
-  return options.trailingSlash !== 'strict';
-}
-
-function resolvePathCaseSensitive(options: RouterOptions): boolean {
-  return options.pathCaseSensitive ?? true;
-}
-
-function createPathParser(options: RouterOptions): PathParser {
-  return new PathParser({
-    caseSensitive: resolvePathCaseSensitive(options),
-    ignoreTrailingSlash: resolveTrailingSlashIgnore(options),
-    maxSegmentLength: options.maxSegmentLength ?? 1024,
-    maxPathLength: options.maxPathLength ?? 8192,
-    maxSegmentCount: options.maxSegmentCount ?? 256,
-    maxParams: options.maxParams ?? 64,
-  });
-}
-
-/**
  * HTTP router with build-once / match-many semantics. Methods are
  * declared as arrow-function fields rather than prototype methods so
  * detached calls (`const m = router.match; m(...)`) work without
@@ -165,17 +68,27 @@ export class Router<T = unknown> implements RouterPublicApi<T> {
   readonly allowedMethods: (path: string) => readonly string[];
 
   constructor(options: RouterOptions = {}) {
-    validateOptions(options);
     const routerOptions: RouterOptions = { ...options };
     const optionalParamDefaults = new OptionalParamDefaults(routerOptions.optionalParamBehavior);
     const methodRegistry = new MethodRegistry();
-    const pathParser = createPathParser(routerOptions);
+    const pathParser = new PathParser({
+      caseSensitive: routerOptions.pathCaseSensitive ?? true,
+      ignoreTrailingSlash: routerOptions.trailingSlash !== 'strict',
+      maxSegmentLength: routerOptions.maxSegmentLength ?? 1024,
+      maxPathLength: routerOptions.maxPathLength ?? 8192,
+      maxSegmentCount: routerOptions.maxSegmentCount ?? 256,
+      maxParams: routerOptions.maxParams ?? 64,
+    });
     const registration = new Registration<T>(
       methodRegistry,
       pathParser,
       optionalParamDefaults,
     );
-    const cache = createCacheContainers<T>(routerOptions);
+    const cache: CacheContainers<T> = {
+      hit: [],
+      miss: [],
+      maxSize: routerOptions.cacheSize ?? 1000,
+    };
 
     let matchImpl: ((method: string, path: string) => MatchOutput<T> | null) | undefined;
     let matchLayer: MatchLayer | undefined;

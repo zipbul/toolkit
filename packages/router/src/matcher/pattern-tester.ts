@@ -25,7 +25,7 @@ const ALPHANUM_PATTERNS = new Set([
   '[\\w-]+', '[\\w\\-]+',
 ]);
 
-function buildPatternTester(
+export function buildPatternTester(
   source: string,
   compiled: RegExp,
 ): PatternTesterFn {
@@ -102,5 +102,3 @@ function isAlphaNumericDash(value: string): boolean {
 
   return true;
 }
-
-export { buildPatternTester };
