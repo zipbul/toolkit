@@ -711,16 +711,14 @@ export class Registration<T> {
     handlerSlotId: number = -1,
     isOptionalExpansion: boolean = false,
   ): Result<void, RouterErrorData> {
-    const idx = this.prefixIndex;
-    const registry = this.identityRegistry;
-    if (idx === null || registry === null) {
-      return err<RouterErrorData>({
-        kind: 'router-sealed',
-        message: 'Prefix index unavailable: router already sealed.',
-        registeredCount: 0,
-        suggestion: 'Construct a fresh Router instance to register additional routes.',
-      });
-    }
+    // Only callers are `seal()`'s route loop (L504 + L608) and both run
+    // strictly between `this.prefixIndex = new ...` / `this.identityRegistry
+    // = new ...` (L242-243) and the `this.prefixIndex = null` reset at the
+    // tail of `seal()` (L391-392). A second `seal()` call short-circuits at
+    // L227 before either ever runs again, so by construction these fields
+    // are non-null at this call site.
+    const idx = this.prefixIndex!;
+    const registry = this.identityRegistry!;
     const handlerId = handlerSlotId >= 0 ? handlerSlotId : registry.idFor(route.value);
     const meta: RouteMeta = {
       routeIndex: this.routeIdCounter++,

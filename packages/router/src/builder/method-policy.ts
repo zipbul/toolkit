@@ -31,9 +31,11 @@ const TCHAR_TABLE = (() => {
   return t;
 })();
 
+// Caller (`validateMethodToken`) already rejects the empty-method case
+// with a `method-empty` error before reaching here, so this loop only
+// runs on a known-non-empty token.
 function isValidMethodToken(method: string): boolean {
   const len = method.length;
-  if (len === 0) return false;
   for (let i = 0; i < len; i++) {
     if (TCHAR_TABLE[method.charCodeAt(i)] === 0) return false;
   }

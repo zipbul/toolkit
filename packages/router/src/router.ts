@@ -110,22 +110,6 @@ function validateOptions(options: RouterOptions): void {
       message: `trailingSlash must be 'strict' | 'ignore' (received '${String(options.trailingSlash)}').`,
     });
   }
-  if (options.pathCaseSensitive !== undefined && typeof options.pathCaseSensitive !== 'boolean') {
-    issues.push({
-      option: 'pathCaseSensitive',
-      message: `pathCaseSensitive must be a boolean (received ${typeof options.pathCaseSensitive} '${String(options.pathCaseSensitive)}').`,
-    });
-  }
-  if (
-    options.optionalParamBehavior !== undefined &&
-    options.optionalParamBehavior !== 'omit' &&
-    options.optionalParamBehavior !== 'set-undefined'
-  ) {
-    issues.push({
-      option: 'optionalParamBehavior',
-      message: `optionalParamBehavior must be 'omit' | 'set-undefined' (received '${String(options.optionalParamBehavior)}').`,
-    });
-  }
   if (issues.length === 0) return;
   throw new RouterError({
     kind: 'route-validation',

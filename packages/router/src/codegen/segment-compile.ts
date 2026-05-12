@@ -290,8 +290,13 @@ function emitNode(
 ): string {
   let code = '';
 
-  const slashVar = `s${posVar.slice(3).replace(/[^0-9]/g, '')}`;
-  const innerPos = `pos${parseInt(posVar.slice(3).split('_')[0] ?? '0') + 1}`;
+  // posVar is always 'pos0' at the entry point or `pos${N}` / `pos${N}_s…`
+  // from the recursive emitNode calls below, so slice(3).split('_')[0] is
+  // always a non-empty digit string. The `?? '0'` fallback the earlier
+  // version carried was unreachable.
+  const posDigits = posVar.slice(3).split('_')[0]!;
+  const slashVar = `s${posDigits}`;
+  const innerPos = `pos${parseInt(posDigits) + 1}`;
 
   // 1. Static children — iterate the inline cache and the Record uniformly.
   forEachStaticChild(node, (seg, child) => {

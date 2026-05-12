@@ -440,7 +440,7 @@ export function compactSegmentTree(root: SegmentNode): { foldedNodes: number; ch
       target.paramChild === null &&
       target.wildcardStore === null &&
       target.store === null &&
-      (target.staticPrefix === null || target.staticPrefix.length === 0)
+      target.staticPrefix === null
     ) {
       const peek = peekSingleStatic(target);
       if (peek.many || peek.key === null || peek.child === null) break;
