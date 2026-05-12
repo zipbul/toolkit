@@ -272,8 +272,14 @@ export class Registration<T> {
           expanded.push(r);
         }
       }
-      this.pendingRoutes.length = 0;
-      this.pendingRoutes.push(...expanded);
+      // Replace pendingRoutes contents in place. `push(...expanded)`
+      // would spread every element as a function argument — at 100k
+      // routes that approaches the engine's arg-list cap (the spec gives
+      // no upper bound but JSC traditionally throws RangeError around
+      // ~500k args). A simple length swap + index assignment side-steps
+      // the cap entirely.
+      this.pendingRoutes.length = expanded.length;
+      for (let i = 0; i < expanded.length; i++) this.pendingRoutes[i] = expanded[i]!;
     }
 
     const loopStart = state.diagnostics !== null ? nowMs() : 0;
