@@ -137,26 +137,19 @@ export type RouterErrorData = {
 // Public API surface a built router exposes. Match/allowedMethods accept any
 // HTTP method token as the method argument; the runtime token gate handles
 // validation.
+//
+// Memory compaction is intentionally not part of this surface. `build()`
+// schedules a fire-and-forget compactMemory cycle internally (only when
+// tenant-prefix factoring orphaned a high-fanout subtree); users do not
+// need to call it directly. Exposing it would invite calls during traffic
+// where the synchronous `Bun.gc(true)` would pause the entire host
+// process — see the side-effect notes in `router.ts`.
 export interface RouterPublicApi<T> {
   add(method: string | readonly string[], path: string, value: T): void;
   addAll(entries: ReadonlyArray<readonly [string, string, T]>): void;
   build(): RouterPublicApi<T>;
   match(method: string, path: string): MatchOutput<T> | null;
   allowedMethods(path: string): readonly string[];
-  /**
-   * Bun-only post-build memory compaction. Triggers `Bun.gc(true)` and
-   * polls `process.memoryUsage().rss` until it stabilizes (libpas's
-   * page-decommit threshold is asynchronous). No-op on non-Bun runtimes.
-   *
-   * Empirical: 100k tenant param routes 625 MB → 275 MB (-56%) in
-   * ~300-400ms with no hot-path regression.
-   */
-  compactMemory(opts?: {
-    maxMs?: number;
-    pollMs?: number;
-    stableHits?: number;
-    minDeltaMb?: number;
-  }): Promise<{ iters: number; rssBefore: number; rssAfter: number }>;
 }
 
 /**

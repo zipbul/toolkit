@@ -169,26 +169,6 @@ export class Router<T = unknown> implements RouterPublicApi<T> {
   readonly build: () => RouterPublicApi<T>;
   readonly match: (method: string, path: string) => MatchOutput<T> | null;
   readonly allowedMethods: (path: string) => readonly string[];
-  /**
-   * Bun-only post-build memory compaction. Triggers `Bun.gc(true)`
-   * (full JSC collect + mimalloc fragmented-memory cleanup), then polls
-   * `process.memoryUsage().rss` until it stops decreasing. libpas's
-   * page-decommit threshold is asynchronous (100ms tick + ~300ms empty-
-   * page age), so we wait until the OS-visible RSS settles instead of
-   * a fixed sleep.
-   *
-   * Empirical: 100k tenant param routes drop from ~625 MB to ~275 MB
-   * (56% reduction) in ~300-400ms with no hot-path regression (JIT
-   * lazily re-tiers on the next match).
-   *
-   * No-op on non-Bun runtimes.
-   */
-  readonly compactMemory: (opts?: {
-    maxMs?: number;
-    pollMs?: number;
-    stableHits?: number;
-    minDeltaMb?: number;
-  }) => Promise<{ iters: number; rssBefore: number; rssAfter: number }>;
 
   constructor(options: RouterOptions = {}) {
     validateOptions(options);
@@ -315,7 +295,7 @@ export class Router<T = unknown> implements RouterPublicApi<T> {
         // is already small enough that the OS-visible RSS settles within
         // the next event-loop turn.
         if (registration.factorWasApplied()) {
-          void this.compactMemory().catch(() => {});
+          void compactMemory().catch(() => {});
         }
       }
       return this;
@@ -335,34 +315,37 @@ export class Router<T = unknown> implements RouterPublicApi<T> {
       return matchLayer.allowedMethods(path);
     };
 
-    this.compactMemory = async (opts = {}) => {
-      const maxMs = opts.maxMs ?? 2000;
-      const pollMs = opts.pollMs ?? 100;
-      const stableHits = opts.stableHits ?? 2;
-      const minDeltaMb = opts.minDeltaMb ?? 2;
-      const minDeltaBytes = minDeltaMb * 1024 * 1024;
-      const rssBefore = process.memoryUsage().rss;
+    /**
+     * Internal post-build memory compaction. Polls `process.memoryUsage().rss`
+     * after each `Bun.gc(true)` until it stops decreasing — libpas's
+     * page-decommit threshold is asynchronous so we cannot synchronously
+     * verify completion. Not exposed on the public API: triggering a full
+     * synchronous GC during traffic would pause the entire host process
+     * (JSC's heap, mimalloc fragmentation, ALL retained objects), so the
+     * router fires this exactly once after build() and only when the
+     * tenant-prefix factor actually orphaned a high-fanout subtree.
+     */
+    const compactMemory = async (): Promise<void> => {
+      const maxMs = 2000;
+      const pollMs = 100;
+      const stableHits = 2;
+      const minDeltaBytes = 2 * 1024 * 1024;
 
-      let prev = rssBefore;
+      let prev = process.memoryUsage().rss;
       let stable = 0;
-      let iters = 0;
       const tStart = performance.now();
       while (performance.now() - tStart < maxMs) {
         Bun.gc(true);
         await Bun.sleep(pollMs);
-        iters++;
         const rss = process.memoryUsage().rss;
         if (Math.abs(rss - prev) < minDeltaBytes) {
           stable++;
-          if (stable >= stableHits) {
-            return { iters, rssBefore, rssAfter: rss };
-          }
+          if (stable >= stableHits) return;
         } else {
           stable = 0;
         }
         prev = rss;
       }
-      return { iters, rssBefore, rssAfter: process.memoryUsage().rss };
     };
 
     Object.freeze(this);
