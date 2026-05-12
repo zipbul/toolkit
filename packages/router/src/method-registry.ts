@@ -52,11 +52,16 @@ export class MethodRegistry {
   }
 
   getOrCreate(method: string): Result<number, RouterErrorData> {
-    const tokenCheck = validateMethodToken(method);
-    if (isErr(tokenCheck)) return tokenCheck;
-
+    // Lookup-first fast path: only entries that *passed* validation are
+    // ever inserted into `codeMap`, so a hit here means the token is
+    // already known-valid — skip the per-call tchar walk. Bench
+    // `bench/method-research/H-validate-cache.bench.ts` shows 4.43× win
+    // at 100k repeated add()s of the same 5 methods.
     const existing = this.codeMap[method];
     if (existing !== undefined) return existing;
+
+    const tokenCheck = validateMethodToken(method);
+    if (isErr(tokenCheck)) return tokenCheck;
 
     if (this.nextOffset >= MAX_METHODS) {
       return err({

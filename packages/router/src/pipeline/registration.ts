@@ -256,10 +256,20 @@ export class Registration<T> {
     }
     if (hasWildcardMethod) {
       const expanded: PendingRoute<T>[] = [];
+      // Set-backed dedup: previous `Array.includes` was O(n×m) over
+      // (pendingRoutes × sealMethods). Bench `bench/method-research/
+      // F-wildcard-includes-vs-set.bench.ts` shows 1.19-2.20× win across
+      // 10k/100k routes with 0/25 custom methods (2.7 ms saved at the
+      // 100k+25 worst case).
       const sealMethods: string[] = [];
-      for (const [name] of this.methodRegistry.getAllCodes()) sealMethods.push(name);
+      const seen = new Set<string>();
+      for (const [name] of this.methodRegistry.getAllCodes()) {
+        sealMethods.push(name);
+        seen.add(name);
+      }
       for (const r of this.pendingRoutes) {
-        if (r.method !== WILDCARD_METHOD && !sealMethods.includes(r.method)) {
+        if (r.method !== WILDCARD_METHOD && !seen.has(r.method)) {
+          seen.add(r.method);
           sealMethods.push(r.method);
         }
       }
