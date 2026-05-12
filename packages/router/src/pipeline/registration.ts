@@ -22,7 +22,7 @@ import { WildcardPrefixIndex, rollbackPlan, type RouteMeta, type CommitPlan } fr
 // applyUndo() down into the prefix-index module. Done here so the matcher
 // layer has no upward dependency on the pipeline layer.
 setPrefixIndexRollback(rollbackPlan as (plan: unknown) => void);
-import { IdentityRegistry, optionsKeyOf } from './identity-registry';
+import { IdentityRegistry } from './identity-registry';
 import { UndoKind } from '../matcher/segment-tree';
 
 const WILDCARD_METHOD = '*' as const;
@@ -157,8 +157,6 @@ export class Registration<T> {
   private prefixIndex: WildcardPrefixIndex | null = null;
   private identityRegistry: IdentityRegistry | null = null;
   private routeIdCounter = 0;
-  private cachedEmptyOptionsKey: string | null = null;
-
   constructor(
     methodRegistry: MethodRegistry,
     pathParser: PathParser,
@@ -248,10 +246,6 @@ export class Registration<T> {
     this.prefixIndex = new WildcardPrefixIndex(options.maxRegexSiblingsPerSegment ?? 32);
     this.identityRegistry = new IdentityRegistry();
     this.routeIdCounter = 0;
-    {
-      const ek = optionsKeyOf({});
-      this.cachedEmptyOptionsKey = isErr(ek) ? '' : ek;
-    }
 
     // Resolve `*`-method registrations against the set of methods present at
     // seal time (built-ins plus any custom token registered before seal).
@@ -707,13 +701,11 @@ export class Registration<T> {
       });
     }
     const handlerId = handlerSlotId >= 0 ? handlerSlotId : registry.idFor(route.value);
-    const optionsKey = this.cachedEmptyOptionsKey ?? '';
     const meta: RouteMeta = {
       routeIndex: this.routeIdCounter++,
       path: route.path,
       method: route.method,
       handlerId,
-      optionsKey,
       isOptionalExpansion,
     };
     if (state.diagnostics !== null) state.diagnostics.wildcardConflictChecks++;

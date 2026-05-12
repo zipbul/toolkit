@@ -57,7 +57,6 @@ export interface RouteMeta {
   expandedPath?: string;
   method: string;
   handlerId: number;
-  optionsKey: string;
   isOptionalExpansion: boolean;
 }
 
@@ -383,7 +382,7 @@ function safeRegexDisjoint(_a: string, _b: string): boolean {
 }
 
 function sameTerminalIdentity(a: RouteMeta, b: RouteMeta): boolean {
-  return a.method === b.method && a.handlerId === b.handlerId && a.optionsKey === b.optionsKey;
+  return a.method === b.method && a.handlerId === b.handlerId;
 }
 
 function routeDuplicate(meta: RouteMeta): RouterErrorData {

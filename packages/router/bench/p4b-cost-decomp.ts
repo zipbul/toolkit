@@ -107,7 +107,6 @@ async function main(): Promise<void> {
         path: routes[r]![1],
         method: 'GET',
         handlerId: r,
-        optionsKey: 'k',
         isOptionalExpansion: false,
       };
       const res = idx.planAndCommit(0, parsedParts[r]!, meta);
