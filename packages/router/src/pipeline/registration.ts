@@ -46,12 +46,6 @@ interface PendingRoute<T> {
   value: T;
 }
 
-export interface ParamMetadata {
-  /** Parameters present in this specific expansion. */
-  present: Array<{ name: string; type: 'param' | 'wildcard' }>;
-  /** Every parameter name declared by the original route. */
-  original: string[];
-}
 
 /**
  * Snapshot of build-time products.
