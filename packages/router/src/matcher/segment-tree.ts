@@ -120,8 +120,6 @@ export const enum UndoKind {
   SegmentTreeReset = 11,
   /** Truncate state.staticByMethod[mc] back to undefined. */
   StaticBucketReset = 17,
-  /** Restore static-map slot prior values. */
-  StaticMapRestore = 12,
   /** Static-map slot delete (was undefined before). */
   StaticMapDelete = 13,
   /** Inverse of inline single-static-child set: clear key + next on the parent. */
@@ -145,8 +143,7 @@ export type UndoRecord =
   | { k: UndoKind.HandlersTruncate; arr: unknown[]; len: number }
   | { k: UndoKind.SegmentTreeReset; trees: Array<SegmentNode | null | undefined>; mc: number }
   | { k: UndoKind.StaticBucketReset; buckets: Array<Record<string, unknown> | undefined>; mc: number }
-  | { k: UndoKind.StaticMapRestore; arr: unknown[]; reg: boolean[]; mc: number; prevValue: unknown; prevReg: boolean }
-  | { k: UndoKind.StaticMapDelete; map: Record<string, unknown>; reg: Record<string, unknown>; key: string }
+  | { k: UndoKind.StaticMapDelete; map: Record<string, unknown>; key: string }
   | { k: UndoKind.SingleChildClear; n: SegmentNode }
   | { k: UndoKind.SingleChildRestore; n: SegmentNode; key: string; next: SegmentNode }
   | { k: UndoKind.StaticPathMaskRestore; map: Record<string, number>; key: string; prevMask: number };
@@ -211,13 +208,8 @@ export function applyUndo(entry: UndoRecord): void {
     case UndoKind.StaticBucketReset:
       delete entry.buckets[entry.mc];
       return;
-    case UndoKind.StaticMapRestore:
-      entry.arr[entry.mc] = entry.prevValue;
-      entry.reg[entry.mc] = entry.prevReg;
-      return;
     case UndoKind.StaticMapDelete:
       delete entry.map[entry.key];
-      delete entry.reg[entry.key];
       return;
     case UndoKind.SingleChildClear:
       entry.n.singleChildKey = null;

@@ -114,7 +114,6 @@ interface RegistrationDiagnostics {
   wildcardRoutes: number;
   methodMs: number;
   parseMs: number;
-  wildcardNameMs: number;
   staticWildcardConflictMs: number;
   prefixIndexPlanMs: number;
   routeLoopOverheadMs: number;
@@ -124,7 +123,6 @@ interface RegistrationDiagnostics {
   factoryMs: number;
   snapshotMs: number;
   wildcardConflictChecks: number;
-  wildcardConflictPrefixScans: number;
   segmentNodeCount: number;
   staticChildMapCount: number;
   paramNodeCount: number;
@@ -514,7 +512,6 @@ export class Registration<T> {
     undo.push({
       k: UndoKind.StaticMapDelete,
       map: bucket as unknown as Record<string, unknown>,
-      reg: bucket as unknown as Record<string, unknown>,
       key: normalized,
     });
     // Restore the path's method-mask bit on rollback. Tagged record keeps
@@ -747,7 +744,6 @@ function createDiagnostics(): RegistrationDiagnostics {
     wildcardRoutes: 0,
     methodMs: 0,
     parseMs: 0,
-    wildcardNameMs: 0,
     staticWildcardConflictMs: 0,
     prefixIndexPlanMs: 0,
     routeLoopOverheadMs: 0,
@@ -757,7 +753,6 @@ function createDiagnostics(): RegistrationDiagnostics {
     factoryMs: 0,
     snapshotMs: 0,
     wildcardConflictChecks: 0,
-    wildcardConflictPrefixScans: 0,
     segmentNodeCount: 0,
     staticChildMapCount: 0,
     paramNodeCount: 0,
@@ -775,7 +770,7 @@ function nowMs(): number {
 function addMs(
   diagnostics: RegistrationDiagnostics | null,
   key: keyof Pick<RegistrationDiagnostics,
-    'methodMs' | 'parseMs' | 'wildcardNameMs' | 'staticWildcardConflictMs' |
+    'methodMs' | 'parseMs' | 'staticWildcardConflictMs' |
     'staticInsertMs' | 'optionalExpandMs' | 'dynamicInsertMs' | 'factoryMs' | 'snapshotMs'>,
   start: number,
 ): void {
