@@ -292,7 +292,8 @@ describe('Router<T> errors', () => {
     expect(router.match('GET', '/users/42')!.value).toBe('handler');
   });
 
-  // ── 0-2: MAX_STACK_DEPTH / MAX_PARAMS guard ──
+  // ── maxSegmentCount option guard (option-driven; no static
+  //    MAX_STACK_DEPTH / MAX_PARAMS constants exist) ──
 
   it('emits segment-limit when path exceeds the configured maxSegmentCount', () => {
     const router = new Router<string>({ maxSegmentCount: 8 });

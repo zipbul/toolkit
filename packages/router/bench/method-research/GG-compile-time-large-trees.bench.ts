@@ -1,10 +1,10 @@
 /**
- * GG) Push compileSegmentTree to its real limits to see if
- * COMPILE_OBSERVED_HARD_MS = 10 ever trips.
- *
- * MAX_NODES_DEFAULT = 256 stops the tree before it can grow large
- * enough for compile time to matter. Probe progressively up to that
- * cap with realistic shapes and measure compile time distribution.
+ * GG) Push compileSegmentTree to its real limits. Originally written to
+ * prove `COMPILE_OBSERVED_HARD_MS = 10` (the per-shape disable threshold)
+ * could never trip under the `MAX_NODES_DEFAULT = 256` cap — p99 was
+ * 4.33 ms at the ceiling. The disable feedback was removed in `55dbf27`
+ * on that evidence; the bench survives as a regression probe on compile
+ * time at the node-count ceiling so a future blow-up surfaces here.
  */
 import { compileSegmentTree } from '../../src/codegen/segment-compile';
 import { createSegmentNode, insertIntoSegmentTree } from '../../src/matcher/segment-tree';

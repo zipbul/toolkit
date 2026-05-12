@@ -1,8 +1,14 @@
 /**
- * BB) COMPILE_OBSERVED_HARD_MS = 10. If a shape ever exceeds this, it's
- * permanently disabled. Test: is 10ms achievable on a normal machine
- * for shapes that should compile? Simulate moderate-sized trees and
- * measure the actual compile time distribution.
+ * BB) Originally measured against `COMPILE_OBSERVED_HARD_MS = 10`, the
+ * per-shape disable threshold. That feedback path was removed in
+ * `55dbf27` after this bench (and `GG`) showed compile time at the
+ * 256-node ceiling caps out around 4-5 ms — the threshold never tripped.
+ *
+ * The bench is kept as a regression probe on the codegen compile-time
+ * distribution itself: any shape that should be codegen-eligible must
+ * stay sub-10 ms on a normal machine. If a future change pushes the
+ * curve above that bar we want to see the spike here before it lands
+ * in production.
  */
 import { compileSegmentTree } from '../../src/codegen/segment-compile';
 import { createSegmentNode, insertIntoSegmentTree } from '../../src/matcher/segment-tree';
