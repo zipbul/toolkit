@@ -3,19 +3,17 @@ import type { MatchFn } from '../matcher/match-state';
 import { forEachStaticChild, hasAmbiguousNode, hasAnyStaticChild } from '../matcher/segment-tree';
 
 /**
- * Codegen budget thresholds. Trees exceeding any of these fall back to the
- * iterative walker; the per-node estimate runs once before any source bytes
- * are concatenated.
+ * Codegen budget thresholds. Trees exceeding either of these fall back to
+ * the iterative walker. The node count gate avoids walking past the JSC-
+ * compile sweet spot; the source-bytes gate is the hard `new Function()`
+ * safety net checked after emission.
  */
 const MAX_SOURCE_BYTES_HARD = 128 * 1024;
 const MAX_NODES_DEFAULT = 256;
-const MAX_FANOUT = 64;
 
 interface CodegenEstimate {
   nodes: number;
-  maxFanout: number;
-  testers: number;
-  rejection: 'too-large' | 'too-fanout' | null;
+  oversized: boolean;
 }
 
 function estimateSegmentTreeCodegen(
@@ -23,45 +21,30 @@ function estimateSegmentTreeCodegen(
   nodeCap: number,
 ): CodegenEstimate {
   let nodes = 0;
-  let maxFanout = 0;
-  let testers = 0;
   const stack: SegmentNode[] = [root];
 
   while (stack.length > 0) {
-    if (nodes > nodeCap) {
-      return { nodes, maxFanout, testers, rejection: 'too-large' };
-    }
+    if (nodes > nodeCap) return { nodes, oversized: true };
     const node = stack.pop()!;
     nodes++;
-    let fanoutHere = 0;
-    forEachStaticChild(node, (_, child) => {
-      stack.push(child);
-      fanoutHere++;
-    });
+    forEachStaticChild(node, (_, child) => { stack.push(child); });
     let p = node.paramChild;
     while (p !== null) {
       stack.push(p.next);
-      fanoutHere++;
-      if (p.tester !== null) testers++;
       p = p.nextSibling;
     }
-    if (node.wildcardStore !== null) fanoutHere++;
-    if (fanoutHere > maxFanout) maxFanout = fanoutHere;
   }
 
-  const rejection: CodegenEstimate['rejection'] = maxFanout > MAX_FANOUT ? 'too-fanout' : null;
-  return { nodes, maxFanout, testers, rejection };
+  return { nodes, oversized: false };
 }
 
 /**
- * Walk the segment tree once and return a small, deterministic set of paths
- * that exercise each major branch at the root. The set is used as warmup
- * input so JSC IC reaches tier-up across the dominant code paths instead of
- * a single one. Caller is responsible for cap-bounding the depth of each
- * synthesized path; this collector emits at most one per direct child of
- * the root and falls back to the synthetic placeholder for empty trees.
+ * Walk the segment tree once and return one synthesized warmup path per
+ * direct child of the root. Used by warmup so JSC IC reaches tier-up
+ * across every major code path instead of a single one. The per-path
+ * depth bound (`16`) is a malformed-tree safety net only.
  */
-export function collectWarmupPaths(root: SegmentNode, max = 8): string[] {
+export function collectWarmupPaths(root: SegmentNode): string[] {
   const out: string[] = [];
 
   const firstStaticChild = (n: SegmentNode): { key: string; child: SegmentNode } | null => {
@@ -75,7 +58,6 @@ export function collectWarmupPaths(root: SegmentNode, max = 8): string[] {
   };
 
   const synthForNode = (node: SegmentNode, prefix: string): string => {
-    if (out.length >= max) return prefix;
     let path = prefix;
     let n: SegmentNode | null = node;
     let guard = 0;
@@ -102,13 +84,12 @@ export function collectWarmupPaths(root: SegmentNode, max = 8): string[] {
   };
 
   forEachStaticChild(root, (seg, child) => {
-    if (out.length >= max) return;
     out.push(synthForNode(child, '/' + seg));
   });
-  if (root.paramChild !== null && out.length < max) {
+  if (root.paramChild !== null) {
     out.push(synthForNode(root.paramChild.next, '/__warm__'));
   }
-  if (root.wildcardStore !== null && out.length < max) {
+  if (root.wildcardStore !== null) {
     out.push('/__warm__/__warm__');
   }
 
@@ -129,8 +110,7 @@ export function compileSegmentTree(root: SegmentNode): CompiledPackage | null {
   // Ambiguous trees (static+param collision) fallback to recursive walker.
   if (hasAmbiguousNode(root)) return null;
 
-  const estimate = estimateSegmentTreeCodegen(root, MAX_NODES_DEFAULT);
-  if (estimate.rejection !== null) return null;
+  if (estimateSegmentTreeCodegen(root, MAX_NODES_DEFAULT).oversized) return null;
 
   const ctx: EmitContext = { bail: false, testers: [] };
   const body = emitNode(ctx, root, 'pos0');
