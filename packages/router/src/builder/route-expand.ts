@@ -1,6 +1,4 @@
-import type { Result } from '@zipbul/result';
 import type { PathPart } from './path-parser';
-import type { RouterErrorData } from '../types';
 
 import { OptionalParamDefaults } from './optional-param-defaults';
 
@@ -33,7 +31,7 @@ export function expandOptional(
   parts: PathPart[],
   handlerIndex: number,
   optionalDefaults: OptionalParamDefaults,
-): Result<ExpandedRoute[], RouterErrorData> {
+): ExpandedRoute[] {
   const collection = collectOptionalIndices(parts);
 
   if (collection.indices.length === 0) {

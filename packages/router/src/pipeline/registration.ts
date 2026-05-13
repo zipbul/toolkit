@@ -540,10 +540,6 @@ export class Registration<T> {
     const expansion = expandOptional(parts, -1, this.optionalParamDefaults);
     addMs(state.diagnostics, 'optionalExpandMs', expandStart);
 
-    if (isErr(expansion)) {
-      return err<RouterErrorData>({ ...expansion.data, path: route.path, method: route.method });
-    }
-
     const originalNames: string[] = [];
     for (const p of parts) {
       if (p.type === 'param' || p.type === 'wildcard') originalNames.push(p.name);

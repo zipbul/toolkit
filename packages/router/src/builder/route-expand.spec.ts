@@ -1,5 +1,4 @@
 import { describe, it, expect } from 'bun:test';
-import { isErr } from '@zipbul/result';
 
 import type { PathPart } from './path-parser';
 import { OptionalParamDefaults } from './optional-param-defaults';
@@ -26,7 +25,6 @@ describe('expandOptional', () => {
 
       const result = expandOptional(parts, 7, defaults);
 
-      expect(isErr(result)).toBe(false);
       expect(result).toEqual([{ parts, handlerIndex: 7, isOptionalExpansion: false }]);
       expect(defaults.snapshot().entries.find(([k]) => k === 7)).toBeUndefined();
     });
@@ -39,10 +37,7 @@ describe('expandOptional', () => {
 
       const result = expandOptional(parts, 0, defaults);
 
-      expect(isErr(result)).toBe(false);
-      if (!isErr(result)) {
-        expect(result.length).toBe(4);
-      }
+      expect(result.length).toBe(4);
     });
 
     it('should record omitted-param names against defaults for matcher fill-in', () => {
@@ -60,13 +55,10 @@ describe('expandOptional', () => {
 
       const result = expandOptional(parts, 0, defaults);
 
-      expect(isErr(result)).toBe(false);
-      if (!isErr(result)) {
-        const fullVariant = result[0]!;
-        const idPart = fullVariant.parts.find(p => p.type === 'param' && p.name === 'id');
-        expect(idPart).toBeDefined();
-        expect((idPart as { optional: boolean }).optional).toBe(false);
-      }
+      const fullVariant = result[0]!;
+      const idPart = fullVariant.parts.find((p: PathPart) => p.type === 'param' && p.name === 'id');
+      expect(idPart).toBeDefined();
+      expect((idPart as { optional: boolean }).optional).toBe(false);
     });
   });
 
@@ -78,12 +70,9 @@ describe('expandOptional', () => {
 
       const result = expandOptional(parts, 0, defaults);
 
-      expect(isErr(result)).toBe(false);
-      if (!isErr(result)) {
-        // Variant 0: full path. Variant 1: dropped optional.
-        const dropped = result[1]!.parts;
-        expect(dropped).toEqual([{ type: 'static', value: '/users', segments: ['users'] }]);
-      }
+      // Variant 0: full path. Variant 1: dropped optional.
+      const dropped = result[1]!.parts;
+      expect(dropped).toEqual([{ type: 'static', value: '/users', segments: ['users'] }]);
     });
 
     it('should pop the static entirely when trim leaves an empty value', () => {
@@ -93,11 +82,8 @@ describe('expandOptional', () => {
 
       const result = expandOptional(parts, 0, defaults);
 
-      expect(isErr(result)).toBe(false);
-      if (!isErr(result)) {
-        // Falls back to the empty-result `/` recovery path.
-        expect(result[1]!.parts).toEqual([{ type: 'static', value: '/', segments: [] }]);
-      }
+      // Falls back to the empty-result `/` recovery path.
+      expect(result[1]!.parts).toEqual([{ type: 'static', value: '/', segments: [] }]);
     });
   });
 
@@ -109,11 +95,8 @@ describe('expandOptional', () => {
 
       const result = expandOptional(parts, 0, defaults);
 
-      expect(isErr(result)).toBe(false);
-      if (!isErr(result)) {
-        const dropped = result[1]!.parts;
-        expect(dropped).toEqual([{ type: 'static', value: '/a/b', segments: ['a', 'b'] }]);
-      }
+      const dropped = result[1]!.parts;
+      expect(dropped).toEqual([{ type: 'static', value: '/a/b', segments: ['a', 'b'] }]);
     });
   });
 });
