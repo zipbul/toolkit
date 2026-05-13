@@ -1,31 +1,21 @@
 import type { SegmentNode } from '../matcher/segment-tree';
 import type { MatchFn } from '../matcher/match-state';
-import { performance } from 'node:perf_hooks';
 import { forEachStaticChild, hasAmbiguousNode, hasAnyStaticChild } from '../matcher/segment-tree';
-import {
-  recordBail,
-  recordCompile,
-  recordEmitMs,
-  shapeSignature,
-} from './codegen-telemetry';
 
 /**
  * Codegen budget thresholds. Trees exceeding any of these fall back to the
  * iterative walker; the per-node estimate runs once before any source bytes
  * are concatenated.
  */
-const MAX_SOURCE_BYTES_PREFERRED = 64 * 1024;
 const MAX_SOURCE_BYTES_HARD = 128 * 1024;
 const MAX_NODES_DEFAULT = 256;
 const MAX_FANOUT = 64;
-const APPROX_SOURCE_PER_NODE = 80;
 
 interface CodegenEstimate {
   nodes: number;
   maxFanout: number;
-  approxSourceBytes: number;
   testers: number;
-  rejection: 'too-large' | 'too-fanout' | 'source-budget' | null;
+  rejection: 'too-large' | 'too-fanout' | null;
 }
 
 function estimateSegmentTreeCodegen(
@@ -39,13 +29,7 @@ function estimateSegmentTreeCodegen(
 
   while (stack.length > 0) {
     if (nodes > nodeCap) {
-      return {
-        nodes,
-        maxFanout,
-        approxSourceBytes: nodes * APPROX_SOURCE_PER_NODE,
-        testers,
-        rejection: 'too-large',
-      };
+      return { nodes, maxFanout, testers, rejection: 'too-large' };
     }
     const node = stack.pop()!;
     nodes++;
@@ -65,17 +49,8 @@ function estimateSegmentTreeCodegen(
     if (fanoutHere > maxFanout) maxFanout = fanoutHere;
   }
 
-  let rejection: CodegenEstimate['rejection'] = null;
-  if (maxFanout > MAX_FANOUT) rejection = 'too-fanout';
-  else if (nodes * APPROX_SOURCE_PER_NODE > MAX_SOURCE_BYTES_PREFERRED) rejection = 'source-budget';
-
-  return {
-    nodes,
-    maxFanout,
-    approxSourceBytes: nodes * APPROX_SOURCE_PER_NODE,
-    testers,
-    rejection,
-  };
+  const rejection: CodegenEstimate['rejection'] = maxFanout > MAX_FANOUT ? 'too-fanout' : null;
+  return { nodes, maxFanout, testers, rejection };
 }
 
 /**
@@ -144,8 +119,6 @@ export function collectWarmupPaths(root: SegmentNode, max = 8): string[] {
 export interface CompiledPackage {
   factory: (testers: any[], pass: any, decoder: any) => MatchFn;
   testers: any[];
-  /** Shape signature recorded in the codegen telemetry registry. */
-  shape: string;
 }
 
 /**
@@ -154,40 +127,14 @@ export interface CompiledPackage {
 export function compileSegmentTree(root: SegmentNode): CompiledPackage | null {
   // Bail on ambiguous trees: codegen only handles unique-winner trees.
   // Ambiguous trees (static+param collision) fallback to recursive walker.
-  if (hasAmbiguousNode(root)) {
-    logCodegen({ event: 'bail', reason: 'ambiguous-tree' });
-    return null;
-  }
+  if (hasAmbiguousNode(root)) return null;
 
   const estimate = estimateSegmentTreeCodegen(root, MAX_NODES_DEFAULT);
-  const shape = shapeSignature(estimate.nodes, estimate.maxFanout, estimate.testers);
-  if (estimate.rejection !== null) {
-    recordBail(shape, estimate.rejection);
-    logCodegen({
-      event: 'bail',
-      reason: estimate.rejection,
-      shape,
-      nodes: estimate.nodes,
-      maxFanout: estimate.maxFanout,
-      approxSourceBytes: estimate.approxSourceBytes,
-    });
-    return null;
-  }
-  const start = performance.now();
-  const ctx: EmitContext = {
-    bail: false,
-    testers: [],
-  };
+  if (estimate.rejection !== null) return null;
 
+  const ctx: EmitContext = { bail: false, testers: [] };
   const body = emitNode(ctx, root, 'pos0');
-
-  if (ctx.bail) {
-    const dt = performance.now() - start;
-    recordBail(shape, 'emitter-bail');
-    recordEmitMs(dt);
-    logCodegen({ event: 'bail', reason: 'emitter-bail', shape, emitMs: dt });
-    return null;
-  }
+  if (ctx.bail) return null;
 
   const source = `
 'use strict';
@@ -205,64 +152,13 @@ ${body}
   return false;
 };`;
 
-  const emitMs = performance.now() - start;
-  recordEmitMs(emitMs);
-
-  if (source.length > MAX_SOURCE_BYTES_HARD) {
-    recordBail(shape, 'source-budget-hard');
-    logCodegen({
-      event: 'bail',
-      reason: 'source-budget-hard',
-      shape,
-      sourceLength: source.length,
-      testers: ctx.testers.length,
-      emitMs,
-    });
-    return null;
-  }
-  if (source.length > MAX_SOURCE_BYTES_PREFERRED) {
-    logCodegen({
-      event: 'over-preferred',
-      shape,
-      sourceLength: source.length,
-      testers: ctx.testers.length,
-      emitMs,
-    });
-  }
+  if (source.length > MAX_SOURCE_BYTES_HARD) return null;
 
   try {
-    const compileStart = performance.now();
     const factory = new Function('testers', 'TESTER_PASS', 'decoder', source) as any;
-    const compileMs = performance.now() - compileStart;
-    recordCompile(shape, compileMs, source.length);
-    logCodegen({
-      event: 'compiled',
-      shape,
-      nodes: estimate.nodes,
-      maxFanout: estimate.maxFanout,
-      sourceLength: source.length,
-      testers: ctx.testers.length,
-      emitMs,
-      compileMs,
-    });
-    return { factory, testers: ctx.testers, shape };
+    return { factory, testers: ctx.testers };
   } catch {
-    recordBail(shape, 'new-function-error');
-    logCodegen({
-      event: 'bail',
-      reason: 'new-function-error',
-      shape,
-      sourceLength: source.length,
-      testers: ctx.testers.length,
-      emitMs,
-    });
     return null;
-  }
-}
-
-function logCodegen(data: Record<string, unknown>): void {
-  if (process.env.ZIPBUL_ROUTER_CODEGEN_DIAGNOSTICS === '1') {
-    console.log(`codegen=${JSON.stringify(data)}`);
   }
 }
 

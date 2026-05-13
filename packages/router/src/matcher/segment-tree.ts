@@ -371,12 +371,9 @@ function leafStoreOf(node: SegmentNode): number | null {
 /**
  * Post-seal compaction. Walks the tree and folds every chain of nodes that
  * each have exactly one static child (and no param/wildcard/store) into the
- * deepest node, recording the path on `staticPrefix`. Returns counters for
- * diagnostics: nodes folded, chains merged.
+ * deepest node, recording the path on `staticPrefix`.
  */
-export function compactSegmentTree(root: SegmentNode): { foldedNodes: number; chains: number } {
-  let foldedNodes = 0;
-  let chains = 0;
+export function compactSegmentTree(root: SegmentNode): void {
   // Intern shared `staticPrefix` arrays so 100k nodes carrying the same
   // single-element prefix share one array reference instead of allocating
   // 100k 1-entry arrays.
@@ -425,7 +422,6 @@ export function compactSegmentTree(root: SegmentNode): { foldedNodes: number; ch
       if (peek.many || peek.key === null || peek.child === null) break;
       folded.push(peek.key);
       target = peek.child;
-      foldedNodes++;
     }
     return { target, folded };
   }
@@ -450,7 +446,6 @@ export function compactSegmentTree(root: SegmentNode): { foldedNodes: number; ch
     forEachStaticChild(node, (key, child) => {
       const { target, folded } = foldChainFrom(child);
       if (folded.length > 0) {
-        chains++;
         const merged = target.staticPrefix === null
           ? internPrefix(folded)
           : internPrefix([...folded, ...target.staticPrefix]);
@@ -464,7 +459,6 @@ export function compactSegmentTree(root: SegmentNode): { foldedNodes: number; ch
     while (p !== null) {
       const { target, folded } = foldChainFrom(p.next);
       if (folded.length > 0) {
-        chains++;
         const merged = target.staticPrefix === null
           ? internPrefix(folded)
           : internPrefix([...folded, ...target.staticPrefix]);
@@ -475,7 +469,6 @@ export function compactSegmentTree(root: SegmentNode): { foldedNodes: number; ch
       p = p.nextSibling;
     }
   }
-  return { foldedNodes, chains };
 }
 
 /**

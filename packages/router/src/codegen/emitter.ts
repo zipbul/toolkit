@@ -2,14 +2,8 @@ import type { MatchFn, MatchState } from '../matcher/match-state';
 import type { NormalizeCfg } from '../matcher/path-normalize';
 import type { MatchOutput, RouteParams } from '../types';
 
-import { performance } from 'node:perf_hooks';
 import { RouterCache, RouterMissCache } from '../cache';
-import {
-  recordCompile,
-  recordWarmupCall,
-  shapeSignature,
-  WARMUP_ITERATIONS,
-} from './codegen-telemetry';
+import { WARMUP_ITERATIONS } from './warmup';
 import {
   CACHE_META,
   DYNAMIC_META,
@@ -139,7 +133,7 @@ export function compileMatchFn<T>(cfg: MatchConfig<T>): CompiledMatch<T> {
       cfg.staticOutputsByMethod,
     ) as CompiledMatch<T>;
 
-    runWarmup(compiled, cfg, shapeSignature(activeMethodCount, 0, cfg.handlers.length));
+    runWarmup(compiled, cfg);
     return compiled;
   }
 
@@ -197,7 +191,7 @@ export function compileMatchFn<T>(cfg: MatchConfig<T>): CompiledMatch<T> {
       cfg.staticOutputsByMethod, cfg.methodCodes,
     ) as CompiledMatch<T>;
 
-    runWarmup(compiled, cfg, shapeSignature(activeMethodCount, 0, cfg.handlers.length));
+    runWarmup(compiled, cfg);
     return compiled;
   }
 
@@ -328,11 +322,7 @@ export function compileMatchFn<T>(cfg: MatchConfig<T>): CompiledMatch<T> {
     EMPTY_PARAMS, CACHE_META, DYNAMIC_META, cfg.terminalSlab, cfg.paramsFactories,
   ) as CompiledMatch<T>;
 
-  runWarmup(
-    compiled,
-    cfg,
-    shapeSignature(activeMethodCount, cfg.trees.filter(t => t != null).length, cfg.handlers.length),
-  );
+  runWarmup(compiled, cfg);
   return compiled;
 }
 
@@ -341,26 +331,13 @@ export function compileMatchFn<T>(cfg: MatchConfig<T>): CompiledMatch<T> {
  * across each active method so the first user request lands on at least
  * baseline-compiled code rather than the cold first-call path.
  */
-function runWarmup<T>(compiled: CompiledMatch<T>, cfg: MatchConfig<T>, shape: string): void {
-  // Telemetry receives the warmup-loop duration as a coarse proxy for the
-  // matchImpl's compile cost. The per-shape disable feedback that this
-  // figure used to gate has been removed (see GG bench), so the value is
-  // now diagnostic-only.
-  const warmStart = performance.now();
+function runWarmup<T>(compiled: CompiledMatch<T>, cfg: MatchConfig<T>): void {
   const warmPaths = ['/__zipbul_warmup__', '/__zipbul_warmup__/sub'];
   for (let it = 0; it < WARMUP_ITERATIONS; it++) {
     for (const [methodName] of cfg.activeMethodCodes) {
       for (const p of warmPaths) {
         try { compiled(methodName, p); } catch { /* warmup non-fatal */ }
       }
-    }
-  }
-  recordCompile(shape, performance.now() - warmStart, 0);
-  for (const [methodName] of cfg.activeMethodCodes) {
-    for (const p of warmPaths) {
-      const t0 = performance.now();
-      try { compiled(methodName, p); } catch { /* warmup non-fatal */ }
-      recordWarmupCall(shape, (performance.now() - t0) * 1e6);
     }
   }
 }

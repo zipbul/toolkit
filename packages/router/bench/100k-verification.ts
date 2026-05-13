@@ -2,7 +2,7 @@
 
 import { performance } from 'node:perf_hooks';
 
-import { ROUTER_INTERNALS_KEY, Router } from '../src/router';
+import { Router } from '../src/router';
 
 type Route = [method: string, path: string, value: number];
 type Scenario = {
@@ -72,13 +72,6 @@ function buildZipbul(routes: Route[]): { router: Router<number>; buildMs: number
   const after = mem();
 
   return { router, buildMs, memDelta: fmtMem(before, after) };
-}
-
-function printDiagnostics(router: Router<number>): void {
-  const diagnostics = (router as any)[ROUTER_INTERNALS_KEY]?.registration?.getDiagnostics?.();
-  if (diagnostics !== null && diagnostics !== undefined) {
-    console.log(`diagnostics=${JSON.stringify(diagnostics)}`);
-  }
 }
 
 function staticScenario(): Scenario {
@@ -274,7 +267,6 @@ function wildcardConflictFeasibility(): void {
     for (let i = 0; i < size; i++) routes.push(['GET', `/static/${i}/leaf`, i]);
     const { router, buildMs, memDelta } = buildZipbul(routes);
     console.log(`disjoint wildcards=${size} statics=${size} routes=${routes.length} add+build=${buildMs.toFixed(2)}ms mem=${memDelta}`);
-    printDiagnostics(router);
   }
 }
 
@@ -312,7 +304,6 @@ function mixedPhaseProxy(): void {
   for (const scenario of scenarios) {
     const { router, buildMs, memDelta } = buildZipbul(scenario.routes);
     console.log(`${scenario.name.padEnd(34)} routes=${String(scenario.routes.length).padStart(6)} add+build=${buildMs.toFixed(2)}ms mem=${memDelta}`);
-    printDiagnostics(router);
   }
 }
 
@@ -321,7 +312,6 @@ function cacheTraversalFeasibility(): void {
   const scenario = paramScenario();
   const built = buildZipbul(scenario.routes);
   console.log(`build=${built.buildMs.toFixed(2)}ms mem=${built.memDelta}`);
-  printDiagnostics(built.router);
 
   const hotPath = '/tenant-50000/users/42/posts/7';
   bench('cache-hot dynamic same path', () => built.router.match('GET', hotPath));
@@ -351,7 +341,6 @@ function runScenario(scenario: Scenario): void {
 
   const built = buildZipbul(scenario.routes);
   console.log(`build=${built.buildMs.toFixed(2)}ms mem=${built.memDelta}`);
-  printDiagnostics(built.router);
 
   for (const [method, path] of scenario.hits) {
     const firstStart = nowNs();

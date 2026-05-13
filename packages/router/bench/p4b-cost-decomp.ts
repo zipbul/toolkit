@@ -147,34 +147,6 @@ async function main(): Promise<void> {
     console.log(`[1b.r.build()] run=${i + 1} dt=${dt.toFixed(2)}ms`);
   }
 
-  // 4b. seal phase decomposition with diagnostics
-  process.env.ZIPBUL_ROUTER_DIAGNOSTICS = '1';
-  for (let i = 0; i < 3; i++) {
-    gcIfPossible();
-    const t0 = performance.now();
-    const r = new Router<string>();
-    for (const [m, p] of routes) r.add(m, p, 'h');
-    r.build();
-    const dt = performance.now() - t0;
-    const internals = (r as unknown as Record<symbol, { registration: { getDiagnostics(): unknown } }>);
-    const sym = Object.getOwnPropertySymbols(r).find(s => s.toString().includes('internals'));
-    let diag: Record<string, unknown> | null = null;
-    if (sym !== undefined) {
-      const reg = (r as unknown as Record<symbol, { registration: { getDiagnostics(): Record<string, unknown> | null } }>)[sym]!.registration;
-      diag = reg.getDiagnostics();
-    }
-    console.log(`[4b.seal-diag] run=${i + 1} dt=${dt.toFixed(2)}ms`);
-    if (diag !== null) {
-      const keys = ['parseMs', 'methodMs', 'wildcardNameMs', 'staticWildcardConflictMs', 'prefixIndexPlanMs', 'staticInsertMs', 'optionalExpandMs', 'dynamicInsertMs', 'factoryMs', 'snapshotMs', 'routeLoopOverheadMs'];
-      for (const k of keys) {
-        const v = diag[k];
-        if (typeof v === 'number') console.log(`  ${k}=${v.toFixed(2)}ms`);
-      }
-    }
-    void internals;
-  }
-  delete process.env.ZIPBUL_ROUTER_DIAGNOSTICS;
-
   // 5. parse cost only
   for (let i = 0; i < 3; i++) {
     gcIfPossible();

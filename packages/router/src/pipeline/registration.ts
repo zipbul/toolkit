@@ -6,7 +6,6 @@ import type { RouterErrorData, RouteParams } from '../types';
 import type { RouteValidationIssue } from '../types';
 import type { PatternTesterFn } from '../matcher/pattern-tester';
 
-import { performance } from 'node:perf_hooks';
 import { err, isErr } from '@zipbul/result';
 import { OptionalParamDefaults } from '../builder/optional-param-defaults';
 import { PathParser } from '../builder/path-parser';
@@ -110,33 +109,6 @@ interface BuildState<T> {
   /** Tracks max present-param count across every expanded route so the
    *  runtime paramOffsets buffer is sized exactly. */
   maxParamsObserved: number;
-  diagnostics: RegistrationDiagnostics | null;
-}
-
-interface RegistrationDiagnostics {
-  routes: number;
-  staticRoutes: number;
-  dynamicRoutes: number;
-  expandedRoutes: number;
-  wildcardRoutes: number;
-  methodMs: number;
-  parseMs: number;
-  staticWildcardConflictMs: number;
-  prefixIndexPlanMs: number;
-  routeLoopOverheadMs: number;
-  staticInsertMs: number;
-  optionalExpandMs: number;
-  dynamicInsertMs: number;
-  factoryMs: number;
-  snapshotMs: number;
-  wildcardConflictChecks: number;
-  segmentNodeCount: number;
-  staticChildMapCount: number;
-  paramNodeCount: number;
-  terminalCount: number;
-  paramsFactorySlots: number;
-  uniqueParamsFactoryCount: number;
-  testerCount: number;
 }
 
 /**
@@ -150,7 +122,6 @@ export class Registration<T> {
   private readonly pendingRoutes: Array<PendingRoute<T>> = [];
 
   private snapshot: RegistrationSnapshot<T> | null = null;
-  private diagnostics: RegistrationDiagnostics | null = null;
   private sealed = false;
   private prefixIndex: WildcardPrefixIndex | null = null;
   private identityRegistry: IdentityRegistry | null = null;
@@ -168,10 +139,6 @@ export class Registration<T> {
 
   isSealed(): boolean {
     return this.sealed;
-  }
-
-  getDiagnostics(): RegistrationDiagnostics | null {
-    return this.diagnostics;
   }
 
   add(method: string | readonly string[], path: string, value: T): void {
@@ -205,10 +172,9 @@ export class Registration<T> {
   } = {}): RegistrationSnapshot<T> {
     if (this.snapshot !== null) return this.snapshot;
 
-    const pendingRouteCount = this.pendingRoutes.length;
     const methodRegistrySnapshot = this.methodRegistry.snapshot();
     const optionalDefaultsSnapshot = this.optionalParamDefaults.snapshot();
-    const state = createBuildState<T>(process.env.ZIPBUL_ROUTER_DIAGNOSTICS === '1');
+    const state = createBuildState<T>();
     const issues: RouteValidationIssue[] = [];
     const undo: SegmentTreeUndoLog = [];
 
@@ -265,7 +231,6 @@ export class Registration<T> {
       for (let i = 0; i < expanded.length; i++) this.pendingRoutes[i] = expanded[i]!;
     }
 
-    const loopStart = state.diagnostics !== null ? nowMs() : 0;
     // Drain transient build allocations every BUILD_CHUNK_SIZE routes
     // so the JSC heap doesn't peak proportionally to the full route
     // count. The heap-capacity heuristic locks in the high-water mark,
@@ -321,7 +286,6 @@ export class Registration<T> {
         Bun.gc(true);
       }
     }
-    if (state.diagnostics !== null) state.diagnostics.routeLoopOverheadMs = nowMs() - loopStart;
 
     if (issues.length > 0) {
       rollback(undo, 0);
@@ -338,7 +302,6 @@ export class Registration<T> {
     this.sealed = true;
     this.pendingRoutes.length = 0; 
 
-    const snapshotStart = nowMs();
     // Pack the per-terminal parallel arrays into a single Int32Array slab
     // so the runtime walker reads contiguous memory rather than chasing
     // two JS arrays. 2 slots per terminal: handlerIdx, isWildcard.
@@ -359,7 +322,6 @@ export class Registration<T> {
       anyTester: state.testerCache.size > 0,
       maxParamsObserved: state.maxParamsObserved,
     };
-    addMs(state.diagnostics, 'snapshotMs', snapshotStart);
 
     this.snapshot = snapshot;
     // Build-only structures (prefix index, identity registry) are discarded
@@ -388,22 +350,6 @@ export class Registration<T> {
       }
     }
     if (factorApplied) Bun.gc(true);
-    if (state.diagnostics !== null) {
-      const paramsFactorySlots = state.paramsFactories.filter(Boolean);
-      state.diagnostics.routes = pendingRouteCount;
-      state.diagnostics.terminalCount = state.terminalHandlers.length;
-      state.diagnostics.paramsFactorySlots = paramsFactorySlots.length;
-      state.diagnostics.uniqueParamsFactoryCount = new Set(paramsFactorySlots).size;
-      state.diagnostics.testerCount = state.testerCache.size;
-      for (const root of state.segmentTrees) {
-        if (root === undefined || root === null) continue;
-        const counts = countSegmentTree(root);
-        state.diagnostics.segmentNodeCount += counts.nodes;
-        state.diagnostics.staticChildMapCount += counts.staticMaps;
-        state.diagnostics.paramNodeCount += counts.paramNodes;
-      }
-      this.diagnostics = state.diagnostics;
-    }
 
     return snapshot;
   }
@@ -430,17 +376,13 @@ export class Registration<T> {
     omitBehavior: boolean,
     decoder: (s: string) => string,
   ): Result<void, RouterErrorData> {
-    const methodStart = nowMs();
     const offsetResult = this.methodRegistry.getOrCreate(route.method);
-    addMs(state.diagnostics, 'methodMs', methodStart);
 
     if (isErr(offsetResult)) {
       return err<RouterErrorData>({ ...offsetResult.data, path: route.path });
     }
 
-    const parseStart = nowMs();
     const parseResult = this.pathParser.parse(route.path);
-    addMs(state.diagnostics, 'parseMs', parseStart);
 
     if (isErr(parseResult)) {
       return err<RouterErrorData>({
@@ -457,11 +399,9 @@ export class Registration<T> {
     // legacy per-route prefix-regex check is no longer needed.
 
     if (!isDynamic) {
-      if (state.diagnostics !== null) state.diagnostics.staticRoutes++;
       return this.compileStaticRoute(route, parts, normalized, methodCode, state, undo);
     }
 
-    if (state.diagnostics !== null) state.diagnostics.dynamicRoutes++;
     return this.compileDynamicRoute(
       route, parts, methodCode, state, undo, routeID, 
       factoryCache, omitBehavior, decoder
@@ -476,13 +416,10 @@ export class Registration<T> {
     state: BuildState<T>,
     undo: SegmentTreeUndoLog,
   ): Result<void, RouterErrorData> {
-    const conflictStart = nowMs();
-    const conflict = this.runPrefixIndexPlan(parts, methodCode, route, undo, state);
-    addMs(state.diagnostics, 'staticWildcardConflictMs', conflictStart);
+    const conflict = this.runPrefixIndexPlan(parts, methodCode, route, undo);
 
     if (isErr(conflict)) return conflict;
 
-    const insertStart = nowMs();
     let bucket = state.staticByMethod[methodCode];
     if (bucket === undefined) {
       bucket = Object.create(null) as Record<string, T>;
@@ -522,7 +459,6 @@ export class Registration<T> {
       key: normalized,
       prevMask,
     });
-    addMs(state.diagnostics, 'staticInsertMs', insertStart);
   }
 
   private compileDynamicRoute(
@@ -536,9 +472,7 @@ export class Registration<T> {
     omitBehavior: boolean,
     decoder: (s: string) => string,
   ): Result<void, RouterErrorData> {
-    const expandStart = nowMs();
     const expansion = expandOptional(parts, -1, this.optionalParamDefaults);
-    addMs(state.diagnostics, 'optionalExpandMs', expandStart);
 
     const originalNames: string[] = [];
     for (const p of parts) {
@@ -564,12 +498,10 @@ export class Registration<T> {
         methodCode,
         route,
         undo,
-        state,
         hIdx,
         expanded.isOptionalExpansion,
       );
       if (isErr(prefixCheck)) return prefixCheck;
-      if (state.diagnostics !== null) state.diagnostics.expandedRoutes++;
       const present: Array<{ name: string; type: 'param' | 'wildcard' }> = [];
       for (const p of expParts) {
         if (p.type === 'param' || p.type === 'wildcard') {
@@ -582,11 +514,9 @@ export class Registration<T> {
 
       const tIdx = state.terminalHandlers.length;
       const isWildcard = expParts.length > 0 && expParts[expParts.length - 1]!.type === 'wildcard';
-      if (isWildcard && state.diagnostics !== null) state.diagnostics.wildcardRoutes++;
 
       let factory: ((u: string, v: Int32Array) => RouteParams) | null = null;
       if (present.length > 0 || (!omitBehavior && originalNames.length > 0)) {
-        const factoryStart = nowMs();
         const cacheKey = (omitBehavior ? 'O:' : 'S:') + originalNames.join(',') + '::' + present.map(p => p.name).join(',');
         let cached = factoryCache.get(cacheKey);
 
@@ -623,7 +553,6 @@ export class Registration<T> {
           factoryCache.set(cacheKey, cached!);
         }
         factory = cached!;
-        addMs(state.diagnostics, 'factoryMs', factoryStart);
       }
 
       state.terminalHandlers[tIdx] = hIdx;
@@ -637,7 +566,6 @@ export class Registration<T> {
         len: tIdx,
       });
 
-      const dynamicInsertStart = nowMs();
       const insertResult = insertIntoSegmentTree(
         root,
         expParts,
@@ -646,7 +574,6 @@ export class Registration<T> {
         routeID,
         undo,
       );
-      addMs(state.diagnostics, 'dynamicInsertMs', dynamicInsertStart);
 
       if (isErr(insertResult)) {
         const data = insertResult.data;
@@ -663,7 +590,6 @@ export class Registration<T> {
     methodCode: number,
     route: PendingRoute<T>,
     undo: SegmentTreeUndoLog,
-    state: BuildState<T>,
     handlerSlotId: number = -1,
     isOptionalExpansion: boolean = false,
   ): Result<void, RouterErrorData> {
@@ -683,10 +609,7 @@ export class Registration<T> {
       handlerId,
       isOptionalExpansion,
     };
-    if (state.diagnostics !== null) state.diagnostics.wildcardConflictChecks++;
-    const planStart = state.diagnostics !== null ? nowMs() : 0;
     const planResult = idx.planAndCommit(methodCode, parts, meta);
-    if (state.diagnostics !== null) state.diagnostics.prefixIndexPlanMs += nowMs() - planStart;
     if (isErr(planResult)) {
       return err<RouterErrorData>({ ...planResult.data, path: route.path, method: route.method });
     }
@@ -699,7 +622,7 @@ export class Registration<T> {
   }
 }
 
-function createBuildState<T>(withDiagnostics = false): BuildState<T> {
+function createBuildState<T>(): BuildState<T> {
   return {
     staticByMethod: [],
     staticPathMethodMask: Object.create(null) as Record<string, number>,
@@ -711,78 +634,7 @@ function createBuildState<T>(withDiagnostics = false): BuildState<T> {
     testerCache: new Map(),
     routeCounter: 0,
     maxParamsObserved: 0,
-    diagnostics: withDiagnostics ? createDiagnostics() : null,
   };
-}
-
-function createDiagnostics(): RegistrationDiagnostics {
-  return {
-    routes: 0,
-    staticRoutes: 0,
-    dynamicRoutes: 0,
-    expandedRoutes: 0,
-    wildcardRoutes: 0,
-    methodMs: 0,
-    parseMs: 0,
-    staticWildcardConflictMs: 0,
-    prefixIndexPlanMs: 0,
-    routeLoopOverheadMs: 0,
-    staticInsertMs: 0,
-    optionalExpandMs: 0,
-    dynamicInsertMs: 0,
-    factoryMs: 0,
-    snapshotMs: 0,
-    wildcardConflictChecks: 0,
-    segmentNodeCount: 0,
-    staticChildMapCount: 0,
-    paramNodeCount: 0,
-    terminalCount: 0,
-    paramsFactorySlots: 0,
-    uniqueParamsFactoryCount: 0,
-    testerCount: 0,
-  };
-}
-
-function nowMs(): number {
-  return performance.now();
-}
-
-function addMs(
-  diagnostics: RegistrationDiagnostics | null,
-  key: keyof Pick<RegistrationDiagnostics,
-    'methodMs' | 'parseMs' | 'staticWildcardConflictMs' |
-    'staticInsertMs' | 'optionalExpandMs' | 'dynamicInsertMs' | 'factoryMs' | 'snapshotMs'>,
-  start: number,
-): void {
-  if (diagnostics !== null) diagnostics[key] += performance.now() - start;
-}
-
-function countSegmentTree(root: SegmentNode): { nodes: number; staticMaps: number; paramNodes: number } {
-  let nodes = 0;
-  let staticMaps = 0;
-  let paramNodes = 0;
-  const stack = [root];
-
-  while (stack.length > 0) {
-    const node = stack.pop()!;
-    nodes++;
-    // Inline single-static-child cache (T32). The diagnostic must
-    // follow it, otherwise the reported node count silently undercounts
-    // every compacted chain.
-    if (node.singleChildNext !== null) stack.push(node.singleChildNext);
-    if (node.staticChildren !== null) {
-      staticMaps++;
-      for (const key in node.staticChildren) stack.push(node.staticChildren[key]!);
-    }
-    let param = node.paramChild;
-    while (param !== null) {
-      paramNodes++;
-      stack.push(param.next);
-      param = param.nextSibling;
-    }
-  }
-
-  return { nodes, staticMaps, paramNodes };
 }
 
 function rollback(undo: SegmentTreeUndoLog, mark: number): void {

@@ -2,12 +2,11 @@ import type { MatchFn, MatchState } from './match-state';
 import type { DecoderFn } from './decoder';
 import type { ParamSegment, SegmentNode } from './segment-tree';
 
-import { performance } from 'node:perf_hooks';
 import { TESTER_PASS } from './pattern-tester';
 import { compactSegmentTree, getTenantFactor, hasAmbiguousNode } from './segment-tree';
 import { compileSegmentTree, collectWarmupPaths } from '../codegen/segment-compile';
 import { detectWildCodegenSpec } from '../codegen/walker-strategy';
-import { recordWarmupCall, WARMUP_ITERATIONS } from '../codegen/codegen-telemetry';
+import { WARMUP_ITERATIONS } from '../codegen/warmup';
 
 /**
  * Run the freshly-compiled walker once per major branch so JSC IC reaches
@@ -26,7 +25,6 @@ import { recordWarmupCall, WARMUP_ITERATIONS } from '../codegen/codegen-telemetr
 function warmupCompiledWalker(
   walker: MatchFn,
   root: SegmentNode,
-  shape: string | null,
   state: MatchState,
 ): void {
   const paths = collectWarmupPaths(root);
@@ -36,13 +34,6 @@ function warmupCompiledWalker(
     for (const p of paths) {
       try { walker(p, state); } catch { /* warmup failures are non-fatal */ }
     }
-  }
-  // Record only the final post-tier-up call latency.
-  for (const p of paths) {
-    const t0 = performance.now();
-    try { walker(p, state); } catch { /* warmup failures are non-fatal */ }
-    const ns = (performance.now() - t0) * 1e6;
-    if (shape !== null) recordWarmupCall(shape, ns);
   }
 }
 
@@ -122,14 +113,14 @@ export function createSegmentWalker(
 
   const compiledWild = tryCodegenStaticPrefixWildcard(root);
   if (compiledWild !== null) {
-    warmupCompiledWalker(compiledWild, root, null, warmupState);
+    warmupCompiledWalker(compiledWild, root, warmupState);
     return compiledWild;
   }
 
   const compiledFullPackage = compileSegmentTree(root);
   if (compiledFullPackage !== null) {
     const compiled = compiledFullPackage.factory(compiledFullPackage.testers, TESTER_PASS, decoder);
-    warmupCompiledWalker(compiled, root, compiledFullPackage.shape, warmupState);
+    warmupCompiledWalker(compiled, root, warmupState);
     return compiled;
   }
 
@@ -137,11 +128,7 @@ export function createSegmentWalker(
   // path will be used. Run single-static-chain compaction here so the
   // walker pays only one node visit per merged chain rather than one per
   // segment. Compaction is destructive; no codegen attempt may follow.
-  const stats = compactSegmentTree(root);
-  if (process.env.ZIPBUL_ROUTER_CODEGEN_DIAGNOSTICS === '1') {
-    // eslint-disable-next-line no-console
-    console.log(`compact=foldedNodes=${stats.foldedNodes} chains=${stats.chains}`);
-  }
+  compactSegmentTree(root);
 
   if (!hasAmbiguousNode(root)) {
     return createIterativeWalker(root, decoder);

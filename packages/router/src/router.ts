@@ -5,11 +5,6 @@ import type { RouterCache, RouterMissCache } from './cache';
 import { OptionalParamDefaults } from './builder/optional-param-defaults';
 import { PathParser } from './builder/path-parser';
 import { compileMatchFn } from './codegen/emitter';
-import {
-  resetBuildAggregate,
-  snapshotBuildAggregate,
-  type BuildAggregate,
-} from './codegen/codegen-telemetry';
 import { optimizeNextInvocation } from 'bun:jsc';
 
 import { MethodRegistry } from './method-registry';
@@ -29,11 +24,6 @@ export interface RouterInternals<T> {
   matchImpl: ((method: string, path: string) => MatchOutput<T> | null) | undefined;
   matchLayer: MatchLayer | undefined;
   registration: Registration<T>;
-  /**
-   * Codegen aggregate for the most recent build pass: counts of generated
-   * vs bailed compiled walkers, total emit/compile/warmup time spent.
-   */
-  codegenAggregate: BuildAggregate | undefined;
 }
 
 interface CacheContainers<T> {
@@ -100,7 +90,6 @@ export class Router<T = unknown> implements RouterPublicApi<T> {
       matchImpl: undefined,
       matchLayer: undefined,
       registration,
-      codegenAggregate: undefined,
     };
 
     Object.defineProperty(this, ROUTER_INTERNALS_KEY, {
@@ -111,7 +100,6 @@ export class Router<T = unknown> implements RouterPublicApi<T> {
     });
 
     const performBuild = (): void => {
-      resetBuildAggregate();
       const snapshot = registration.seal({
         optionalParamBehavior: routerOptions.optionalParamBehavior,
       });
@@ -163,7 +151,6 @@ export class Router<T = unknown> implements RouterPublicApi<T> {
 
       internals.matchImpl = matchImpl;
       internals.matchLayer = matchLayer;
-      internals.codegenAggregate = snapshotBuildAggregate();
 
       // Build pushes the JSC heap commit to a high-water mark (transient
       // parser/expand/prefix-index/insertion allocations on the order of
