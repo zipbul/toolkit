@@ -286,14 +286,15 @@ export function detectTenantFactor(root: SegmentNode, minSiblings = 1000): Tenan
   if (keys.length < minSiblings) return null;
 
   const firstChild = root.staticChildren[keys[0]!]!;
-  const baseShape = subtreeShape(firstChild);
   const baseStore = leafStoreOf(firstChild);
   if (baseStore === null) return null;
 
   const keyToTerminal = new Map<string, number>();
-  for (const k of keys) {
+  keyToTerminal.set(keys[0]!, baseStore);
+  for (let i = 1; i < keys.length; i++) {
+    const k = keys[i]!;
     const child = root.staticChildren[k]!;
-    if (subtreeShape(child) !== baseShape) return null;
+    if (!subtreeShapesEqual(firstChild, child)) return null;
     const store = leafStoreOf(child);
     if (store === null) return null;
     keyToTerminal.set(k, store);
@@ -302,33 +303,61 @@ export function detectTenantFactor(root: SegmentNode, minSiblings = 1000): Tenan
 }
 
 /**
- * Recursive shape signature of a subtree, EXCLUDING terminal store values
- * so two branches that only differ in `store` collapse to the same hash.
- * Includes paramName, patternSource (regex identity), wildcardOrigin,
- * staticPrefix sequence, and child structure.
+ * Direct structural compare — skips the string-build hash that
+ * `subtreeShape()` returned. The detector only ever needs to verify
+ * every sibling subtree matches the canonical first one; allocating an
+ * O(N) string per sibling (with `parts.join`) was empirically 18% of
+ * the 100k-tenant build profile (cpu-prof: subtreeShape + join hot).
  */
-function subtreeShape(node: SegmentNode): string {
-  const parts: string[] = [];
-  parts.push(`ws=${node.wildcardStore === null ? 'n' : 'y'}`);
-  parts.push(`wn=${node.wildcardName ?? ''}`);
-  parts.push(`wo=${node.wildcardOrigin ?? ''}`);
-  parts.push(`sp=${node.staticPrefix === null ? '' : node.staticPrefix.join('\x00')}`);
-  if (node.singleChildKey !== null && node.singleChildNext !== null) {
-    parts.push(`SC=${node.singleChildKey}\x01${subtreeShape(node.singleChildNext)}`);
+function subtreeShapesEqual(a: SegmentNode, b: SegmentNode): boolean {
+  if ((a.wildcardStore === null) !== (b.wildcardStore === null)) return false;
+  if (a.wildcardName !== b.wildcardName) return false;
+  if (a.wildcardOrigin !== b.wildcardOrigin) return false;
+
+  const ap = a.staticPrefix;
+  const bp = b.staticPrefix;
+  if ((ap === null) !== (bp === null)) return false;
+  if (ap !== null && bp !== null) {
+    if (ap.length !== bp.length) return false;
+    for (let i = 0; i < ap.length; i++) if (ap[i] !== bp[i]) return false;
   }
-  if (node.staticChildren !== null) {
-    const childKeys: string[] = [];
-    for (const k in node.staticChildren) childKeys.push(k);
-    childKeys.sort();
-    for (const k of childKeys) parts.push(`S=${k}\x01${subtreeShape(node.staticChildren[k]!)}`);
+
+  if ((a.singleChildKey === null) !== (b.singleChildKey === null)) return false;
+  if (a.singleChildKey !== null) {
+    if (a.singleChildKey !== b.singleChildKey) return false;
+    if (!subtreeShapesEqual(a.singleChildNext!, b.singleChildNext!)) return false;
   }
-  let p = node.paramChild;
-  while (p !== null) {
-    parts.push(`P=${p.name}\x01${p.patternSource ?? ''}\x01${subtreeShape(p.next)}`);
-    p = p.nextSibling;
+
+  const ac = a.staticChildren;
+  const bc = b.staticChildren;
+  if ((ac === null) !== (bc === null)) return false;
+  if (ac !== null && bc !== null) {
+    const aKeys: string[] = [];
+    const bKeys: string[] = [];
+    for (const k in ac) aKeys.push(k);
+    for (const k in bc) bKeys.push(k);
+    if (aKeys.length !== bKeys.length) return false;
+    aKeys.sort();
+    bKeys.sort();
+    for (let i = 0; i < aKeys.length; i++) {
+      const ak = aKeys[i]!;
+      if (ak !== bKeys[i]) return false;
+      if (!subtreeShapesEqual(ac[ak]!, bc[ak]!)) return false;
+    }
   }
-  // Terminal store is intentionally excluded.
-  return parts.join('\x02');
+
+  let p1 = a.paramChild;
+  let p2 = b.paramChild;
+  while (p1 !== null && p2 !== null) {
+    if (p1.name !== p2.name) return false;
+    if (p1.patternSource !== p2.patternSource) return false;
+    if (!subtreeShapesEqual(p1.next, p2.next)) return false;
+    p1 = p1.nextSibling;
+    p2 = p2.nextSibling;
+  }
+  if (p1 !== null || p2 !== null) return false;
+
+  return true;
 }
 
 /**
