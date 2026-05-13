@@ -204,7 +204,7 @@ describe('Router — property-based tests', () => {
 
   describe('no-crash fuzz invariant', () => {
     it('any arbitrary string passed to match() does not crash', () => {
-      const router = new Router<string>({ maxPathLength: 8192 });
+      const router = new Router<string>();
       router.add('GET', '/users', 'users');
       router.add('GET', '/users/:id', 'user');
       router.add('GET', '/files/*path', 'files');
@@ -238,7 +238,7 @@ describe('Router — property-based tests', () => {
     });
 
     it('arbitrary strings with special characters never cause unhandled exceptions', () => {
-      const router = new Router<string>({ maxPathLength: 8192 });
+      const router = new Router<string>();
       router.add('GET', '/api/:version/resource', 'resource');
       router.add('GET', '/static/file', 'static');
       router.build();

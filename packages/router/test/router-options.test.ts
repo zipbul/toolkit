@@ -53,15 +53,6 @@ describe('Router<T> options', () => {
     expect(withSlash).toBeNull();
   });
 
-  it('should respect maxSegmentLength option', () => {
-    const router = new Router<string>({ maxSegmentLength: 10 });
-    router.add('GET', '/ok', 'ok');
-    router.build();
-
-    expect(router.match('GET', '/ok')).not.toBeNull();
-    expect(router.match('GET', '/this-is-too-long-segment')).toBeNull();
-  });
-
   it('should decode params (always-on)', () => {
     const router = new Router<string>();
     router.add('GET', '/users/:id', 'user');

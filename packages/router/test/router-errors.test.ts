@@ -137,16 +137,6 @@ describe('Router<T> errors', () => {
     expect(issue.kind).toBe('route-parse');
   });
 
-  it('should return null for oversized segment during match', () => {
-    const router = new Router<string>({
-      maxSegmentLength: 5,
-    });
-    router.add('GET', '/ok', 'ok');
-    router.build();
-
-    expect(router.match('GET', '/very-long-segment-name')).toBeNull();
-  });
-
   it('should include kind, message, path, method in error data', () => {
     const router = new Router<string>();
     router.build();
@@ -292,21 +282,4 @@ describe('Router<T> errors', () => {
     expect(router.match('GET', '/users/42')!.value).toBe('handler');
   });
 
-  // ── maxSegmentCount option guard ──
-
-  it('emits segment-limit when path exceeds the configured maxSegmentCount', () => {
-    const router = new Router<string>({ maxSegmentCount: 8 });
-    const path = '/' + Array.from({ length: 9 }, (_, i) => `s${i}`).join('/');
-
-    router.add('GET', path, 'deep');
-    const issue = firstBuildIssue(router);
-    expect(issue.kind).toBe('segment-limit');
-  });
-
-  it('accepts a path with exactly maxSegmentCount segments', () => {
-    const router = new Router<string>({ maxSegmentCount: 8 });
-    const path = '/' + Array.from({ length: 8 }, (_, i) => `s${i}`).join('/');
-
-    router.add('GET', path, 'deep');
-  });
 });

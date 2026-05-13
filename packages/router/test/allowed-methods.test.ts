@@ -76,28 +76,6 @@ describe('allowedMethods', () => {
     expect([...r.allowedMethods('/USERS')].sort()).toEqual(['GET', 'POST']);
   });
 
-  it('returns empty when path exceeds maxPathLength', () => {
-    const r = new Router<number>({ maxPathLength: 16 });
-    r.add('GET', '/x', 1);
-    r.build();
-
-    expect(r.allowedMethods('/' + 'a'.repeat(100))).toEqual([]);
-  });
-
-  it('returns empty for path with no registered method (regardless of segment length)', () => {
-    // Router no longer enforces maxSegmentLength at runtime — that is a
-    // build-time concern. allowedMethods just returns whatever methods are
-    // registered for the matching path.
-    const r = new Router<number>({ maxSegmentLength: 8 });
-    r.add('GET', '/users/:id', 1);
-    r.build();
-
-    // Long segment still matches the dynamic param at runtime.
-    expect(r.allowedMethods('/users/' + 'x'.repeat(50))).toEqual(['GET']);
-    // But an unregistered path returns empty.
-    expect(r.allowedMethods('/missing/' + 'x'.repeat(50))).toEqual([]);
-  });
-
   it('mixes static and dynamic — both report correctly', () => {
     const r = new Router<number>();
     r.add('GET', '/static', 1);

@@ -217,7 +217,6 @@ describe('Router<T> combinations', () => {
         pathCaseSensitive: false,
         trailingSlash: "ignore",
         cacheSize: 10,
-        maxSegmentLength: 256,
         optionalParamBehavior: 'set-undefined',
       });
       router.add('GET', '/api/:category/:id?', 'val');
@@ -237,18 +236,4 @@ describe('Router<T> combinations', () => {
 
   });
 
-  // ── Error Combinations (1 test) ──
-
-  describe('error combinations', () => {
-    it('should reject registering a path whose segment exceeds maxSegmentLength', () => {
-      // maxSegmentLength is enforced at build-time (during compilation), not runtime.
-      const router = new Router<string>({
-        maxSegmentLength: 10,
-      });
-      const longSeg = 'a'.repeat(20);
-      router.add('GET', `/api/${longSeg}`, 'val');
-
-      expect(() => router.build()).toThrow();
-    });
-  });
 });

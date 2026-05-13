@@ -20,22 +20,6 @@ test('AUDIT match() returns null for standard method with no routes', () => {
   expect(r.match('HEAD', '/foo')).toBeNull();
 });
 
-test('AUDIT match() returns null for oversized path', () => {
-  const r = new Router<string>({ maxPathLength: 10 });
-  r.add('GET', '/foo', 'x');
-  r.build();
-
-  expect(r.match('GET', '/' + 'a'.repeat(100))).toBeNull();
-});
-
-test('AUDIT match() returns null for oversized segment at match', () => {
-  const r = new Router<string>({ maxSegmentLength: 5 });
-  r.add('GET', '/foo', 'x');
-  r.build();
-
-  expect(r.match('GET', '/' + 'a'.repeat(20))).toBeNull();
-});
-
 test('AUDIT match() returns null when called before build', () => {
   const r = new Router<string>();
   r.add('GET', '/foo', 'x');

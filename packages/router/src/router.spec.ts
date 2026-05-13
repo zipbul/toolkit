@@ -181,13 +181,6 @@ describe('Router', () => {
       expect(r.match('GET', '/x')).toBeNull();
     });
 
-    it('should return null when path exceeds maxPathLength', () => {
-      const r = buildWith([['GET', '/x', 1]], { maxPathLength: 10 });
-      const longPath = '/' + 'a'.repeat(20);
-
-      expect(r.match('GET', longPath)).toBeNull();
-    });
-
     it('should return null for unregistered method', () => {
       const r = buildWith([['GET', '/x', 1]]);
       const result = r.match('DELETE', '/x');
@@ -252,25 +245,6 @@ describe('Router', () => {
       expect(second).toBe(r);
     });
 
-    it('should match path at exact maxPathLength', () => {
-      const maxLen = 30;
-      const path = '/' + 'a'.repeat(maxLen - 1); // exactly 30 chars
-      const r = makeRouter<number>({ maxPathLength: maxLen });
-      r.add('GET', path, 1);
-      r.build();
-
-      const result = r.match('GET', path);
-
-      expect(result).not.toBeNull();
-    });
-
-    it('should return null at maxPathLength+1', () => {
-      const maxLen = 30;
-      const path = '/' + 'a'.repeat(maxLen); // 31 chars > maxLen
-      const r = buildWith([['GET', '/x', 1]], { maxPathLength: maxLen });
-
-      expect(r.match('GET', path)).toBeNull();
-    });
   });
 
   // ---- CO (Corner) ----

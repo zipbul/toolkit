@@ -384,10 +384,8 @@ describe('shape-specialized wildcard matchImpl', () => {
     expect(r.match('POST', '/static/foo')).toBeNull();
   });
 
-  it('does not gate runtime length against maxPathLength (length is a build-time concern)', () => {
-    // Router no longer enforces maxPathLength on match() input. The wildcard
-    // happily captures the long suffix.
-    const r = new Router<number>({ maxPathLength: 32 });
+  it('captures arbitrarily long wildcard suffixes without any length cap', () => {
+    const r = new Router<number>();
     r.add('GET', '/static/*path', 1);
     r.build();
 
@@ -395,9 +393,8 @@ describe('shape-specialized wildcard matchImpl', () => {
     expect(r.match('GET', '/static/' + long)!.params).toEqual({ path: long });
   });
 
-  it('does not gate runtime segment length against maxSegmentLength', () => {
-    // Same: segment-length is enforced at register-time, not match-time.
-    const r = new Router<number>({ maxSegmentLength: 8 });
+  it('captures arbitrarily long single-segment wildcards', () => {
+    const r = new Router<number>();
     r.add('GET', '/files/*filepath', 1);
     r.build();
 

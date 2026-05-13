@@ -458,25 +458,6 @@ describe('edge case URLs', () => {
     expect(m!.params).toEqual({ p1: '1', p2: '2', p3: '3', p4: '4', p5: '5', p6: '6' });
   });
 
-  it('rejects registering path with segment exceeding maxSegmentLength (build-time)', () => {
-    const r = new Router<string>({ maxSegmentLength: 5 });
-    r.add('GET', '/users/' + 'x'.repeat(10), 'u');
-    expect(() => r.build()).toThrow();
-  });
-
-  it('rejects registering path exceeding maxPathLength (build-time)', () => {
-    const r = new Router<string>({ maxPathLength: 32 });
-    r.add('GET', '/users/' + 'x'.repeat(100), 'u');
-    expect(() => r.build()).toThrow();
-  });
-
-  it('does not throw at runtime on path longer than maxPathLength (length is a build-time concern)', () => {
-    const r = new Router<string>({ maxPathLength: 32 });
-    r.add('GET', '/users/:id', 'u');
-    r.build();
-
-    expect(() => r.match('GET', '/users/' + 'x'.repeat(100))).not.toThrow();
-  });
 });
 
 // ── Cache behavior under stress ──────────────────────────────────────────

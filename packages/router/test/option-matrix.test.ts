@@ -254,11 +254,11 @@ describe('optionalParamBehavior × cache', () => {
 
 });
 
-// ── maxPathLength + maxSegmentLength interactions ────────────────────────
+// ── unbounded path/segment lengths ────────────────────────────────────────
 
-describe('length limits × route type', () => {
-  it('a generous maxPathLength + maxSegmentLength accept very long paths', () => {
-    const r = new Router<string>({ maxPathLength: 200_000, maxSegmentLength: 200_000 });
+describe('unbounded length', () => {
+  it('accepts arbitrarily long static path registrations', () => {
+    const r = new Router<string>();
     r.add('GET', '/files/*p', 'f');
     r.build();
 
@@ -269,8 +269,8 @@ describe('length limits × route type', () => {
     expect(m!.params.p?.length).toBe(100_000);
   });
 
-  it('a generous maxSegmentLength accepts long single-segment param values', () => {
-    const r = new Router<string>({ maxSegmentLength: 200_000, maxPathLength: 200_000 });
+  it('accepts long single-segment param values', () => {
+    const r = new Router<string>();
     r.add('GET', '/users/:id', 'u');
     r.build();
 
@@ -279,34 +279,6 @@ describe('length limits × route type', () => {
 
     expect(m).not.toBeNull();
     expect(m!.params.id?.length).toBe(100_000);
-  });
-
-  it('finite maxPathLength rejects oversized paths at build-time', () => {
-    const r = new Router<string>({ maxPathLength: 1000, maxSegmentLength: 200_000 });
-    r.add('GET', '/users/' + 'x'.repeat(2000), 'u');
-    expect(() => r.build()).toThrow();
-  });
-
-  it('finite maxSegmentLength rejects oversized single segments at build-time', () => {
-    const r = new Router<string>({ maxPathLength: 200_000, maxSegmentLength: 100 });
-    r.add('GET', '/users/' + 'x'.repeat(200), 'u');
-    expect(() => r.build()).toThrow();
-  });
-
-  it('does not gate runtime input length: long paths still go through matching', () => {
-    // maxPathLength is a build-time constraint. At runtime, the router does
-    // not throw or short-circuit on long inputs — it just matches normally.
-    const r = new Router<string>({ maxPathLength: 64 });
-    r.add('GET', '/users/:id', 'u');
-    r.add('GET', '/files/*p', 'f');
-    r.add('GET', '/health', 'h');
-    r.build();
-
-    const longId = 'x'.repeat(100);
-    // /users/<long> still matches the dynamic param.
-    expect(r.match('GET', '/users/' + longId)!.params.id).toBe(longId);
-    // /health (within limit) still works.
-    expect(r.match('GET', '/health')!.value).toBe('h');
   });
 });
 

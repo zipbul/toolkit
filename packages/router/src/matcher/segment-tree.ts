@@ -334,19 +334,14 @@ function subtreeShape(node: SegmentNode): string {
 /**
  * Walk to the unique terminal node and return its `store`. Returns null
  * if there is no unique terminal (multiple stores on the path). The
- * depth bound is a malformed-tree safety net only; the registration
- * layer caps actual segment count via the `maxSegmentCount` option
- * (default 256 in `router.ts:createPathParser`). 64 here doesn't have
- * to match the option — it just bounds the loop.
+ * depth bound is a malformed-tree safety net only — no valid registered
+ * tree chains a single-static-only path 64 deep without `store`/multi-
+ * child branching breaking the loop sooner.
  */
 function leafStoreOf(node: SegmentNode): number | null {
   let cur: SegmentNode = node;
   let depth = 0;
-  // Malformed-tree safety net only. The actual segment-count limit is
-  // enforced by `maxSegmentCount` (router.ts:createPathParser default
-  // 256); we cap descent at 64 here because no valid registered tree
-  // can chain a single-static-only path that deep without `store`/
-  // multi-child branching breaking the loop sooner.
+  // Malformed-tree safety net only — see the docstring above.
   while (depth++ < 64) {
     if (cur.store !== null) return cur.store;
     if (cur.paramChild !== null && cur.paramChild.nextSibling === null) {

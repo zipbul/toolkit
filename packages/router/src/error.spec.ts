@@ -56,18 +56,18 @@ describe('RouterError', () => {
   });
 
   it('should have readonly data property', () => {
-    const err = new RouterError({ kind: 'segment-limit', message: 'too long' });
+    const err = new RouterError({ kind: 'route-parse', message: 'too long' });
     expect(typeof err.data).toBe('object');
-    expect(err.data.kind).toBe('segment-limit');
+    expect(err.data.kind).toBe('route-parse');
   });
 
   it('should support all error kinds — required fields stubbed per discriminated union', () => {
     // After A3, kind-specific required fields are enforced by the type
     // system. Each constructor call below provides the minimum legal shape
     // for its kind. Aspirational kinds present in pre-A3 history
-    // (regex-timeout / method-not-found / not-built / path-too-long) were
-    // never produced anywhere in src and have been dropped — they belonged
-    // to a separate matcher-state error channel, not RouterErrorData.
+    // (regex-timeout / method-not-found / not-built / path-too-long /
+    // segment-limit) were never produced anywhere in src or have been
+    // dropped along with the option that emitted them.
     const variants = [
       { kind: 'router-sealed' as const, message: 'sealed', suggestion: 'recreate' },
       { kind: 'route-duplicate' as const, message: 'dup', suggestion: 'use another' },
@@ -76,7 +76,6 @@ describe('RouterError', () => {
       { kind: 'param-duplicate' as const, message: 'param dup', path: '/a', segment: 'p', suggestion: 'rename' },
       { kind: 'regex-unsafe' as const, message: 'unsafe', segment: '\\d+', suggestion: 'simplify' },
       { kind: 'method-limit' as const, message: 'method limit', method: 'X', suggestion: 'reduce' },
-      { kind: 'segment-limit' as const, message: 'seg limit' },
     ];
 
     for (const data of variants) {

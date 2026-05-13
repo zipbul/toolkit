@@ -82,9 +82,6 @@ async function main(): Promise<void> {
   const parser = new PathParser({
     caseSensitive: true,
     ignoreTrailingSlash: false,
-    maxSegmentLength: 1024,
-    maxPathLength: 8192,
-    maxSegmentCount: 256,
   });
   const parsedParts: Array<PathPart[]> = [];
   for (const [, p] of routes) {
@@ -185,10 +182,7 @@ async function main(): Promise<void> {
     const parser2 = new PathParser({
       caseSensitive: true,
       ignoreTrailingSlash: false,
-      maxSegmentLength: 1024,
-      maxPathLength: 8192,
-      maxSegmentCount: 256,
-      });
+    });
     let n = 0;
     for (const [, p] of routes) {
       parser2.parse(p);

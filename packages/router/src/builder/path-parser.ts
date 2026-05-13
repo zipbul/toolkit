@@ -27,9 +27,6 @@ export interface ParseResult {
 export interface PathParserConfig {
   caseSensitive: boolean;
   ignoreTrailingSlash: boolean;
-  maxSegmentLength: number;
-  maxPathLength: number;
-  maxSegmentCount: number;
 }
 
 // ── PathParser ──
@@ -65,17 +62,14 @@ export class PathParser {
 
   // Single-pass char-code scan covering the structural-sanity check (leading
   private validatePath(path: string): Result<never, RouterErrorData> | null {
-    const result = validatePathChars(path, this.config.maxPathLength);
+    const result = validatePathChars(path);
     if (isErr(result)) return result;
     return null;
   }
 
   /**
-   * Stage 2 — split + normalize + enforce hard limits. Returns the segment
-   * array consumed by stage 3 alongside the canonical normalized path used
-   * by lookup. Limits enforced here (segment count and segment length) are
-   * token-level constraints, so they belong with tokenization rather than
-   * semantic parse.
+   * Stage 2 — split + normalize. Returns the segment array consumed by
+   * stage 3 alongside the canonical normalized path used by lookup.
    */
   private tokenize(
     path: string,
@@ -91,23 +85,8 @@ export class PathParser {
       }
     }
 
-    // Validate segment count up front so the per-segment loop below sees
-    // a bounded array (the count limit is the most likely fail-fast gate).
-    const maxSegments = this.config.maxSegmentCount;
-    if (Number.isFinite(maxSegments) && segments.length > maxSegments) {
-      return err({
-        kind: 'segment-limit',
-        message: `Path has ${segments.length} segments, exceeding the maximum of ${maxSegments}: ${path}`,
-        path,
-        suggestion: `Split deeply nested routes into shorter sub-paths (limit is ${maxSegments}).`,
-      });
-    }
-
-    // Single-pass walk: empty-segment check, case-fold static segments,
-    // segment-length validation. Earlier separate loops collapsed into
-    // one — same charCode lookups, one iteration over the segments array.
+    // Single-pass walk: empty-segment check + case-fold for static segments.
     const caseSensitive = this.config.caseSensitive;
-    const maxLen = this.config.maxSegmentLength;
 
     for (let i = 0; i < segments.length; i++) {
       const seg = segments[i]!;
@@ -126,15 +105,6 @@ export class PathParser {
 
       if (isDynamic) {
         continue;
-      }
-
-      if (seg.length > maxLen) {
-        return err({
-          kind: 'segment-limit',
-          message: `Segment length exceeds limit: ${seg.substring(0, 20)}...`,
-          segment: seg.substring(0, 40),
-          suggestion: `Shorten the path segment to ${maxLen} characters or fewer.`,
-        });
       }
 
       if (!caseSensitive) {

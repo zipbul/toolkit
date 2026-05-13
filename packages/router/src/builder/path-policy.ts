@@ -20,22 +20,12 @@ import { CC_SLASH } from './constants';
  */
 export function validatePathChars(
   path: string,
-  maxPathLength: number,
 ): Result<void, RouterErrorData> {
   if (path.length === 0 || path.charCodeAt(0) !== CC_SLASH) {
     return err({
       kind: 'path-missing-leading-slash',
       message: `Path must start with '/': ${path}`,
       path,
-    });
-  }
-
-  if (Number.isFinite(maxPathLength) && path.length > maxPathLength) {
-    return err({
-      kind: 'path-too-long',
-      message: `Path length ${path.length} exceeds maxPathLength ${maxPathLength}.`,
-      path,
-      suggestion: `Shorten the path or raise maxPathLength.`,
     });
   }
 

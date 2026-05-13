@@ -7,12 +7,6 @@ export interface RouterOptions {
   trailingSlash?: 'strict' | 'ignore';
   /** Path case-sensitivity. Default true. */
   pathCaseSensitive?: boolean;
-  /** Full path max length used for build-time guards. Default 8192. */
-  maxPathLength?: number;
-  /** Single segment max length. Default 1024. */
-  maxSegmentLength?: number;
-  /** Max segments per registered path. Default 256. */
-  maxSegmentCount?: number;
   /** Max optional-segment expansions per registered route. Default 1024. */
   maxOptionalExpansions?: number;
   /** Max total expanded routes across one build. Default 200_000. */
@@ -64,8 +58,6 @@ export type RouterErrorKind =
   | 'path-encoded-control' // 인코드된 C0/DEL
   | 'path-dot-segment'   // 디코드 시 `.` 또는 `..`
   | 'path-empty-segment' // interior empty `/a//b`
-  | 'path-too-long'      // maxPathLength 초과
-  | 'segment-limit'      // 빌드 시 세그먼트 길이/수/파라미터 수 상한 초과
   | 'optional-expansion-limit' // 단일 path의 maxOptionalExpansions 초과
   | 'expansion-total-limit'   // maxExpandedRoutes 초과
   | 'regex-sibling-limit'     // maxRegexSiblingsPerSegment 초과
@@ -119,8 +111,6 @@ export type RouterErrorData = {
   | { kind: 'path-encoded-control'; message: string; suggestion?: string }
   | { kind: 'path-dot-segment'; message: string; suggestion?: string }
   | { kind: 'path-empty-segment'; message: string; suggestion?: string }
-  | { kind: 'path-too-long'; message: string; suggestion?: string }
-  | { kind: 'segment-limit'; message: string; segment?: string; suggestion?: string }
   | { kind: 'optional-expansion-limit'; message: string; suggestion?: string }
   | { kind: 'expansion-total-limit'; message: string; suggestion?: string }
   | { kind: 'regex-sibling-limit'; message: string; segment?: string; suggestion?: string }

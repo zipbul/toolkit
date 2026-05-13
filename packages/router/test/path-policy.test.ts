@@ -24,13 +24,6 @@ describe('registration path policy accepts well-formed routes', () => {
     }).not.toThrow();
   });
 
-  test('accepts a path exactly maxPathLength bytes long (boundary)', () => {
-    const r = new Router<string>({ maxPathLength: 16 });
-    expect(() => {
-      r.add('GET', '/' + 'x'.repeat(15), 'h');
-      r.build();
-    }).not.toThrow();
-  });
 });
 
 describe('registration path validation', () => {

@@ -61,10 +61,9 @@ describe('match() never throws on bad input', () => {
   });
 
   it('does not throw on extremely long URLs', () => {
-    // Router no longer enforces maxPathLength at runtime — that is a
-    // framework / build-time concern. We only assert match() never throws
-    // on absurdly long input.
-    const r = new Router<string>({ maxPathLength: 1024 });
+    // Router no longer caps path length anywhere — register / match must
+    // tolerate absurdly long input without throwing.
+    const r = new Router<string>();
     r.add('GET', '/health', 'u');
     r.build();
 

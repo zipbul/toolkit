@@ -8,9 +8,6 @@ function defaultConfig(overrides: Partial<PathParserConfig> = {}): PathParserCon
   return {
     caseSensitive: true,
     ignoreTrailingSlash: true,
-    maxSegmentLength: 256,
-    maxPathLength: 8192,
-    maxSegmentCount: 64,
     ...overrides,
   };
 }
@@ -258,18 +255,6 @@ describe('PathParser', () => {
       }
     });
 
-    it('should reject static segment exceeding maxSegmentLength', () => {
-      const result = parse('/a/' + 'x'.repeat(300), { maxSegmentLength: 256 });
-      expect(isErr(result)).toBe(true);
-      if (isErr(result)) expect(result.data.kind).toBe('segment-limit');
-    });
-
-    it('should not enforce maxSegmentLength on param segments', () => {
-      const longName = 'a'.repeat(300);
-      const result = parse(`/users/:${longName}`, { maxSegmentLength: 256 });
-      // Param segment names are not checked against maxSegmentLength
-      expect(isErr(result)).toBe(false);
-    });
   });
 
   describe('regex safety (always-on hardcoded guards)', () => {
@@ -291,12 +276,4 @@ describe('PathParser', () => {
     });
   });
 
-  describe('segment/param limits', () => {
-    it('should reject paths with more than 64 segments', () => {
-      const path = '/' + Array.from({ length: 65 }, (_, i) => `s${i}`).join('/');
-      const result = parse(path);
-      expect(isErr(result)).toBe(true);
-      if (isErr(result)) expect(result.data.kind).toBe('segment-limit');
-    });
-  });
 });

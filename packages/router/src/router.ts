@@ -74,9 +74,6 @@ export class Router<T = unknown> implements RouterPublicApi<T> {
     const pathParser = new PathParser({
       caseSensitive: routerOptions.pathCaseSensitive ?? true,
       ignoreTrailingSlash: routerOptions.trailingSlash !== 'strict',
-      maxSegmentLength: routerOptions.maxSegmentLength ?? 1024,
-      maxPathLength: routerOptions.maxPathLength ?? 8192,
-      maxSegmentCount: routerOptions.maxSegmentCount ?? 256,
     });
     const registration = new Registration<T>(
       methodRegistry,
