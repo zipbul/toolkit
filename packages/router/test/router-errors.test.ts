@@ -292,8 +292,7 @@ describe('Router<T> errors', () => {
     expect(router.match('GET', '/users/42')!.value).toBe('handler');
   });
 
-  // ── maxSegmentCount option guard (option-driven; no static
-  //    MAX_STACK_DEPTH / MAX_PARAMS constants exist) ──
+  // ── maxSegmentCount option guard ──
 
   it('emits segment-limit when path exceeds the configured maxSegmentCount', () => {
     const router = new Router<string>({ maxSegmentCount: 8 });
@@ -309,20 +308,5 @@ describe('Router<T> errors', () => {
     const path = '/' + Array.from({ length: 8 }, (_, i) => `s${i}`).join('/');
 
     router.add('GET', path, 'deep');
-  });
-
-  it('emits segment-limit when path exceeds the configured maxParams', () => {
-    const router = new Router<string>({ maxParams: 4 });
-    const path = '/' + Array.from({ length: 5 }, (_, i) => `:p${i}`).join('/');
-
-    router.add('GET', path, 'many-params');
-    expect(firstBuildIssue(router).kind).toBe('segment-limit');
-  });
-
-  it('accepts a path with exactly maxParams params', () => {
-    const router = new Router<string>({ maxParams: 4 });
-    const path = '/' + Array.from({ length: 4 }, (_, i) => `:p${i}`).join('/');
-
-    router.add('GET', path, 'max-params');
   });
 });

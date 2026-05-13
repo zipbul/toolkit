@@ -7,7 +7,6 @@ import { TESTER_PASS } from './pattern-tester';
 import { compactSegmentTree, getTenantFactor, hasAmbiguousNode } from './segment-tree';
 import { compileSegmentTree, collectWarmupPaths } from '../codegen/segment-compile';
 import { detectWildCodegenSpec } from '../codegen/walker-strategy';
-import { createMatchState } from './match-state';
 import { recordWarmupCall, WARMUP_ITERATIONS } from '../codegen/codegen-telemetry';
 
 /**
@@ -28,9 +27,9 @@ function warmupCompiledWalker(
   walker: MatchFn,
   root: SegmentNode,
   shape: string | null,
+  state: MatchState,
 ): void {
   const paths = collectWarmupPaths(root);
-  const state = createMatchState();
   // Drive JSC IC past its baseline thresholds so the walker is at least
   // baseline-compiled before the first user request lands on it.
   for (let it = 0; it < WARMUP_ITERATIONS; it++) {
@@ -108,6 +107,7 @@ function tryCodegenStaticPrefixWildcard(root: SegmentNode): MatchFn | null {
 export function createSegmentWalker(
   root: SegmentNode,
   decoder: DecoderFn,
+  warmupState: MatchState,
 ): MatchFn {
   // Tenant-factor short-circuit. When the root carries a factor descriptor
   // (post-seal optimization), staticChildren has been moved into a hash
@@ -122,14 +122,14 @@ export function createSegmentWalker(
 
   const compiledWild = tryCodegenStaticPrefixWildcard(root);
   if (compiledWild !== null) {
-    warmupCompiledWalker(compiledWild, root, null);
+    warmupCompiledWalker(compiledWild, root, null, warmupState);
     return compiledWild;
   }
 
   const compiledFullPackage = compileSegmentTree(root);
   if (compiledFullPackage !== null) {
     const compiled = compiledFullPackage.factory(compiledFullPackage.testers, TESTER_PASS, decoder);
-    warmupCompiledWalker(compiled, root, compiledFullPackage.shape);
+    warmupCompiledWalker(compiled, root, compiledFullPackage.shape, warmupState);
     return compiled;
   }
 

@@ -29,7 +29,7 @@ describe('allowedMethods', () => {
 
     const allowed = r.allowedMethods('/users/42');
 
-    expect(allowed.sort()).toEqual(['DELETE', 'GET', 'POST']);
+    expect([...allowed].sort()).toEqual(['DELETE', 'GET', 'POST']);
   });
 
   it('returns the matching method even when called for the same path that match() succeeded for', () => {
@@ -73,7 +73,7 @@ describe('allowedMethods', () => {
     r.add('POST', '/Users', 2);
     r.build();
 
-    expect(r.allowedMethods('/USERS').sort()).toEqual(['GET', 'POST']);
+    expect([...r.allowedMethods('/USERS')].sort()).toEqual(['GET', 'POST']);
   });
 
   it('returns empty when path exceeds maxPathLength', () => {
@@ -139,7 +139,7 @@ describe('allowedMethods', () => {
     r.add('PUT', '/files/*p', 2);
     r.build();
 
-    expect(r.allowedMethods('/files/dir/file.txt').sort()).toEqual(['GET', 'PUT']);
+    expect([...r.allowedMethods('/files/dir/file.txt')].sort()).toEqual(['GET', 'PUT']);
     expect(r.allowedMethods('/files')).toEqual(['GET', 'PUT'].sort()); // star captures empty
   });
 

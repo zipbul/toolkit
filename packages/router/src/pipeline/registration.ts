@@ -85,6 +85,10 @@ export interface RegistrationSnapshot<T> {
   /** True iff any registered route declared a regex pattern tester. The
    *  full tester cache is build-only and not retained on the snapshot. */
   anyTester: boolean;
+  /** Maximum param count observed across every expanded route. Used at
+   *  build-time to size the runtime `MatchState.paramOffsets` Int32Array
+   *  exactly — no user option, no arbitrary fallback. */
+  maxParamsObserved: number;
 }
 
 interface BuildState<T> {
@@ -103,6 +107,9 @@ interface BuildState<T> {
    *  testers attached to ParamSegment. */
   testerCache: Map<string, PatternTesterFn>;
   routeCounter: number;
+  /** Tracks max present-param count across every expanded route so the
+   *  runtime paramOffsets buffer is sized exactly. */
+  maxParamsObserved: number;
   diagnostics: RegistrationDiagnostics | null;
 }
 
@@ -360,6 +367,7 @@ export class Registration<T> {
       terminalSlab,
       paramsFactories: state.paramsFactories,
       anyTester: state.testerCache.size > 0,
+      maxParamsObserved: state.maxParamsObserved,
     };
     addMs(state.diagnostics, 'snapshotMs', snapshotStart);
 
@@ -599,6 +607,9 @@ export class Registration<T> {
           present.push({ name: p.name, type: p.type });
         }
       }
+      if (present.length > state.maxParamsObserved) {
+        state.maxParamsObserved = present.length;
+      }
 
       const tIdx = state.terminalHandlers.length;
       const isWildcard = expParts.length > 0 && expParts[expParts.length - 1]!.type === 'wildcard';
@@ -731,6 +742,7 @@ function createBuildState<T>(withDiagnostics = false): BuildState<T> {
     paramsFactories: [],
     testerCache: new Map(),
     routeCounter: 0,
+    maxParamsObserved: 0,
     diagnostics: withDiagnostics ? createDiagnostics() : null,
   };
 }

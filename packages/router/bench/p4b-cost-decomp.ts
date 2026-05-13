@@ -85,8 +85,6 @@ async function main(): Promise<void> {
     maxSegmentLength: 1024,
     maxPathLength: 8192,
     maxSegmentCount: 256,
-    maxParams: 64,
-    profile: 'secure',
   });
   const parsedParts: Array<PathPart[]> = [];
   for (const [, p] of routes) {
@@ -130,7 +128,7 @@ async function main(): Promise<void> {
     const undo: SegmentTreeUndoLog = [];
     const testerCache = new Map<string, PatternTesterFn>();
     for (let r = 0; r < parsedParts.length; r++) {
-      const res = insertIntoSegmentTree(root, parsedParts[r]!, r, testerCache, r, undo);
+      const res = insertIntoSegmentTree(root, parsedParts[r]!, r, testerCache, r, undo, 32);
       if (res !== undefined) throw new Error('segment-tree insert err');
     }
     const dt = performance.now() - t0;
@@ -190,9 +188,7 @@ async function main(): Promise<void> {
       maxSegmentLength: 1024,
       maxPathLength: 8192,
       maxSegmentCount: 256,
-      maxParams: 64,
-      profile: 'secure',
-    });
+      });
     let n = 0;
     for (const [, p] of routes) {
       parser2.parse(p);

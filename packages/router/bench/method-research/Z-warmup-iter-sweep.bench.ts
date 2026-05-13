@@ -24,7 +24,7 @@ function probeWarmupCount(warmupCount: number, routes: number): number {
   if (!compiled) return -1;
   const fn = compiled.factory(compiled.testers, TESTER_PASS, decoder);
   const paths = collectWarmupPaths(root);
-  const state = createMatchState();
+  const state = createMatchState(64);
   for (let it = 0; it < warmupCount; it++) {
     for (const p of paths) { try { fn(p, state); } catch {} }
   }

@@ -13,8 +13,6 @@ export interface RouterOptions {
   maxSegmentLength?: number;
   /** Max segments per registered path. Default 256. */
   maxSegmentCount?: number;
-  /** Max parameters per registered path. Default 64. */
-  maxParams?: number;
   /** Max optional-segment expansions per registered route. Default 1024. */
   maxOptionalExpansions?: number;
   /** Max total expanded routes across one build. Default 200_000. */

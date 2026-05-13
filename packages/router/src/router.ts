@@ -77,7 +77,6 @@ export class Router<T = unknown> implements RouterPublicApi<T> {
       maxSegmentLength: routerOptions.maxSegmentLength ?? 1024,
       maxPathLength: routerOptions.maxPathLength ?? 8192,
       maxSegmentCount: routerOptions.maxSegmentCount ?? 256,
-      maxParams: routerOptions.maxParams ?? 64,
     });
     const registration = new Registration<T>(
       methodRegistry,

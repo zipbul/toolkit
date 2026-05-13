@@ -60,6 +60,12 @@ export function buildFromRegistration<T>(
     }
   }
 
+  // Pre-allocate the runtime match state so its paramOffsets buffer can be
+  // shared with codegen warmup — the warmup pass needs a real MatchState
+  // to invoke the freshly-compiled walker against, and reusing the runtime
+  // instance avoids ever sizing a throwaway buffer with an arbitrary cap.
+  const matchState = createMatchState(snapshot.maxParamsObserved);
+
   // Fused loop — for each method:
   //   1. attach a segment walker to `trees[code]` if a tree exists
   //   2. push `[name, code]` into activeMethodCodes if the method has
@@ -73,7 +79,7 @@ export function buildFromRegistration<T>(
     const segRoot = snapshot.segmentTrees[code];
     let walker: MatchFn | null = null;
     if (segRoot !== undefined && segRoot !== null) {
-      walker = createSegmentWalker(segRoot, decoder);
+      walker = createSegmentWalker(segRoot, decoder, matchState);
     }
     trees[code] = walker;
     if (walker !== null || staticOutputsByMethod[code] !== undefined) {
@@ -96,7 +102,7 @@ export function buildFromRegistration<T>(
     staticPathMethodMask: snapshot.staticPathMethodMask,
     activeMethodCodes,
     methodCodes,
-    matchState: createMatchState(options.maxParams ?? 64),
+    matchState,
     normalizePath,
     terminalSlab: snapshot.terminalSlab,
     paramsFactories: snapshot.paramsFactories,

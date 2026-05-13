@@ -30,7 +30,6 @@ export interface PathParserConfig {
   maxSegmentLength: number;
   maxPathLength: number;
   maxSegmentCount: number;
-  maxParams: number;
 }
 
 // ── PathParser ──
@@ -74,9 +73,9 @@ export class PathParser {
   /**
    * Stage 2 — split + normalize + enforce hard limits. Returns the segment
    * array consumed by stage 3 alongside the canonical normalized path used
-   * by lookup. Limits enforced here (segment count ≤ 64, length ≤ maxLen,
-   * param count ≤ MAX_PARAMS) are token-level constraints, so they belong
-   * with tokenization rather than semantic parse.
+   * by lookup. Limits enforced here (segment count and segment length) are
+   * token-level constraints, so they belong with tokenization rather than
+   * semantic parse.
    */
   private tokenize(
     path: string,
@@ -105,14 +104,10 @@ export class PathParser {
     }
 
     // Single-pass walk: empty-segment check, case-fold static segments,
-    // segment-length validation, and param-count tally. Three earlier
-    // separate loops collapsed into one — same charCode lookups, one
-    // iteration over the segments array.
+    // segment-length validation. Earlier separate loops collapsed into
+    // one — same charCode lookups, one iteration over the segments array.
     const caseSensitive = this.config.caseSensitive;
     const maxLen = this.config.maxSegmentLength;
-    const maxParams = this.config.maxParams;
-    const paramsBounded = Number.isFinite(maxParams);
-    let paramCount = 0;
 
     for (let i = 0; i < segments.length; i++) {
       const seg = segments[i]!;
@@ -130,15 +125,6 @@ export class PathParser {
       const isDynamic = firstChar === CC_COLON || firstChar === CC_STAR;
 
       if (isDynamic) {
-        paramCount++;
-        if (paramsBounded && paramCount > maxParams) {
-          return err({
-            kind: 'segment-limit',
-            message: `Path has ${paramCount} parameters, exceeding the maximum of ${maxParams}: ${path}`,
-            path,
-            suggestion: `Reduce the number of named parameters in this path (limit is ${maxParams}).`,
-          });
-        }
         continue;
       }
 

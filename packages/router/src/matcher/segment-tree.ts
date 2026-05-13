@@ -6,14 +6,6 @@ import type { PathPart } from '../builder/path-parser';
 import { err } from '@zipbul/result';
 import { buildPatternTester } from './pattern-tester';
 
-// Insert-time sibling cap. The default mirrors `ROUTER_DEFAULTS.
-// maxRegexSiblingsPerSegment` so a registration that doesn't set the
-// option matches the historical 32. Callers pass the option-resolved
-// value via `insertIntoSegmentTree`'s `regexSiblingCap` parameter so the
-// hard limit can be raised (the prior file-scope const ignored the
-// option and produced a `regex-sibling-limit` reject even when the
-// option was set to a larger value).
-const DEFAULT_REGEX_SIBLING_CAP = 32;
 
 /**
  * Segment-based route tree. Each node corresponds to one URL segment
@@ -541,18 +533,19 @@ function rollbackUndo(undo: SegmentTreeUndoLog, start: number): void {
  *    literal child on a non-wildcard node) takes a single hash lookup and
  *    no allocation.
  */
+// The `regexSiblingCap` parameter must be supplied by the caller — see
+// `registration.ts:seal()` where the option-resolved value is forwarded.
 export function insertIntoSegmentTree(
   root: SegmentNode,
   parts: PathPart[],
   handlerIndex: number,
   testerCache: Map<string, PatternTesterFn>,
   routeID: number,
-  undoLog?: SegmentTreeUndoLog,
-  regexSiblingCap: number = DEFAULT_REGEX_SIBLING_CAP,
+  undoLog: SegmentTreeUndoLog,
+  regexSiblingCap: number,
 ): Result<void, RouterErrorData> {
   let node = root;
-  const undo = undoLog ?? [];
-  const undoStart = undo.length;
+  const undoStart = undoLog.length;
 
   for (let i = 0; i < parts.length; i++) {
     const part = parts[i]!;
@@ -575,7 +568,7 @@ export function insertIntoSegmentTree(
         }
 
         if (node.wildcardStore !== null) {
-          rollbackUndo(undo, undoStart);
+          rollbackUndo(undoLog, undoStart);
           return err({
             kind: 'route-conflict',
             message: `Static route conflicts with existing wildcard '*${node.wildcardName}' at the same position`,
@@ -591,7 +584,7 @@ export function insertIntoSegmentTree(
           const fresh = createSegmentNode();
           node.singleChildKey = seg;
           node.singleChildNext = fresh;
-          undo.push({ k: UndoKind.SingleChildClear, n: node });
+          undoLog.push({ k: UndoKind.SingleChildClear, n: node });
           node = fresh;
           continue;
         }
@@ -604,7 +597,7 @@ export function insertIntoSegmentTree(
         if (children === null) {
           children = Object.create(null) as Record<string, SegmentNode>;
           node.staticChildren = children;
-          undo.push({ k: UndoKind.StaticChildrenInit, n: node });
+          undoLog.push({ k: UndoKind.StaticChildrenInit, n: node });
         }
         if (node.singleChildKey !== null && node.singleChildNext !== null) {
           const promotedKey = node.singleChildKey;
@@ -612,18 +605,18 @@ export function insertIntoSegmentTree(
           children[promotedKey] = promotedNext;
           node.singleChildKey = null;
           node.singleChildNext = null;
-          undo.push({ k: UndoKind.SingleChildRestore, n: node, key: promotedKey, next: promotedNext });
-          undo.push({ k: UndoKind.StaticChildAdd, p: children, key: promotedKey });
+          undoLog.push({ k: UndoKind.SingleChildRestore, n: node, key: promotedKey, next: promotedNext });
+          undoLog.push({ k: UndoKind.StaticChildAdd, p: children, key: promotedKey });
         }
 
         const fresh = createSegmentNode();
         children[seg] = fresh;
-        undo.push({ k: UndoKind.StaticChildAdd, p: children, key: seg });
+        undoLog.push({ k: UndoKind.StaticChildAdd, p: children, key: seg });
         node = fresh;
       }
     } else if (part.type === 'param') {
       if (node.wildcardStore !== null) {
-        rollbackUndo(undo, undoStart);
+        rollbackUndo(undoLog, undoStart);
         return err({
           kind: 'route-conflict',
           message: `Parameter ':${part.name}' conflicts with existing wildcard '*${node.wildcardName}' at the same position`,
@@ -645,9 +638,9 @@ export function insertIntoSegmentTree(
 
             tester = buildPatternTester(part.pattern, compiled);
             testerCache.set(part.pattern, tester);
-            undo.push({ k: UndoKind.TesterAdd, cache: testerCache, key: part.pattern });
+            undoLog.push({ k: UndoKind.TesterAdd, cache: testerCache, key: part.pattern });
           } catch (e) {
-            rollbackUndo(undo, undoStart);
+            rollbackUndo(undoLog, undoStart);
             return err({
               kind: 'route-parse',
               message: `Invalid regex pattern in parameter ':${part.name}': ${e instanceof Error ? e.message : String(e)}`,
@@ -668,7 +661,7 @@ export function insertIntoSegmentTree(
           nextSibling: null,
         };
         node.paramChild = created;
-        undo.push({ k: UndoKind.ParamChildSet, n: node });
+        undoLog.push({ k: UndoKind.ParamChildSet, n: node });
         node = created.next;
       } else {
         let p: ParamSegment | null = node.paramChild;
@@ -682,7 +675,7 @@ export function insertIntoSegmentTree(
           }
 
           if (p.name === part.name && p.patternSource !== part.pattern) {
-            rollbackUndo(undo, undoStart);
+            rollbackUndo(undoLog, undoStart);
             return err({
               kind: 'route-conflict',
               message: `Parameter ':${part.name}' has conflicting regex patterns`,
@@ -692,7 +685,7 @@ export function insertIntoSegmentTree(
           }
 
           if (p.patternSource === null && p.ownerRouteID !== routeID) {
-            rollbackUndo(undo, undoStart);
+            rollbackUndo(undoLog, undoStart);
             return err({
               kind: 'route-conflict',
               message: `Parameter ':${part.name}' is unreachable — earlier sibling ':${p.name}' (registered by a different route) has no regex pattern and matches every value at this position. Add a regex pattern to disambiguate, or remove this route.`,
@@ -710,7 +703,7 @@ export function insertIntoSegmentTree(
           let cursor: ParamSegment | null = node.paramChild;
           while (cursor !== null) { siblingCount++; cursor = cursor.nextSibling; }
           if (siblingCount > regexSiblingCap) {
-            rollbackUndo(undo, undoStart);
+            rollbackUndo(undoLog, undoStart);
             return err({
               kind: 'regex-sibling-limit',
               message: `Too many regex/param siblings at the same position (cap ${regexSiblingCap}).`,
@@ -728,7 +721,7 @@ export function insertIntoSegmentTree(
           };
           const tail = prev!;
           tail.nextSibling = fresh;
-          undo.push({ k: UndoKind.ParamSiblingAdd, prev: tail });
+          undoLog.push({ k: UndoKind.ParamSiblingAdd, prev: tail });
           node = fresh.next;
         } else {
           node = matched.next;
@@ -738,7 +731,7 @@ export function insertIntoSegmentTree(
       // wildcard — terminal
       if (node.wildcardStore !== null) {
         if (node.wildcardName !== part.name) {
-          rollbackUndo(undo, undoStart);
+          rollbackUndo(undoLog, undoStart);
           return err({
             kind: 'route-conflict',
             message: `Wildcard '*${part.name}' conflicts with existing wildcard '*${node.wildcardName}'`,
@@ -747,7 +740,7 @@ export function insertIntoSegmentTree(
           });
         }
 
-        rollbackUndo(undo, undoStart);
+        rollbackUndo(undoLog, undoStart);
         return err({
           kind: 'route-duplicate',
           message: 'Wildcard route already exists at this position',
@@ -756,7 +749,7 @@ export function insertIntoSegmentTree(
       }
 
       if (node.paramChild !== null) {
-        rollbackUndo(undo, undoStart);
+        rollbackUndo(undoLog, undoStart);
         return err({
           kind: 'route-conflict',
           message: `Wildcard '*${part.name}' conflicts with existing parameter at the same position`,
@@ -768,14 +761,14 @@ export function insertIntoSegmentTree(
       node.wildcardStore = handlerIndex;
       node.wildcardName = part.name;
       node.wildcardOrigin = part.origin;
-      undo.push({ k: UndoKind.WildcardSet, n: node });
+      undoLog.push({ k: UndoKind.WildcardSet, n: node });
 
       return;
     }
   }
 
   if (node.store !== null) {
-    rollbackUndo(undo, undoStart);
+    rollbackUndo(undoLog, undoStart);
     return err({
       kind: 'route-duplicate',
       message: 'Terminal route already exists at this position',
@@ -784,5 +777,5 @@ export function insertIntoSegmentTree(
   }
 
   node.store = handlerIndex;
-  undo.push({ k: UndoKind.StoreSet, n: node });
+  undoLog.push({ k: UndoKind.StoreSet, n: node });
 }
