@@ -81,11 +81,6 @@ export interface CommitPlan {
 
 export class WildcardPrefixIndex {
   private readonly roots = new Map<number, PrefixTrieNode>();
-  private readonly maxRegexSiblingsPerSegment: number;
-
-  constructor(maxRegexSiblingsPerSegment = 32) {
-    this.maxRegexSiblingsPerSegment = maxRegexSiblingsPerSegment;
-  }
 
   /**
    * Validate and (on success) commit a route into the per-method prefix
@@ -171,9 +166,6 @@ export class WildcardPrefixIndex {
             return abort(routeConflict('a plain param sibling already covers this segment', routeMeta));
           }
           let siblings = getRegexParamChildren(node);
-          if (siblings !== null && siblings.length >= this.maxRegexSiblingsPerSegment) {
-            return abort(regexSiblingLimit(this.maxRegexSiblingsPerSegment, routeMeta));
-          }
           let matched: PrefixTrieNode | null = null;
           if (siblings !== null) {
             for (let i = 0; i < siblings.length; i++) {
@@ -390,16 +382,6 @@ function routeUnreachable(why: string, meta: RouteMeta): RouterErrorData {
     message: `${meta.method} ${meta.path}: ${why}`,
     path: meta.path,
     method: meta.method,
-  };
-}
-
-function regexSiblingLimit(cap: number, meta: RouteMeta): RouterErrorData {
-  return {
-    kind: 'regex-sibling-limit',
-    message: `Too many regex param siblings at the same position (cap ${cap}): ${meta.method} ${meta.path}`,
-    path: meta.path,
-    method: meta.method,
-    suggestion: `Reduce distinct regex constraints sharing this segment to ${cap} or fewer.`,
   };
 }
 

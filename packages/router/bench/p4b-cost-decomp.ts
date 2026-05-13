@@ -95,7 +95,7 @@ async function main(): Promise<void> {
     gcIfPossible();
     const m0 = memMb();
     const t0 = performance.now();
-    const idx = new WildcardPrefixIndex(32);
+    const idx = new WildcardPrefixIndex();
     for (let r = 0; r < parsedParts.length; r++) {
       const meta = {
         routeIndex: r,
@@ -125,7 +125,7 @@ async function main(): Promise<void> {
     const undo: SegmentTreeUndoLog = [];
     const testerCache = new Map<string, PatternTesterFn>();
     for (let r = 0; r < parsedParts.length; r++) {
-      const res = insertIntoSegmentTree(root, parsedParts[r]!, r, testerCache, r, undo, 32);
+      const res = insertIntoSegmentTree(root, parsedParts[r]!, r, testerCache, r, undo);
       if (res !== undefined) throw new Error('segment-tree insert err');
     }
     const dt = performance.now() - t0;

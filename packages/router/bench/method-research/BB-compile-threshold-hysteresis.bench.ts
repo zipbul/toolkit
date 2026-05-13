@@ -24,6 +24,7 @@ function makeTree(routes: number) {
       i,
       cache as any,
       i,
+      [],
     );
   }
   return root;

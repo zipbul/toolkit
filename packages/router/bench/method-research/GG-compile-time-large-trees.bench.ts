@@ -23,6 +23,7 @@ function makeWide(routes: number, depth: number) {
       r,
       cache as any,
       r,
+      [],
     );
   }
   return root;

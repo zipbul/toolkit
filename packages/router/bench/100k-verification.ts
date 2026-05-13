@@ -220,8 +220,7 @@ function wildcardHeavyScenario(): Scenario {
 function regexHeavyScenario(): Scenario {
   // 100k routes where each segment uses a constrained regex param.
   // Stresses regex compilation, sibling disjointness, and tester cache.
-  // Uses 4 distinct regex shapes per group to exercise sibling logic without
-  // exploding past maxRegexSiblingsPerSegment=32.
+  // Uses 4 distinct regex shapes per group to exercise sibling logic.
   const routes: Route[] = [];
   const shapes = ['(\\d+)', '([a-z]+)', '([A-Z]+)', '(\\d{2,8})'];
   for (let i = 0; i < COUNT; i++) {

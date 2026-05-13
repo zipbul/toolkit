@@ -528,8 +528,6 @@ function rollbackUndo(undo: SegmentTreeUndoLog, start: number): void {
  *    literal child on a non-wildcard node) takes a single hash lookup and
  *    no allocation.
  */
-// The `regexSiblingCap` parameter must be supplied by the caller — see
-// `registration.ts:seal()` where the option-resolved value is forwarded.
 export function insertIntoSegmentTree(
   root: SegmentNode,
   parts: PathPart[],
@@ -537,7 +535,6 @@ export function insertIntoSegmentTree(
   testerCache: Map<string, PatternTesterFn>,
   routeID: number,
   undoLog: SegmentTreeUndoLog,
-  regexSiblingCap: number,
 ): Result<void, RouterErrorData> {
   let node = root;
   const undoStart = undoLog.length;
@@ -694,18 +691,6 @@ export function insertIntoSegmentTree(
         }
 
         if (matched === null) {
-          let siblingCount = 1;
-          let cursor: ParamSegment | null = node.paramChild;
-          while (cursor !== null) { siblingCount++; cursor = cursor.nextSibling; }
-          if (siblingCount > regexSiblingCap) {
-            rollbackUndo(undoLog, undoStart);
-            return err({
-              kind: 'regex-sibling-limit',
-              message: `Too many regex/param siblings at the same position (cap ${regexSiblingCap}).`,
-              segment: part.name,
-              suggestion: `Reduce the number of distinct regex constraints sharing this segment to ${regexSiblingCap} or fewer.`,
-            });
-          }
           const fresh: ParamSegment = {
             name: part.name,
             tester,

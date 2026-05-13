@@ -7,12 +7,6 @@ export interface RouterOptions {
   trailingSlash?: 'strict' | 'ignore';
   /** Path case-sensitivity. Default true. */
   pathCaseSensitive?: boolean;
-  /** Max optional-segment expansions per registered route. Default 1024. */
-  maxOptionalExpansions?: number;
-  /** Max total expanded routes across one build. Default 200_000. */
-  maxExpandedRoutes?: number;
-  /** Max regex sibling param children at the same segment position. Default 32. */
-  maxRegexSiblingsPerSegment?: number;
   /**
    * 메서드별 매치 캐시 최대 엔트리 수. 기본값 1000. 캐시는 항상 켜져 있고
    * 비활성화 옵션은 없다 — 빈 라우터는 빈 캐시(메모리 0)이며 lazy 할당이라
@@ -58,9 +52,6 @@ export type RouterErrorKind =
   | 'path-encoded-control' // 인코드된 C0/DEL
   | 'path-dot-segment'   // 디코드 시 `.` 또는 `..`
   | 'path-empty-segment' // interior empty `/a//b`
-  | 'optional-expansion-limit' // 단일 path의 maxOptionalExpansions 초과
-  | 'expansion-total-limit'   // maxExpandedRoutes 초과
-  | 'regex-sibling-limit'     // maxRegexSiblingsPerSegment 초과
   | 'route-validation';  // build()/seal() 일괄 검증 실패
 
 export interface RouteValidationIssue {
@@ -111,9 +102,6 @@ export type RouterErrorData = {
   | { kind: 'path-encoded-control'; message: string; suggestion?: string }
   | { kind: 'path-dot-segment'; message: string; suggestion?: string }
   | { kind: 'path-empty-segment'; message: string; suggestion?: string }
-  | { kind: 'optional-expansion-limit'; message: string; suggestion?: string }
-  | { kind: 'expansion-total-limit'; message: string; suggestion?: string }
-  | { kind: 'regex-sibling-limit'; message: string; segment?: string; suggestion?: string }
   | { kind: 'route-validation'; message: string; errors: RouteValidationIssue[] }
 );
 

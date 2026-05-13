@@ -114,9 +114,6 @@ export class Router<T = unknown> implements RouterPublicApi<T> {
       resetBuildAggregate();
       const snapshot = registration.seal({
         optionalParamBehavior: routerOptions.optionalParamBehavior,
-        maxExpandedRoutes: routerOptions.maxExpandedRoutes,
-        maxOptionalExpansions: routerOptions.maxOptionalExpansions,
-        maxRegexSiblingsPerSegment: routerOptions.maxRegexSiblingsPerSegment,
       });
       const r = buildFromRegistration<T>(snapshot, routerOptions, methodRegistry);
 

@@ -32,42 +32,6 @@ describe('expandOptional', () => {
     });
   });
 
-  describe('validateOptionalCount', () => {
-    it('rejects an optional count whose 2^N expansion exceeds the cap', () => {
-      const parts: PathPart[] = [];
-
-      for (let i = 0; i < 11; i++) {
-        parts.push(staticPart(`/p${i}/`));
-        parts.push(param(`a${i}`, true));
-      }
-
-      const defaults = new OptionalParamDefaults('set-undefined');
-      const result = expandOptional(parts, 0, defaults, 1024);
-
-      expect(isErr(result)).toBe(true);
-      if (isErr(result)) {
-        expect(result.data.kind).toBe('optional-expansion-limit');
-      }
-    });
-
-    it('accepts exactly the cap of 1024 expansions (2^10)', () => {
-      const parts: PathPart[] = [];
-
-      for (let i = 0; i < 10; i++) {
-        parts.push(staticPart(`/p${i}/`));
-        parts.push(param(`a${i}`, true));
-      }
-
-      const defaults = new OptionalParamDefaults('set-undefined');
-      const result = expandOptional(parts, 0, defaults, 1024);
-
-      expect(isErr(result)).toBe(false);
-      if (!isErr(result)) {
-        expect(result.length).toBe(1 << 10);
-      }
-    });
-  });
-
   describe('enumerateExpansions', () => {
     it('should produce 2^N variants for N optionals', () => {
       const parts: PathPart[] = [staticPart('/'), param('a', true), staticPart('/'), param('b', true)];

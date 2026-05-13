@@ -152,13 +152,10 @@ export class Registration<T> {
   private snapshot: RegistrationSnapshot<T> | null = null;
   private diagnostics: RegistrationDiagnostics | null = null;
   private sealed = false;
-  private maxExpandedRoutes = 200_000;
-  private maxOptionalExpansions = 1024;
-  private totalExpandedRoutes = 0;
   private prefixIndex: WildcardPrefixIndex | null = null;
   private identityRegistry: IdentityRegistry | null = null;
   private routeIdCounter = 0;
-  private regexSiblingCap = 32;
+
   constructor(
     methodRegistry: MethodRegistry,
     pathParser: PathParser,
@@ -205,9 +202,6 @@ export class Registration<T> {
 
   seal(options: {
     optionalParamBehavior?: 'omit' | 'set-undefined';
-    maxExpandedRoutes?: number;
-    maxOptionalExpansions?: number;
-    maxRegexSiblingsPerSegment?: number;
   } = {}): RegistrationSnapshot<T> {
     if (this.snapshot !== null) return this.snapshot;
 
@@ -220,11 +214,7 @@ export class Registration<T> {
 
     const factoryCache = new Map<string, (u: string, v: Int32Array) => RouteParams>();
     const omitBehavior = (options.optionalParamBehavior ?? 'omit') === 'omit';
-    this.maxExpandedRoutes = options.maxExpandedRoutes ?? 200_000;
-    this.maxOptionalExpansions = options.maxOptionalExpansions ?? 1024;
-    this.totalExpandedRoutes = 0;
-    this.regexSiblingCap = options.maxRegexSiblingsPerSegment ?? 32;
-    this.prefixIndex = new WildcardPrefixIndex(this.regexSiblingCap);
+    this.prefixIndex = new WildcardPrefixIndex();
     this.identityRegistry = new IdentityRegistry();
     this.routeIdCounter = 0;
 
@@ -547,7 +537,7 @@ export class Registration<T> {
     decoder: (s: string) => string,
   ): Result<void, RouterErrorData> {
     const expandStart = nowMs();
-    const expansion = expandOptional(parts, -1, this.optionalParamDefaults, this.maxOptionalExpansions);
+    const expansion = expandOptional(parts, -1, this.optionalParamDefaults);
     addMs(state.diagnostics, 'optionalExpandMs', expandStart);
 
     if (isErr(expansion)) {
@@ -573,23 +563,6 @@ export class Registration<T> {
 
     for (const expanded of expansion) {
       const expParts = expanded.parts;
-      if (++this.totalExpandedRoutes > this.maxExpandedRoutes) {
-        // Report every limit-hit route, not just the first one. The
-        // earlier `expansionLimitEmitted` flag muted every route after
-        // the initial hit by returning a bare `return;` — which the
-        // `Result<void, RouterErrorData>` signature reads as success,
-        // so the surrounding seal loop pushed nothing into `issues` and
-        // the offending routes vanished from the user-visible error
-        // payload. Make every limit-hit route show up so the cap
-        // diagnostic is honest about scope.
-        return err<RouterErrorData>({
-          kind: 'expansion-total-limit',
-          message: `Total expanded routes exceed cap ${this.maxExpandedRoutes}.`,
-          path: route.path,
-          method: route.method,
-          suggestion: `Reduce optional-param expansion across the registered routes, or raise maxExpandedRoutes (default 200000).`,
-        });
-      }
       const prefixCheck = this.runPrefixIndexPlan(
         expParts,
         methodCode,
@@ -676,7 +649,6 @@ export class Registration<T> {
         state.testerCache,
         routeID,
         undo,
-        this.regexSiblingCap,
       );
       addMs(state.diagnostics, 'dynamicInsertMs', dynamicInsertStart);
 

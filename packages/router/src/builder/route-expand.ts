@@ -2,7 +2,6 @@ import type { Result } from '@zipbul/result';
 import type { PathPart } from './path-parser';
 import type { RouterErrorData } from '../types';
 
-import { err } from '@zipbul/result';
 import { OptionalParamDefaults } from './optional-param-defaults';
 
 export interface ExpandedRoute {
@@ -29,21 +28,13 @@ interface OptionalCollection {
  *
  * Records the omitted-param names against `optionalDefaults` so the matcher
  * can fill them with the configured optional-default value at match time.
- *
- * Returns an error when the optional count exceeds `MAX_OPTIONAL` to defend
- * against pathological registrations.
  */
 export function expandOptional(
   parts: PathPart[],
   handlerIndex: number,
   optionalDefaults: OptionalParamDefaults,
-  maxOptionalExpansions = 1024,
 ): Result<ExpandedRoute[], RouterErrorData> {
   const collection = collectOptionalIndices(parts);
-
-  const guard = validateOptionalCount(collection.indices.length, maxOptionalExpansions);
-
-  if (guard !== null) return guard;
 
   if (collection.indices.length === 0) {
     return [{ parts, handlerIndex, isOptionalExpansion: false }];
@@ -69,34 +60,6 @@ function collectOptionalIndices(parts: PathPart[]): OptionalCollection {
   }
 
   return { indices, names };
-}
-
-/**
- * Reject paths with too many optional params before the 2^N cartesian loop
- * runs. Returning `null` means safe to expand.
- */
-function validateOptionalCount(
-  count: number,
-  cap: number,
-): Result<never, RouterErrorData> | null {
-  if (count > cap) {
-    return err({
-      kind: 'optional-expansion-limit',
-      message: `Path has more than ${cap} optional parameters (cartesian expansion would explode).`,
-      suggestion: 'Reduce optionals or split into multiple explicit routes.',
-    });
-  }
-  // Equivalently bound the cartesian product: 2^count must stay ≤ cap.
-  // For count up to ~20 this is the same as the count gate; the explicit
-  // check below covers caps that are smaller than 2^count for tight caps.
-  if (count > 0 && Math.pow(2, count) > cap) {
-    return err({
-      kind: 'optional-expansion-limit',
-      message: `Path's 2^${count} optional expansion exceeds maxOptionalExpansions cap ${cap}.`,
-      suggestion: 'Reduce optionals or raise maxOptionalExpansions explicitly.',
-    });
-  }
-  return null;
 }
 
 function createStaticPart(value: string): PathPart {

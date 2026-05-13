@@ -13,7 +13,7 @@ function buildTreeWith(routes: number) {
   const root = createSegmentNode();
   const cache = new Map();
   for (let i = 0; i < routes; i++) {
-    insertIntoSegmentTree(root, [{ type: 'static', value: `/p${i}`, segments: [`p${i}`] }] as any, i, cache as any, i);
+    insertIntoSegmentTree(root, [{ type: 'static', value: `/p${i}`, segments: [`p${i}`] }] as any, i, cache as any, i, []);
   }
   return root;
 }
