@@ -1,6 +1,6 @@
 import type { MatchOutput, RouterOptions, RouterPublicApi } from './types';
 import type { MatchCacheEntry, MatchConfig } from './codegen/emitter';
-import type { RouterCache, RouterMissCache } from './cache';
+import type { RouterCache } from './cache';
 
 import { OptionalParamDefaults } from './builder/optional-param-defaults';
 import { PathParser } from './builder/path-parser';
@@ -33,7 +33,6 @@ interface CacheContainers<T> {
    * `Map<number, …>.get` it would otherwise compile.
    */
   hit: Array<RouterCache<MatchCacheEntry<T>> | undefined>;
-  miss: Array<RouterMissCache | undefined>;
   maxSize: number;
 }
 
@@ -72,7 +71,6 @@ export class Router<T = unknown> implements RouterPublicApi<T> {
     );
     const cache: CacheContainers<T> = {
       hit: [],
-      miss: [],
       maxSize: routerOptions.cacheSize ?? 1000,
     };
 
@@ -123,7 +121,6 @@ export class Router<T = unknown> implements RouterPublicApi<T> {
         matchState: r.matchState,
         handlers: snapshot.handlers,
         hitCacheByMethod: cache.hit,
-        missCacheByMethod: cache.miss,
         cacheMaxSize: cache.maxSize,
         activeMethodCodes: r.activeMethodCodes,
         terminalSlab: r.terminalSlab,

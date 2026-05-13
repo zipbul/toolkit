@@ -2,7 +2,7 @@ import type { MatchFn, MatchState } from '../matcher/match-state';
 import type { NormalizeCfg } from '../matcher/path-normalize';
 import type { MatchOutput, RouteParams } from '../types';
 
-import { RouterCache, RouterMissCache } from '../cache';
+import { RouterCache } from '../cache';
 import { WARMUP_ITERATIONS } from './warmup';
 import {
   CACHE_META,
@@ -37,7 +37,6 @@ export interface MatchConfig<T> {
   readonly matchState: MatchState;
   readonly handlers: T[];
   readonly hitCacheByMethod: Array<RouterCache<MatchCacheEntry<T>> | undefined>;
-  readonly missCacheByMethod: Array<RouterMissCache | undefined>;
   readonly cacheMaxSize: number;
   readonly activeMethodCodes: ReadonlyArray<readonly [string, number]>;
   /**
@@ -225,9 +224,9 @@ export function compileMatchFn<T>(cfg: MatchConfig<T>): CompiledMatch<T> {
   // clone. `EMPTY_PARAMS` is already frozen module-init. Caller mutation
   // of returned params throws TypeError instead of silently corrupting
   // the cached entry.
+  // hit-cache probe (after static). missCache was removed — measured
+  // dead weight across hit / unique-miss / Zipf workloads (bench/cache-bypass).
   src.push(`
-    var ms = missCacheByMethod[mc];
-    if (ms !== undefined && ms.has(sp)) return null;
     var hc = hitCacheByMethod[mc];
     if (hc !== undefined) {
       var cached = hc.get(sp);
@@ -241,11 +240,6 @@ export function compileMatchFn<T>(cfg: MatchConfig<T>): CompiledMatch<T> {
     }
   `);
 
-  const emitMissCacheWrite = (): string => `
-    if (ms === undefined) { ms = new RouterMissCache(${cacheMaxSize}); missCacheByMethod[mc] = ms; }
-    ms.add(sp);
-  `;
-
   if (cfg.hasAnyTree) {
     // Single-method router: closure-capture the per-method walker as a
     // constant `tr0` so JSC folds the dispatch and inlines the call site.
@@ -257,10 +251,7 @@ export function compileMatchFn<T>(cfg: MatchConfig<T>): CompiledMatch<T> {
     } else {
       src.push(`
         var tr = trees[mc];
-        if (!tr) {
-          ${emitMissCacheWrite()}
-          return null;
-        }
+        if (!tr) return null;
         var ok = tr(sp, matchState);
       `);
     }
@@ -274,10 +265,7 @@ export function compileMatchFn<T>(cfg: MatchConfig<T>): CompiledMatch<T> {
         }
       }
 
-      if (!ok) {
-        ${emitMissCacheWrite()}
-        return null;
-      }
+      if (!ok) return null;
 
       var hIdx = terminalSlab[slabBase];
       var factory = paramsFactories[tIdx];
@@ -299,14 +287,13 @@ export function compileMatchFn<T>(cfg: MatchConfig<T>): CompiledMatch<T> {
       };
     `);
   } else {
-    src.push(emitMissCacheWrite());
     src.push('return null;');
   }
 
   const body = src.join('\n');
   const factory = new Function(
     'activeBucket', 'tr0', 'staticOutputsByMethod', 'methodCodes', 'trees', 'matchState', 'handlers',
-    'hitCacheByMethod', 'missCacheByMethod', 'RouterCache', 'RouterMissCache',
+    'hitCacheByMethod', 'RouterCache',
     'EMPTY_PARAMS', 'CACHE_META', 'DYNAMIC_META', 'terminalSlab', 'paramsFactories',
     `return function match(method, path) {\n${body}\n};`,
   );
@@ -318,7 +305,7 @@ export function compileMatchFn<T>(cfg: MatchConfig<T>): CompiledMatch<T> {
 
   const compiled = factory(
     activeBucket, tr0, cfg.staticOutputsByMethod, cfg.methodCodes, cfg.trees, cfg.matchState, cfg.handlers,
-    cfg.hitCacheByMethod, cfg.missCacheByMethod, RouterCache, RouterMissCache,
+    cfg.hitCacheByMethod, RouterCache,
     EMPTY_PARAMS, CACHE_META, DYNAMIC_META, cfg.terminalSlab, cfg.paramsFactories,
   ) as CompiledMatch<T>;
 
