@@ -245,8 +245,12 @@ export function compileMatchFn<T>(cfg: MatchConfig<T>): CompiledMatch<T> {
     // constant `tr0` so JSC folds the dispatch and inlines the call site.
     // Multi-method router still indexes into the trees array per call.
     if (singleMethod !== null) {
+      // tr0 is guaranteed non-null here: singleMethod implies the only
+      // active method, and hasAnyTree being true means *its* tree slot
+      // is populated. The defensive `tr0 !== null ?` ternary the
+      // emitter used to carry was dead in this branch.
       src.push(`
-        var ok = tr0 !== null ? tr0(sp, matchState) : false;
+        var ok = tr0(sp, matchState);
       `);
     } else {
       src.push(`
