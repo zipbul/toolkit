@@ -32,23 +32,31 @@ export function expandOptional(
   handlerIndex: number,
   optionalDefaults: OptionalParamDefaults,
 ): ExpandedRoute[] {
-  const collection = collectOptionalIndices(parts);
-
-  if (collection.indices.length === 0) {
+  // Fast path — overwhelmingly common: most paths carry no `?` optional.
+  // Skip the OptionalCollection alloc entirely by scanning once and
+  // bailing on the first hit.
+  let firstOptional = -1;
+  for (let i = 0; i < parts.length; i++) {
+    const p = parts[i]!;
+    if (p.type === 'param' && p.optional) { firstOptional = i; break; }
+  }
+  if (firstOptional === -1) {
     return [{ parts, handlerIndex, isOptionalExpansion: false }];
   }
 
+  // Slow path — rebuild the full collection now that we know there is
+  // at least one optional segment.
+  const collection = collectOptionalIndices(parts, firstOptional);
   optionalDefaults.record(handlerIndex, collection.names);
-
   return enumerateExpansions(parts, handlerIndex, collection.indices);
 }
 
-/** Walk parts once, recording the index and name of every optional param. */
-function collectOptionalIndices(parts: PathPart[]): OptionalCollection {
+/** Walk parts from `start` onward, recording every optional param. */
+function collectOptionalIndices(parts: PathPart[], start: number): OptionalCollection {
   const indices: number[] = [];
   const names: string[] = [];
 
-  for (let i = 0; i < parts.length; i++) {
+  for (let i = start; i < parts.length; i++) {
     const part = parts[i]!;
 
     if (part.type === 'param' && part.optional) {
