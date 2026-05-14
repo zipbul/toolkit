@@ -2,6 +2,8 @@ import type { PathPart } from './path-parser';
 
 import { OptionalParamDefaults } from './optional-param-defaults';
 
+export const MAX_OPTIONAL_SEGMENTS_PER_ROUTE = 4;
+
 export interface ExpandedRoute {
   parts: PathPart[];
   handlerIndex: number;
@@ -17,6 +19,16 @@ export interface ExpandedRoute {
 interface OptionalCollection {
   indices: number[];
   names: string[];
+}
+
+export function countOptionalSegments(parts: PathPart[]): number {
+  let count = 0;
+
+  for (const part of parts) {
+    if (part.type === 'param' && part.optional) count++;
+  }
+
+  return count;
 }
 
 /**

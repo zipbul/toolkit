@@ -9,7 +9,7 @@ import type { PatternTesterFn } from '../matcher/pattern-tester';
 import { err, isErr } from '@zipbul/result';
 import { OptionalParamDefaults } from '../builder/optional-param-defaults';
 import { PathParser } from '../builder/path-parser';
-import { expandOptional } from '../builder/route-expand';
+import { countOptionalSegments, expandOptional, MAX_OPTIONAL_SEGMENTS_PER_ROUTE } from '../builder/route-expand';
 import { RouterError } from '../error';
 import { MethodRegistry } from '../method-registry';
 import { createSegmentNode, detectTenantFactor, insertIntoSegmentTree, setTenantFactor } from '../matcher/segment-tree';
@@ -482,6 +482,16 @@ export class Registration<T> {
     omitBehavior: boolean,
     decoder: (s: string) => string,
   ): Result<void, RouterErrorData> {
+    const optionalCount = countOptionalSegments(parts);
+    if (optionalCount > MAX_OPTIONAL_SEGMENTS_PER_ROUTE) {
+      return err({
+        kind: 'route-parse',
+        message: `Route has ${optionalCount} optional segments; maximum is ${MAX_OPTIONAL_SEGMENTS_PER_ROUTE} to cap expansion variants before 2^N growth.`,
+        path: route.path,
+        suggestion: `Reduce optional segments to ${MAX_OPTIONAL_SEGMENTS_PER_ROUTE} or fewer, or register explicit routes for the rare combinations.`,
+      });
+    }
+
     const expansion = expandOptional(parts, -1, this.optionalParamDefaults);
 
     const originalNames: string[] = [];

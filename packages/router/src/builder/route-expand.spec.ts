@@ -2,7 +2,7 @@ import { describe, it, expect } from 'bun:test';
 
 import type { PathPart } from './path-parser';
 import { OptionalParamDefaults } from './optional-param-defaults';
-import { expandOptional } from './route-expand';
+import { countOptionalSegments, expandOptional, MAX_OPTIONAL_SEGMENTS_PER_ROUTE } from './route-expand';
 
 const param = (name: string, optional = false): PathPart => ({
   type: 'param',
@@ -38,6 +38,28 @@ describe('expandOptional', () => {
       const result = expandOptional(parts, 0, defaults);
 
       expect(result.length).toBe(4);
+    });
+
+    it('should keep the mid-position N=1 i18n shape to exactly 2 variants', () => {
+      const parts: PathPart[] = [staticPart('/'), param('lang', true), staticPart('/posts')];
+      const defaults = new OptionalParamDefaults('set-undefined');
+
+      const result = expandOptional(parts, 0, defaults);
+
+      expect(countOptionalSegments(parts)).toBe(1);
+      expect(result.length).toBe(2);
+      expect(result[0]!.parts).toEqual([staticPart('/'), param('lang'), staticPart('/posts')]);
+      expect(result[1]!.parts).toEqual([staticPart('/posts')]);
+    });
+
+    it('should count optional segments by N, not by position', () => {
+      const mid: PathPart[] = [staticPart('/'), param('lang', true), staticPart('/posts')];
+      const last: PathPart[] = [staticPart('/posts/'), param('id', true)];
+      const overCap: PathPart[] = [staticPart('/'), ...Array.from({ length: MAX_OPTIONAL_SEGMENTS_PER_ROUTE + 1 }, (_, i) => param(`p${i}`, true))];
+
+      expect(countOptionalSegments(mid)).toBe(1);
+      expect(countOptionalSegments(last)).toBe(1);
+      expect(countOptionalSegments(overCap)).toBe(MAX_OPTIONAL_SEGMENTS_PER_ROUTE + 1);
     });
 
     it('should record omitted-param names against defaults for matcher fill-in', () => {

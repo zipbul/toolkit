@@ -2,6 +2,7 @@ import { describe, it, expect } from 'bun:test';
 
 import { Router } from '../src/router';
 import { RouterError } from '../src/error';
+import { MAX_OPTIONAL_SEGMENTS_PER_ROUTE } from '../src/builder/route-expand';
 import type { RouterErrorData } from '../src/types';
 
 // ── Helpers ──
@@ -135,6 +136,17 @@ describe('Router<T> errors', () => {
     router.add('GET', '/users/:id(\\d+', 'invalid-regex');
     const issue = firstBuildIssue(router);
     expect(issue.kind).toBe('route-parse');
+  });
+
+  it('should reject optional segment expansion above the per-route cap before expansion', () => {
+    const router = new Router<string>();
+    const path = '/' + Array.from({ length: MAX_OPTIONAL_SEGMENTS_PER_ROUTE + 1 }, (_, i) => `:p${i}?`).join('/');
+
+    router.add('GET', path, 'too-many-optionals');
+    const issue = firstBuildIssue(router);
+
+    expect(issue.kind).toBe('route-parse');
+    expect(issue.message).toContain(`maximum is ${MAX_OPTIONAL_SEGMENTS_PER_ROUTE}`);
   });
 
   it('should include kind, message, path, method in error data', () => {
