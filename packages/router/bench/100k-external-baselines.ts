@@ -8,6 +8,7 @@ import { TrieRouter } from 'hono/router/trie-router';
 import KoaTreeRouter from 'koa-tree-router';
 import { Memoirist } from 'memoirist';
 import { addRoute, createRouter as createRou3, findRoute } from 'rou3';
+import { createRouter as createRadix3 } from 'radix3';
 
 import { Router } from '../src/router';
 
@@ -240,6 +241,12 @@ const adapterMeta: Record<string, AdapterMeta> = {
     scenarios: new Set(['static', 'param']),
     notes: 'static-only / param-only — wildcard and mixed unsupported',
   },
+  radix3: {
+    pkg: 'radix3',
+    scenarios: new Set(['static', 'param', 'wildcard']),
+    notes: 'method-agnostic — composite key `${method} ${path}` per route, lookup mirrors',
+    rewritePath: (path) => path.replace(/\/\*([^/]+)$/, '/**:$1'),
+  },
 };
 
 function resolveAdapterVersion(pkg: string): string {
@@ -424,6 +431,17 @@ const builders: Record<string, () => Promise<void>> = {
       const result = (router as any).find(method, path);
       return result.handle === null ? null : result;
     },
+  ),
+  radix3: () => measure(
+    'radix3',
+    (rs) => {
+      const router = createRadix3<any>() as any;
+      for (const [method, path, value] of rs) {
+        router.insert(`/${method}${path}`, { method, value });
+      }
+      return router;
+    },
+    (router, method, path) => (router as any).lookup(`/${method}${path}`) ?? null,
   ),
 };
 

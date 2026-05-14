@@ -131,7 +131,7 @@ export type UndoRecord =
   | { k: UndoKind.StoreSet; n: SegmentNode }
   | { k: UndoKind.TesterAdd; cache: Map<string, PatternTesterFn>; key: string }
   | { k: UndoKind.PrefixIndexPlan; plan: unknown }
-  | { k: UndoKind.TerminalArraysTruncate; t: number[]; w: boolean[]; f: Array<unknown>; len: number }
+  | { k: UndoKind.TerminalArraysTruncate; t: number[]; w: boolean[]; f: Array<unknown>; b: number[]; len: number }
   | { k: UndoKind.HandlersTruncate; arr: unknown[]; len: number }
   | { k: UndoKind.SegmentTreeReset; trees: Array<SegmentNode | null | undefined>; mc: number }
   | { k: UndoKind.StaticBucketReset; buckets: Array<Record<string, unknown> | undefined>; mc: number }
@@ -190,6 +190,7 @@ export function applyUndo(entry: UndoRecord): void {
       entry.t.length = entry.len;
       entry.w.length = entry.len;
       entry.f.length = entry.len;
+      entry.b.length = entry.len;
       return;
     case UndoKind.HandlersTruncate:
       entry.arr.length = entry.len;

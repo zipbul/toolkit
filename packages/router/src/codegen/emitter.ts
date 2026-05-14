@@ -41,8 +41,9 @@ export interface MatchConfig<T> {
   readonly activeMethodCodes: ReadonlyArray<readonly [string, number]>;
   /**
    * Packed `Int32Array` slab carrying per-terminal metadata. Two slots
-   * per terminal index `t`: `terminalSlab[t*2]` is the handler index,
-   * `terminalSlab[t*2+1]` is `1` for wildcard terminals and `0` for
+   * per terminal index `t`: `terminalSlab[t*3]` is the handler index,
+   * `terminalSlab[t*3+1]` is `1` for wildcard terminals and `0` for
+   * non-wildcard, `terminalSlab[t*3+2]` is the present-param bitmask
    * regular ones. Replaces the prior `terminalHandlers: number[]` +
    * `isWildcardByTerminal: boolean[]` parallel arrays so the hot path
    * reads contiguous typed memory.
@@ -264,19 +265,19 @@ export function compileMatchFn<T>(cfg: MatchConfig<T>): CompiledMatch<T> {
     const trimRecheck = cfg.trimSlash
       ? ''
       : `
-      if (ok && sp.length > 1 && sp.charCodeAt(sp.length - 1) === 47 && terminalSlab[(matchState.handlerIndex << 1) + 1] === 0) {
+      if (ok && sp.length > 1 && sp.charCodeAt(sp.length - 1) === 47 && terminalSlab[matchState.handlerIndex * 3 + 1] === 0) {
         ok = false;
       }`;
     src.push(`
       var tIdx = matchState.handlerIndex;
-      var slabBase = tIdx << 1;${trimRecheck}
+      var slabBase = tIdx * 3;${trimRecheck}
 
       if (!ok) return null;
 
       var hIdx = terminalSlab[slabBase];
       var factory = paramsFactories[tIdx];
       var params = factory !== null
-        ? factory(sp, matchState.paramOffsets)
+        ? factory(terminalSlab[slabBase + 2], sp, matchState.paramOffsets)
         : EMPTY_PARAMS;
 
       var val = handlers[hIdx];

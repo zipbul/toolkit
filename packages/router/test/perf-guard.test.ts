@@ -16,10 +16,10 @@ describe('performance guard invariants', () => {
 
     expect(snapshot.handlers.length).toBe(1);
     const slab = snapshot.terminalSlab as Int32Array;
-    const terminals = slab.length / 2;
+    const terminals = slab.length / 3;
     expect(terminals).toBeGreaterThanOrEqual(1);
     for (let t = 0; t < terminals; t++) {
-      expect(slab[t * 2]).toBe(0);
+      expect(slab[t * 3]).toBe(0);
     }
   });
 

@@ -62,17 +62,21 @@ interface PendingRoute<T> {
  * the per-active-method bucket probe loop.
  */
 /**
- * Per-terminal metadata slab packed as `Int32Array`. Two slots per
+ * Per-terminal metadata slab packed as `Int32Array`. Three slots per
  * terminal index `t`:
- *   - `slab[t*2]` — handler index into `handlers[]`
- *   - `slab[t*2 + 1]` — `1` if the terminal corresponds to a wildcard
+ *   - `slab[t*3]` — handler index into `handlers[]`
+ *   - `slab[t*3 + 1]` — `1` if the terminal corresponds to a wildcard
  *     match, `0` otherwise
- * The slab is sized once at seal-time from the build-state arrays;
- * walker reads it as contiguous typed memory.
+ *   - `slab[t*3 + 2]` — present-param bitmask. Bit `i` set ⇔ originalNames[i]
+ *     is present in this expansion variant. The compiled super-factory uses
+ *     this mask to select which originalName receives a captured value vs.
+ *     undefined, eliminating the need for a per-variant factory function
+ *     (factoryCache size goes from O(2^N) variants to O(1) per route shape).
  */
-const TERMINAL_SLOTS = 2;
+const TERMINAL_SLOTS = 3;
 const TERMINAL_HANDLER_OFFSET = 0;
 const TERMINAL_IS_WILDCARD_OFFSET = 1;
+const TERMINAL_PRESENT_BITMASK_OFFSET = 2;
 
 export interface RegistrationSnapshot<T> {
   staticByMethod: Array<Record<string, T> | undefined>;
@@ -80,7 +84,7 @@ export interface RegistrationSnapshot<T> {
   segmentTrees: Array<SegmentNode | null>;
   handlers: T[];
   terminalSlab: Int32Array;
-  paramsFactories: Array<((u: string, v: Int32Array) => RouteParams) | null>;
+  paramsFactories: Array<((presentBitmask: number, u: string, v: Int32Array) => RouteParams) | null>;
   /** True iff any registered route declared a regex pattern tester. The
    *  full tester cache is build-only and not retained on the snapshot. */
   anyTester: boolean;
@@ -100,7 +104,10 @@ interface BuildState<T> {
    *  so per-route insertion stays O(1) without resizing TypedArrays. */
   terminalHandlers: number[];
   isWildcardByTerminal: boolean[];
-  paramsFactories: Array<((u: string, v: Int32Array) => RouteParams) | null>;
+  paramsFactories: Array<((presentBitmask: number, u: string, v: Int32Array) => RouteParams) | null>;
+  /** Per-terminal presentBitmask (build-time growable, packed into
+   *  terminalSlab at seal). Bit i set ⇔ originalNames[i] is captured. */
+  presentBitmaskByTerminal: number[];
   /** Build-only tester cache (deduped by pattern source). Not retained
    *  on the snapshot — runtime only needs the resulting per-route
    *  testers attached to ParamSegment. */
@@ -178,7 +185,7 @@ export class Registration<T> {
     const issues: RouteValidationIssue[] = [];
     const undo: SegmentTreeUndoLog = [];
 
-    const factoryCache = new Map<string, (u: string, v: Int32Array) => RouteParams>();
+    const factoryCache = new Map<string, (presentBitmask: number, u: string, v: Int32Array) => RouteParams>();
     const omitBehavior = (options.optionalParamBehavior ?? 'omit') === 'omit';
     this.prefixIndex = new WildcardPrefixIndex();
     this.identityRegistry = new IdentityRegistry();
@@ -304,12 +311,15 @@ export class Registration<T> {
 
     // Pack the per-terminal parallel arrays into a single Int32Array slab
     // so the runtime walker reads contiguous memory rather than chasing
-    // two JS arrays. 2 slots per terminal: handlerIdx, isWildcard.
+    // three JS arrays. 3 slots per terminal: handlerIdx, isWildcard,
+    // presentBitmask. The bitmask drives the super-factory body's per-name
+    // gate, replacing what used to be 2^N distinct factory functions.
     const terminalCount = state.terminalHandlers.length;
     const terminalSlab = new Int32Array(terminalCount * TERMINAL_SLOTS);
     for (let t = 0; t < terminalCount; t++) {
       terminalSlab[t * TERMINAL_SLOTS + TERMINAL_HANDLER_OFFSET] = state.terminalHandlers[t]!;
       terminalSlab[t * TERMINAL_SLOTS + TERMINAL_IS_WILDCARD_OFFSET] = state.isWildcardByTerminal[t] ? 1 : 0;
+      terminalSlab[t * TERMINAL_SLOTS + TERMINAL_PRESENT_BITMASK_OFFSET] = state.presentBitmaskByTerminal[t] ?? 0;
     }
 
     const snapshot: RegistrationSnapshot<T> = {
@@ -372,7 +382,7 @@ export class Registration<T> {
     state: BuildState<T>,
     undo: SegmentTreeUndoLog,
     routeID: number,
-    factoryCache: Map<string, (u: string, v: Int32Array) => RouteParams>,
+    factoryCache: Map<string, (presentBitmask: number, u: string, v: Int32Array) => RouteParams>,
     omitBehavior: boolean,
     decoder: (s: string) => string,
   ): Result<void, RouterErrorData> {
@@ -468,15 +478,19 @@ export class Registration<T> {
     state: BuildState<T>,
     undo: SegmentTreeUndoLog,
     routeID: number,
-    factoryCache: Map<string, (u: string, v: Int32Array) => RouteParams>,
+    factoryCache: Map<string, (presentBitmask: number, u: string, v: Int32Array) => RouteParams>,
     omitBehavior: boolean,
     decoder: (s: string) => string,
   ): Result<void, RouterErrorData> {
     const expansion = expandOptional(parts, -1, this.optionalParamDefaults);
 
     const originalNames: string[] = [];
+    const originalTypes: Array<'param' | 'wildcard'> = [];
     for (const p of parts) {
-      if (p.type === 'param' || p.type === 'wildcard') originalNames.push(p.name);
+      if (p.type === 'param' || p.type === 'wildcard') {
+        originalNames.push(p.name);
+        originalTypes.push(p.type);
+      }
     }
 
     let root = state.segmentTrees[methodCode];
@@ -515,53 +529,56 @@ export class Registration<T> {
       const tIdx = state.terminalHandlers.length;
       const isWildcard = expParts.length > 0 && expParts[expParts.length - 1]!.type === 'wildcard';
 
-      let factory: ((u: string, v: Int32Array) => RouteParams) | null = null;
+      // Compute presentBitmask: bit i set ⇔ originalNames[i] is captured
+      // by this expansion variant. The super-factory uses this mask at
+      // match-time to gate per-name assignment, so one factory function
+      // serves every variant of a given route shape (factory count goes
+      // from O(2^N) variants to O(1) per route shape).
+      let presentBitmask = 0;
+      for (let origIdx = 0; origIdx < originalNames.length; origIdx++) {
+        const origName = originalNames[origIdx]!;
+        for (let p = 0; p < present.length; p++) {
+          if (present[p]!.name === origName) {
+            presentBitmask |= (1 << origIdx);
+            break;
+          }
+        }
+      }
+
+      let factory: ((presentBitmask: number, u: string, v: Int32Array) => RouteParams) | null = null;
       if (present.length > 0 || (!omitBehavior && originalNames.length > 0)) {
-        // Manual concat is 3.2× faster than `.join(',')` + `.map(p => p.name)`
-        // for the typical 2-3 element name arrays (bench/cache-key-build.ts:
-        // 71 → 22 ns/call). Saves a `present.map` array alloc per route.
+        // cacheKey is variant-independent: one super-factory per route shape
+        // (omitBehavior + originalNames + originalTypes). All 2^N variants
+        // of an optional-heavy route share the same compiled function.
         let cacheKey = omitBehavior ? 'O:' : 'S:';
         for (let n = 0; n < originalNames.length; n++) {
           if (n > 0) cacheKey += ',';
           cacheKey += originalNames[n]!;
-        }
-        cacheKey += '::';
-        for (let n = 0; n < present.length; n++) {
-          if (n > 0) cacheKey += ',';
-          cacheKey += present[n]!.name;
+          cacheKey += originalTypes[n] === 'wildcard' ? '#w' : '#p';
         }
         let cached = factoryCache.get(cacheKey);
 
         if (cached === undefined) {
-          let body: string;
-          if (omitBehavior) {
-            body = 'var p = new NullProtoObj();\n';
-            for (let j = 0; j < present.length; j++) {
-              const pInfo = present[j]!;
-              const start = j * 2;
-              const end = j * 2 + 1;
-              const val = `u.substring(v[${start}], v[${end}])`;
-              body += `p[${JSON.stringify(pInfo.name)}] = ${pInfo.type === 'param' ? `decoder(${val})` : val};\n`;
+          // Super-factory body: walks originalNames in order, gates each
+          // assignment on the corresponding bit in `m` (presentBitmask).
+          // `s` is a sliding paramOffsets cursor — only the present slots
+          // were filled by the walker, so absent ones must be skipped.
+          // omitBehavior=true: drop absent entirely (no key written).
+          // omitBehavior=false: write `undefined` for absent.
+          let body = 'var p = new NullProtoObj();\nvar s = 0;\n';
+          for (let n = 0; n < originalNames.length; n++) {
+            const name = originalNames[n]!;
+            const isWild = originalTypes[n] === 'wildcard';
+            const val = `u.substring(v[s*2], v[s*2+1])`;
+            const assign = isWild ? val : `decoder(${val})`;
+            body += `if (m & ${1 << n}) { p[${JSON.stringify(name)}] = ${assign}; s++; }`;
+            if (!omitBehavior) {
+              body += ` else { p[${JSON.stringify(name)}] = undefined; }`;
             }
-            body += 'return p;';
-          } else {
-            const presentNames = present.map(p => p.name);
-            body = 'var p = new NullProtoObj();\n';
-            for (const name of originalNames) {
-              const idx = presentNames.indexOf(name);
-              if (idx !== -1) {
-                const pInfo = present[idx]!;
-                const start = idx * 2;
-                const end = idx * 2 + 1;
-                const val = `u.substring(v[${start}], v[${end}])`;
-                body += `p[${JSON.stringify(name)}] = ${pInfo.type === 'param' ? `decoder(${val})` : val};\n`;
-              } else {
-                body += `p[${JSON.stringify(name)}] = undefined;\n`;
-              }
-            }
-            body += 'return p;';
+            body += '\n';
           }
-          cached = new Function('decoder', 'NullProtoObj', 'u', 'v', body).bind(null, decoder, NullProtoObj) as any;
+          body += 'return p;';
+          cached = new Function('decoder', 'NullProtoObj', 'm', 'u', 'v', body).bind(null, decoder, NullProtoObj) as any;
           factoryCache.set(cacheKey, cached!);
         }
         factory = cached!;
@@ -570,11 +587,13 @@ export class Registration<T> {
       state.terminalHandlers[tIdx] = hIdx;
       state.isWildcardByTerminal[tIdx] = isWildcard;
       state.paramsFactories[tIdx] = factory;
+      state.presentBitmaskByTerminal[tIdx] = presentBitmask;
       undo.push({
         k: UndoKind.TerminalArraysTruncate,
         t: state.terminalHandlers,
         w: state.isWildcardByTerminal,
         f: state.paramsFactories,
+        b: state.presentBitmaskByTerminal,
         len: tIdx,
       });
 
@@ -643,6 +662,7 @@ function createBuildState<T>(): BuildState<T> {
     terminalHandlers: [],
     isWildcardByTerminal: [],
     paramsFactories: [],
+    presentBitmaskByTerminal: [],
     testerCache: new Map(),
     routeCounter: 0,
     maxParamsObserved: 0,
