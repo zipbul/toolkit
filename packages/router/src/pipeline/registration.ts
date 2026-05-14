@@ -263,6 +263,7 @@ export class Registration<T> {
         state.terminalHandlers.length = terminalMark;
         state.isWildcardByTerminal.length = terminalMark;
         state.paramsFactories.length = factoryMark;
+        state.presentBitmaskByTerminal.length = terminalMark;
         this.optionalParamDefaults.restore(optionalMark);
         state.routeCounter--;
         issues.push({
@@ -503,6 +504,21 @@ export class Registration<T> {
       }
     }
 
+    // presentBitmask is a 32-bit Int32. `1 << 31` already lands on the
+    // sign bit, and `1 << 32` wraps to 1 in V8/JSC. With more than 31
+    // capturing segments the super-factory's per-name gate would alias
+    // and silently miscompile, so reject at registration time. Real
+    // production routes routinely sit at 1-3 params; 31 is the JSC
+    // bitmask ceiling, well above any observed pattern.
+    if (originalNames.length > 31) {
+      return err({
+        kind: 'route-parse',
+        message: `Route has ${originalNames.length} capturing segments; maximum is 31 (Int32 bitmask ceiling).`,
+        path: route.path,
+        suggestion: 'Reduce the number of :param/*wildcard segments per route.',
+      });
+    }
+
     let root = state.segmentTrees[methodCode];
 
     if (root === undefined || root === null) {
@@ -624,6 +640,7 @@ export class Registration<T> {
         return err<RouterErrorData>({ ...data, path: route.path, method: route.method });
       }
     }
+    return undefined;
   }
 
   private runPrefixIndexPlan(
@@ -634,12 +651,14 @@ export class Registration<T> {
     handlerSlotId: number = -1,
     isOptionalExpansion: boolean = false,
   ): Result<void, RouterErrorData> {
-    // Only callers are `seal()`'s route loop (L504 + L608) and both run
-    // strictly between `this.prefixIndex = new ...` / `this.identityRegistry
-    // = new ...` (L242-243) and the `this.prefixIndex = null` reset at the
-    // tail of `seal()` (L391-392). A second `seal()` call short-circuits at
-    // L227 before either ever runs again, so by construction these fields
-    // are non-null at this call site.
+    // Only callers are `compileStaticRoute` and `compileDynamicRoute`,
+    // both invoked from `seal()`'s route loop strictly between
+    // `this.prefixIndex = new WildcardPrefixIndex()` /
+    // `this.identityRegistry = new IdentityRegistry()` and the
+    // `this.prefixIndex = null` reset at the tail of `seal()`. A second
+    // `seal()` call short-circuits at the `if (this.snapshot !== null)`
+    // guard before either ever runs again, so by construction these
+    // fields are non-null at this call site.
     const idx = this.prefixIndex!;
     const registry = this.identityRegistry!;
     const handlerId = handlerSlotId >= 0 ? handlerSlotId : registry.idFor(route.value);

@@ -1,0 +1,7 @@
+{
+  "$schema": "https://unpkg.com/knip@latest/schema.json",
+  "entry": ["index.ts", "internal.ts", "src/**/*.spec.ts", "test/**/*.test.ts", "test/**/*.ts"],
+  "project": ["src/**/*.ts", "test/**/*.ts"],
+  "ignore": ["bench/**", "ULTIMATE.md"],
+  "ignoreDependencies": ["@hattip/router", "find-my-way", "hono", "itty-router", "koa-tree-router", "memoirist", "radix3", "rou3"]
+}

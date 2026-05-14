@@ -559,15 +559,21 @@ function createFactoredWalker(
  * factor and clear its staticChildren/singleChild slots so the prefixed
  * factored walker owns dispatch.
  */
-function tryDetectPrefixedFactor(root: SegmentNode): { prefixSegs: string[]; factor: TenantFactor } | null {
+/**
+ * Dry-run variant: detects but does not mutate. Returns the deepest
+ * reachable node along with the factor candidate so the caller can
+ * decide whether to commit. Mutation is split out into
+ * `applyPrefixedFactor` so partial-success batch detection (multi-
+ * prefix factor below) can roll back cleanly when any sibling fails.
+ */
+function detectPrefixedFactorDry(
+  root: SegmentNode,
+): { prefixSegs: string[]; factor: TenantFactor; deepNode: SegmentNode } | null {
   const prefixSegs: string[] = [];
   let cur: SegmentNode = root;
 
   // Bound the descent to keep this O(prefix depth) rather than O(tree).
   for (let depth = 0; depth < 32; depth++) {
-    // Stop if any non-static feature is present at this level — params,
-    // wildcards, terminals and pre-compacted prefixes all break the
-    // single-chain assumption the prefixed walker depends on.
     if (
       cur.paramChild !== null ||
       cur.wildcardStore !== null ||
@@ -605,11 +611,21 @@ function tryDetectPrefixedFactor(root: SegmentNode): { prefixSegs: string[]; fac
   const factor = detectTenantFactor(cur);
   if (factor === null) return null;
 
-  setTenantFactor(cur, factor);
-  cur.staticChildren = null;
-  cur.singleChildKey = null;
-  cur.singleChildNext = null;
-  return { prefixSegs, factor };
+  return { prefixSegs, factor, deepNode: cur };
+}
+
+function applyPrefixedFactor(deepNode: SegmentNode, factor: TenantFactor): void {
+  setTenantFactor(deepNode, factor);
+  deepNode.staticChildren = null;
+  deepNode.singleChildKey = null;
+  deepNode.singleChildNext = null;
+}
+
+function tryDetectPrefixedFactor(root: SegmentNode): { prefixSegs: string[]; factor: TenantFactor } | null {
+  const dry = detectPrefixedFactorDry(root);
+  if (dry === null) return null;
+  applyPrefixedFactor(dry.deepNode, dry.factor);
+  return { prefixSegs: dry.prefixSegs, factor: dry.factor };
 }
 
 /**
@@ -776,41 +792,59 @@ function tryDetectMultiPrefixFactor(root: SegmentNode): Map<string, PrefixedFact
   }
   if (keyCount < 2) return null;
 
-  const out = new Map<string, PrefixedFactorEntry>();
+  // Phase 1: dry-run detect every child without mutation. Any failure
+  // aborts the whole batch with the tree intact. This is the
+  // correctness fix for the previous version, which mutated each
+  // child as it was processed and left a partially-factored tree
+  // behind whenever a later sibling failed — fall-through walker
+  // tiers would then walk an inconsistent tree (some children
+  // factored, others not) and silently miscompile.
+  type Pending =
+    | { type: 'prefixed'; key: string; deepNode: SegmentNode; factor: TenantFactor; prefixSegs: string[] }
+    | { type: 'direct'; key: string; child: SegmentNode; factor: TenantFactor };
+  const pending: Pending[] = [];
   for (const k in childMap) {
     const child = childMap[k]!;
-
-    // Try prefix-walk + factor first (child has a single-static chain
-    // before the high-fanout sibling group).
-    const prefixed = tryDetectPrefixedFactor(child);
-    if (prefixed !== null) {
-      out.set(k, {
-        prefixSegs: prefixed.prefixSegs,
-        keyToTerminal: prefixed.factor.keyToTerminal,
-        sharedNext: prefixed.factor.sharedNext,
+    const dryPrefixed = detectPrefixedFactorDry(child);
+    if (dryPrefixed !== null) {
+      pending.push({
+        type: 'prefixed',
+        key: k,
+        deepNode: dryPrefixed.deepNode,
+        factor: dryPrefixed.factor,
+        prefixSegs: dryPrefixed.prefixSegs,
       });
       continue;
     }
-
-    // No leading chain — child itself may already be the factor location
-    // (its staticChildren is the high-fanout sibling group).
     const direct = detectTenantFactor(child);
     if (direct !== null) {
-      setTenantFactor(child, direct);
-      child.staticChildren = null;
-      child.singleChildKey = null;
-      child.singleChildNext = null;
-      out.set(k, {
-        prefixSegs: [],
-        keyToTerminal: direct.keyToTerminal,
-        sharedNext: direct.sharedNext,
-      });
+      pending.push({ type: 'direct', key: k, child, factor: direct });
       continue;
     }
-
-    // Partial application would require fall-through, which destroys
-    // the IC's monomorphism on the dispatched walker — reject.
+    // Any sibling without a factor candidate aborts the batch — no
+    // mutation has happened yet, so the tree is left untouched and
+    // the caller falls through to the next walker tier safely.
     return null;
+  }
+
+  // Phase 2: every sibling produced a candidate; commit the mutations.
+  const out = new Map<string, PrefixedFactorEntry>();
+  for (const p of pending) {
+    if (p.type === 'prefixed') {
+      applyPrefixedFactor(p.deepNode, p.factor);
+      out.set(p.key, {
+        prefixSegs: p.prefixSegs,
+        keyToTerminal: p.factor.keyToTerminal,
+        sharedNext: p.factor.sharedNext,
+      });
+    } else {
+      applyPrefixedFactor(p.child, p.factor);
+      out.set(p.key, {
+        prefixSegs: [],
+        keyToTerminal: p.factor.keyToTerminal,
+        sharedNext: p.factor.sharedNext,
+      });
+    }
   }
   return out;
 }

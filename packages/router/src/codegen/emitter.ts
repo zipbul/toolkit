@@ -49,7 +49,7 @@ export interface MatchConfig<T> {
    * reads contiguous typed memory.
    */
   readonly terminalSlab: Int32Array;
-  readonly paramsFactories: Array<((u: string, v: Int32Array) => RouteParams) | null>;
+  readonly paramsFactories: Array<((presentBitmask: number, u: string, v: Int32Array) => RouteParams) | null>;
 }
 
 type CompiledMatch<T> = (method: string, path: string) => MatchOutput<T> | null;

@@ -24,7 +24,7 @@ export interface BuildResult<T> {
   matchState: MatchState;
   normalizePath: PathNormalizer;
   terminalSlab: Int32Array;
-  paramsFactories: Array<((u: string, v: Int32Array) => RouteParams) | null>;
+  paramsFactories: Array<((presentBitmask: number, u: string, v: Int32Array) => RouteParams) | null>;
   ignoreTrailingSlash: boolean;
   caseSensitive: boolean;
 }
