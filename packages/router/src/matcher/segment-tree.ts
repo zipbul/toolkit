@@ -311,6 +311,15 @@ export function detectTenantFactor(root: SegmentNode, minSiblings = 1000): Tenan
  * the 100k-tenant build profile (cpu-prof: subtreeShape + join hot).
  */
 function subtreeShapesEqual(a: SegmentNode, b: SegmentNode): boolean {
+  // Terminal-store presence must match. Two siblings whose subtrees
+  // differ only by an intermediate `store` (e.g. one tenant adds a
+  // mid-route `/data/:type` while every other tenant only registers
+  // `/data/:type/:item`) are NOT factor-equivalent: the factored
+  // walker would fold them under one canonical subtree and override
+  // every leaf with the same handler index, miscompiling matches at
+  // the differing position. The handler value itself differs per
+  // sibling — only presence must match.
+  if ((a.store === null) !== (b.store === null)) return false;
   if ((a.wildcardStore === null) !== (b.wildcardStore === null)) return false;
   if (a.wildcardName !== b.wildcardName) return false;
   if (a.wildcardOrigin !== b.wildcardOrigin) return false;
