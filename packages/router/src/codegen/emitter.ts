@@ -273,7 +273,7 @@ export function compileMatchFn<T>(cfg: MatchConfig<T>): CompiledMatch<T> {
 
       var hIdx = terminalSlab[slabBase];
       var factory = paramsFactories[tIdx];
-      var params = (factory !== undefined && factory !== null)
+      var params = factory !== null
         ? factory(sp, matchState.paramOffsets)
         : EMPTY_PARAMS;
 
