@@ -313,12 +313,24 @@ function isDotSegment(path: string, segStart: number, segEnd: number): boolean {
   return dotCount === 1 || dotCount === 2;
 }
 
+// 128-entry lookup table — one Uint8Array load + comparison vs the
+// 8-branch hand-written `isAcceptablePathChar` mirrors method-policy's
+// TCHAR_TABLE pattern. Covers ALPHA / DIGIT / unreserved / sub-delims /
+// `:` / `@` / `/` / `?` / `%` per RFC 3986 path-char grammar.
+const ACCEPTABLE_PCHAR_TABLE = (() => {
+  const t = new Uint8Array(128);
+  for (let c = 0x41; c <= 0x5a; c++) t[c] = 1;     // A-Z
+  for (let c = 0x61; c <= 0x7a; c++) t[c] = 1;     // a-z
+  for (let c = 0x30; c <= 0x39; c++) t[c] = 1;     // 0-9
+  for (const c of [
+    0x2d, 0x2e, 0x5f, 0x7e,                        // unreserved: - . _ ~
+    0x21, 0x24, 0x26, 0x27, 0x28, 0x29,            // sub-delims: ! $ & ' ( )
+    0x2a, 0x2b, 0x2c, 0x3b, 0x3d,                  // sub-delims: * + , ; =
+    0x3a, 0x40, 0x2f, 0x3f, 0x25,                  // : @ / ? %
+  ]) t[c] = 1;
+  return t;
+})();
+
 function isAcceptablePathChar(c: number): boolean {
-  if ((c >= 0x41 && c <= 0x5a) || (c >= 0x61 && c <= 0x7a) || (c >= 0x30 && c <= 0x39)) return true;
-  if (c === 0x2d || c === 0x2e || c === 0x5f || c === 0x7e) return true;
-  if (c === 0x21 || c === 0x24 || c === 0x26 || c === 0x27 || c === 0x28 ||
-      c === 0x29 || c === 0x2a || c === 0x2b || c === 0x2c || c === 0x3b || c === 0x3d) return true;
-  if (c === 0x3a || c === 0x40 || c === 0x2f || c === 0x3f) return true;
-  if (c === 0x25) return true;
-  return false;
+  return c < 128 && ACCEPTABLE_PCHAR_TABLE[c] === 1;
 }
