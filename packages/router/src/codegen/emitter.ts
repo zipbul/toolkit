@@ -260,14 +260,18 @@ export function compileMatchFn<T>(cfg: MatchConfig<T>): CompiledMatch<T> {
       `);
     }
 
+    // Trailing-slash recheck wrapped in `if (ok)` only matters when the
+    // upstream normalizer didn't already trim. Skip the wrapper + dead
+    // 4-condition `&&` chain entirely for trim-active routers (default).
+    const trimRecheck = cfg.trimSlash
+      ? ''
+      : `
+      if (ok && sp.length > 1 && sp.charCodeAt(sp.length - 1) === 47 && terminalSlab[(matchState.handlerIndex << 1) + 1] === 0) {
+        ok = false;
+      }`;
     src.push(`
       var tIdx = matchState.handlerIndex;
-      var slabBase = tIdx << 1;
-      if (ok) {
-        if (!${cfg.trimSlash} && sp.length > 1 && sp.charCodeAt(sp.length - 1) === 47 && terminalSlab[slabBase + 1] === 0) {
-          ok = false;
-        }
-      }
+      var slabBase = tIdx << 1;${trimRecheck}
 
       if (!ok) return null;
 
