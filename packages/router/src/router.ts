@@ -1,6 +1,6 @@
 import type { MatchOutput, RouterOptions, RouterPublicApi } from './types';
 import type { MatchCacheEntry, MatchConfig } from './codegen/emitter';
-import type { RouterCache } from './cache';
+import { RouterCache } from './cache';
 
 import { OptionalParamDefaults } from './builder/optional-param-defaults';
 import { PathParser } from './builder/path-parser';
@@ -107,6 +107,16 @@ export class Router<T = unknown> implements RouterPublicApi<T> {
 
       for (const bucket of r.staticOutputsByMethod) {
         if (bucket !== undefined) { hasAnyStatic = true; break; }
+      }
+
+      // Pre-allocate per-method hit caches now so the hot path can drop
+      // its `if (hc === undefined)` lazy-init branch — every active
+      // method gets a slot and the matchImpl always sees a non-null hc.
+      for (let i = 0; i < r.activeMethodCodes.length; i++) {
+        const code = r.activeMethodCodes[i]![1];
+        if (cache.hit[code] === undefined) {
+          cache.hit[code] = new RouterCache(cache.maxSize);
+        }
       }
 
       const cfg: MatchConfig<T> = {
