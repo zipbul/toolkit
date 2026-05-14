@@ -129,6 +129,16 @@ export function createSegmentWalker(
     );
   }
 
+  // Multi-prefix recursive factor: root.staticChildren has multiple keys
+  // (e.g. `/users/...` + `/api/...`). Try detect-prefixed-factor on each
+  // child independently. If every child yields a factor, build a single
+  // walker that dispatches on first segment then runs that child's
+  // prefix walk + factor lookup.
+  const multiPrefixed = tryDetectMultiPrefixFactor(root);
+  if (multiPrefixed !== null) {
+    return createMultiPrefixFactoredWalker(decoder, multiPrefixed);
+  }
+
   const compiledWild = tryCodegenStaticPrefixWildcard(root);
   if (compiledWild !== null) {
     warmupCompiledWalker(compiledWild, root, warmupState);
@@ -642,6 +652,219 @@ function createPrefixedFactoredWalker(
     const storeOverride = looked;
 
     let node = sharedNext;
+    pos = end === len ? len : end + 1;
+
+    while (pos < len) {
+      if (node.staticPrefix !== null) {
+        const sp = node.staticPrefix;
+        let ok = true;
+        for (let i = 0; i < sp.length; i++) {
+          const s = sp[i]!;
+          const sLen = s.length;
+          const after = pos + sLen;
+          if (after > len) { ok = false; break; }
+          if (!url.startsWith(s, pos)) { ok = false; break; }
+          if (after < len && url.charCodeAt(after) !== 47) { ok = false; break; }
+          pos = after === len ? len : after + 1;
+        }
+        if (!ok) return false;
+        if (pos >= len) break;
+      }
+
+      let endInner = pos;
+      while (endInner < len && url.charCodeAt(endInner) !== 47) endInner++;
+      const segLen = endInner - pos;
+
+      const sck = node.singleChildKey;
+      if (
+        sck !== null &&
+        node.singleChildNext !== null &&
+        sck.length === segLen &&
+        url.startsWith(sck, pos)
+      ) {
+        node = node.singleChildNext;
+        pos = endInner === len ? len : endInner + 1;
+        continue;
+      }
+      if (node.staticChildren !== null) {
+        const segStr = url.substring(pos, endInner);
+        const child = node.staticChildren[segStr];
+        if (child !== undefined) {
+          node = child;
+          pos = endInner === len ? len : endInner + 1;
+          continue;
+        }
+      }
+
+      if (node.paramChild !== null && segLen > 0) {
+        if (node.paramChild.tester !== null) {
+          const decoded = decoder(url.substring(pos, endInner));
+          if (node.paramChild.tester(decoded) !== TESTER_PASS) return false;
+        }
+        const pc = state.paramCount * 2;
+        state.paramOffsets[pc] = pos;
+        state.paramOffsets[pc + 1] = endInner;
+        state.paramCount++;
+        node = node.paramChild.next;
+        pos = endInner === len ? len : endInner + 1;
+        continue;
+      }
+
+      if (node.wildcardStore !== null) {
+        if (node.wildcardOrigin === 'multi' && pos >= len) return false;
+        const pc = state.paramCount * 2;
+        state.paramOffsets[pc] = pos;
+        state.paramOffsets[pc + 1] = len;
+        state.paramCount++;
+        state.handlerIndex = storeOverride;
+        return true;
+      }
+
+      return false;
+    }
+
+    if (node.store !== null) {
+      state.handlerIndex = storeOverride;
+      return true;
+    }
+
+    if (node.wildcardStore !== null && node.wildcardOrigin === 'star') {
+      const pc = state.paramCount * 2;
+      state.paramOffsets[pc] = len;
+      state.paramOffsets[pc + 1] = len;
+      state.paramCount++;
+      state.handlerIndex = storeOverride;
+      return true;
+    }
+
+    return false;
+  };
+}
+
+interface PrefixedFactorEntry {
+  prefixSegs: string[];
+  keyToTerminal: Map<string, number>;
+  sharedNext: SegmentNode;
+}
+
+/**
+ * Detect prefixed-factor descriptors for every direct static child of
+ * `root`. Returns the per-key map only if (a) root has multiple static
+ * children and no other dispatch features (param/wildcard/store), and
+ * (b) every child yields a non-null prefixed-factor result. Partial
+ * application would force a fall-through walker which the IC cannot
+ * unify, so we treat partial as "decline".
+ */
+function tryDetectMultiPrefixFactor(root: SegmentNode): Map<string, PrefixedFactorEntry> | null {
+  if (
+    root.paramChild !== null ||
+    root.wildcardStore !== null ||
+    root.store !== null ||
+    root.staticPrefix !== null
+  ) {
+    return null;
+  }
+
+  const childMap = root.staticChildren;
+  if (childMap === null) return null;
+
+  // Need at least 2 keys; single-key falls into tryDetectPrefixedFactor above.
+  let keyCount = 0;
+  for (const _k in childMap) {
+    keyCount++;
+    if (keyCount > 1) break;
+  }
+  if (keyCount < 2) return null;
+
+  const out = new Map<string, PrefixedFactorEntry>();
+  for (const k in childMap) {
+    const child = childMap[k]!;
+
+    // Try prefix-walk + factor first (child has a single-static chain
+    // before the high-fanout sibling group).
+    const prefixed = tryDetectPrefixedFactor(child);
+    if (prefixed !== null) {
+      out.set(k, {
+        prefixSegs: prefixed.prefixSegs,
+        keyToTerminal: prefixed.factor.keyToTerminal,
+        sharedNext: prefixed.factor.sharedNext,
+      });
+      continue;
+    }
+
+    // No leading chain — child itself may already be the factor location
+    // (its staticChildren is the high-fanout sibling group).
+    const direct = detectTenantFactor(child);
+    if (direct !== null) {
+      setTenantFactor(child, direct);
+      child.staticChildren = null;
+      child.singleChildKey = null;
+      child.singleChildNext = null;
+      out.set(k, {
+        prefixSegs: [],
+        keyToTerminal: direct.keyToTerminal,
+        sharedNext: direct.sharedNext,
+      });
+      continue;
+    }
+
+    // Partial application would require fall-through, which destroys
+    // the IC's monomorphism on the dispatched walker — reject.
+    return null;
+  }
+  return out;
+}
+
+/**
+ * Walker for the multi-prefix factor case. Dispatches on the first URL
+ * segment to one of the per-child prefixed-factor entries, then walks
+ * that entry's prefix segments, looks up the factor key, and walks the
+ * shared subtree. Body after factor lookup is structurally identical
+ * to `createPrefixedFactoredWalker`.
+ */
+function createMultiPrefixFactoredWalker(
+  decoder: DecoderFn,
+  childMap: Map<string, PrefixedFactorEntry>,
+): MatchFn {
+  return function walk(url: string, state: MatchState): boolean {
+    state.paramCount = 0;
+    const len = url.length;
+
+    if (url === '/') return false;
+
+    // First segment selects the prefixed-factor entry.
+    let slash1 = 1;
+    while (slash1 < len && url.charCodeAt(slash1) !== 47) slash1++;
+    const firstSeg = slash1 === len ? url.substring(1) : url.substring(1, slash1);
+    const entry = childMap.get(firstSeg);
+    if (entry === undefined) return false;
+
+    const prefixSegs = entry.prefixSegs;
+    const prefixCount = prefixSegs.length;
+    let pos = slash1 === len ? len : slash1 + 1;
+
+    // Walk the per-child static prefix chain.
+    for (let i = 0; i < prefixCount; i++) {
+      const seg = prefixSegs[i]!;
+      const segLen = seg.length;
+      const after = pos + segLen;
+      if (after > len) return false;
+      if (!url.startsWith(seg, pos)) return false;
+      if (after < len && url.charCodeAt(after) !== 47) return false;
+      pos = after === len ? len : after + 1;
+    }
+
+    if (pos >= len) return false;
+
+    // Factor key segment.
+    let end = pos;
+    while (end < len && url.charCodeAt(end) !== 47) end++;
+    const seg = end === pos ? '' : url.substring(pos, end);
+    const looked = entry.keyToTerminal.get(seg);
+    if (looked === undefined) return false;
+    const storeOverride = looked;
+
+    let node = entry.sharedNext;
     pos = end === len ? len : end + 1;
 
     while (pos < len) {
