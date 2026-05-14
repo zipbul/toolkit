@@ -70,8 +70,6 @@ type CompiledMatch<T> = (method: string, path: string) => MatchOutput<T> | null;
  * RFC-compliant pathnames.
  */
 export function compileMatchFn<T>(cfg: MatchConfig<T>): CompiledMatch<T> {
-  const cacheMaxSize = cfg.cacheMaxSize;
-
   const activeMethodCount = cfg.activeMethodCodes.length;
   const singleMethod = activeMethodCount === 1 ? cfg.activeMethodCodes[0]! : null;
 
@@ -282,10 +280,6 @@ export function compileMatchFn<T>(cfg: MatchConfig<T>): CompiledMatch<T> {
         : EMPTY_PARAMS;
 
       var val = handlers[hIdx];
-      if (hc === undefined) {
-        hc = new RouterCache(${cacheMaxSize});
-        hitCacheByMethod[mc] = hc;
-      }
       if (params !== EMPTY_PARAMS) Object.freeze(params);
       hc.set(sp, { value: val, params: params });
       return {
