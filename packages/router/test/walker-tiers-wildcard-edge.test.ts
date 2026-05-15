@@ -104,6 +104,20 @@ describe('static + dynamic precedence at same position', () => {
     expect(r.match('GET', '/api/v1/users/42')?.value).toBe('one');
     expect(r.match('GET', '/api/v1/posts')?.value).toBe('generic');
   });
+
+  it('three-way precedence: static literal + param + nested wildcard', () => {
+    // Same-node static + param + wildcard would conflict (route-unreachable).
+    // Realistic three-way: static + param at the same depth, wildcard nested
+    // one level down to catch multi-segment tails.
+    const r = new Router<string>();
+    r.add('GET', '/x/me', 'static-me');
+    r.add('GET', '/x/:id', 'param-id');
+    r.add('GET', '/x/:id/files/*rest', 'wild-rest');
+    r.build();
+    expect(r.match('GET', '/x/me')?.value).toBe('static-me');
+    expect(r.match('GET', '/x/other')?.value).toBe('param-id');
+    expect(r.match('GET', '/x/abc/files/a/b/c')?.value).toBe('wild-rest');
+  });
 });
 
 describe('match.params edge values', () => {

@@ -42,6 +42,31 @@ describe('percent-decoded param values', () => {
     // to '/'.
     expect(r.match('GET', '/users/a%2Fb')?.params['name']).toBe('a/b');
   });
+
+  it('wildcard captures encoded slash bytes raw (not decoded) in tail', () => {
+    const r = new Router<string>();
+    r.add('GET', '/files/*path', 'h');
+    r.build();
+    // Wildcard tail is intentionally raw — no decoder pass per
+    // path-parser policy (wildcard captures are byte-exact).
+    expect(r.match('GET', '/files/a%2Fb')?.params['path']).toBe('a%2Fb');
+    expect(r.match('GET', '/files/deep/nested/file.txt')?.params['path']).toBe('deep/nested/file.txt');
+  });
+
+  it('repeated dynamic match returns identical params (cache hit semantics)', () => {
+    const r = new Router<string>();
+    r.add('GET', '/users/:name', 'h');
+    r.build();
+    const first = r.match('GET', '/users/foo%20bar');
+    expect(first?.meta.source).toBe('dynamic');
+    expect(first?.params['name']).toBe('foo bar');
+    const second = r.match('GET', '/users/foo%20bar');
+    expect(second?.meta.source).toBe('cache');
+    expect(second?.params['name']).toBe('foo bar');
+    // Cache must not corrupt params on repeated hit
+    const third = r.match('GET', '/users/foo%20bar');
+    expect(third?.params['name']).toBe('foo bar');
+  });
 });
 
 describe('case folding (caseSensitive=false)', () => {
