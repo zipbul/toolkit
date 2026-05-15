@@ -382,7 +382,23 @@ function leafStoreOf(node: SegmentNode): number | null {
   let depth = 0;
   // Malformed-tree safety net only — see the docstring above.
   while (depth++ < 64) {
-    if (cur.store !== null) return cur.store;
+    if (cur.store !== null) {
+      // Multi-terminal subtree (intermediate node carries a store AND
+      // has descendants) is not factor-safe: the factored walker keeps
+      // a single `storeOverride` per tenant key, so the override would
+      // be applied to every descendant terminal instead of only the
+      // one this routine reached. Return null and let the detector
+      // reject the factor candidate.
+      if (
+        cur.paramChild !== null ||
+        cur.singleChildKey !== null ||
+        cur.staticChildren !== null ||
+        cur.wildcardStore !== null
+      ) {
+        return null;
+      }
+      return cur.store;
+    }
     if (cur.paramChild !== null && cur.paramChild.nextSibling === null) {
       cur = cur.paramChild.next;
       continue;

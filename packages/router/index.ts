@@ -9,6 +9,7 @@ export type {
   RouteParams,
   RouterErrorKind,
   RouterErrorData,
+  RouterPublicApi,
   MatchMeta,
   MatchOutput,
 } from './src/types';

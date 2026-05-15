@@ -191,6 +191,56 @@ describe('walker tier consistency — every applicable tier returns the same res
   }
 });
 
+describe('leafStoreOf rejects multi-terminal subtree (AUDIT2-001/002)', () => {
+  it('does not collapse intermediate + leaf terminals into one factor entry', () => {
+    const r = new Router<string>();
+    // Every tenant has BOTH an intermediate terminal (/data/:id) AND a
+    // leaf terminal (/data/:id/item). The factored walker keeps a single
+    // storeOverride per tenant key — without the leafStoreOf guard, the
+    // override would be pinned to the intermediate handler and every
+    // leaf match would silently return the wrong route.
+    for (let i = 0; i < 1500; i++) {
+      r.add('GET', `/tenant-${i}/data/:id`, `mid-${i}`);
+      r.add('GET', `/tenant-${i}/data/:id/item`, `leaf-${i}`);
+    }
+    r.build();
+    expect(r.match('GET', '/tenant-0/data/abc')?.value).toBe('mid-0');
+    expect(r.match('GET', '/tenant-0/data/abc/item')?.value).toBe('leaf-0');
+    expect(r.match('GET', '/tenant-99/data/x')?.value).toBe('mid-99');
+    expect(r.match('GET', '/tenant-99/data/x/item')?.value).toBe('leaf-99');
+    expect(r.match('GET', '/tenant-1499/data/y/item')?.value).toBe('leaf-1499');
+  });
+});
+
+describe('cacheSize validation (AUDIT2-009)', () => {
+  it('rejects negative cacheSize', () => {
+    expect(() => new Router<string>({ cacheSize: -1 })).toThrow(RouterError);
+  });
+  it('rejects zero cacheSize', () => {
+    expect(() => new Router<string>({ cacheSize: 0 })).toThrow(RouterError);
+  });
+  it('rejects NaN cacheSize', () => {
+    expect(() => new Router<string>({ cacheSize: Number.NaN })).toThrow(RouterError);
+  });
+  it('rejects non-integer cacheSize', () => {
+    expect(() => new Router<string>({ cacheSize: 3.5 })).toThrow(RouterError);
+  });
+  it('accepts positive integer cacheSize', () => {
+    expect(() => new Router<string>({ cacheSize: 1024 })).not.toThrow();
+    expect(() => new Router<string>({ cacheSize: 1 })).not.toThrow();
+  });
+  it('error has kind=router-options-invalid', () => {
+    try {
+      new Router<string>({ cacheSize: -1 });
+    } catch (e) {
+      expect(e).toBeInstanceOf(RouterError);
+      expect((e as RouterError).data.kind).toBe('router-options-invalid');
+      return;
+    }
+    throw new Error('expected throw');
+  });
+});
+
 describe('rollback after route validation failure (R1)', () => {
   it('truncates every per-terminal column including presentBitmaskByTerminal', () => {
     // Mix valid + invalid routes. Fail invalid → all columns must

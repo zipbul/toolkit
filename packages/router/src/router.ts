@@ -1,6 +1,7 @@
 import type { MatchOutput, RouterOptions, RouterPublicApi } from './types';
 import type { MatchCacheEntry, MatchConfig } from './codegen/emitter';
 import { RouterCache } from './cache';
+import { RouterError } from './error';
 
 import { OptionalParamDefaults } from './builder/optional-param-defaults';
 import { PathParser } from './builder/path-parser';
@@ -69,9 +70,24 @@ export class Router<T = unknown> implements RouterPublicApi<T> {
       pathParser,
       optionalParamDefaults,
     );
+    // Validate cacheSize before passing it to RouterCache. nextPow2 silently
+    // converts garbage (negative/NaN/non-integer) into a 1-slot cache and
+    // rounds 1000 to 1024 — explicit guard for actionable errors.
+    const requestedCacheSize = routerOptions.cacheSize ?? 1000;
+    if (
+      !Number.isInteger(requestedCacheSize) ||
+      requestedCacheSize < 1 ||
+      requestedCacheSize > 0x4000_0000
+    ) {
+      throw new RouterError({
+        kind: 'router-options-invalid',
+        message: `cacheSize must be a positive integer (received: ${String(requestedCacheSize)})`,
+        suggestion: 'Pass a positive integer between 1 and 2^30.',
+      });
+    }
     const cache: CacheContainers<T> = {
       hit: [],
-      maxSize: routerOptions.cacheSize ?? 1000,
+      maxSize: requestedCacheSize,
     };
 
     let matchImpl: ((method: string, path: string) => MatchOutput<T> | null) | undefined;

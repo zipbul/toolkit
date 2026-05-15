@@ -52,6 +52,7 @@ export type RouterErrorKind =
   | 'path-encoded-control' // 인코드된 C0/DEL
   | 'path-dot-segment'   // 디코드 시 `.` 또는 `..`
   | 'path-empty-segment' // interior empty `/a//b`
+  | 'router-options-invalid' // RouterOptions 입력값 검증 실패 (cacheSize 등)
   | 'route-validation';  // build()/seal() 일괄 검증 실패
 
 export interface RouteValidationIssue {
@@ -102,6 +103,7 @@ export type RouterErrorData = {
   | { kind: 'path-encoded-control'; message: string; suggestion?: string }
   | { kind: 'path-dot-segment'; message: string; suggestion?: string }
   | { kind: 'path-empty-segment'; message: string; suggestion?: string }
+  | { kind: 'router-options-invalid'; message: string; suggestion?: string }
   | { kind: 'route-validation'; message: string; errors: RouteValidationIssue[] }
 );
 
