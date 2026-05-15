@@ -1,13 +1,17 @@
-import type { MatchFn, MatchState } from './match-state';
-import type { DecoderFn } from './decoder';
-import type { SegmentNode } from '../tree';
-
-import { TESTER_PASS } from '../tree';
-import { compactSegmentTree, hasAmbiguousNode } from '../tree';
-import { getTenantFactor } from '../tree';
-import { compileSegmentTree, collectWarmupPaths } from '../codegen';
-import { tryCodegenStaticPrefixWildcard } from '../codegen';
-import { WARMUP_ITERATIONS } from '../codegen';
+import type { DecoderFn, MatchFn, MatchState } from '../types';
+import {
+  compactSegmentTree,
+  getTenantFactor,
+  hasAmbiguousNode,
+  TESTER_PASS,
+  type SegmentNode,
+} from '../tree';
+import {
+  collectWarmupPaths,
+  compileSegmentTree,
+  tryCodegenStaticPrefixWildcard,
+  WARMUP_ITERATIONS,
+} from '../codegen';
 
 import { createIterativeWalker } from './walkers/iterative';
 import { createFactoredWalker } from './walkers/factored';

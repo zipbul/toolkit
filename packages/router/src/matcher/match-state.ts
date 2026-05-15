@@ -1,23 +1,4 @@
-/**
- * Hot-path match state. Shared across synchronous allowedMethods() lookups,
- * and pre-allocated per Router instance for match() hot-path.
- */
-export interface MatchState {
-  /** The index of the matched handler. -1 if no match. */
-  handlerIndex: number;
-  /** Current count of matched parameters. */
-  paramCount: number;
-  /**
-   * Flat buffer for [start, end] index pairs of matched parameters.
-   */
-  paramOffsets: Int32Array;
-}
-
-/**
- * Hot-path match function: writes paramOffsets/handlerIndex into `state`.
- * Returns true on match, false otherwise.
- */
-export type MatchFn = (url: string, state: MatchState) => boolean;
+import type { MatchState } from '../types';
 
 export function createMatchState(maxParams: number): MatchState {
   // Two slots per parameter (start, end) plus a small headroom slot so

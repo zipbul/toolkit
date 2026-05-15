@@ -1,4 +1,10 @@
-import type { MatchOutput, RouteParams, RouterOptions } from '../types';
+import type {
+  MatchFn,
+  MatchOutput,
+  MatchState,
+  RouteParams,
+  RouterOptions,
+} from '../types';
 import type { RegistrationSnapshot } from './registration';
 
 import { MethodRegistry } from '../method-registry';
@@ -11,8 +17,6 @@ import {
   createMatchState,
   createSegmentWalker,
   decoder,
-  type MatchFn,
-  type MatchState,
 } from '../matcher';
 
 /**

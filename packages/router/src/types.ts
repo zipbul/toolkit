@@ -142,3 +142,25 @@ export interface MatchOutput<T> {
   /** 매칭 메타 정보 */
   meta: MatchMeta;
 }
+
+/**
+ * Hot-path match state. Shared across `allowedMethods()` lookups,
+ * pre-allocated per Router instance for the match() hot path.
+ */
+export interface MatchState {
+  /** Index of the matched handler. -1 if no match. */
+  handlerIndex: number;
+  /** Current count of matched parameters. */
+  paramCount: number;
+  /** Flat buffer for [start, end] index pairs of matched parameters. */
+  paramOffsets: Int32Array;
+}
+
+/**
+ * Hot-path match function: writes paramOffsets/handlerIndex into `state`.
+ * Returns true on match, false otherwise.
+ */
+export type MatchFn = (url: string, state: MatchState) => boolean;
+
+/** URL-segment decoder. Falls back to the raw input on percent decode failure. */
+export type DecoderFn = (raw: string) => string;

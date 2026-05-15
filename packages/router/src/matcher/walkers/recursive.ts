@@ -1,8 +1,10 @@
-import type { MatchFn, MatchState } from '../match-state';
-import type { DecoderFn } from '../decoder';
-import type { ParamSegment, SegmentNode } from '../../tree';
+import type { DecoderFn, MatchFn, MatchState } from '../../types';
+import {
+  TESTER_PASS,
+  type ParamSegment,
+  type SegmentNode,
+} from '../../tree';
 
-import { TESTER_PASS } from '../../tree';
 
 /**
  * Recursive backtracking walker. Used when `hasAmbiguousNode(root)` is

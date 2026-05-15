@@ -1,8 +1,6 @@
-import type { MatchFn, MatchState } from '../match-state';
-import type { DecoderFn } from '../decoder';
-import type { SegmentNode } from '../../tree';
+import type { DecoderFn, MatchFn, MatchState } from '../../types';
+import { TESTER_PASS, type SegmentNode } from '../../tree';
 
-import { TESTER_PASS } from '../../tree';
 
 /**
  * Single-pass, allocation-free walker for trees without ambiguous nodes

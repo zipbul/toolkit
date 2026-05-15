@@ -1,5 +1,4 @@
-/** Takes a raw segment and returns the percent-decoded string. */
-export type DecoderFn = (raw: string) => string;
+import type { DecoderFn } from '../types';
 
 /**
  * Module-singleton decoder for param values. Stateless — every router

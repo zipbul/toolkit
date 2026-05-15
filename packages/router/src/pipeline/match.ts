@@ -1,4 +1,4 @@
-import type { MatchFn, MatchState } from '../matcher';
+import type { MatchFn, MatchState } from '../types';
 import type { PathNormalizer } from '../codegen';
 
 

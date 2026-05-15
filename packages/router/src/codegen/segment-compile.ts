@@ -1,9 +1,12 @@
-import type { SegmentNode } from '../tree';
-import type { MatchFn } from '../matcher';
-import type { DecoderFn } from '../matcher';
-import type { PatternTesterFn } from '../tree';
-import { forEachStaticChild, hasAnyStaticChild } from '../tree';
-import { hasAmbiguousNode } from '../tree';
+import type { MatchFn, DecoderFn } from '../types';
+import {
+  forEachStaticChild,
+  hasAmbiguousNode,
+  hasAnyStaticChild,
+  TESTER_PASS,
+  type PatternTesterFn,
+  type SegmentNode,
+} from '../tree';
 
 /**
  * Codegen budget thresholds. Trees exceeding either of these fall back to
@@ -103,7 +106,7 @@ export function collectWarmupPaths(root: SegmentNode): string[] {
 export interface CompiledPackage {
   factory: (
     testers: PatternTesterFn[],
-    pass: typeof import('../tree/pattern-tester').TESTER_PASS,
+    pass: typeof TESTER_PASS,
     decoder: DecoderFn,
   ) => MatchFn;
   testers: PatternTesterFn[];

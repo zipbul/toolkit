@@ -1,4 +1,4 @@
-import type { MatchFn } from '../matcher';
+import type { MatchFn } from '../types';
 import type { SegmentNode } from '../tree';
 
 import { detectWildCodegenSpec } from './walker-strategy';
