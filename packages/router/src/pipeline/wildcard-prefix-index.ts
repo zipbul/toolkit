@@ -227,33 +227,10 @@ export class WildcardPrefixIndex {
     partial.hasWildcardTail = wildcardTailName !== null;
     partial.wildcardTailName = wildcardTailName;
 
-    if (wildcardTailName !== null) {
-      if (node.subtreeTerminalCount > 0 || node.subtreeWildcardCount > 0) {
-        applyRevert(partial, false);
-        return err(routeUnreachable('a descendant terminal or wildcard already covers this prefix', routeMeta));
-      }
-      setWildcardName(node, wildcardTailName);
-      for (let i = 0; i < visited.length; i++) visited[i]!.subtreeWildcardCount++;
-    } else {
-      if (node.terminalMeta !== null) {
-        if (!routeMeta.isOptionalExpansion) {
-          applyRevert(partial, false);
-          return err(routeDuplicate(routeMeta));
-        }
-        if (sameTerminalIdentity(node.terminalMeta, routeMeta)) {
-          applyRevert(partial, false);
-          return 'alias';
-        }
-        applyRevert(partial, false);
-        return err(routeConflict('optional-expansion duplicate with different identity', routeMeta));
-      }
-      if (getWildcardName(node) !== null) {
-        applyRevert(partial, false);
-        return err(routeUnreachable('a wildcard is registered at this exact prefix', routeMeta));
-      }
-      node.terminalMeta = routeMeta;
-      for (let i = 0; i < visited.length; i++) visited[i]!.subtreeTerminalCount++;
-    }
+    const attachResult = wildcardTailName !== null
+      ? attachWildcardTail(node, wildcardTailName, visited, partial, routeMeta)
+      : attachTerminal(node, visited, partial, routeMeta);
+    if (attachResult !== undefined) return attachResult;
 
     return partial;
   }
@@ -380,6 +357,59 @@ function routeConflict(why: string, meta: RouteMeta): RouterErrorData {
     path: meta.path,
     method: meta.method,
   };
+}
+
+/**
+ * Commit a wildcard-tail terminal at `node`. Caller has already filled
+ * `partial.freshX` carriers so revert can run cleanly on rejection.
+ * Returns an `Err` Result on conflict, `undefined` on success.
+ */
+function attachWildcardTail(
+  node: PrefixTrieNode,
+  name: string,
+  visited: PrefixTrieNode[],
+  partial: CommitPlan,
+  routeMeta: RouteMeta,
+): Result<never, RouterErrorData> | undefined {
+  if (node.subtreeTerminalCount > 0 || node.subtreeWildcardCount > 0) {
+    applyRevert(partial, false);
+    return err(routeUnreachable('a descendant terminal or wildcard already covers this prefix', routeMeta));
+  }
+  setWildcardName(node, name);
+  for (let i = 0; i < visited.length; i++) visited[i]!.subtreeWildcardCount++;
+  return undefined;
+}
+
+/**
+ * Commit a non-wildcard terminal at `node`. Returns `'alias'` for a
+ * permitted optional-expansion duplicate, an `Err` Result on conflict,
+ * `undefined` on a normal commit.
+ */
+function attachTerminal(
+  node: PrefixTrieNode,
+  visited: PrefixTrieNode[],
+  partial: CommitPlan,
+  routeMeta: RouteMeta,
+): Result<'alias', RouterErrorData> | undefined {
+  if (node.terminalMeta !== null) {
+    if (!routeMeta.isOptionalExpansion) {
+      applyRevert(partial, false);
+      return err(routeDuplicate(routeMeta));
+    }
+    if (sameTerminalIdentity(node.terminalMeta, routeMeta)) {
+      applyRevert(partial, false);
+      return 'alias';
+    }
+    applyRevert(partial, false);
+    return err(routeConflict('optional-expansion duplicate with different identity', routeMeta));
+  }
+  if (getWildcardName(node) !== null) {
+    applyRevert(partial, false);
+    return err(routeUnreachable('a wildcard is registered at this exact prefix', routeMeta));
+  }
+  node.terminalMeta = routeMeta;
+  for (let i = 0; i < visited.length; i++) visited[i]!.subtreeTerminalCount++;
+  return undefined;
 }
 
 function routeUnreachable(why: string, meta: RouteMeta): RouterErrorData {
