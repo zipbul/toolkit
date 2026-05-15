@@ -2,7 +2,7 @@ import type { Result } from '@zipbul/result';
 import type { PathPart } from '../builder/path-parser';
 import type { SegmentNode } from '../matcher/segment-tree';
 import type { SegmentTreeUndoLog } from '../matcher/segment-tree-undo';
-import { applyUndo, setPrefixIndexRollback } from '../matcher/segment-tree-undo';
+import { applyUndo } from '../matcher/segment-tree-undo';
 import type { RouterErrorData, RouteParams } from '../types';
 import type { RouteValidationIssue } from '../types';
 import type { PatternTesterFn } from '../matcher/pattern-tester';
@@ -23,11 +23,6 @@ import { createSegmentNode, insertIntoSegmentTree } from '../matcher/segment-tre
 import { detectTenantFactor, setTenantFactor } from '../matcher/factor-detect';
 import { decoder } from '../matcher/decoder';
 import { WildcardPrefixIndex, rollbackPlan, type RouteMeta, type CommitPlan } from './wildcard-prefix-index';
-
-// One-time wiring: dispatch UndoKind.PrefixIndexPlan from segment-tree's
-// applyUndo() down into the prefix-index module. Done here so the matcher
-// layer has no upward dependency on the pipeline layer.
-setPrefixIndexRollback(rollbackPlan as (plan: unknown) => void);
 import { IdentityRegistry } from './identity-registry';
 import { UndoKind } from '../matcher/segment-tree-undo';
 
@@ -640,6 +635,7 @@ export class Registration<T> {
     if (planResult === 'alias') return undefined;
     undo.push({
       k: UndoKind.PrefixIndexPlan,
+      rollback: rollbackPlan as (plan: unknown) => void,
       plan: planResult as CommitPlan,
     });
     return undefined;

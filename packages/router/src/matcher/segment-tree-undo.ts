@@ -49,7 +49,7 @@ export type UndoRecord =
   | { k: UndoKind.WildcardSet; n: SegmentNode }
   | { k: UndoKind.StoreSet; n: SegmentNode }
   | { k: UndoKind.TesterAdd; cache: Map<string, PatternTesterFn>; key: string }
-  | { k: UndoKind.PrefixIndexPlan; plan: unknown }
+  | { k: UndoKind.PrefixIndexPlan; rollback: (plan: unknown) => void; plan: unknown }
   | { k: UndoKind.TerminalArraysTruncate; t: number[]; w: boolean[]; f: Array<unknown>; b: number[]; len: number }
   | { k: UndoKind.HandlersTruncate; arr: unknown[]; len: number }
   | { k: UndoKind.SegmentTreeReset; trees: Array<SegmentNode | null | undefined>; mc: number }
@@ -62,17 +62,6 @@ export type UndoRecord =
 // All undo entries are tagged records — closures were eliminated to
 // keep the entry shape monomorphic and avoid per-entry scope alloc.
 export type SegmentTreeUndoLog = UndoRecord[];
-
-let prefixIndexRollback: ((plan: unknown) => void) | null = null;
-
-/**
- * Wire the prefix-index rollback dispatcher. Called once at module
- * initialization from `pipeline/registration.ts`. Decouples the matcher
- * from the pipeline so segment-tree.ts has no upward dependency.
- */
-export function setPrefixIndexRollback(fn: (plan: unknown) => void): void {
-  prefixIndexRollback = fn;
-}
 
 export function applyUndo(entry: UndoRecord): void {
   switch (entry.k) {
@@ -100,10 +89,10 @@ export function applyUndo(entry: UndoRecord): void {
       entry.cache.delete(entry.key);
       return;
     case UndoKind.PrefixIndexPlan:
-      // Dispatched by registration's caller (which knows the prefix-index
-      // module). The matcher layer must not depend on pipeline, so the
-      // dispatcher is registered via setPrefixIndexRollback().
-      prefixIndexRollback!(entry.plan);
+      // Each entry carries its own rollback dispatcher reference, so the
+      // matcher layer never imports the prefix-index module. Caller
+      // (registration.ts) bakes `rollbackPlan` into the entry at push time.
+      entry.rollback(entry.plan);
       return;
     case UndoKind.TerminalArraysTruncate:
       entry.t.length = entry.len;
