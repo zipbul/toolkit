@@ -54,58 +54,22 @@ export function createRecursiveWalker(root: SegmentNode, decoder: DecoderFn): Ma
     const len = path.length;
 
     if (node.staticPrefix !== null) {
-      const sp = node.staticPrefix;
-      for (let i = 0; i < sp.length; i++) {
-        const seg = sp[i]!;
-        const segLen = seg.length;
-        const after = pos + segLen;
-        if (after > len) return false;
-        if (!path.startsWith(seg, pos)) return false;
-        if (after < len && path.charCodeAt(after) !== 47) return false;
-        pos = after === len ? len : after + 1;
-      }
+      const newPos = consumeStaticPrefixRec(node.staticPrefix, path, pos, len);
+      if (newPos < 0) return false;
+      pos = newPos;
     }
 
-    if (pos >= len) {
-      if (node.store !== null) {
-        state.handlerIndex = node.store;
-        return true;
-      }
-      if (node.wildcardStore !== null && node.wildcardOrigin === 'star') {
-        const pc = state.paramCount * 2;
-        state.paramOffsets[pc] = len;
-        state.paramOffsets[pc + 1] = len;
-        state.paramCount++;
-        state.handlerIndex = node.wildcardStore;
-        return true;
-      }
-      return false;
-    }
+    if (pos >= len) return matchTerminalAtNode(node, len, state);
 
     let end = pos;
     while (end < len && path.charCodeAt(end) !== 47) end++;
     const segLen = end - pos;
 
-    const sck = node.singleChildKey;
-    if (
-      sck !== null &&
-      node.singleChildNext !== null &&
-      sck.length === segLen &&
-      path.startsWith(sck, pos)
-    ) {
-      if (match(node.singleChildNext, path, end === len ? len : end + 1, state, decoder)) return true;
-    } else if (node.staticChildren !== null) {
-      const seg = path.substring(pos, end);
-      const child = node.staticChildren[seg];
-      if (child !== undefined) {
-        if (match(child, path, end === len ? len : end + 1, state, decoder)) return true;
-      }
-    }
+    if (tryStaticDescent(node, path, pos, end, segLen, len, state, decoder)) return true;
 
     const head = node.paramChild;
     if (head !== null && segLen > 0) {
       if (tryMatchParam(head, path, pos, end, state, decoder)) return true;
-
       let p: ParamSegment | null = head.nextSibling;
       while (p !== null) {
         if (tryMatchParam(p, path, pos, end, state, decoder)) return true;
@@ -113,36 +77,106 @@ export function createRecursiveWalker(root: SegmentNode, decoder: DecoderFn): Ma
       }
     }
 
-    if (node.wildcardStore !== null) {
-      if (node.wildcardOrigin === 'multi' && pos >= len) return false;
-      const pc = state.paramCount * 2;
-      state.paramOffsets[pc] = pos;
-      state.paramOffsets[pc + 1] = len;
-      state.paramCount++;
-      state.handlerIndex = node.wildcardStore;
-      return true;
-    }
+    return tryWildcardCapture(node, pos, len, state);
+  }
 
+  function tryStaticDescent(
+    node: SegmentNode,
+    path: string,
+    pos: number,
+    end: number,
+    segLen: number,
+    len: number,
+    state: MatchState,
+    decoder: DecoderFn,
+  ): boolean {
+    const sck = node.singleChildKey;
+    if (
+      sck !== null &&
+      node.singleChildNext !== null &&
+      sck.length === segLen &&
+      path.startsWith(sck, pos)
+    ) {
+      return match(node.singleChildNext, path, end === len ? len : end + 1, state, decoder);
+    }
+    if (node.staticChildren !== null) {
+      const seg = path.substring(pos, end);
+      const child = node.staticChildren[seg];
+      if (child !== undefined) {
+        return match(child, path, end === len ? len : end + 1, state, decoder);
+      }
+    }
     return false;
   }
 
   return function walk(url: string, state: MatchState): boolean {
     state.paramCount = 0;
-    if (url === '/') {
-      if (root.store !== null) {
-        state.handlerIndex = root.store;
-        return true;
-      }
-      if (root.wildcardStore !== null && root.wildcardOrigin === 'star') {
-        state.paramOffsets[0] = 1;
-        state.paramOffsets[1] = 1;
-        state.paramCount = 1;
-        state.handlerIndex = root.wildcardStore;
-        return true;
-      }
-      return false;
-    }
-
+    if (url === '/') return matchRootSlash(root, state);
     return match(root, url, 1, state, decoder);
   };
+}
+
+function matchRootSlash(root: SegmentNode, state: MatchState): boolean {
+  if (root.store !== null) {
+    state.handlerIndex = root.store;
+    return true;
+  }
+  if (root.wildcardStore !== null && root.wildcardOrigin === 'star') {
+    state.paramOffsets[0] = 1;
+    state.paramOffsets[1] = 1;
+    state.paramCount = 1;
+    state.handlerIndex = root.wildcardStore;
+    return true;
+  }
+  return false;
+}
+
+function matchTerminalAtNode(node: SegmentNode, len: number, state: MatchState): boolean {
+  if (node.store !== null) {
+    state.handlerIndex = node.store;
+    return true;
+  }
+  if (node.wildcardStore !== null && node.wildcardOrigin === 'star') {
+    const pc = state.paramCount * 2;
+    state.paramOffsets[pc] = len;
+    state.paramOffsets[pc + 1] = len;
+    state.paramCount++;
+    state.handlerIndex = node.wildcardStore;
+    return true;
+  }
+  return false;
+}
+
+function consumeStaticPrefixRec(
+  sp: ReadonlyArray<string>,
+  path: string,
+  pos: number,
+  len: number,
+): number {
+  for (let i = 0; i < sp.length; i++) {
+    const seg = sp[i]!;
+    const segLen = seg.length;
+    const after = pos + segLen;
+    if (after > len) return -1;
+    if (!path.startsWith(seg, pos)) return -1;
+    if (after < len && path.charCodeAt(after) !== 47) return -1;
+    pos = after === len ? len : after + 1;
+  }
+  return pos;
+}
+
+function tryWildcardCapture(
+  node: SegmentNode,
+  pos: number,
+  len: number,
+  state: MatchState,
+): boolean {
+  if (node.wildcardStore === null) return false;
+  if (node.wildcardOrigin === 'multi' && pos >= len) return false;
+  const pc = state.paramCount * 2;
+  state.paramOffsets[pc] = pos;
+  state.paramOffsets[pc + 1] = len;
+  state.paramCount++;
+  state.handlerIndex = node.wildcardStore;
+  return true;
 }

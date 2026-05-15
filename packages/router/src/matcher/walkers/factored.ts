@@ -38,88 +38,89 @@ export function createFactoredWalker(
     const firstSeg = slash1 === len ? url.substring(1) : url.substring(1, slash1);
     const looked = keyToTerminal.get(firstSeg);
     if (looked === undefined) return false;
-    const storeOverride = looked;
 
-    let node = sharedNext;
-    let pos = slash1 === len ? len : slash1 + 1;
+    return walkSharedSubtree(
+      sharedNext,
+      url,
+      slash1 === len ? len : slash1 + 1,
+      len,
+      looked,
+      decoder,
+      state,
+    );
+  };
+}
 
-    while (pos < len) {
-      if (node.staticPrefix !== null) {
-        const sp = node.staticPrefix;
-        let ok = true;
-        for (let i = 0; i < sp.length; i++) {
-          const seg = sp[i]!;
-          const segLen = seg.length;
-          const after = pos + segLen;
-          if (after > len) { ok = false; break; }
-          if (!url.startsWith(seg, pos)) { ok = false; break; }
-          if (after < len && url.charCodeAt(after) !== 47) { ok = false; break; }
-          pos = after === len ? len : after + 1;
-        }
-        if (!ok) return false;
-        if (pos >= len) break;
-      }
+/**
+ * Walk the canonical shared subtree after the tenant-factor key has been
+ * resolved. `storeOverride` is the per-tenant terminal handler the
+ * factor table looked up; it replaces whatever the shared subtree's
+ * leaf store would say. Shared by all factored walker variants because
+ * their inner-loop semantics are identical once the tenant key is fixed.
+ */
+export function walkSharedSubtree(
+  sharedNext: SegmentNode,
+  url: string,
+  initialPos: number,
+  len: number,
+  storeOverride: number,
+  decoder: DecoderFn,
+  state: MatchState,
+): boolean {
+  let node = sharedNext;
+  let pos = initialPos;
 
-      let end = pos;
-      while (end < len && url.charCodeAt(end) !== 47) end++;
-      const segLen = end - pos;
+  while (pos < len) {
+    if (node.staticPrefix !== null) {
+      const newPos = consumeStaticPrefix(node.staticPrefix, url, pos, len);
+      if (newPos < 0) return false;
+      pos = newPos;
+      if (pos >= len) break;
+    }
 
-      const sck = node.singleChildKey;
-      if (
-        sck !== null &&
-        node.singleChildNext !== null &&
-        sck.length === segLen &&
-        url.startsWith(sck, pos)
-      ) {
-        node = node.singleChildNext;
+    let end = pos;
+    while (end < len && url.charCodeAt(end) !== 47) end++;
+    const segLen = end - pos;
+
+    const sck = node.singleChildKey;
+    if (
+      sck !== null &&
+      node.singleChildNext !== null &&
+      sck.length === segLen &&
+      url.startsWith(sck, pos)
+    ) {
+      node = node.singleChildNext;
+      pos = end === len ? len : end + 1;
+      continue;
+    }
+    if (node.staticChildren !== null) {
+      const seg = url.substring(pos, end);
+      const child = node.staticChildren[seg];
+      if (child !== undefined) {
+        node = child;
         pos = end === len ? len : end + 1;
         continue;
       }
-      if (node.staticChildren !== null) {
-        const seg = url.substring(pos, end);
-        const child = node.staticChildren[seg];
-        if (child !== undefined) {
-          node = child;
-          pos = end === len ? len : end + 1;
-          continue;
-        }
-      }
-
-      if (node.paramChild !== null && segLen > 0) {
-        if (node.paramChild.tester !== null) {
-          const decoded = decoder(url.substring(pos, end));
-          if (node.paramChild.tester(decoded) !== TESTER_PASS) return false;
-        }
-        const pc = state.paramCount * 2;
-        state.paramOffsets[pc] = pos;
-        state.paramOffsets[pc + 1] = end;
-        state.paramCount++;
-        node = node.paramChild.next;
-        pos = end === len ? len : end + 1;
-        continue;
-      }
-
-      if (node.wildcardStore !== null) {
-        if (node.wildcardOrigin === 'multi' && pos >= len) return false;
-        const pc = state.paramCount * 2;
-        state.paramOffsets[pc] = pos;
-        state.paramOffsets[pc + 1] = len;
-        state.paramCount++;
-        state.handlerIndex = storeOverride;
-        return true;
-      }
-
-      return false;
     }
 
-    if (node.store !== null) {
-      state.handlerIndex = storeOverride;
-      return true;
-    }
-
-    if (node.wildcardStore !== null && node.wildcardOrigin === 'star') {
+    if (node.paramChild !== null && segLen > 0) {
+      if (node.paramChild.tester !== null) {
+        const decoded = decoder(url.substring(pos, end));
+        if (node.paramChild.tester(decoded) !== TESTER_PASS) return false;
+      }
       const pc = state.paramCount * 2;
-      state.paramOffsets[pc] = len;
+      state.paramOffsets[pc] = pos;
+      state.paramOffsets[pc + 1] = end;
+      state.paramCount++;
+      node = node.paramChild.next;
+      pos = end === len ? len : end + 1;
+      continue;
+    }
+
+    if (node.wildcardStore !== null) {
+      if (node.wildcardOrigin === 'multi' && pos >= len) return false;
+      const pc = state.paramCount * 2;
+      state.paramOffsets[pc] = pos;
       state.paramOffsets[pc + 1] = len;
       state.paramCount++;
       state.handlerIndex = storeOverride;
@@ -127,5 +128,37 @@ export function createFactoredWalker(
     }
 
     return false;
-  };
+  }
+
+  if (node.store !== null) {
+    state.handlerIndex = storeOverride;
+    return true;
+  }
+  if (node.wildcardStore !== null && node.wildcardOrigin === 'star') {
+    const pc = state.paramCount * 2;
+    state.paramOffsets[pc] = len;
+    state.paramOffsets[pc + 1] = len;
+    state.paramCount++;
+    state.handlerIndex = storeOverride;
+    return true;
+  }
+  return false;
+}
+
+function consumeStaticPrefix(
+  sp: ReadonlyArray<string>,
+  url: string,
+  pos: number,
+  len: number,
+): number {
+  for (let i = 0; i < sp.length; i++) {
+    const seg = sp[i]!;
+    const segLen = seg.length;
+    const after = pos + segLen;
+    if (after > len) return -1;
+    if (!url.startsWith(seg, pos)) return -1;
+    if (after < len && url.charCodeAt(after) !== 47) return -1;
+    pos = after === len ? len : after + 1;
+  }
+  return pos;
 }

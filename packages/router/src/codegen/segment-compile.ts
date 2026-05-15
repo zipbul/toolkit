@@ -174,8 +174,6 @@ function emitNode(
   node: SegmentNode,
   posVar: string,
 ): string {
-  let code = '';
-
   // posVar is always 'pos0' at the entry point or `pos${N}` / `pos${N}_s…`
   // from the recursive emitNode calls below, so slice(3).split('_')[0] is
   // always a non-empty digit string. The `?? '0'` fallback the earlier
@@ -184,80 +182,99 @@ function emitNode(
   const slashVar = `s${posDigits}`;
   const innerPos = `pos${parseInt(posDigits) + 1}`;
 
-  // 1. Static children — iterate the inline cache and the Record uniformly.
+  let code = emitStaticChildren(ctx, node, posVar, innerPos);
+  if (ctx.bail) return '';
+
+  if (node.paramChild !== null) {
+    code += emitParamBranch(ctx, node.paramChild, posVar, slashVar, innerPos);
+    if (ctx.bail) return '';
+  }
+
+  if (node.wildcardStore !== null) {
+    code += emitWildcardStore(node, posVar);
+  }
+
+  return code;
+}
+
+/** Emit one `if (url.startsWith(seg, pos)) { … }` block per static child
+ *  of `node`. Each block recursively emits the child's subtree. */
+function emitStaticChildren(
+  ctx: EmitContext,
+  node: SegmentNode,
+  posVar: string,
+  innerPos: string,
+): string {
+  let code = '';
   forEachStaticChild(node, (seg, child) => {
+    if (ctx.bail) return;
     const segLen = seg.length;
     const nextPos = `${innerPos}_s${seg.replace(/[^a-z0-9]/gi, '_')}`;
-
+    const childInner = emitNode(ctx, child, nextPos);
+    if (ctx.bail) return;
     code += `
     if (url.startsWith(${JSON.stringify(seg)}, ${posVar})) {
       var c = url.charCodeAt(${posVar} + ${segLen});
       if (c === 47) { // '/'
         var ${nextPos} = ${posVar} + ${segLen} + 1;
-${emitNode(ctx, child, nextPos)}
+${childInner}
       } else if (c !== c) { // NaN — past end-of-string → terminal
 ${emitTerminalAt(child)}
       }
     }`;
   });
+  return code;
+}
 
-  // 2. Param child
-  const param = node.paramChild;
-  if (param !== null) {
-    if (param.nextSibling !== null) {
-      ctx.bail = true;
-      return '';
-    }
+/** Emit param-segment dispatch: scan to next `/`, then either the
+ *  strict-terminal fast path, the wildcard-terminal fast path, or the
+ *  general descent into `param.next`. Bails if param has siblings
+ *  (codegen only handles single-param positions; ambiguous fall through
+ *  to the recursive walker). */
+function emitParamBranch(
+  ctx: EmitContext,
+  param: NonNullable<SegmentNode['paramChild']>,
+  posVar: string,
+  slashVar: string,
+  innerPos: string,
+): string {
+  if (param.nextSibling !== null) {
+    ctx.bail = true;
+    return '';
+  }
 
-    const next = param.next;
-    const nextHasNoStatic = !hasAnyStaticChild(next);
-    const strictTerminal = nextHasNoStatic && next.paramChild === null && next.wildcardStore === null && next.store !== null;
-    const wildcardTerminal = nextHasNoStatic && next.paramChild === null && next.wildcardStore !== null;
-    const testerIdx = param.tester !== null ? ctx.testers.push(param.tester) - 1 : -1;
+  const next = param.next;
+  const nextHasNoStatic = !hasAnyStaticChild(next);
+  const strictTerminal = nextHasNoStatic && next.paramChild === null && next.wildcardStore === null && next.store !== null;
+  const wildcardTerminal = nextHasNoStatic && next.paramChild === null && next.wildcardStore !== null;
+  const testerIdx = param.tester !== null ? ctx.testers.push(param.tester) - 1 : -1;
 
-    // charCodeAt scan beats `indexOf('/', pos)` on short HTTP paths (the
-    // common case); see bench/method-research/P-indexof-vs-charcode.bench.ts.
-    // The walker uses the same shape — keep emitter aligned. The "no slash
-    // found" sentinel is `len` here (matches what the walker emits) instead
-    // of `-1`, but we keep `-1` to preserve the wildcardTerminal branch's
-    // existing arithmetic guards.
-    code += `
+  // charCodeAt scan beats `indexOf('/', pos)` on short HTTP paths (the
+  // common case); see bench/method-research/P-indexof-vs-charcode.bench.ts.
+  // The walker uses the same shape — keep emitter aligned. The "no slash
+  // found" sentinel is `len` here (matches what the walker emits) instead
+  // of `-1`, but we keep `-1` to preserve the wildcardTerminal branch's
+  // existing arithmetic guards.
+  let code = `
     var ${slashVar} = ${posVar};
     while (${slashVar} < len && url.charCodeAt(${slashVar}) !== 47) ${slashVar}++;
     if (${slashVar} === len) ${slashVar} = -1;`;
 
-    const testerCheck = testerIdx === -1 ? '' : `
-      if (testers[${testerIdx}](decoder(url.substring(${posVar}, ${slashVar} === -1 ? len : ${slashVar}))) !== TESTER_PASS) return false;`;
+  const testerCheck = emitTesterCheck(testerIdx, posVar, slashVar);
 
-    if (strictTerminal) {
-      code += `
-    if (${slashVar} === -1 && ${posVar} < len) {
-      ${testerCheck}
-      var pc = state.paramCount * 2;
-      state.paramOffsets[pc] = ${posVar};
-      state.paramOffsets[pc + 1] = len;
-      state.paramCount++;
-      state.handlerIndex = ${next.store};
-      return true;
-    }`;
-    } else if (wildcardTerminal && next.wildcardOrigin === 'multi') {
-      code += `
-    if (${slashVar} !== -1 && ${slashVar} > ${posVar} && ${slashVar} + 1 < len) {
-      ${testerCheck}
-      var pc = state.paramCount * 2;
-      state.paramOffsets[pc] = ${posVar};
-      state.paramOffsets[pc + 1] = ${slashVar};
-      state.paramOffsets[pc + 2] = ${slashVar} + 1;
-      state.paramOffsets[pc + 3] = len;
-      state.paramCount += 2;
-      state.handlerIndex = ${next.wildcardStore};
-      return true;
-    }`;
-    } else {
-      const inner = emitNode(ctx, next, innerPos);
-      if (ctx.bail) return '';
+  if (strictTerminal) {
+    code += emitStrictTerminal(posVar, slashVar, testerCheck, next.store!);
+    return code;
+  }
+  if (wildcardTerminal && next.wildcardOrigin === 'multi') {
+    code += emitMultiWildcardTerminal(posVar, slashVar, testerCheck, next.wildcardStore!);
+    return code;
+  }
 
-      code += `
+  const inner = emitNode(ctx, next, innerPos);
+  if (ctx.bail) return '';
+
+  code += `
     if (${slashVar} !== -1 && ${slashVar} > ${posVar}) {
       ${testerCheck}
       var pc = state.paramCount * 2;
@@ -268,26 +285,60 @@ ${emitTerminalAt(child)}
 ${inner}
     }`;
 
-      if (next.store !== null) {
-        code += `
+  if (next.store !== null) {
+    code += emitStrictTerminal(posVar, slashVar, testerCheck, next.store);
+  }
+  return code;
+}
+
+function emitTesterCheck(testerIdx: number, posVar: string, slashVar: string): string {
+  if (testerIdx === -1) return '';
+  return `
+      if (testers[${testerIdx}](decoder(url.substring(${posVar}, ${slashVar} === -1 ? len : ${slashVar}))) !== TESTER_PASS) return false;`;
+}
+
+function emitStrictTerminal(
+  posVar: string,
+  slashVar: string,
+  testerCheck: string,
+  storeIdx: number,
+): string {
+  return `
     if (${slashVar} === -1 && ${posVar} < len) {
       ${testerCheck}
       var pc = state.paramCount * 2;
       state.paramOffsets[pc] = ${posVar};
       state.paramOffsets[pc + 1] = len;
       state.paramCount++;
-      state.handlerIndex = ${next.store};
+      state.handlerIndex = ${storeIdx};
       return true;
     }`;
-      }
-    }
-  }
+}
 
-  // 3. Wildcard Store
-  if (node.wildcardStore !== null) {
-    if (node.wildcardOrigin === 'star') {
-      code += `
-    if (${posVar} <= len) {
+function emitMultiWildcardTerminal(
+  posVar: string,
+  slashVar: string,
+  testerCheck: string,
+  wildcardStoreIdx: number,
+): string {
+  return `
+    if (${slashVar} !== -1 && ${slashVar} > ${posVar} && ${slashVar} + 1 < len) {
+      ${testerCheck}
+      var pc = state.paramCount * 2;
+      state.paramOffsets[pc] = ${posVar};
+      state.paramOffsets[pc + 1] = ${slashVar};
+      state.paramOffsets[pc + 2] = ${slashVar} + 1;
+      state.paramOffsets[pc + 3] = len;
+      state.paramCount += 2;
+      state.handlerIndex = ${wildcardStoreIdx};
+      return true;
+    }`;
+}
+
+function emitWildcardStore(node: SegmentNode, posVar: string): string {
+  const guard = node.wildcardOrigin === 'star' ? `${posVar} <= len` : `${posVar} < len`;
+  return `
+    if (${guard}) {
       var pc = state.paramCount * 2;
       state.paramOffsets[pc] = ${posVar};
       state.paramOffsets[pc + 1] = len;
@@ -295,20 +346,6 @@ ${inner}
       state.handlerIndex = ${node.wildcardStore};
       return true;
     }`;
-    } else {
-      code += `
-    if (${posVar} < len) {
-      var pc = state.paramCount * 2;
-      state.paramOffsets[pc] = ${posVar};
-      state.paramOffsets[pc + 1] = len;
-      state.paramCount++;
-      state.handlerIndex = ${node.wildcardStore};
-      return true;
-    }`;
-    }
-  }
-
-  return code;
 }
 
 function emitTerminalAt(node: SegmentNode): string {

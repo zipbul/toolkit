@@ -2,10 +2,11 @@ import type { DecoderFn, MatchFn, MatchState } from '../../types';
 import {
   detectTenantFactor,
   setTenantFactor,
-  TESTER_PASS,
   type SegmentNode,
   type TenantFactor,
 } from '../../tree';
+
+import { walkSharedSubtree } from './factored';
 
 /**
  * Dry-run variant: detects but does not mutate. Returns the deepest
@@ -105,113 +106,23 @@ export function createPrefixedFactoredWalker(
     state.paramCount = 0;
     const len = url.length;
 
-    let pos = 1;
-    for (let i = 0; i < prefixCount; i++) {
-      const seg = prefixSegs[i]!;
-      const segLen = seg.length;
-      const after = pos + segLen;
-      if (after > len) return false;
-      if (!url.startsWith(seg, pos)) return false;
-      if (after < len && url.charCodeAt(after) !== 47) return false;
-      pos = after === len ? len : after + 1;
-    }
+    const afterPrefix = consumeFixedPrefix(prefixSegs, prefixCount, url, 1, len);
+    if (afterPrefix < 0 || afterPrefix >= len) return false;
 
-    if (pos >= len) return false;
-
-    let end = pos;
-    while (end < len && url.charCodeAt(end) !== 47) end++;
-    const seg = end === pos ? '' : url.substring(pos, end);
+    const keyEnd = scanSegmentEnd(url, afterPrefix, len);
+    const seg = keyEnd === afterPrefix ? '' : url.substring(afterPrefix, keyEnd);
     const looked = keyToTerminal.get(seg);
     if (looked === undefined) return false;
-    const storeOverride = looked;
 
-    let node = sharedNext;
-    pos = end === len ? len : end + 1;
-
-    while (pos < len) {
-      if (node.staticPrefix !== null) {
-        const sp = node.staticPrefix;
-        let ok = true;
-        for (let i = 0; i < sp.length; i++) {
-          const s = sp[i]!;
-          const sLen = s.length;
-          const after = pos + sLen;
-          if (after > len) { ok = false; break; }
-          if (!url.startsWith(s, pos)) { ok = false; break; }
-          if (after < len && url.charCodeAt(after) !== 47) { ok = false; break; }
-          pos = after === len ? len : after + 1;
-        }
-        if (!ok) return false;
-        if (pos >= len) break;
-      }
-
-      let endInner = pos;
-      while (endInner < len && url.charCodeAt(endInner) !== 47) endInner++;
-      const segLen = endInner - pos;
-
-      const sck = node.singleChildKey;
-      if (
-        sck !== null &&
-        node.singleChildNext !== null &&
-        sck.length === segLen &&
-        url.startsWith(sck, pos)
-      ) {
-        node = node.singleChildNext;
-        pos = endInner === len ? len : endInner + 1;
-        continue;
-      }
-      if (node.staticChildren !== null) {
-        const segStr = url.substring(pos, endInner);
-        const child = node.staticChildren[segStr];
-        if (child !== undefined) {
-          node = child;
-          pos = endInner === len ? len : endInner + 1;
-          continue;
-        }
-      }
-
-      if (node.paramChild !== null && segLen > 0) {
-        if (node.paramChild.tester !== null) {
-          const decoded = decoder(url.substring(pos, endInner));
-          if (node.paramChild.tester(decoded) !== TESTER_PASS) return false;
-        }
-        const pc = state.paramCount * 2;
-        state.paramOffsets[pc] = pos;
-        state.paramOffsets[pc + 1] = endInner;
-        state.paramCount++;
-        node = node.paramChild.next;
-        pos = endInner === len ? len : endInner + 1;
-        continue;
-      }
-
-      if (node.wildcardStore !== null) {
-        if (node.wildcardOrigin === 'multi' && pos >= len) return false;
-        const pc = state.paramCount * 2;
-        state.paramOffsets[pc] = pos;
-        state.paramOffsets[pc + 1] = len;
-        state.paramCount++;
-        state.handlerIndex = storeOverride;
-        return true;
-      }
-
-      return false;
-    }
-
-    if (node.store !== null) {
-      state.handlerIndex = storeOverride;
-      return true;
-    }
-
-    if (node.wildcardStore !== null && node.wildcardOrigin === 'star') {
-      const pc = state.paramCount * 2;
-      state.paramOffsets[pc] = len;
-      state.paramOffsets[pc + 1] = len;
-      state.paramCount++;
-      state.handlerIndex = storeOverride;
-      return true;
-    }
-
-    return false;
+    return walkSharedSubtree(
+      sharedNext,
+      url,
+      keyEnd === len ? len : keyEnd + 1,
+      len,
+      looked,
+      decoder,
+      state,
+    );
   };
 }
 
@@ -321,115 +232,56 @@ export function createMultiPrefixFactoredWalker(
     const entry = childMap.get(firstSeg);
     if (entry === undefined) return false;
 
-    const prefixSegs = entry.prefixSegs;
-    const prefixCount = prefixSegs.length;
-    let pos = slash1 === len ? len : slash1 + 1;
+    const afterPrefix = consumeFixedPrefix(
+      entry.prefixSegs,
+      entry.prefixSegs.length,
+      url,
+      slash1 === len ? len : slash1 + 1,
+      len,
+    );
+    if (afterPrefix < 0 || afterPrefix >= len) return false;
 
-    for (let i = 0; i < prefixCount; i++) {
-      const seg = prefixSegs[i]!;
-      const segLen = seg.length;
-      const after = pos + segLen;
-      if (after > len) return false;
-      if (!url.startsWith(seg, pos)) return false;
-      if (after < len && url.charCodeAt(after) !== 47) return false;
-      pos = after === len ? len : after + 1;
-    }
-
-    if (pos >= len) return false;
-
-    let end = pos;
-    while (end < len && url.charCodeAt(end) !== 47) end++;
-    const seg = end === pos ? '' : url.substring(pos, end);
+    const keyEnd = scanSegmentEnd(url, afterPrefix, len);
+    const seg = keyEnd === afterPrefix ? '' : url.substring(afterPrefix, keyEnd);
     const looked = entry.keyToTerminal.get(seg);
     if (looked === undefined) return false;
-    const storeOverride = looked;
 
-    let node = entry.sharedNext;
-    pos = end === len ? len : end + 1;
-
-    while (pos < len) {
-      if (node.staticPrefix !== null) {
-        const sp = node.staticPrefix;
-        let ok = true;
-        for (let i = 0; i < sp.length; i++) {
-          const s = sp[i]!;
-          const sLen = s.length;
-          const after = pos + sLen;
-          if (after > len) { ok = false; break; }
-          if (!url.startsWith(s, pos)) { ok = false; break; }
-          if (after < len && url.charCodeAt(after) !== 47) { ok = false; break; }
-          pos = after === len ? len : after + 1;
-        }
-        if (!ok) return false;
-        if (pos >= len) break;
-      }
-
-      let endInner = pos;
-      while (endInner < len && url.charCodeAt(endInner) !== 47) endInner++;
-      const segLen = endInner - pos;
-
-      const sck = node.singleChildKey;
-      if (
-        sck !== null &&
-        node.singleChildNext !== null &&
-        sck.length === segLen &&
-        url.startsWith(sck, pos)
-      ) {
-        node = node.singleChildNext;
-        pos = endInner === len ? len : endInner + 1;
-        continue;
-      }
-      if (node.staticChildren !== null) {
-        const segStr = url.substring(pos, endInner);
-        const child = node.staticChildren[segStr];
-        if (child !== undefined) {
-          node = child;
-          pos = endInner === len ? len : endInner + 1;
-          continue;
-        }
-      }
-
-      if (node.paramChild !== null && segLen > 0) {
-        if (node.paramChild.tester !== null) {
-          const decoded = decoder(url.substring(pos, endInner));
-          if (node.paramChild.tester(decoded) !== TESTER_PASS) return false;
-        }
-        const pc = state.paramCount * 2;
-        state.paramOffsets[pc] = pos;
-        state.paramOffsets[pc + 1] = endInner;
-        state.paramCount++;
-        node = node.paramChild.next;
-        pos = endInner === len ? len : endInner + 1;
-        continue;
-      }
-
-      if (node.wildcardStore !== null) {
-        if (node.wildcardOrigin === 'multi' && pos >= len) return false;
-        const pc = state.paramCount * 2;
-        state.paramOffsets[pc] = pos;
-        state.paramOffsets[pc + 1] = len;
-        state.paramCount++;
-        state.handlerIndex = storeOverride;
-        return true;
-      }
-
-      return false;
-    }
-
-    if (node.store !== null) {
-      state.handlerIndex = storeOverride;
-      return true;
-    }
-
-    if (node.wildcardStore !== null && node.wildcardOrigin === 'star') {
-      const pc = state.paramCount * 2;
-      state.paramOffsets[pc] = len;
-      state.paramOffsets[pc + 1] = len;
-      state.paramCount++;
-      state.handlerIndex = storeOverride;
-      return true;
-    }
-
-    return false;
+    return walkSharedSubtree(
+      entry.sharedNext,
+      url,
+      keyEnd === len ? len : keyEnd + 1,
+      len,
+      looked,
+      decoder,
+      state,
+    );
   };
+}
+
+/** Consume `prefixSegs` against `url` starting at `pos`. Returns the new
+ *  position after the prefix matches, or `-1` on mismatch. */
+function consumeFixedPrefix(
+  prefixSegs: ReadonlyArray<string>,
+  prefixCount: number,
+  url: string,
+  pos: number,
+  len: number,
+): number {
+  for (let i = 0; i < prefixCount; i++) {
+    const seg = prefixSegs[i]!;
+    const segLen = seg.length;
+    const after = pos + segLen;
+    if (after > len) return -1;
+    if (!url.startsWith(seg, pos)) return -1;
+    if (after < len && url.charCodeAt(after) !== 47) return -1;
+    pos = after === len ? len : after + 1;
+  }
+  return pos;
+}
+
+/** Scan `url` from `pos` to the next `/` or end. */
+function scanSegmentEnd(url: string, pos: number, len: number): number {
+  let end = pos;
+  while (end < len && url.charCodeAt(end) !== 47) end++;
+  return end;
 }

@@ -13,40 +13,16 @@ export function createIterativeWalker(root: SegmentNode, decoder: DecoderFn): Ma
     state.paramCount = 0;
     const len = url.length;
 
-    if (url === '/') {
-      if (root.store !== null) {
-        state.handlerIndex = root.store;
-        return true;
-      }
-      if (root.wildcardStore !== null && root.wildcardOrigin === 'star') {
-        state.paramOffsets[0] = 1;
-        state.paramOffsets[1] = 1;
-        state.paramCount = 1;
-        state.handlerIndex = root.wildcardStore;
-        return true;
-      }
-      return false;
-    }
+    if (url === '/') return matchRootSlash(root, state);
 
     let node = root;
     let pos = 1;
 
     while (pos < len) {
-      // Compacted single-static chain on this node — consume its prefix
-      // segments before the regular per-segment dispatch.
       if (node.staticPrefix !== null) {
-        const sp = node.staticPrefix;
-        let ok = true;
-        for (let i = 0; i < sp.length; i++) {
-          const seg = sp[i]!;
-          const segLen = seg.length;
-          const after = pos + segLen;
-          if (after > len) { ok = false; break; }
-          if (!url.startsWith(seg, pos)) { ok = false; break; }
-          if (after < len && url.charCodeAt(after) !== 47) { ok = false; break; }
-          pos = after === len ? len : after + 1;
-        }
-        if (!ok) return false;
+        const newPos = consumeStaticPrefix(node.staticPrefix, url, pos, len);
+        if (newPos < 0) return false;
+        pos = newPos;
         if (pos >= len) break;
       }
 
@@ -108,20 +84,60 @@ export function createIterativeWalker(root: SegmentNode, decoder: DecoderFn): Ma
       return false;
     }
 
-    if (node.store !== null) {
-      state.handlerIndex = node.store;
-      return true;
-    }
-
-    if (node.wildcardStore !== null && node.wildcardOrigin === 'star') {
-      const pc = state.paramCount * 2;
-      state.paramOffsets[pc] = len;
-      state.paramOffsets[pc + 1] = len;
-      state.paramCount++;
-      state.handlerIndex = node.wildcardStore;
-      return true;
-    }
-
-    return false;
+    return matchTerminalAtNode(node, len, state);
   };
+}
+
+/** Match `/` against the root: store-first then star-wildcard fallback. */
+function matchRootSlash(root: SegmentNode, state: MatchState): boolean {
+  if (root.store !== null) {
+    state.handlerIndex = root.store;
+    return true;
+  }
+  if (root.wildcardStore !== null && root.wildcardOrigin === 'star') {
+    state.paramOffsets[0] = 1;
+    state.paramOffsets[1] = 1;
+    state.paramCount = 1;
+    state.handlerIndex = root.wildcardStore;
+    return true;
+  }
+  return false;
+}
+
+/** Walk a compacted single-static chain. Returns the new `pos` after
+ *  the prefix matches, or `-1` to signal mismatch. */
+function consumeStaticPrefix(
+  sp: ReadonlyArray<string>,
+  url: string,
+  pos: number,
+  len: number,
+): number {
+  for (let i = 0; i < sp.length; i++) {
+    const seg = sp[i]!;
+    const segLen = seg.length;
+    const after = pos + segLen;
+    if (after > len) return -1;
+    if (!url.startsWith(seg, pos)) return -1;
+    if (after < len && url.charCodeAt(after) !== 47) return -1;
+    pos = after === len ? len : after + 1;
+  }
+  return pos;
+}
+
+/** Resolve a terminal at the end-of-input position: store first, then
+ *  star-wildcard fallback. */
+function matchTerminalAtNode(node: SegmentNode, len: number, state: MatchState): boolean {
+  if (node.store !== null) {
+    state.handlerIndex = node.store;
+    return true;
+  }
+  if (node.wildcardStore !== null && node.wildcardOrigin === 'star') {
+    const pc = state.paramCount * 2;
+    state.paramOffsets[pc] = len;
+    state.paramOffsets[pc + 1] = len;
+    state.paramCount++;
+    state.handlerIndex = node.wildcardStore;
+    return true;
+  }
+  return false;
 }
