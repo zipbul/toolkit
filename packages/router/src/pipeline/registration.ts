@@ -24,9 +24,10 @@ import { detectTenantFactor, setTenantFactor } from '../matcher/factor-detect';
 import { decoder } from '../matcher/decoder';
 import { WildcardPrefixIndex, rollbackPlan, type RouteMeta, type CommitPlan } from './wildcard-prefix-index';
 import { IdentityRegistry } from './identity-registry';
+import { packTerminalSlab } from './terminal-slab';
+import { WILDCARD_METHOD, expandWildcardMethodRoutes } from './wildcard-method-expand';
 import { UndoKind } from '../matcher/segment-tree-undo';
 
-const WILDCARD_METHOD = '*' as const;
 
 /**
  * How many routes to process between full GC + libpas scavenge cycles
@@ -75,11 +76,6 @@ interface PendingRoute<T> {
  *     undefined, eliminating the need for a per-variant factory function
  *     (factoryCache size goes from O(2^N) variants to O(1) per route shape).
  */
-const TERMINAL_SLOTS = 3;
-const TERMINAL_HANDLER_OFFSET = 0;
-const TERMINAL_IS_WILDCARD_OFFSET = 1;
-const TERMINAL_PRESENT_BITMASK_OFFSET = 2;
-
 export interface RegistrationSnapshot<T> {
   staticByMethod: Array<Record<string, T> | undefined>;
   staticPathMethodMask: Record<string, number>;
@@ -193,52 +189,7 @@ export class Registration<T> {
     this.identityRegistry = new IdentityRegistry();
     this.routeIdCounter = 0;
 
-    // Resolve `*`-method registrations against the set of methods present at
-    // seal time (built-ins plus any custom token registered before seal).
-    // Common case (no `*` registrations) skips the whole expansion — at 100k
-    // routes that's 100k avoided allocations and one full array copy.
-    let hasWildcardMethod = false;
-    for (let i = 0; i < this.pendingRoutes.length; i++) {
-      if (this.pendingRoutes[i]!.method === WILDCARD_METHOD) {
-        hasWildcardMethod = true;
-        break;
-      }
-    }
-    if (hasWildcardMethod) {
-      const expanded: PendingRoute<T>[] = [];
-      // Set-backed dedup: previous `Array.includes` was O(n×m) over
-      // (pendingRoutes × sealMethods). Bench `bench/method-research/
-      // F-wildcard-includes-vs-set.bench.ts` shows 1.19-2.20× win across
-      // 10k/100k routes with 0/25 custom methods (2.7 ms saved at the
-      // 100k+25 worst case).
-      const sealMethods: string[] = [];
-      const seen = new Set<string>();
-      for (const [name] of this.methodRegistry.getAllCodes()) {
-        sealMethods.push(name);
-        seen.add(name);
-      }
-      for (const r of this.pendingRoutes) {
-        if (r.method !== WILDCARD_METHOD && !seen.has(r.method)) {
-          seen.add(r.method);
-          sealMethods.push(r.method);
-        }
-      }
-      for (const r of this.pendingRoutes) {
-        if (r.method === WILDCARD_METHOD) {
-          for (const m of sealMethods) expanded.push({ method: m, path: r.path, value: r.value });
-        } else {
-          expanded.push(r);
-        }
-      }
-      // Replace pendingRoutes contents in place. `push(...expanded)`
-      // would spread every element as a function argument — at 100k
-      // routes that approaches the engine's arg-list cap (the spec gives
-      // no upper bound but JSC traditionally throws RangeError around
-      // ~500k args). A simple length swap + index assignment side-steps
-      // the cap entirely.
-      this.pendingRoutes.length = expanded.length;
-      for (let i = 0; i < expanded.length; i++) this.pendingRoutes[i] = expanded[i]!;
-    }
+    expandWildcardMethodRoutes(this.pendingRoutes, this.methodRegistry);
 
     // Drain transient build allocations every BUILD_CHUNK_SIZE routes
     // so the JSC heap doesn't peak proportionally to the full route
@@ -324,13 +275,11 @@ export class Registration<T> {
     // three JS arrays. 3 slots per terminal: handlerIdx, isWildcard,
     // presentBitmask. The bitmask drives the super-factory body's per-name
     // gate, replacing what used to be 2^N distinct factory functions.
-    const terminalCount = state.terminalHandlers.length;
-    const terminalSlab = new Int32Array(terminalCount * TERMINAL_SLOTS);
-    for (let t = 0; t < terminalCount; t++) {
-      terminalSlab[t * TERMINAL_SLOTS + TERMINAL_HANDLER_OFFSET] = state.terminalHandlers[t]!;
-      terminalSlab[t * TERMINAL_SLOTS + TERMINAL_IS_WILDCARD_OFFSET] = state.isWildcardByTerminal[t] ? 1 : 0;
-      terminalSlab[t * TERMINAL_SLOTS + TERMINAL_PRESENT_BITMASK_OFFSET] = state.presentBitmaskByTerminal[t] ?? 0;
-    }
+    const terminalSlab = packTerminalSlab(
+      state.terminalHandlers,
+      state.isWildcardByTerminal,
+      state.presentBitmaskByTerminal,
+    );
 
     const snapshot: RegistrationSnapshot<T> = {
       staticByMethod: state.staticByMethod,
