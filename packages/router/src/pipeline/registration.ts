@@ -299,6 +299,13 @@ export class Registration<T> {
       rollback(undo, 0);
       this.methodRegistry.restore(methodRegistrySnapshot);
       this.optionalParamDefaults.restore(optionalDefaultsSnapshot);
+      // Discard build-only state on the throw path too — the success
+      // path drops these at line ~340 below; without symmetrical
+      // cleanup a failed build kept the prefix index and identity
+      // registry alive on the surviving Registration instance until
+      // the next seal attempt (avoidable retention).
+      this.prefixIndex = null;
+      this.identityRegistry = null;
 
       throw new RouterError({
         kind: 'route-validation',

@@ -212,6 +212,14 @@ export class Router<T = unknown> implements RouterPublicApi<T> {
     // param match +5 ns). MatchLayer owns cold-path concerns only.
     this.match = (method, path) => {
       if (matchImpl === undefined) return null;
+      // Pathname must start with `/` per RFC 3986 origin-form. Without
+      // this guard, the iterative/recursive fallback walkers (which
+      // start `pos = 1` and skip the loop when `pos >= len`) can match
+      // an empty string against a root-bearing dynamic tree (e.g.
+      // `/:id?`) and return the wrong handler. The compiled codegen
+      // tier already rejects `len < 2` upstream — the guard here
+      // brings every walker tier in line.
+      if (path.length === 0 || path.charCodeAt(0) !== 47) return null;
       return matchImpl(method, path);
     };
 

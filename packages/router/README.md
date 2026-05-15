@@ -202,35 +202,39 @@ The aliases `:name*` (≡ `*name`) and `*name+` (≡ `:name+`) are also accepted
 
 ```typescript
 interface RouterOptions {
-  ignoreTrailingSlash?: boolean;
-  caseSensitive?: boolean;
-  decodeParams?: boolean;
-  enableCache?: boolean;
+  trailingSlash?: 'strict' | 'ignore';
+  pathCaseSensitive?: boolean;
   cacheSize?: number;
-  maxPathLength?: number;
-  maxSegmentLength?: number;
-  optionalParamBehavior?: 'omit' | 'setUndefined' | 'setEmptyString';
-  regexSafety?: RegexSafetyOptions;
-  regexAnchorPolicy?: 'warn' | 'error' | 'silent';
-  onWarn?: (warning: RouterWarning) => void;
+  optionalParamBehavior?: 'omit' | 'set-undefined';
 }
 ```
 
 | Option | Default | Description |
 |:-------|:--------|:------------|
-| `ignoreTrailingSlash` | `true` | `/users/` and `/users` match the same route |
-| `caseSensitive` | `true` | `/Users` and `/users` are different routes |
-| `decodeParams` | `true` | Percent-decode named param values (wildcards stay raw) |
-| `enableCache` | `false` | Cache `'dynamic'` matches; subsequent hits return `'cache'` source |
-| `cacheSize` | `1000` | Per-method hit-cache capacity (rounded up to next power of two; second-chance / clock eviction). Must be a positive integer. |
-| `maxPathLength` | `2048` | Paths exceeding this length make `match()` return `null` |
-| `maxSegmentLength` | `256` | Paths with any segment exceeding this length make `match()` return `null` |
-| `optionalParamBehavior` | `'omit'` | Shape of `params` when an optional param is missing — see the table above |
-| `regexAnchorPolicy` | `'silent'` | Behavior when a regex param contains `^` or `$` (the anchors are stripped either way): `'silent'` strips silently, `'warn'` calls `onWarn`, `'error'` throws `regex-anchor` |
+| `trailingSlash` | `'ignore'` | `'strict'` keeps `/a` and `/a/` distinct; `'ignore'` collapses one trailing slash on registration and at match time |
+| `pathCaseSensitive` | `true` | `/Users` and `/users` are different routes |
+| `cacheSize` | `1000` | Per-method hit-cache capacity (rounded up to next power of two; second-chance / clock eviction). Must be a positive integer between 1 and 2^30 |
+| `optionalParamBehavior` | `'omit'` | Shape of `params` when an optional param is missing — `'omit'` drops the key, `'set-undefined'` writes `undefined` |
+
+Percent-decoding is always on for named params (wildcards stay raw). Path
+length and segment length are not bounded by the router — that gate
+belongs to the upstream framework / HTTP server. Regex anchors (`^` / `$`)
+are stripped silently. There is no `enableCache` toggle; the cache is
+always allocated lazily per-method (zero memory for an empty router).
 
 ### Cache trade-off
 
-`enableCache: true` adds a per-method `(path → MatchOutput)` second-chance / clock cache. Capacity is bounded by `cacheSize` (rounded up to the next power of two so the slot index can be a single mask), so memory cannot grow unbounded. Eviction is approximate-LRU via the clock used-bit, not exact LRU — recently accessed entries survive one sweep. There is no separate miss cache: `match()` misses pay the walker cost every time, which empirically beat dedicated miss caching across hit / unique-miss / Zipf workloads. Use cache when the live path set is small relative to the route count and dynamic matches dominate the hot path; skip it when matches are already <40 ns or paths are highly variable. Cached routes can never go stale: `build()` seals the route table and rejects further registrations.
+The per-method `(path → MatchOutput)` cache is a second-chance / clock
+cache. Capacity is bounded by `cacheSize` (rounded up to the next power
+of two so the slot index can be a single mask), so memory cannot grow
+unbounded. Eviction is approximate-LRU via the clock used-bit, not exact
+LRU — recently accessed entries survive one sweep. There is no separate
+miss cache: `match()` misses pay the walker cost every time, which
+empirically beat dedicated miss caching across hit / unique-miss / Zipf
+workloads. The cache is most useful when the live path set is small
+relative to the route count and dynamic matches dominate the hot path.
+Cached routes can never go stale: `build()` seals the route table and
+rejects further registrations.
 
 ### Regex Safety
 

@@ -202,35 +202,36 @@ router.add('GET', '/assets/:file+', handler);
 
 ```typescript
 interface RouterOptions {
-  ignoreTrailingSlash?: boolean;
-  caseSensitive?: boolean;
-  decodeParams?: boolean;
-  enableCache?: boolean;
+  trailingSlash?: 'strict' | 'ignore';
+  pathCaseSensitive?: boolean;
   cacheSize?: number;
-  maxPathLength?: number;
-  maxSegmentLength?: number;
-  optionalParamBehavior?: 'omit' | 'setUndefined' | 'setEmptyString';
-  regexSafety?: RegexSafetyOptions;
-  regexAnchorPolicy?: 'warn' | 'error' | 'silent';
-  onWarn?: (warning: RouterWarning) => void;
+  optionalParamBehavior?: 'omit' | 'set-undefined';
 }
 ```
 
 | 옵션 | 기본값 | 설명 |
 |:-----|:-------|:-----|
-| `ignoreTrailingSlash` | `true` | `/users/` 와 `/users` 가 같은 라우트 |
-| `caseSensitive` | `true` | `/Users` 와 `/users` 가 다른 라우트 |
-| `decodeParams` | `true` | 이름 파라미터 값 퍼센트 디코딩 (와일드카드는 raw 유지) |
-| `enableCache` | `false` | `'dynamic'` 매칭 결과 캐싱 — 이후 적중은 `'cache'` source |
-| `cacheSize` | `1000` | 메서드당 hit 캐시 용량 (다음 2의 거듭제곱으로 올림; second-chance / clock 축출). 양의 정수만 허용. |
-| `maxPathLength` | `2048` | 이 길이를 초과하는 경로는 `match()` 가 `null` 반환 |
-| `maxSegmentLength` | `256` | 한 세그먼트가 이 길이를 초과하면 `match()` 가 `null` 반환 |
-| `optionalParamBehavior` | `'omit'` | 누락된 선택적 파라미터의 `params` 형태 — 위 표 참조 |
-| `regexAnchorPolicy` | `'silent'` | 정규식 파라미터에 `^` / `$` 포함 시 동작 (앵커는 어느 정책이든 제거됨): `'silent'` 는 조용히 제거, `'warn'` 은 `onWarn` 호출, `'error'` 는 `regex-anchor` throw |
+| `trailingSlash` | `'ignore'` | `'strict'` 면 `/a` 와 `/a/` 가 다름; `'ignore'` 면 등록/매치 시점에 trailing slash 1개 collapse |
+| `pathCaseSensitive` | `true` | `/Users` 와 `/users` 가 다른 라우트 |
+| `cacheSize` | `1000` | 메서드당 hit 캐시 용량 (다음 2의 거듭제곱으로 올림; second-chance / clock 축출). 1 ~ 2^30 양의 정수만 허용 |
+| `optionalParamBehavior` | `'omit'` | 누락된 선택적 파라미터의 `params` 형태 — `'omit'` 은 키 자체 생략, `'set-undefined'` 는 `undefined` 기록 |
+
+이름 파라미터 퍼센트 디코딩은 항상 켜져 있음 (와일드카드는 raw 유지). 경로
+길이 / 세그먼트 길이 제한은 라우터 책임이 아니라 상위 프레임워크 / HTTP
+서버 책임. 정규식 앵커 (`^` / `$`) 는 silent 로 제거. `enableCache` 토글
+없음 — 캐시는 메서드별 lazy 할당이라 빈 라우터는 0 메모리.
 
 ### 캐시 트레이드오프
 
-`enableCache: true` 는 메서드당 `(path → MatchOutput)` second-chance / clock 캐시를 추가합니다. 용량은 `cacheSize` 로 bound (다음 2의 거듭제곱으로 올림 — slot index 를 단일 mask 로 처리하기 위함) — 메모리 무한 증가 불가. 축출은 clock used-bit 기반 근사 LRU (정확한 LRU 아님 — 최근 접근한 항목은 한 sweep 살아남음). 별도 miss 캐시 없음 — `match()` 미스는 매번 walker 비용. (이전 측정 결과 hit / unique-miss / Zipf 워크로드 모두 dedicated miss 캐시가 net-negative). 활성 path 집합이 라우트 수에 비해 작고 동적 매칭이 핫패스를 차지할 때 사용. 매칭이 이미 <40 ns 이거나 path 가 매우 다양할 때는 비활성. 캐시는 stale 될 수 없습니다 — `build()` 가 라우트 테이블을 봉인하고 이후 등록을 거부.
+메서드당 `(path → MatchOutput)` second-chance / clock 캐시. 용량은
+`cacheSize` 로 bound (다음 2의 거듭제곱으로 올림 — slot index 를 단일
+mask 로 처리하기 위함) — 메모리 무한 증가 불가. 축출은 clock used-bit
+기반 근사 LRU (정확한 LRU 아님 — 최근 접근한 항목은 한 sweep 살아남음).
+별도 miss 캐시 없음 — `match()` 미스는 매번 walker 비용. (이전 측정
+결과 hit / unique-miss / Zipf 워크로드 모두 dedicated miss 캐시가
+net-negative). 활성 path 집합이 라우트 수에 비해 작고 동적 매칭이
+핫패스를 차지할 때 가장 유용. 캐시는 stale 될 수 없음 — `build()` 가
+라우트 테이블을 봉인하고 이후 등록을 거부.
 
 ### 정규식 안전성
 
