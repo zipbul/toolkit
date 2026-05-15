@@ -1,10 +1,10 @@
 import type { MatchFn, MatchState } from './match-state';
 import type { DecoderFn } from './decoder';
-import type { SegmentNode } from './segment-tree';
+import type { SegmentNode } from '../tree/segment-tree';
 
-import { TESTER_PASS } from './pattern-tester';
-import { compactSegmentTree, hasAmbiguousNode } from './segment-tree-traversal';
-import { getTenantFactor } from './factor-detect';
+import { TESTER_PASS } from '../tree/pattern-tester';
+import { compactSegmentTree, hasAmbiguousNode } from '../tree/traversal';
+import { getTenantFactor } from '../tree/factor-detect';
 import { compileSegmentTree, collectWarmupPaths } from '../codegen/segment-compile';
 import { tryCodegenStaticPrefixWildcard } from '../codegen/wildcard-prefix-codegen';
 import { WARMUP_ITERATIONS } from '../codegen/warmup';

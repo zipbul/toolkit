@@ -5,7 +5,7 @@ import type { PathPart } from '../builder/path-parser';
 
 import { err } from '@zipbul/result';
 import { buildPatternTester } from './pattern-tester';
-import { UndoKind, applyUndo, type SegmentTreeUndoLog } from './segment-tree-undo';
+import { UndoKind, applyUndo, type SegmentTreeUndoLog } from './undo';
 
 
 /**

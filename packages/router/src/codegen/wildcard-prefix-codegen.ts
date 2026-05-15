@@ -1,5 +1,5 @@
 import type { MatchFn } from '../matcher/match-state';
-import type { SegmentNode } from '../matcher/segment-tree';
+import type { SegmentNode } from '../tree/segment-tree';
 
 import { detectWildCodegenSpec } from './walker-strategy';
 

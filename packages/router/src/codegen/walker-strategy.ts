@@ -1,4 +1,4 @@
-import type { SegmentNode } from '../matcher/segment-tree';
+import type { SegmentNode } from '../tree/segment-tree';
 
 /*
  * ─── Walker-strategy decisions ──────────────────────────────────────

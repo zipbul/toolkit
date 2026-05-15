@@ -1,11 +1,11 @@
 import type { Result } from '@zipbul/result';
 import type { PathPart } from '../builder/path-parser';
-import type { SegmentNode } from '../matcher/segment-tree';
-import type { SegmentTreeUndoLog } from '../matcher/segment-tree-undo';
-import { applyUndo } from '../matcher/segment-tree-undo';
+import type { SegmentNode } from '../tree/segment-tree';
+import type { SegmentTreeUndoLog } from '../tree/undo';
+import { applyUndo } from '../tree/undo';
 import type { RouterErrorData, RouteParams } from '../types';
 import type { RouteValidationIssue } from '../types';
-import type { PatternTesterFn } from '../matcher/pattern-tester';
+import type { PatternTesterFn } from '../tree/pattern-tester';
 
 import { err, isErr } from '@zipbul/result';
 import { OptionalParamDefaults } from '../builder/optional-param-defaults';
@@ -19,14 +19,14 @@ import {
 } from '../codegen/super-factory';
 import { RouterError } from '../error';
 import { MethodRegistry } from '../method-registry';
-import { createSegmentNode, insertIntoSegmentTree } from '../matcher/segment-tree';
-import { detectTenantFactor, setTenantFactor } from '../matcher/factor-detect';
+import { createSegmentNode, insertIntoSegmentTree } from '../tree/segment-tree';
+import { detectTenantFactor, setTenantFactor } from '../tree/factor-detect';
 import { decoder } from '../matcher/decoder';
 import { WildcardPrefixIndex, rollbackPlan, type RouteMeta, type CommitPlan } from './wildcard-prefix-index';
 import { IdentityRegistry } from './identity-registry';
 import { packTerminalSlab } from './terminal-slab';
 import { WILDCARD_METHOD, expandWildcardMethodRoutes } from './wildcard-method-expand';
-import { UndoKind } from '../matcher/segment-tree-undo';
+import { UndoKind } from '../tree/undo';
 
 
 /**
