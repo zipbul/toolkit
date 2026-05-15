@@ -130,219 +130,284 @@ export function insertIntoSegmentTree(
     const part = parts[i]!;
 
     if (part.type === 'static') {
-      const segs = part.segments;
-
-      for (let s = 0; s < segs.length; s++) {
-        const seg = segs[s]!;
-        // Fast path 1: inline single-static-child cache hit (string compare).
-        if (node.singleChildKey === seg && node.singleChildNext !== null && node.wildcardStore === null) {
-          node = node.singleChildNext;
-          continue;
-        }
-        // Fast path 2: promoted staticChildren Record hit.
-        const sc = node.staticChildren;
-        if (sc !== null && node.wildcardStore === null) {
-          const child = sc[seg];
-          if (child !== undefined) { node = child; continue; }
-        }
-
-        if (node.wildcardStore !== null) {
-          rollbackUndo(undoLog, undoStart);
-          return err({
-            kind: 'route-conflict',
-            message: `Static route conflicts with existing wildcard '*${node.wildcardName}' at the same position`,
-            segment: seg,
-            conflictsWith: `*${node.wildcardName}`,
-          });
-        }
-
-        // Inline-cache slot is empty AND no Record yet: store the child
-        // inline so a node with exactly one static child never allocates
-        // a Record.
-        if (node.singleChildKey === null && node.staticChildren === null) {
-          const fresh = createSegmentNode();
-          node.singleChildKey = seg;
-          node.singleChildNext = fresh;
-          undoLog.push({ k: UndoKind.SingleChildClear, n: node });
-          node = fresh;
-          continue;
-        }
-
-        // Either a different inline-cache key already occupies the slot,
-        // or the Record was previously promoted. Promote the inline entry
-        // (if any) into the Record before adding this new sibling so the
-        // walker only has to consult one of inline/Record per node.
-        let children = node.staticChildren;
-        if (children === null) {
-          children = Object.create(null) as Record<string, SegmentNode>;
-          node.staticChildren = children;
-          undoLog.push({ k: UndoKind.StaticChildrenInit, n: node });
-        }
-        if (node.singleChildKey !== null && node.singleChildNext !== null) {
-          const promotedKey = node.singleChildKey;
-          const promotedNext = node.singleChildNext;
-          children[promotedKey] = promotedNext;
-          node.singleChildKey = null;
-          node.singleChildNext = null;
-          undoLog.push({ k: UndoKind.SingleChildRestore, n: node, key: promotedKey, next: promotedNext });
-          undoLog.push({ k: UndoKind.StaticChildAdd, p: children, key: promotedKey });
-        }
-
-        const fresh = createSegmentNode();
-        children[seg] = fresh;
-        undoLog.push({ k: UndoKind.StaticChildAdd, p: children, key: seg });
-        node = fresh;
-      }
-    } else if (part.type === 'param') {
-      if (node.wildcardStore !== null) {
+      const result = insertStaticSegments(node, part.segments, undoLog);
+      if (typeof result === 'object' && 'kind' in result) {
         rollbackUndo(undoLog, undoStart);
-        return err({
-          kind: 'route-conflict',
-          message: `Parameter ':${part.name}' conflicts with existing wildcard '*${node.wildcardName}' at the same position`,
-          segment: part.name,
-          conflictsWith: `*${node.wildcardName}`,
-        });
+        return err(result);
       }
-
-      let tester: PatternTesterFn | null = null;
-
-      if (part.pattern !== null) {
-        const cached = testerCache.get(part.pattern);
-
-        if (cached !== undefined) {
-          tester = cached;
-        } else {
-          try {
-            const compiled = new RegExp(`^(?:${part.pattern})$`);
-
-            tester = buildPatternTester(part.pattern, compiled);
-            testerCache.set(part.pattern, tester);
-            undoLog.push({ k: UndoKind.TesterAdd, cache: testerCache, key: part.pattern });
-          } catch (e) {
-            rollbackUndo(undoLog, undoStart);
-            return err({
-              kind: 'route-parse',
-              message: `Invalid regex pattern in parameter ':${part.name}': ${e instanceof Error ? e.message : String(e)}`,
-              segment: part.name,
-              suggestion: 'Fix the regex syntax. Anchors are stripped automatically; do not include ^ or $.',
-            });
-          }
-        }
+      node = result;
+    } else if (part.type === 'param') {
+      const result = insertParamPart(node, part, testerCache, routeID, undoLog);
+      if ('kind' in result) {
+        rollbackUndo(undoLog, undoStart);
+        return err(result);
       }
-
-      if (node.paramChild === null) {
-        const created: ParamSegment = {
-          name: part.name,
-          tester,
-          patternSource: part.pattern,
-          ownerRouteID: routeID,
-          next: createSegmentNode(),
-          nextSibling: null,
-        };
-        node.paramChild = created;
-        undoLog.push({ k: UndoKind.ParamChildSet, n: node });
-        node = created.next;
-      } else {
-        let p: ParamSegment | null = node.paramChild;
-        let prev: ParamSegment | null = null;
-        let matched: ParamSegment | null = null;
-
-        while (p !== null) {
-          if (p.name === part.name && p.patternSource === part.pattern) {
-            matched = p;
-            break;
-          }
-
-          if (p.name === part.name && p.patternSource !== part.pattern) {
-            rollbackUndo(undoLog, undoStart);
-            return err({
-              kind: 'route-conflict',
-              message: `Parameter ':${part.name}' has conflicting regex patterns`,
-              segment: part.name,
-              conflictsWith: `:${p.name}${p.patternSource !== null ? `(${p.patternSource})` : ''}`,
-            });
-          }
-
-          if (p.patternSource === null && p.ownerRouteID !== routeID) {
-            rollbackUndo(undoLog, undoStart);
-            return err({
-              kind: 'route-conflict',
-              message: `Parameter ':${part.name}' is unreachable — earlier sibling ':${p.name}' (registered by a different route) has no regex pattern and matches every value at this position. Add a regex pattern to disambiguate, or remove this route.`,
-              segment: part.name,
-              conflictsWith: p.name,
-            });
-          }
-
-          prev = p;
-          p = p.nextSibling;
-        }
-
-        if (matched === null) {
-          const fresh: ParamSegment = {
-            name: part.name,
-            tester,
-            patternSource: part.pattern,
-            ownerRouteID: routeID,
-            next: createSegmentNode(),
-            nextSibling: null,
-          };
-          const tail = prev!;
-          tail.nextSibling = fresh;
-          undoLog.push({ k: UndoKind.ParamSiblingAdd, prev: tail });
-          node = fresh.next;
-        } else {
-          node = matched.next;
-        }
-      }
+      node = result.node;
     } else {
       // wildcard — terminal
-      if (node.wildcardStore !== null) {
-        if (node.wildcardName !== part.name) {
-          rollbackUndo(undoLog, undoStart);
-          return err({
-            kind: 'route-conflict',
-            message: `Wildcard '*${part.name}' conflicts with existing wildcard '*${node.wildcardName}'`,
-            segment: part.name,
-            conflictsWith: `*${node.wildcardName}`,
-          });
-        }
-
+      const fail = attachWildcardTerminal(node, part, handlerIndex, undoLog);
+      if (fail !== undefined) {
         rollbackUndo(undoLog, undoStart);
-        return err({
-          kind: 'route-duplicate',
-          message: 'Wildcard route already exists at this position',
-          suggestion: 'Use a different path or HTTP method',
-        });
+        return err(fail);
       }
-
-      if (node.paramChild !== null) {
-        rollbackUndo(undoLog, undoStart);
-        return err({
-          kind: 'route-conflict',
-          message: `Wildcard '*${part.name}' conflicts with existing parameter at the same position`,
-          segment: part.name,
-          conflictsWith: `:${node.paramChild.name}`,
-        });
-      }
-
-      node.wildcardStore = handlerIndex;
-      node.wildcardName = part.name;
-      node.wildcardOrigin = part.origin;
-      undoLog.push({ k: UndoKind.WildcardSet, n: node });
-
       return;
     }
   }
 
-  if (node.store !== null) {
+  const fail = attachStoreTerminal(node, handlerIndex, undoLog);
+  if (fail !== undefined) {
     rollbackUndo(undoLog, undoStart);
-    return err({
+    return err(fail);
+  }
+}
+
+/**
+ * Walk a sequence of literal segments from `node`, creating fresh nodes
+ * for missing children. Returns the descended node on success, or a
+ * `RouterErrorData` carrier (no Result wrapper — caller runs rollback).
+ */
+function insertStaticSegments(
+  node: SegmentNode,
+  segs: ReadonlyArray<string>,
+  undoLog: SegmentTreeUndoLog,
+): SegmentNode | RouterErrorData {
+  for (let s = 0; s < segs.length; s++) {
+    const seg = segs[s]!;
+    // Fast path 1: inline single-static-child cache hit (string compare).
+    if (node.singleChildKey === seg && node.singleChildNext !== null && node.wildcardStore === null) {
+      node = node.singleChildNext;
+      continue;
+    }
+    // Fast path 2: promoted staticChildren Record hit.
+    const sc = node.staticChildren;
+    if (sc !== null && node.wildcardStore === null) {
+      const child = sc[seg];
+      if (child !== undefined) { node = child; continue; }
+    }
+
+    if (node.wildcardStore !== null) {
+      return {
+        kind: 'route-conflict',
+        message: `Static route conflicts with existing wildcard '*${node.wildcardName}' at the same position`,
+        segment: seg,
+        conflictsWith: `*${node.wildcardName}`,
+      };
+    }
+
+    // Inline-cache slot is empty AND no Record yet: store the child inline so
+    // a node with exactly one static child never allocates a Record.
+    if (node.singleChildKey === null && node.staticChildren === null) {
+      const fresh = createSegmentNode();
+      node.singleChildKey = seg;
+      node.singleChildNext = fresh;
+      undoLog.push({ k: UndoKind.SingleChildClear, n: node });
+      node = fresh;
+      continue;
+    }
+
+    // Either a different inline-cache key already occupies the slot, or the
+    // Record was previously promoted. Promote the inline entry (if any) into
+    // the Record before adding this new sibling so the walker only has to
+    // consult one of inline/Record per node.
+    let children = node.staticChildren;
+    if (children === null) {
+      children = Object.create(null) as Record<string, SegmentNode>;
+      node.staticChildren = children;
+      undoLog.push({ k: UndoKind.StaticChildrenInit, n: node });
+    }
+    if (node.singleChildKey !== null && node.singleChildNext !== null) {
+      const promotedKey = node.singleChildKey;
+      const promotedNext = node.singleChildNext;
+      children[promotedKey] = promotedNext;
+      node.singleChildKey = null;
+      node.singleChildNext = null;
+      undoLog.push({ k: UndoKind.SingleChildRestore, n: node, key: promotedKey, next: promotedNext });
+      undoLog.push({ k: UndoKind.StaticChildAdd, p: children, key: promotedKey });
+    }
+
+    const fresh = createSegmentNode();
+    children[seg] = fresh;
+    undoLog.push({ k: UndoKind.StaticChildAdd, p: children, key: seg });
+    node = fresh;
+  }
+  return node;
+}
+
+/**
+ * Resolve or create the param sibling that matches `part` under `node`.
+ * Returns `{ node }` on success or a `RouterErrorData` on conflict
+ * (caller runs rollback).
+ */
+function insertParamPart(
+  node: SegmentNode,
+  part: { type: 'param'; name: string; pattern: string | null; optional: boolean },
+  testerCache: Map<string, PatternTesterFn>,
+  routeID: number,
+  undoLog: SegmentTreeUndoLog,
+): { node: SegmentNode } | RouterErrorData {
+  if (node.wildcardStore !== null) {
+    return {
+      kind: 'route-conflict',
+      message: `Parameter ':${part.name}' conflicts with existing wildcard '*${node.wildcardName}' at the same position`,
+      segment: part.name,
+      conflictsWith: `*${node.wildcardName}`,
+    };
+  }
+
+  const testerOrErr = resolveOrCompileTester(part, testerCache, undoLog);
+  if (testerOrErr !== null && 'kind' in testerOrErr) return testerOrErr;
+  const tester = testerOrErr as PatternTesterFn | null;
+
+  if (node.paramChild === null) {
+    const created: ParamSegment = {
+      name: part.name,
+      tester,
+      patternSource: part.pattern,
+      ownerRouteID: routeID,
+      next: createSegmentNode(),
+      nextSibling: null,
+    };
+    node.paramChild = created;
+    undoLog.push({ k: UndoKind.ParamChildSet, n: node });
+    return { node: created.next };
+  }
+
+  let p: ParamSegment | null = node.paramChild;
+  let prev: ParamSegment | null = null;
+  let matched: ParamSegment | null = null;
+
+  while (p !== null) {
+    if (p.name === part.name && p.patternSource === part.pattern) {
+      matched = p;
+      break;
+    }
+
+    if (p.name === part.name && p.patternSource !== part.pattern) {
+      return {
+        kind: 'route-conflict',
+        message: `Parameter ':${part.name}' has conflicting regex patterns`,
+        segment: part.name,
+        conflictsWith: `:${p.name}${p.patternSource !== null ? `(${p.patternSource})` : ''}`,
+      };
+    }
+
+    if (p.patternSource === null && p.ownerRouteID !== routeID) {
+      return {
+        kind: 'route-conflict',
+        message: `Parameter ':${part.name}' is unreachable — earlier sibling ':${p.name}' (registered by a different route) has no regex pattern and matches every value at this position. Add a regex pattern to disambiguate, or remove this route.`,
+        segment: part.name,
+        conflictsWith: p.name,
+      };
+    }
+
+    prev = p;
+    p = p.nextSibling;
+  }
+
+  if (matched !== null) return { node: matched.next };
+
+  const fresh: ParamSegment = {
+    name: part.name,
+    tester,
+    patternSource: part.pattern,
+    ownerRouteID: routeID,
+    next: createSegmentNode(),
+    nextSibling: null,
+  };
+  const tail = prev!;
+  tail.nextSibling = fresh;
+  undoLog.push({ k: UndoKind.ParamSiblingAdd, prev: tail });
+  return { node: fresh.next };
+}
+
+/**
+ * Look up or compile the regex tester for a param's `pattern`. Returns
+ * `null` for an unconstrained param, the cached/compiled tester on
+ * success, or a `RouterErrorData` for a regex compile failure.
+ */
+function resolveOrCompileTester(
+  part: { name: string; pattern: string | null },
+  testerCache: Map<string, PatternTesterFn>,
+  undoLog: SegmentTreeUndoLog,
+): PatternTesterFn | null | RouterErrorData {
+  if (part.pattern === null) return null;
+  const cached = testerCache.get(part.pattern);
+  if (cached !== undefined) return cached;
+  try {
+    const compiled = new RegExp(`^(?:${part.pattern})$`);
+    const tester = buildPatternTester(part.pattern, compiled);
+    testerCache.set(part.pattern, tester);
+    undoLog.push({ k: UndoKind.TesterAdd, cache: testerCache, key: part.pattern });
+    return tester;
+  } catch (e) {
+    return {
+      kind: 'route-parse',
+      message: `Invalid regex pattern in parameter ':${part.name}': ${e instanceof Error ? e.message : String(e)}`,
+      segment: part.name,
+      suggestion: 'Fix the regex syntax. Anchors are stripped automatically; do not include ^ or $.',
+    };
+  }
+}
+
+/**
+ * Attach a wildcard terminal at `node`. Returns `undefined` on success
+ * or a `RouterErrorData` on conflict.
+ */
+function attachWildcardTerminal(
+  node: SegmentNode,
+  part: { type: 'wildcard'; name: string; origin: 'star' | 'multi' },
+  handlerIndex: number,
+  undoLog: SegmentTreeUndoLog,
+): RouterErrorData | undefined {
+  if (node.wildcardStore !== null) {
+    if (node.wildcardName !== part.name) {
+      return {
+        kind: 'route-conflict',
+        message: `Wildcard '*${part.name}' conflicts with existing wildcard '*${node.wildcardName}'`,
+        segment: part.name,
+        conflictsWith: `*${node.wildcardName}`,
+      };
+    }
+    return {
+      kind: 'route-duplicate',
+      message: 'Wildcard route already exists at this position',
+      suggestion: 'Use a different path or HTTP method',
+    };
+  }
+
+  if (node.paramChild !== null) {
+    return {
+      kind: 'route-conflict',
+      message: `Wildcard '*${part.name}' conflicts with existing parameter at the same position`,
+      segment: part.name,
+      conflictsWith: `:${node.paramChild.name}`,
+    };
+  }
+
+  node.wildcardStore = handlerIndex;
+  node.wildcardName = part.name;
+  node.wildcardOrigin = part.origin;
+  undoLog.push({ k: UndoKind.WildcardSet, n: node });
+  return undefined;
+}
+
+/**
+ * Attach a non-wildcard terminal store at `node`. Returns `undefined`
+ * on success or a `RouterErrorData` on duplicate.
+ */
+function attachStoreTerminal(
+  node: SegmentNode,
+  handlerIndex: number,
+  undoLog: SegmentTreeUndoLog,
+): RouterErrorData | undefined {
+  if (node.store !== null) {
+    return {
       kind: 'route-duplicate',
       message: 'Terminal route already exists at this position',
       suggestion: 'Use a different path or HTTP method',
-    });
+    };
   }
-
   node.store = handlerIndex;
   undoLog.push({ k: UndoKind.StoreSet, n: node });
+  return undefined;
 }
