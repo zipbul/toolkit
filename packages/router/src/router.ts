@@ -62,138 +62,38 @@ export class Router<T = unknown> implements RouterPublicApi<T> {
 
   constructor(options: RouterOptions = {}) {
     const routerOptions: RouterOptions = { ...options };
-    const optionalParamDefaults = new OptionalParamDefaults(routerOptions.optionalParamBehavior);
     const methodRegistry = new MethodRegistry();
-    const pathParser = new PathParser({
-      caseSensitive: routerOptions.pathCaseSensitive ?? true,
-      ignoreTrailingSlash: routerOptions.trailingSlash !== 'strict',
-    });
     const registration = new Registration<T>(
       methodRegistry,
-      pathParser,
-      optionalParamDefaults,
+      new PathParser({
+        caseSensitive: routerOptions.pathCaseSensitive ?? true,
+        ignoreTrailingSlash: routerOptions.trailingSlash !== 'strict',
+      }),
+      new OptionalParamDefaults(routerOptions.optionalParamBehavior),
     );
-    // Validate cacheSize before passing it to RouterCache. nextPow2 silently
-    // converts garbage (negative/NaN/non-integer) into a 1-slot cache and
-    // rounds 1000 to 1024 — explicit guard for actionable errors.
-    const requestedCacheSize = routerOptions.cacheSize ?? 1000;
-    if (
-      !Number.isInteger(requestedCacheSize) ||
-      requestedCacheSize < 1 ||
-      requestedCacheSize > 0x4000_0000
-    ) {
-      throw new RouterError({
-        kind: 'router-options-invalid',
-        message: `cacheSize must be a positive integer (received: ${String(requestedCacheSize)})`,
-        suggestion: 'Pass a positive integer between 1 and 2^30.',
-      });
-    }
     const cache: CacheContainers<T> = {
       hit: [],
-      maxSize: requestedCacheSize,
+      maxSize: validateCacheSize(routerOptions.cacheSize),
     };
-
-    let matchImpl: ((method: string, path: string) => MatchOutput<T> | null) | undefined;
-    let matchLayer: MatchLayer | undefined;
-
-    // Internal inspection hatch for regression guards (walker tier
-    // detection, handler rollback, etc). NOT part of the public API —
-    // external code must access this through the `@zipbul/router/internal`
-    // subpath via `getRouterInternals(router)`. Defined non-enumerable so
-    // `Object.keys(router)` does not surface it; the wrapper itself is
-    // unfrozen so build() can populate fields, while the Router instance
-    // is frozen to prevent wrapper substitution.
     const internals: RouterInternals<T> = {
       matchImpl: undefined,
       matchLayer: undefined,
       registration,
     };
-
-    Object.defineProperty(this, ROUTER_INTERNALS_KEY, {
-      value: internals,
-      writable: false,
-      enumerable: false,
-      configurable: false,
-    });
+    installInternalsSlot(this, internals);
 
     const performBuild = (): void => {
-      const snapshot = registration.seal({
-        optionalParamBehavior: routerOptions.optionalParamBehavior,
-      });
-      const r = buildFromRegistration<T>(snapshot, routerOptions, methodRegistry);
-
-      let hasAnyStatic = false;
-
-      for (const bucket of r.staticOutputsByMethod) {
-        if (bucket !== undefined) { hasAnyStatic = true; break; }
-      }
-
-      // Pre-allocate per-method hit caches now so the hot path can drop
-      // its `if (hc === undefined)` lazy-init branch — every active
-      // method gets a slot and the matchImpl always sees a non-null hc.
-      for (let i = 0; i < r.activeMethodCodes.length; i++) {
-        const code = r.activeMethodCodes[i]![1];
-        if (cache.hit[code] === undefined) {
-          cache.hit[code] = new RouterCache(cache.maxSize);
-        }
-      }
-
-      const cfg: MatchConfig<T> = {
-        trimSlash: r.ignoreTrailingSlash,
-        lowerCase: !r.caseSensitive,
-        hasAnyTree: r.trees.some(t => t != null),
-        hasAnyStatic,
-        staticOutputsByMethod: r.staticOutputsByMethod,
-        methodCodes: r.methodCodes,
-        trees: r.trees,
-        matchState: r.matchState,
-        handlers: snapshot.handlers,
-        hitCacheByMethod: cache.hit,
-        activeMethodCodes: r.activeMethodCodes,
-        terminalSlab: r.terminalSlab,
-        paramsFactories: r.paramsFactories,
-      };
-
-      matchImpl = compileMatchFn<T>(cfg);
-      // Force JSC tier-up on the next match() call. Empirical (100k tenant):
-      // first-call ~110µs → ~63µs (-43%), p50 ~3µs → ~2µs (-30%). No
-      // hot-path regression — JSC re-tiers regardless; this just front-
-      // loads the cost into build().
-      optimizeNextInvocation(matchImpl);
-      matchLayer = new MatchLayer({
-        normalizePath: r.normalizePath,
-        matchState: r.matchState,
-        activeMethodCodes: r.activeMethodCodes,
-        trees: r.trees,
-        staticPathMethodMask: r.staticPathMethodMask,
-      });
-
-      // Build-only tables are frozen as a partition.
-      Object.freeze(snapshot.segmentTrees);
-      Object.freeze(snapshot.staticByMethod);
-      Object.freeze(r.activeMethodCodes);
-
-      internals.matchImpl = matchImpl;
-      internals.matchLayer = matchLayer;
-
-      // Build pushes the JSC heap commit to a high-water mark (transient
-      // parser/expand/prefix-index/insertion allocations on the order of
-      // 100s of MB at 100k routes). `Bun.gc(true)` runs JSC's full
-      // collect AND mimalloc's fragmented-memory cleanup in one call;
-      // libpas's scavenger tick then returns the empty pages to the OS
-      // asynchronously. Hot path is unaffected — the JIT lazily re-tiers
-      // on the next match.
-      Bun.gc(true);
+      const built = runBuildPipeline<T>(registration, methodRegistry, routerOptions, cache);
+      internals.matchImpl = built.matchImpl;
+      internals.matchLayer = built.matchLayer;
     };
 
     this.add = (method, path, value) => {
       registration.add(method, path, value);
     };
-
     this.addAll = (entries) => {
       registration.addAll(entries);
     };
-
     this.build = () => {
       if (!registration.isSealed()) performBuild();
       // No post-build compactMemory call. The single `Bun.gc(true)` inside
@@ -212,7 +112,8 @@ export class Router<T = unknown> implements RouterPublicApi<T> {
     // breaks JSC's monomorphic IC (verified: static match 300 ps → 13 ns,
     // param match +5 ns). MatchLayer owns cold-path concerns only.
     this.match = (method, path) => {
-      if (matchImpl === undefined) return null;
+      const impl = internals.matchImpl;
+      if (impl === undefined) return null;
       // Pathname must start with `/` per RFC 3986 origin-form. Without
       // this guard, the iterative/recursive fallback walkers (which
       // start `pos = 1` and skip the loop when `pos >= len`) can match
@@ -221,14 +122,142 @@ export class Router<T = unknown> implements RouterPublicApi<T> {
       // tier already rejects `len < 2` upstream — the guard here
       // brings every walker tier in line.
       if (path.length === 0 || path.charCodeAt(0) !== 47) return null;
-      return matchImpl(method, path);
+      return impl(method, path);
     };
-
     this.allowedMethods = (path) => {
-      if (matchLayer === undefined) return [];
-      return matchLayer.allowedMethods(path);
+      const layer = internals.matchLayer;
+      return layer === undefined ? [] : layer.allowedMethods(path);
     };
 
     Object.freeze(this);
   }
+}
+
+/**
+ * Validate `cacheSize` before handing it to `RouterCache`. nextPow2 silently
+ * converts garbage (negative/NaN/non-integer) into a 1-slot cache and rounds
+ * 1000 → 1024; this guard surfaces actionable errors instead.
+ */
+function validateCacheSize(rawCacheSize: number | undefined): number {
+  const requested = rawCacheSize ?? 1000;
+  if (
+    !Number.isInteger(requested) ||
+    requested < 1 ||
+    requested > 0x4000_0000
+  ) {
+    throw new RouterError({
+      kind: 'router-options-invalid',
+      message: `cacheSize must be a positive integer (received: ${String(requested)})`,
+      suggestion: 'Pass a positive integer between 1 and 2^30.',
+    });
+  }
+  return requested;
+}
+
+/**
+ * Internal-inspection hatch wiring. Symbol-keyed slot, non-enumerable +
+ * non-configurable so external code cannot recreate the key by name and
+ * `Object.keys(router)` does not surface it. The `internals` wrapper
+ * itself stays unfrozen so build() can populate matchImpl/matchLayer
+ * after the Router instance is frozen.
+ */
+function installInternalsSlot<T>(target: object, internals: RouterInternals<T>): void {
+  Object.defineProperty(target, ROUTER_INTERNALS_KEY, {
+    value: internals,
+    writable: false,
+    enumerable: false,
+    configurable: false,
+  });
+}
+
+interface BuildPipelineResult<T> {
+  matchImpl: (method: string, path: string) => MatchOutput<T> | null;
+  matchLayer: MatchLayer;
+}
+
+/**
+ * Drive one build cycle: seal registration → produce runtime tables →
+ * pre-allocate per-method caches → compile matchImpl → freeze read-only
+ * partitions → run the single mimalloc/JSC GC drain. Returns the freshly
+ * built matchImpl/matchLayer pair so the caller can publish them into
+ * the internals slot.
+ */
+function runBuildPipeline<T>(
+  registration: Registration<T>,
+  methodRegistry: MethodRegistry,
+  routerOptions: RouterOptions,
+  cache: CacheContainers<T>,
+): BuildPipelineResult<T> {
+  const snapshot = registration.seal({
+    optionalParamBehavior: routerOptions.optionalParamBehavior,
+  });
+  const r = buildFromRegistration<T>(snapshot, routerOptions, methodRegistry);
+
+  let hasAnyStatic = false;
+  for (const bucket of r.staticOutputsByMethod) {
+    if (bucket !== undefined) { hasAnyStatic = true; break; }
+  }
+
+  // Pre-allocate per-method hit caches so the hot path can drop its
+  // `if (hc === undefined)` lazy-init branch — every active method gets
+  // a slot and the matchImpl always sees a non-null hc.
+  for (let i = 0; i < r.activeMethodCodes.length; i++) {
+    const code = r.activeMethodCodes[i]![1];
+    if (cache.hit[code] === undefined) {
+      cache.hit[code] = new RouterCache(cache.maxSize);
+    }
+  }
+
+  const matchImpl = compileMatchFn<T>(buildMatchConfig(snapshot, r, cache, hasAnyStatic));
+  // Force JSC tier-up on the next match() call. Empirical (100k tenant):
+  // first-call ~110µs → ~63µs (-43%), p50 ~3µs → ~2µs (-30%). No hot-path
+  // regression — JSC re-tiers regardless; this just front-loads the cost
+  // into build().
+  optimizeNextInvocation(matchImpl);
+  const matchLayer = new MatchLayer({
+    normalizePath: r.normalizePath,
+    matchState: r.matchState,
+    activeMethodCodes: r.activeMethodCodes,
+    trees: r.trees,
+    staticPathMethodMask: r.staticPathMethodMask,
+  });
+
+  // Build-only tables are frozen as a partition.
+  Object.freeze(snapshot.segmentTrees);
+  Object.freeze(snapshot.staticByMethod);
+  Object.freeze(r.activeMethodCodes);
+
+  // Build pushes the JSC heap commit to a high-water mark (transient
+  // parser/expand/prefix-index/insertion allocations on the order of 100s
+  // of MB at 100k routes). `Bun.gc(true)` runs JSC's full collect AND
+  // mimalloc's fragmented-memory cleanup in one call; libpas's scavenger
+  // tick then returns the empty pages to the OS asynchronously. Hot path
+  // is unaffected — the JIT lazily re-tiers on the next match.
+  Bun.gc(true);
+
+  return { matchImpl, matchLayer };
+}
+
+/** Pure projection: snapshot + BuildResult + cache → MatchConfig. */
+function buildMatchConfig<T>(
+  snapshot: ReturnType<Registration<T>['seal']>,
+  r: ReturnType<typeof buildFromRegistration<T>>,
+  cache: CacheContainers<T>,
+  hasAnyStatic: boolean,
+): MatchConfig<T> {
+  return {
+    trimSlash: r.ignoreTrailingSlash,
+    lowerCase: !r.caseSensitive,
+    hasAnyTree: r.trees.some(t => t != null),
+    hasAnyStatic,
+    staticOutputsByMethod: r.staticOutputsByMethod,
+    methodCodes: r.methodCodes,
+    trees: r.trees,
+    matchState: r.matchState,
+    handlers: snapshot.handlers,
+    hitCacheByMethod: cache.hit,
+    activeMethodCodes: r.activeMethodCodes,
+    terminalSlab: r.terminalSlab,
+    paramsFactories: r.paramsFactories,
+  };
 }
