@@ -184,16 +184,48 @@ export class Registration<T> {
     const methodRegistrySnapshot = this.methodRegistry.snapshot();
     const optionalDefaultsSnapshot = this.optionalParamDefaults.snapshot();
     const state = createBuildState<T>();
-    const issues: RouteValidationIssue[] = [];
     const undo: SegmentTreeUndoLog = [];
-
-    const factoryCache: FactoryCache = createFactoryCache();
     const omitBehavior = (options.optionalParamBehavior ?? 'omit') === 'omit';
+
     this.prefixIndex = new WildcardPrefixIndex();
     this.identityRegistry = new IdentityRegistry();
     this.routeIdCounter = 0;
 
     expandWildcardMethodRoutes(this.pendingRoutes, this.methodRegistry);
+
+    const issues = this.compileAllRoutes(state, undo, omitBehavior);
+
+    if (issues.length > 0) {
+      this.abortBuild(undo, methodRegistrySnapshot, optionalDefaultsSnapshot, issues);
+    }
+
+    this.sealed = true;
+    this.pendingRoutes.length = 0;
+
+    const snapshot = this.packSnapshot(state);
+    this.snapshot = snapshot;
+    // Build-only structures (prefix index, identity registry) are discarded
+    // here so they do not retain memory past snapshot publication.
+    this.prefixIndex = null;
+    this.identityRegistry = null;
+
+    applyTenantFactors(state.segmentTrees);
+
+    return snapshot;
+  }
+
+  /**
+   * Run the per-route compile loop with periodic GC drains. Returns the
+   * accumulated validation issues; an empty array means every pending
+   * route compiled cleanly.
+   */
+  private compileAllRoutes(
+    state: BuildState<T>,
+    undo: SegmentTreeUndoLog,
+    omitBehavior: boolean,
+  ): RouteValidationIssue[] {
+    const issues: RouteValidationIssue[] = [];
+    const factoryCache: FactoryCache = createFactoryCache();
 
     // Drain transient build allocations every BUILD_CHUNK_SIZE routes
     // so the JSC heap doesn't peak proportionally to the full route
@@ -211,7 +243,7 @@ export class Registration<T> {
 
       const result = this.compileRoute(
         route, state, undo, routeID,
-        factoryCache, omitBehavior, decoder
+        factoryCache, omitBehavior, decoder,
       );
 
       if (isErr(result)) {
@@ -252,40 +284,50 @@ export class Registration<T> {
       }
     }
 
-    if (issues.length > 0) {
-      rollback(undo, 0);
-      this.methodRegistry.restore(methodRegistrySnapshot);
-      this.optionalParamDefaults.restore(optionalDefaultsSnapshot);
-      // Discard build-only state on the throw path too — the success
-      // path drops these at line ~340 below; without symmetrical
-      // cleanup a failed build kept the prefix index and identity
-      // registry alive on the surviving Registration instance until
-      // the next seal attempt (avoidable retention).
-      this.prefixIndex = null;
-      this.identityRegistry = null;
+    return issues;
+  }
 
-      throw new RouterError({
-        kind: 'route-validation',
-        message: `${issues.length} route(s) failed validation during build().`,
-        errors: issues,
-      });
-    }
+  /**
+   * Failure path: roll back every build mutation, drop build-only state,
+   * and throw a RouterError carrying every collected issue. Never returns.
+   */
+  private abortBuild(
+    undo: SegmentTreeUndoLog,
+    methodRegistrySnapshot: ReturnType<MethodRegistry['snapshot']>,
+    optionalDefaultsSnapshot: ReturnType<OptionalParamDefaults['snapshot']>,
+    issues: RouteValidationIssue[],
+  ): never {
+    rollback(undo, 0);
+    this.methodRegistry.restore(methodRegistrySnapshot);
+    this.optionalParamDefaults.restore(optionalDefaultsSnapshot);
+    // Discard build-only state on the throw path too — the success path
+    // drops these in seal() after publishing the snapshot. Without
+    // symmetrical cleanup a failed build kept the prefix index and
+    // identity registry alive on the surviving Registration instance
+    // until the next seal attempt (avoidable retention).
+    this.prefixIndex = null;
+    this.identityRegistry = null;
 
-    this.sealed = true;
-    this.pendingRoutes.length = 0; 
+    throw new RouterError({
+      kind: 'route-validation',
+      message: `${issues.length} route(s) failed validation during build().`,
+      errors: issues,
+    });
+  }
 
-    // Pack the per-terminal parallel arrays into a single Int32Array slab
-    // so the runtime walker reads contiguous memory rather than chasing
-    // three JS arrays. 3 slots per terminal: handlerIdx, isWildcard,
-    // presentBitmask. The bitmask drives the super-factory body's per-name
-    // gate, replacing what used to be 2^N distinct factory functions.
+  /**
+   * Pack the build state into the read-only snapshot that the runtime
+   * consumes. Per-terminal parallel arrays collapse into one Int32Array
+   * slab so the matcher reads contiguous memory.
+   */
+  private packSnapshot(state: BuildState<T>): RegistrationSnapshot<T> {
     const terminalSlab = packTerminalSlab(
       state.terminalHandlers,
       state.isWildcardByTerminal,
       state.presentBitmaskByTerminal,
     );
 
-    const snapshot: RegistrationSnapshot<T> = {
+    return {
       staticByMethod: state.staticByMethod,
       staticPathMethodMask: state.staticPathMethodMask,
       segmentTrees: Object.freeze([...state.segmentTrees]) as Array<SegmentNode | null>,
@@ -294,36 +336,6 @@ export class Registration<T> {
       paramsFactories: state.paramsFactories,
       maxParamsObserved: state.maxParamsObserved,
     };
-
-    this.snapshot = snapshot;
-    // Build-only structures (prefix index, identity registry) are discarded
-    // here so they do not retain memory past snapshot publication.
-    this.prefixIndex = null;
-    this.identityRegistry = null;
-    // Tenant-prefix factor detection. When a method's root has a high-fanout
-    // sibling group whose subtrees only differ in the terminal handler index,
-    // collapse them onto a single canonical subtree + Map<prefix, handler>.
-    // Empirical (100k tenant `/tenant-${i}/users/:id/posts/:postId`):
-    // 706k objects → 206k objects, RSS 220 MB → ~50 MB once libpas scavenges
-    // the orphaned subtrees (~300 ms after Bun.gc).
-    let factorApplied = false;
-    for (const root of state.segmentTrees) {
-      if (root === undefined || root === null) continue;
-      const factor = detectTenantFactor(root);
-      if (factor !== null) {
-        setTenantFactor(root, factor);
-        // Drop the original high-fanout staticChildren now that the
-        // factor map owns the dispatch — they're no longer reachable
-        // from the walker.
-        root.staticChildren = null;
-        root.singleChildKey = null;
-        root.singleChildNext = null;
-        factorApplied = true;
-      }
-    }
-    if (factorApplied) Bun.gc(true);
-
-    return snapshot;
   }
 
   private assertNotSealed(
@@ -608,6 +620,31 @@ function createBuildState<T>(): BuildState<T> {
     routeCounter: 0,
     maxParamsObserved: 0,
   };
+}
+
+/**
+ * Tenant-prefix factor detection. When a method's root has a high-fanout
+ * sibling group whose subtrees only differ in the terminal handler index,
+ * collapse them onto a single canonical subtree + Map<prefix, handler>.
+ * Empirical (100k tenant `/tenant-${i}/users/:id/posts/:postId`):
+ * 706k objects → 206k objects, RSS 220 MB → ~50 MB once libpas scavenges
+ * the orphaned subtrees (~300 ms after Bun.gc).
+ */
+function applyTenantFactors(segmentTrees: ReadonlyArray<SegmentNode | null>): void {
+  let factorApplied = false;
+  for (const root of segmentTrees) {
+    if (root === undefined || root === null) continue;
+    const factor = detectTenantFactor(root);
+    if (factor === null) continue;
+    setTenantFactor(root, factor);
+    // Drop the original high-fanout staticChildren now that the factor
+    // map owns the dispatch — they're no longer reachable from the walker.
+    root.staticChildren = null;
+    root.singleChildKey = null;
+    root.singleChildNext = null;
+    factorApplied = true;
+  }
+  if (factorApplied) Bun.gc(true);
 }
 
 function rollback(undo: SegmentTreeUndoLog, mark: number): void {

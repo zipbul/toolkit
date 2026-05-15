@@ -69,161 +69,74 @@ type CompiledMatch<T> = (method: string, path: string) => MatchOutput<T> | null;
  * RFC-compliant pathnames.
  */
 export function compileMatchFn<T>(cfg: MatchConfig<T>): CompiledMatch<T> {
-  const activeMethodCount = cfg.activeMethodCodes.length;
-  const singleMethod = activeMethodCount === 1 ? cfg.activeMethodCodes[0]! : null;
+  const singleMethod = cfg.activeMethodCodes.length === 1 ? cfg.activeMethodCodes[0]! : null;
 
-  const src: string[] = [];
-  const normCfg: NormalizeCfg = cfg;
+  // Three router shapes get three distinct emitters. Each emits a
+  // single-purpose `new Function()` body: no shape branching at runtime,
+  // no dead-code closure captures, and JSC ICs stay monomorphic per shape.
+  if (cfg.hasAnyStatic && !cfg.hasAnyTree && singleMethod !== null) {
+    return compileStaticOnlySingleMethod(cfg, singleMethod);
+  }
+  if (cfg.hasAnyStatic && !cfg.hasAnyTree) {
+    return compileStaticOnlyMultiMethod(cfg);
+  }
+  return compileMixed(cfg, singleMethod);
+}
 
-  // Path validation (length, percent encoding, etc.) is the upstream
-  // framework / HTTP server's responsibility. The router accepts the
-  // pathname as given and normalizes only what is policy: trailing slash
-  // and case folding. No `?` stripping; no per-call length guards.
+type SingleMethodSpec = readonly [string, number];
 
-  // Method dispatch — specialised when only one method is active so JSC
-  // can fold the literal compare and the `mc` constant.
+/** Emit method-dispatch prelude. Single-method specialises to a literal compare. */
+function emitMethodDispatch(singleMethod: SingleMethodSpec | null): string {
   if (singleMethod !== null) {
     const [name, code] = singleMethod;
-    src.push(`if (method !== ${JSON.stringify(name)}) return null;`);
-    src.push(`var mc = ${code};`);
-  } else {
-    src.push(`var mc = methodCodes[method]; if (mc === undefined) return null;`);
+    return `if (method !== ${JSON.stringify(name)}) return null;\nvar mc = ${code};`;
   }
+  return `var mc = methodCodes[method]; if (mc === undefined) return null;`;
+}
 
-  // Single-method static-only fast path: closure-captures the bucket
-  // resolved for that method so the lookup is a single property access.
-  //
-  // Bun/JSC optimization: the overwhelmingly common case is that callers
-  // pass canonical paths — no `?` query, no trailing slash, no uppercase.
-  // We probe `activeBucket[path]` *before* paying any normalization cost
-  // so that path becomes a single object property load with zero
-  // substring/indexOf/toLowerCase work. Only on miss do we run the full
-  // normalization and retry.
-  if (cfg.hasAnyStatic && !cfg.hasAnyTree && singleMethod !== null) {
-    src.push(`
-      var out = activeBucket[path];
-      if (out !== undefined) return out;
-    `);
-    src.push('var sp = path;');
-    const trimJs0 = emitTrailingSlashTrim(normCfg, 'sp');
-    if (trimJs0 !== '') src.push(trimJs0);
-    const lowerJs0 = emitLowerCase(normCfg, 'sp');
-    if (lowerJs0 !== '') src.push(lowerJs0);
-    src.push(`
-      if (sp !== path) {
-        out = activeBucket[sp];
-        if (out !== undefined) return out;
-      }
-      return null;
-    `);
+/** Emit `var sp = path;` plus the active normalization steps. */
+function emitNormalize(cfg: NormalizeCfg, outVar: string): string {
+  const lines = [`var ${outVar} = path;`];
+  const trim = emitTrailingSlashTrim(cfg, outVar);
+  if (trim !== '') lines.push(trim);
+  const lower = emitLowerCase(cfg, outVar);
+  if (lower !== '') lines.push(lower);
+  return lines.join('\n');
+}
 
-    const body = src.join('\n');
-    const factory = new Function(
-      'activeBucket', 'methodCodes', 'staticOutputsByMethod',
-      `return function match(method, path) {\n${body}\n};`,
-    );
-
-    const compiled = factory(
-      cfg.staticOutputsByMethod[singleMethod[1]] ?? Object.create(null),
-      cfg.methodCodes,
-      cfg.staticOutputsByMethod,
-    ) as CompiledMatch<T>;
-
-    runWarmup(compiled, cfg);
-    return compiled;
+/** Emit the post-normalize static-bucket probe. */
+function emitStaticBucketProbe(singleMethod: SingleMethodSpec | null, key: string): string {
+  if (singleMethod !== null) {
+    return `
+      var out = activeBucket[${key}];
+      if (out !== undefined) return out;`;
   }
-
-  // Bun/JSC fast path for mixed (static + dynamic) routers: try the
-  // canonical-path static bucket *before* normalization so static hits
-  // skip the indexOf/substring/Map.get chain entirely. Object property
-  // load is one IC slot; on miss we fall through to the existing
-  // normalize → cache → walker pipeline with `sp` populated identically.
-  // Single-method case uses the closure-captured `activeBucket`; multi-
-  // method case must resolve the per-method bucket from the dispatched mc.
-  if (cfg.hasAnyStatic && cfg.hasAnyTree) {
-    if (singleMethod !== null) {
-      src.push(`
-        var preOut = activeBucket[path];
-        if (preOut !== undefined) return preOut;
-      `);
-    } else {
-      src.push(`
-        var preBucket = staticOutputsByMethod[mc];
-        if (preBucket !== undefined) {
-          var preOut = preBucket[path];
-          if (preOut !== undefined) return preOut;
-        }
-      `);
-    }
-  }
-
-  // Inline path normalization: only router-policy steps run here
-  // (trailing-slash trim and case folding). Query stripping is not the
-  // router's job — the framework hands us a pathname.
-  src.push('var sp = path;');
-  const trimJs = emitTrailingSlashTrim(normCfg, 'sp');
-  if (trimJs !== '') src.push(trimJs);
-  const lowerJs = emitLowerCase(normCfg, 'sp');
-  if (lowerJs !== '') src.push(lowerJs);
-
-  // Static-only, multi-method.
-  if (cfg.hasAnyStatic && !cfg.hasAnyTree) {
-    src.push(`
+  return `
       var bucket = staticOutputsByMethod[mc];
       if (bucket !== undefined) {
-        var out = bucket[sp];
+        var out = bucket[${key}];
         if (out !== undefined) return out;
-      }
-      return null;
-    `);
+      }`;
+}
 
-    const body = src.join('\n');
-    const factory = new Function(
-      'staticOutputsByMethod', 'methodCodes',
-      `return function match(method, path) {\n${body}\n};`,
-    );
-
-    const compiled = factory(
-      cfg.staticOutputsByMethod, cfg.methodCodes,
-    ) as CompiledMatch<T>;
-
-    runWarmup(compiled, cfg);
-    return compiled;
+/** Emit pre-normalize fast-path bucket probe (mixed routers only). */
+function emitPreNormalizeStaticProbe(singleMethod: SingleMethodSpec | null): string {
+  if (singleMethod !== null) {
+    return `
+      var preOut = activeBucket[path];
+      if (preOut !== undefined) return preOut;`;
   }
+  return `
+      var preBucket = staticOutputsByMethod[mc];
+      if (preBucket !== undefined) {
+        var preOut = preBucket[path];
+        if (preOut !== undefined) return preOut;
+      }`;
+}
 
-  // Static-first on the normalized path: an object property load (one IC
-  // slot) beats both branches of the cache check, and static results are
-  // never stored in the cache, so probing static before the cache costs
-  // nothing on a cache hit and saves the cache lookups on a static hit
-  // for non-canonical inputs (e.g., trailing slash that got trimmed).
-  if (cfg.hasAnyStatic) {
-    if (singleMethod !== null) {
-      src.push(`
-        var out = activeBucket[sp];
-        if (out !== undefined) return out;
-      `);
-    } else {
-      src.push(`
-        var bucket = staticOutputsByMethod[mc];
-        if (bucket !== undefined) {
-          var out = bucket[sp];
-          if (out !== undefined) return out;
-        }
-      `);
-    }
-  }
-
-  // Cache probe (after static). Static hits already returned above; only
-  // dynamic results live in the cache. Sparse-array indexing by mc keeps
-  // each lookup as a typed-array load rather than a `Map.get` dispatch.
-  // Cache entries are frozen at write time so subsequent hits can return
-  // their `params` reference directly without paying for a per-match
-  // clone. `EMPTY_PARAMS` is already frozen module-init. Caller mutation
-  // of returned params throws TypeError instead of silently corrupting
-  // the cached entry.
-  // hit-cache probe (after static). missCache was removed — measured
-  // dead weight across hit / unique-miss / Zipf workloads (bench/cache-bypass).
-  src.push(`
+/** Emit hit-cache probe — only dynamic results land in the cache. */
+function emitHitCacheProbe(): string {
+  return `
     var hc = hitCacheByMethod[mc];
     if (hc !== undefined) {
       var cached = hc.get(sp);
@@ -234,64 +147,137 @@ export function compileMatchFn<T>(cfg: MatchConfig<T>): CompiledMatch<T> {
           meta: CACHE_META,
         };
       }
-    }
-  `);
+    }`;
+}
 
-  if (cfg.hasAnyTree) {
-    // Single-method router: closure-capture the per-method walker as a
-    // constant `tr0` so JSC folds the dispatch and inlines the call site.
-    // Multi-method router still indexes into the trees array per call.
-    if (singleMethod !== null) {
-      // tr0 is guaranteed non-null here: singleMethod implies the only
-      // active method, and hasAnyTree being true means *its* tree slot
-      // is populated. The defensive `tr0 !== null ?` ternary the
-      // emitter used to carry was dead in this branch.
-      src.push(`
-        var ok = tr0(sp, matchState);
-      `);
-    } else {
-      src.push(`
-        var tr = trees[mc];
-        if (!tr) return null;
-        var ok = tr(sp, matchState);
-      `);
-    }
+/**
+ * Emit walker dispatch + terminal-slab unpack + cache write. Only used
+ * by the mixed/dynamic compiler; static-only emitters never reach here.
+ */
+function emitWalkerAndPack(cfg: MatchConfig<unknown>, singleMethod: SingleMethodSpec | null): string {
+  const dispatch = singleMethod !== null
+    ? `var ok = tr0(sp, matchState);`
+    : `var tr = trees[mc];
+       if (!tr) return null;
+       var ok = tr(sp, matchState);`;
 
-    // Trailing-slash recheck wrapped in `if (ok)` only matters when the
-    // upstream normalizer didn't already trim. Skip the wrapper + dead
-    // 4-condition `&&` chain entirely for trim-active routers (default).
-    const trimRecheck = cfg.trimSlash
-      ? ''
-      : `
+  // Trailing-slash recheck wrapped in `if (ok)` only matters when the
+  // upstream normalizer didn't already trim. Skip the wrapper + dead
+  // 4-condition `&&` chain entirely for trim-active routers (default).
+  const trimRecheck = cfg.trimSlash
+    ? ''
+    : `
       if (ok && sp.length > 1 && sp.charCodeAt(sp.length - 1) === 47 && terminalSlab[matchState.handlerIndex * 3 + 1] === 0) {
         ok = false;
       }`;
-    src.push(`
-      var tIdx = matchState.handlerIndex;
-      var slabBase = tIdx * 3;${trimRecheck}
 
-      if (!ok) return null;
+  return `
+    ${dispatch}
 
-      var hIdx = terminalSlab[slabBase];
-      var factory = paramsFactories[tIdx];
-      var params = factory !== null
-        ? factory(terminalSlab[slabBase + 2], sp, matchState.paramOffsets)
-        : EMPTY_PARAMS;
+    var tIdx = matchState.handlerIndex;
+    var slabBase = tIdx * 3;${trimRecheck}
 
-      var val = handlers[hIdx];
-      if (params !== EMPTY_PARAMS) Object.freeze(params);
-      hc.set(sp, { value: val, params: params });
-      return {
-        value: val,
-        params: params,
-        meta: DYNAMIC_META,
-      };
-    `);
-  } else {
-    src.push('return null;');
+    if (!ok) return null;
+
+    var hIdx = terminalSlab[slabBase];
+    var factory = paramsFactories[tIdx];
+    var params = factory !== null
+      ? factory(terminalSlab[slabBase + 2], sp, matchState.paramOffsets)
+      : EMPTY_PARAMS;
+
+    var val = handlers[hIdx];
+    if (params !== EMPTY_PARAMS) Object.freeze(params);
+    hc.set(sp, { value: val, params: params });
+    return {
+      value: val,
+      params: params,
+      meta: DYNAMIC_META,
+    };`;
+}
+
+/**
+ * Static-only, single-method. Pre-probes the closure-captured bucket
+ * with the raw path; only normalizes on miss.
+ */
+function compileStaticOnlySingleMethod<T>(
+  cfg: MatchConfig<T>,
+  singleMethod: SingleMethodSpec,
+): CompiledMatch<T> {
+  const body = [
+    emitMethodDispatch(singleMethod),
+    `
+      var out = activeBucket[path];
+      if (out !== undefined) return out;`,
+    emitNormalize(cfg, 'sp'),
+    `
+      if (sp !== path) {
+        out = activeBucket[sp];
+        if (out !== undefined) return out;
+      }
+      return null;`,
+  ].join('\n');
+
+  const factory = new Function(
+    'activeBucket', 'methodCodes', 'staticOutputsByMethod',
+    `return function match(method, path) {\n${body}\n};`,
+  );
+
+  const compiled = factory(
+    cfg.staticOutputsByMethod[singleMethod[1]] ?? Object.create(null),
+    cfg.methodCodes,
+    cfg.staticOutputsByMethod,
+  ) as CompiledMatch<T>;
+
+  runWarmup(compiled, cfg);
+  return compiled;
+}
+
+/**
+ * Static-only, multi-method. No pre-probe (would need per-mc bucket
+ * resolution before normalize); just normalize and dispatch via mc.
+ */
+function compileStaticOnlyMultiMethod<T>(cfg: MatchConfig<T>): CompiledMatch<T> {
+  const body = [
+    emitMethodDispatch(null),
+    emitNormalize(cfg, 'sp'),
+    `
+      var bucket = staticOutputsByMethod[mc];
+      if (bucket !== undefined) {
+        var out = bucket[sp];
+        if (out !== undefined) return out;
+      }
+      return null;`,
+  ].join('\n');
+
+  const factory = new Function(
+    'staticOutputsByMethod', 'methodCodes',
+    `return function match(method, path) {\n${body}\n};`,
+  );
+
+  const compiled = factory(cfg.staticOutputsByMethod, cfg.methodCodes) as CompiledMatch<T>;
+  runWarmup(compiled, cfg);
+  return compiled;
+}
+
+/**
+ * Mixed router (any tree, optionally with statics). Pre-probes static on
+ * the raw path, normalizes, retries static on the normalized path, then
+ * cache, then walker + slab unpack + cache write.
+ */
+function compileMixed<T>(cfg: MatchConfig<T>, singleMethod: SingleMethodSpec | null): CompiledMatch<T> {
+  const lines: string[] = [emitMethodDispatch(singleMethod)];
+
+  if (cfg.hasAnyStatic && cfg.hasAnyTree) {
+    lines.push(emitPreNormalizeStaticProbe(singleMethod));
   }
+  lines.push(emitNormalize(cfg, 'sp'));
+  if (cfg.hasAnyStatic) {
+    lines.push(emitStaticBucketProbe(singleMethod, 'sp'));
+  }
+  lines.push(emitHitCacheProbe());
+  lines.push(cfg.hasAnyTree ? emitWalkerAndPack(cfg, singleMethod) : 'return null;');
 
-  const body = src.join('\n');
+  const body = lines.join('\n');
   const factory = new Function(
     'activeBucket', 'tr0', 'staticOutputsByMethod', 'methodCodes', 'trees', 'matchState', 'handlers',
     'hitCacheByMethod',
