@@ -377,11 +377,19 @@ function subtreeShapesEqual(a: SegmentNode, b: SegmentNode): boolean {
  * tree chains a single-static-only path 64 deep without `store`/multi-
  * child branching breaking the loop sooner.
  */
+/**
+ * Hard ceiling on chain-walk depth in `leafStoreOf`. Production paths
+ * never approach this (median depth ≤ 6); the cap is a safety net for
+ * malformed trees that would otherwise loop until the runtime stack
+ * pops. Increasing it only changes the depth at which the safety net
+ * trips — no other code reads this value.
+ */
+const LEAF_STORE_MAX_DEPTH = 64;
+
 function leafStoreOf(node: SegmentNode): number | null {
   let cur: SegmentNode = node;
   let depth = 0;
-  // Malformed-tree safety net only — see the docstring above.
-  while (depth++ < 64) {
+  while (depth++ < LEAF_STORE_MAX_DEPTH) {
     if (cur.store !== null) {
       // Multi-terminal subtree (intermediate node carries a store AND
       // has descendants) is not factor-safe: the factored walker keeps

@@ -195,6 +195,7 @@ export class PathParser {
               kind: 'route-parse',
               message: `Wildcard ':${paramResult.name}+' must be the last segment: ${path}`,
               path,
+              suggestion: 'Move the wildcard parameter to the end of the path.',
             });
           }
 
@@ -309,6 +310,7 @@ export class PathParser {
           kind: 'route-parse',
           message: `Unclosed regex pattern in parameter ':${name}': ${path}`,
           path,
+          suggestion: 'Close the regex group with a matching ).',
         });
       }
 
@@ -368,6 +370,7 @@ export class PathParser {
         kind: 'route-parse',
         message: `Wildcard '*${name}' must be the last segment: ${path}`,
         path,
+        suggestion: 'Move the wildcard segment to the end of the path.',
       });
     }
 
@@ -445,6 +448,7 @@ function validateParamName(
       kind: 'route-parse',
       message: `Empty parameter name in path: ${path}`,
       path,
+      suggestion: 'Provide a name after the : or * decorator (e.g. :id, *path).',
     });
   }
 
@@ -459,6 +463,7 @@ function validateParamName(
       message: `Invalid parameter name '${prefix}${name}' in path: ${path}. Parameter names must start with a letter.`,
       path,
       segment: name,
+      suggestion: 'Start the parameter name with an ASCII letter (a-z or A-Z).',
     });
   }
 
@@ -474,6 +479,7 @@ function validateParamName(
         message: `Invalid character '${name.charAt(i)}' in parameter name '${prefix}${name}'. Only alphanumeric characters and underscores are allowed (snake_case or camelCase).`,
         path,
         segment: name,
+        suggestion: 'Restrict parameter names to ASCII letters, digits, and underscores.',
       });
     }
   }
