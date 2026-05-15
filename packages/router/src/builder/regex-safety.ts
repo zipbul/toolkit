@@ -30,94 +30,44 @@ function hasNestedUnlimitedQuantifiers(pattern: string): boolean {
 
     if (char === '\\') {
       i++;
-
       lastAtomUnlimited = false;
-
       continue;
     }
-
     if (char === '[') {
       i = skipCharClass(pattern, i);
       lastAtomUnlimited = false;
-
       continue;
     }
-
     if (char === '(') {
       stack.push({ hadUnlimited: false });
-
       lastAtomUnlimited = false;
-
       continue;
     }
-
     if (char === ')') {
-      const frame = stack.pop();
-      const groupUnlimited = Boolean(frame?.hadUnlimited);
-
-      if (groupUnlimited && stack.length) {
-        const frame = stack[stack.length - 1];
-
-        if (frame) {
-          frame.hadUnlimited = true;
-        }
-      }
-
-      lastAtomUnlimited = groupUnlimited;
-
+      lastAtomUnlimited = closeGroup(stack);
       continue;
     }
-
     if (char === '*' || char === '+') {
-      if (lastAtomUnlimited) {
-        return true;
-      }
-
+      if (lastAtomUnlimited) return true;
       lastAtomUnlimited = true;
-
-      if (stack.length) {
-        const frame = stack[stack.length - 1];
-
-        if (frame) {
-          frame.hadUnlimited = true;
-        }
-      }
-
+      markTopFrameUnlimited(stack);
       continue;
     }
-
     if (char === '{') {
-      const close = pattern.indexOf('}', i + 1);
-
-      if (close === -1) {
+      const braced = parseBracedQuantifier(pattern, i);
+      if (braced === null) {
+        // Unterminated `{` — treat as a literal, no quantifier effect.
         lastAtomUnlimited = false;
-
         continue;
       }
-
-      const slice = pattern.slice(i + 1, close);
-      const unlimited = slice.includes(',');
-
-      if (unlimited) {
-        if (lastAtomUnlimited) {
-          return true;
-        }
-
+      if (braced.unlimited) {
+        if (lastAtomUnlimited) return true;
         lastAtomUnlimited = true;
-
-        if (stack.length) {
-          const frame = stack[stack.length - 1];
-
-          if (frame) {
-            frame.hadUnlimited = true;
-          }
-        }
+        markTopFrameUnlimited(stack);
       } else {
         lastAtomUnlimited = false;
       }
-
-      i = close;
-
+      i = braced.closeIdx;
       continue;
     }
 
@@ -125,6 +75,38 @@ function hasNestedUnlimitedQuantifiers(pattern: string): boolean {
   }
 
   return false;
+}
+
+/** Pop the top group frame and propagate its `hadUnlimited` upward.
+ *  Returns whether the group itself contained an unlimited quantifier
+ *  so callers can treat the group as a "lastAtomUnlimited" candidate. */
+function closeGroup(stack: QuantifierFrame[]): boolean {
+  const frame = stack.pop();
+  const groupUnlimited = Boolean(frame?.hadUnlimited);
+  if (groupUnlimited) markTopFrameUnlimited(stack);
+  return groupUnlimited;
+}
+
+/** No-op when the stack is empty; otherwise mark the innermost group as
+ *  containing an unlimited quantifier so the next quantifier on it can
+ *  be detected as nested. */
+function markTopFrameUnlimited(stack: QuantifierFrame[]): void {
+  if (stack.length === 0) return;
+  const top = stack[stack.length - 1];
+  if (top !== undefined) top.hadUnlimited = true;
+}
+
+/** Parse `{m,n}` / `{m,}` / `{m}` starting at `pattern[i]` (`{`).
+ *  Returns the quantifier kind plus the index of the closing `}`,
+ *  or `null` for an unterminated brace (caller treats as literal). */
+function parseBracedQuantifier(
+  pattern: string,
+  start: number,
+): { unlimited: boolean; closeIdx: number } | null {
+  const closeIdx = pattern.indexOf('}', start + 1);
+  if (closeIdx === -1) return null;
+  const body = pattern.slice(start + 1, closeIdx);
+  return { unlimited: body.includes(','), closeIdx };
 }
 
 /**

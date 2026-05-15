@@ -9,7 +9,8 @@ import { forEachStaticChild, hasAnyStaticChild } from './segment-tree';
 export function compactSegmentTree(root: SegmentNode): void {
   // Intern shared `staticPrefix` arrays so 100k nodes carrying the same
   // single-element prefix share one array reference instead of allocating
-  // 100k 1-entry arrays.
+  // 100k 1-entry arrays. Closure-scoped because the intern map dies with
+  // the call — the runtime walker only reads the deduped array refs.
   const prefixIntern = new Map<string, string[]>();
   const internPrefix = (parts: string[]): string[] => {
     const key = parts.join('\x00');
@@ -19,56 +20,6 @@ export function compactSegmentTree(root: SegmentNode): void {
     return parts;
   };
 
-  // Single-static-child passthrough probe — peeks the inline cache first,
-  // then the Record. Avoids any `Object.keys()` allocation.
-  function peekSingleStatic(target: SegmentNode): { key: string | null; child: SegmentNode | null; many: boolean } {
-    if (target.singleChildKey !== null && target.singleChildNext !== null && target.staticChildren === null) {
-      return { key: target.singleChildKey, child: target.singleChildNext, many: false };
-    }
-    if (target.staticChildren !== null) {
-      let only: string | null = null;
-      let onlyChild: SegmentNode | null = null;
-      let many = false;
-      // The Record may contain entries even when an inline child also exists
-      // (during build, before promotion); count both.
-      if (target.singleChildKey !== null) { only = target.singleChildKey; onlyChild = target.singleChildNext; }
-      for (const k in target.staticChildren) {
-        if (only === null) { only = k; onlyChild = target.staticChildren[k]!; }
-        else { many = true; break; }
-      }
-      return { key: only, child: onlyChild, many };
-    }
-    return { key: null, child: null, many: false };
-  }
-
-  function foldChainFrom(start: SegmentNode): { target: SegmentNode; folded: string[] } {
-    const folded: string[] = [];
-    let target = start;
-    while (
-      hasAnyStaticChild(target) &&
-      target.paramChild === null &&
-      target.wildcardStore === null &&
-      target.store === null &&
-      target.staticPrefix === null
-    ) {
-      const peek = peekSingleStatic(target);
-      if (peek.many || peek.key === null || peek.child === null) break;
-      folded.push(peek.key);
-      target = peek.child;
-    }
-    return { target, folded };
-  }
-
-  function rewireStaticChild(parent: SegmentNode, key: string, target: SegmentNode): void {
-    if (parent.singleChildKey === key) {
-      parent.singleChildNext = target;
-      return;
-    }
-    if (parent.staticChildren !== null && key in parent.staticChildren) {
-      parent.staticChildren[key] = target;
-    }
-  }
-
   const stack: SegmentNode[] = [root];
   const visited = new Set<SegmentNode>();
   while (stack.length > 0) {
@@ -77,12 +28,9 @@ export function compactSegmentTree(root: SegmentNode): void {
     visited.add(node);
 
     forEachStaticChild(node, (key, child) => {
-      const { target, folded } = foldChainFrom(child);
+      const { target, folded } = foldStaticChain(child);
       if (folded.length > 0) {
-        const merged = target.staticPrefix === null
-          ? internPrefix(folded)
-          : internPrefix([...folded, ...target.staticPrefix]);
-        target.staticPrefix = merged;
+        target.staticPrefix = internPrefix(extendStaticPrefix(folded, target.staticPrefix));
         rewireStaticChild(node, key, target);
       }
       stack.push(target);
@@ -90,17 +38,79 @@ export function compactSegmentTree(root: SegmentNode): void {
 
     let p = node.paramChild;
     while (p !== null) {
-      const { target, folded } = foldChainFrom(p.next);
+      const { target, folded } = foldStaticChain(p.next);
       if (folded.length > 0) {
-        const merged = target.staticPrefix === null
-          ? internPrefix(folded)
-          : internPrefix([...folded, ...target.staticPrefix]);
-        target.staticPrefix = merged;
+        target.staticPrefix = internPrefix(extendStaticPrefix(folded, target.staticPrefix));
         p.next = target;
       }
       stack.push(target);
       p = p.nextSibling;
     }
+  }
+}
+
+/** Single-static-child passthrough probe — peeks the inline cache first,
+ *  then the Record. Avoids any `Object.keys()` allocation. */
+function peekSingleStaticChild(
+  target: SegmentNode,
+): { key: string | null; child: SegmentNode | null; many: boolean } {
+  if (target.singleChildKey !== null && target.singleChildNext !== null && target.staticChildren === null) {
+    return { key: target.singleChildKey, child: target.singleChildNext, many: false };
+  }
+  if (target.staticChildren !== null) {
+    let only: string | null = null;
+    let onlyChild: SegmentNode | null = null;
+    let many = false;
+    // The Record may contain entries even when an inline child also exists
+    // (during build, before promotion); count both.
+    if (target.singleChildKey !== null) {
+      only = target.singleChildKey;
+      onlyChild = target.singleChildNext;
+    }
+    for (const k in target.staticChildren) {
+      if (only === null) { only = k; onlyChild = target.staticChildren[k]!; }
+      else { many = true; break; }
+    }
+    return { key: only, child: onlyChild, many };
+  }
+  return { key: null, child: null, many: false };
+}
+
+/** Walk the single-static-chain starting at `start`, returning the
+ *  deepest reachable node plus the keys that were folded away. */
+function foldStaticChain(start: SegmentNode): { target: SegmentNode; folded: string[] } {
+  const folded: string[] = [];
+  let target = start;
+  while (
+    hasAnyStaticChild(target) &&
+    target.paramChild === null &&
+    target.wildcardStore === null &&
+    target.store === null &&
+    target.staticPrefix === null
+  ) {
+    const peek = peekSingleStaticChild(target);
+    if (peek.many || peek.key === null || peek.child === null) break;
+    folded.push(peek.key);
+    target = peek.child;
+  }
+  return { target, folded };
+}
+
+/** Compose the new staticPrefix array from freshly folded keys plus
+ *  any prefix the deepest node already carried. */
+function extendStaticPrefix(folded: string[], existing: string[] | null): string[] {
+  return existing === null ? folded : [...folded, ...existing];
+}
+
+/** Re-attach `key` on `parent` to point at `target`, regardless of
+ *  whether the slot lives in the inline cache or the promoted Record. */
+function rewireStaticChild(parent: SegmentNode, key: string, target: SegmentNode): void {
+  if (parent.singleChildKey === key) {
+    parent.singleChildNext = target;
+    return;
+  }
+  if (parent.staticChildren !== null && key in parent.staticChildren) {
+    parent.staticChildren[key] = target;
   }
 }
 

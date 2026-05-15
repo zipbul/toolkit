@@ -162,32 +162,23 @@ export class PathParser {
     this.activeParams.clear();
 
     const parts: PathPart[] = [];
+    const acc: StaticAccumulator = { buf: '/', segments: [] };
     let isDynamic = false;
-    let staticBuf = '/';
-    let currentStaticSegments: string[] = [];
 
     for (let i = 0; i < segments.length; i++) {
       const seg = segments[i]!;
       const firstChar = seg.charCodeAt(0);
+      const isLast = i === segments.length - 1;
 
       if (firstChar === CC_COLON) {
-        if (staticBuf.length > 0) {
-          parts.push({ type: 'static', value: staticBuf, segments: currentStaticSegments });
-          staticBuf = '';
-          currentStaticSegments = [];
-        }
-
+        flushStaticBuffer(acc, parts);
         isDynamic = true;
-
         const paramResult = this.parseParam(seg, path);
-
-        if (isErr(paramResult)) {
-          return paramResult;
-        }
-
-        // If parseParam returned a wildcard (from :name+ or :name* syntax)
+        if (isErr(paramResult)) return paramResult;
+        // `:name+` / `:name*` resolved into a wildcard — must be the last
+        // segment, then we exit the loop entirely.
         if (paramResult.type === 'wildcard') {
-          if (i !== segments.length - 1) {
+          if (!isLast) {
             return err({
               kind: 'route-parse',
               message: `Wildcard ':${paramResult.name}+' must be the last segment: ${path}`,
@@ -195,51 +186,28 @@ export class PathParser {
               suggestion: 'Move the wildcard parameter to the end of the path.',
             });
           }
-
           parts.push(paramResult);
           break;
         }
-
         parts.push(paramResult);
-
-        if (i < segments.length - 1) {
-          staticBuf = '/';
-        }
+        if (!isLast) acc.buf = '/';
       } else if (firstChar === CC_STAR) {
-        if (staticBuf.length > 0) {
-          parts.push({ type: 'static', value: staticBuf, segments: currentStaticSegments });
-          staticBuf = '';
-          currentStaticSegments = [];
-        }
-
+        flushStaticBuffer(acc, parts);
         isDynamic = true;
-
         const wcResult = this.parseWildcard(seg, i, segments.length, path);
-
-        if (isErr(wcResult)) {
-          return wcResult;
-        }
-
+        if (isErr(wcResult)) return wcResult;
         parts.push(wcResult);
       } else {
-        staticBuf += seg;
-        currentStaticSegments.push(seg);
-
-        if (i < segments.length - 1) {
-          staticBuf += '/';
-        }
+        appendStaticSegment(acc, seg, !isLast);
       }
     }
 
-    if (staticBuf.length > 0) {
-      parts.push({ type: 'static', value: staticBuf, segments: currentStaticSegments });
-    }
-
-    // Root path `/` with no segments
+    flushStaticBuffer(acc, parts);
+    // Root path `/` with no segments produces an empty parts list — emit
+    // an explicit static `/` so insertIntoSegmentTree sees a real terminal.
     if (parts.length === 0) {
       parts.push({ type: 'static', value: '/', segments: [] });
     }
-
     return { parts, normalized, isDynamic };
   }
 
@@ -247,95 +215,52 @@ export class PathParser {
     let core = seg;
     let isOptional = false;
 
-    // Check trailing decorators
-    if (core.endsWith('?')) {
-      const beforeOptional = core.charCodeAt(core.length - 2);
+    const optionalResult = stripOptionalDecorator(core, seg, path);
+    if ('kind' in optionalResult) return err(optionalResult);
+    core = optionalResult.core;
+    isOptional = optionalResult.isOptional;
 
-      if (beforeOptional === CC_PLUS || beforeOptional === CC_STAR) {
-        return err({
-          kind: 'route-parse',
-          message: `Invalid decorator combination in parameter '${seg}': ${path}`,
-          path,
-          segment: seg,
-          suggestion: 'Use either optional params (:name?) or wildcard params (:name+ / :name*), not both.',
-        });
-      }
+    // `:name+` / `:name*` (no regex group) parses as a wildcard, not a param.
+    const wildcardFromColon = this.tryParseWildcardFromColon(core, path);
+    if (wildcardFromColon !== null) return wildcardFromColon;
 
-      isOptional = true;
-      core = core.slice(0, -1);
-    }
-
-    // Multi/zero-or-more → convert to wildcard (only if no '(' pattern)
-    if (core.endsWith('+') && !core.includes('(')) {
-      const name = core.slice(1, -1); // skip ':' and '+'
-      const validation = validateParamName(name, ':', path);
-
-      if (validation !== null) return validation;
-
-      const dup = this.registerParam(name, ':', path);
-
-      if (dup !== null) return dup;
-
-      return { type: 'wildcard', name, origin: 'multi' };
-    }
-
-    if (core.endsWith('*') && !core.includes('(')) {
-      const name = core.slice(1, -1); // skip ':' and '*'
-      const validation = validateParamName(name, ':', path);
-
-      if (validation !== null) return validation;
-
-      const dup = this.registerParam(name, ':', path);
-
-      if (dup !== null) return dup;
-
-      return { type: 'wildcard', name, origin: 'star' };
-    }
-
-    // Extract name and pattern
-    let name: string;
-    let pattern: string | null = null;
-    const parenIdx = core.indexOf('(');
-
-    if (parenIdx === -1) {
-      name = core.slice(1); // skip ':'
-    } else {
-      name = core.slice(1, parenIdx);
-
-      if (!core.endsWith(')')) {
-        return err({
-          kind: 'route-parse',
-          message: `Unclosed regex pattern in parameter ':${name}': ${path}`,
-          path,
-          suggestion: 'Close the regex group with a matching ).',
-        });
-      }
-
-      // Whitespace-only `(   )` collapses to no-pattern, matching the empty
-      // `()` shape — the matcher would otherwise compile a literal-whitespace
-      // regex which is almost certainly a typo.
-      const rawPattern = core.slice(parenIdx + 1, -1);
-      pattern = rawPattern.trim() === '' ? null : normalizeParamPatternSource(rawPattern);
-    }
+    const nameAndPattern = extractNameAndPattern(core, path);
+    if ('kind' in nameAndPattern) return err(nameAndPattern);
+    const { name, pattern } = nameAndPattern;
 
     const nameValidation = validateParamName(name, ':', path);
-
     if (nameValidation !== null) return nameValidation;
 
     const dup = this.registerParam(name, ':', path);
-
     if (dup !== null) return dup;
 
-    // Validate regex pattern
     if (pattern !== null) {
       const safetyResult = this.validatePattern(pattern);
-
-      if (isErr(safetyResult)) {
-        return safetyResult;
-      }
+      if (isErr(safetyResult)) return safetyResult;
     }
 
     return { type: 'param', name, pattern, optional: isOptional };
+  }
+
+  /**
+   * `:name+` / `:name*` (without a regex group) collapses into a wildcard.
+   * Returns the wildcard PathPart on hit, an `Err` Result on validation
+   * failure, or `null` when the segment is not this shape.
+   */
+  private tryParseWildcardFromColon(
+    core: string,
+    path: string,
+  ): Result<PathPart, RouterErrorData> | null {
+    const tail = core.charAt(core.length - 1);
+    if (tail !== '+' && tail !== '*') return null;
+    if (core.includes('(')) return null;
+    const origin: 'star' | 'multi' = tail === '+' ? 'multi' : 'star';
+    const name = core.slice(1, -1); // skip leading ':' and trailing decorator
+    const validation = validateParamName(name, ':', path);
+    if (validation !== null) return validation;
+    const dup = this.registerParam(name, ':', path);
+    if (dup !== null) return dup;
+    return { type: 'wildcard', name, origin };
   }
 
   private parseWildcard(
@@ -482,5 +407,81 @@ function validateParamName(
   }
 
   return null;
+}
+
+/**
+ * Peel the trailing `?` optional decorator. Rejects `:name+?` / `:name*?`
+ * combinations as a parse error. Returns `{ core, isOptional }` on
+ * success, a `RouterErrorData` carrier on failure (no Result wrapper —
+ * caller already wraps in `err()`).
+ */
+function stripOptionalDecorator(
+  core: string,
+  seg: string,
+  path: string,
+): { core: string; isOptional: boolean } | RouterErrorData {
+  if (!core.endsWith('?')) return { core, isOptional: false };
+  const before = core.charCodeAt(core.length - 2);
+  if (before === CC_PLUS || before === CC_STAR) {
+    return {
+      kind: 'route-parse',
+      message: `Invalid decorator combination in parameter '${seg}': ${path}`,
+      path,
+      segment: seg,
+      suggestion: 'Use either optional params (:name?) or wildcard params (:name+ / :name*), not both.',
+    };
+  }
+  return { core: core.slice(0, -1), isOptional: true };
+}
+
+/**
+ * Split `:name(pattern)` into its name and (possibly null) pattern.
+ * Whitespace-only `( )` collapses to no-pattern. Returns the parsed
+ * pair on success, a `RouterErrorData` carrier for unclosed groups.
+ */
+function extractNameAndPattern(
+  core: string,
+  path: string,
+): { name: string; pattern: string | null } | RouterErrorData {
+  const parenIdx = core.indexOf('(');
+  if (parenIdx === -1) {
+    return { name: core.slice(1), pattern: null };
+  }
+  const name = core.slice(1, parenIdx);
+  if (!core.endsWith(')')) {
+    return {
+      kind: 'route-parse',
+      message: `Unclosed regex pattern in parameter ':${name}': ${path}`,
+      path,
+      suggestion: 'Close the regex group with a matching ).',
+    };
+  }
+  const rawPattern = core.slice(parenIdx + 1, -1);
+  const pattern = rawPattern.trim() === '' ? null : normalizeParamPatternSource(rawPattern);
+  return { name, pattern };
+}
+
+/** Mutable accumulator that gathers consecutive static segments before
+ *  any dynamic part flushes them as one literal `PathPart`. */
+interface StaticAccumulator {
+  buf: string;
+  segments: string[];
+}
+
+/** Flush whatever the accumulator holds into `parts` and reset it.
+ *  No-op when the accumulator is empty. */
+function flushStaticBuffer(acc: StaticAccumulator, parts: PathPart[]): void {
+  if (acc.buf.length === 0) return;
+  parts.push({ type: 'static', value: acc.buf, segments: acc.segments });
+  acc.buf = '';
+  acc.segments = [];
+}
+
+/** Append one literal segment to the accumulator. `hasNext` controls
+ *  whether a trailing slash is appended for the next segment join. */
+function appendStaticSegment(acc: StaticAccumulator, seg: string, hasNext: boolean): void {
+  acc.buf += seg;
+  acc.segments.push(seg);
+  if (hasNext) acc.buf += '/';
 }
 

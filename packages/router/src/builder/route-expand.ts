@@ -109,65 +109,72 @@ function enumerateExpansions(
 
   // Iterate the 2^N - 1 non-empty subsets of "which optionals to drop".
   for (let bit = 1; bit < (1 << optionalIndices.length); bit++) {
-    const filtered: PathPart[] = [];
-
-    for (let i = 0; i < parts.length; i++) {
-      let skip = false;
-
-      for (let j = 0; j < optionalIndices.length; j++) {
-        if (optionalIndices[j] === i && (bit & (1 << j))) {
-          skip = true;
-          break;
-        }
-      }
-
-      if (skip) {
-        // Invariant A — drop-time slash trim:
-        // When a dropped optional follows a static that ends in `/`, the
-        // trailing slash must be stripped so e.g. `/users/` + dropped `:id`
-        // doesn't produce a route ending in `/users/`. This is *not*
-        // redundant with the post-merge `//` collapse below — the two cover
-        // disjoint cases (this one removes a single trailing `/`; the
-        // collapse fixes `//` produced by concatenating two static parts).
-        if (filtered.length > 0) {
-          const prev = filtered[filtered.length - 1]!;
-
-          if (prev.type === 'static' && prev.value.endsWith('/')) {
-            const trimmed = prev.value.slice(0, -1);
-
-            if (trimmed.length > 0) {
-              filtered[filtered.length - 1] = createStaticPart(trimmed);
-            } else {
-              filtered.pop();
-            }
-          }
-        }
-
-        continue;
-      }
-
-      const part = parts[i]!;
-
-      if (part.type === 'param' && part.optional) {
-        filtered.push({ ...part, optional: false });
-      } else {
-        filtered.push(part);
-      }
-    }
-
+    const filtered = filterDroppedSegments(parts, optionalIndices, bit);
     const merged = mergeStaticParts(filtered);
-
-    if (merged.length > 0) {
-      result.push({ parts: merged, handlerIndex, isOptionalExpansion: true });
-    } else {
-      // Every required segment was an optional that got dropped (e.g. `/:id?`
-      // with `:id` omitted). The intended URL is `/`, not nothing — registering
-      // an empty parts list would silently fail-match `/`.
-      result.push({ parts: [createStaticPart('/')], handlerIndex, isOptionalExpansion: true });
-    }
+    // Empty result means every required segment was an optional that got
+    // dropped (e.g. `/:id?` with `:id` omitted). The intended URL is `/`,
+    // not nothing — registering empty parts would silently fail-match `/`.
+    const variantParts = merged.length > 0 ? merged : [createStaticPart('/')];
+    result.push({ parts: variantParts, handlerIndex, isOptionalExpansion: true });
   }
 
   return result;
+}
+
+/**
+ * Walk `parts` once and emit the subset selected by `dropMask`. A bit
+ * set in `dropMask` skips the corresponding entry in `optionalIndices`.
+ * Skipped optionals trigger drop-time slash trimming on the prior
+ * static segment so `/users/` + dropped `:id` doesn't leave a trailing
+ * slash. Each surviving optional flips its `optional: true` flag off
+ * because the insertion path treats it as required for that variant.
+ */
+function filterDroppedSegments(
+  parts: PathPart[],
+  optionalIndices: number[],
+  dropMask: number,
+): PathPart[] {
+  const filtered: PathPart[] = [];
+  for (let i = 0; i < parts.length; i++) {
+    if (isDroppedAt(i, optionalIndices, dropMask)) {
+      trimTrailingSlashOnDrop(filtered);
+      continue;
+    }
+    const part = parts[i]!;
+    filtered.push(part.type === 'param' && part.optional ? { ...part, optional: false } : part);
+  }
+  return filtered;
+}
+
+/** Bit `j` set in `dropMask` ⇔ `optionalIndices[j]` is dropped. */
+function isDroppedAt(
+  partIndex: number,
+  optionalIndices: number[],
+  dropMask: number,
+): boolean {
+  for (let j = 0; j < optionalIndices.length; j++) {
+    if (optionalIndices[j] === partIndex && (dropMask & (1 << j))) return true;
+  }
+  return false;
+}
+
+/**
+ * Drop-time slash trim. When the previous accumulated entry is a static
+ * ending in `/`, peel that slash so the dropped optional doesn't leave
+ * `/users/` dangling. Disjoint from the post-merge `//` collapse —
+ * that one fixes double slashes produced by concatenation; this one
+ * fixes single trailing slashes left by drops.
+ */
+function trimTrailingSlashOnDrop(filtered: PathPart[]): void {
+  if (filtered.length === 0) return;
+  const prev = filtered[filtered.length - 1]!;
+  if (prev.type !== 'static' || !prev.value.endsWith('/')) return;
+  const trimmed = prev.value.slice(0, -1);
+  if (trimmed.length > 0) {
+    filtered[filtered.length - 1] = createStaticPart(trimmed);
+  } else {
+    filtered.pop();
+  }
 }
 
 /**
