@@ -366,11 +366,18 @@ function routeDuplicate(meta: RouteMeta): RouterErrorData {
 }
 
 function routeConflict(why: string, meta: RouteMeta): RouterErrorData {
+  // The prefix-index walk knows *that* a sibling at the current
+  // position blocks this route, but resolving *which* sibling without
+  // a backref pointer would mean a second walk. The actionable
+  // information is in `message` (what kind of conflict). `segment`
+  // and `conflictsWith` carry the registering route's own path so
+  // the caller can echo it without losing context — they are not
+  // a pointer to the colliding sibling.
   return {
     kind: 'route-conflict',
     message: `${meta.method} ${meta.path}: ${why}`,
     segment: meta.path,
-    conflictsWith: meta.method,
+    conflictsWith: 'sibling at the same position',
     path: meta.path,
     method: meta.method,
   };
