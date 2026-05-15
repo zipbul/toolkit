@@ -1,17 +1,20 @@
-import type { MatchOutput, RouterOptions, RouterPublicApi } from './types';
-import type { MatchCacheEntry, MatchConfig } from './codegen/emitter';
-import { RouterCache } from './cache';
-import { RouterError } from './error';
-
-import { OptionalParamDefaults } from './builder/optional-param-defaults';
-import { PathParser } from './builder/path-parser';
-import { compileMatchFn } from './codegen/emitter';
 import { optimizeNextInvocation } from 'bun:jsc';
 
+import type { MatchOutput, RouterOptions, RouterPublicApi } from './types';
+import { RouterCache } from './cache';
+import { RouterError } from './error';
 import { MethodRegistry } from './method-registry';
-import { buildFromRegistration } from './pipeline/build';
-import { MatchLayer } from './pipeline/match';
-import { Registration } from './pipeline/registration';
+import { OptionalParamDefaults, PathParser } from './builder';
+import {
+  compileMatchFn,
+  type MatchCacheEntry,
+  type MatchConfig,
+} from './codegen';
+import {
+  buildFromRegistration,
+  MatchLayer,
+  Registration,
+} from './pipeline';
 
 /**
  * Symbol-keyed slot for the internal-inspection hatch. Symbol identity
@@ -139,7 +142,6 @@ export class Router<T = unknown> implements RouterPublicApi<T> {
         trimSlash: r.ignoreTrailingSlash,
         lowerCase: !r.caseSensitive,
         hasAnyTree: r.trees.some(t => t != null),
-        anyTester: r.anyTester,
         hasAnyStatic,
         staticOutputsByMethod: r.staticOutputsByMethod,
         methodCodes: r.methodCodes,
@@ -147,7 +149,6 @@ export class Router<T = unknown> implements RouterPublicApi<T> {
         matchState: r.matchState,
         handlers: snapshot.handlers,
         hitCacheByMethod: cache.hit,
-        cacheMaxSize: cache.maxSize,
         activeMethodCodes: r.activeMethodCodes,
         terminalSlab: r.terminalSlab,
         paramsFactories: r.paramsFactories,

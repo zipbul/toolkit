@@ -1,7 +1,7 @@
 import { err, isErr } from '@zipbul/result';
 import type { Result } from '@zipbul/result';
 import type { RouterErrorData } from './types';
-import { validateMethodToken } from './builder/method-policy';
+import { validateMethodToken } from './builder';
 
 const DEFAULT_METHODS: ReadonlyArray<readonly [string, number]> = [
   ['GET', 0],

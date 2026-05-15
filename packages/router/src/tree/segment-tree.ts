@@ -1,7 +1,7 @@
 import type { Result } from '@zipbul/result';
 import type { RouterErrorData } from '../types';
 import type { PatternTesterFn } from './pattern-tester';
-import type { PathPart } from '../builder/path-parser';
+import type { PathPart } from './path-part';
 
 import { err } from '@zipbul/result';
 import { buildPatternTester } from './pattern-tester';

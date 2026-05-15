@@ -1,4 +1,4 @@
-import type { PathPart } from './path-parser';
+import type { PathPart } from '../tree';
 
 import { OptionalParamDefaults } from './optional-param-defaults';
 

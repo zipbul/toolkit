@@ -1,18 +1,18 @@
-import type { MatchFn, MatchState } from '../matcher/match-state';
-import type { NormalizeCfg } from '../matcher/path-normalize';
+import type { MatchFn, MatchState } from '../matcher';
+import type { NormalizeCfg } from './path-normalize';
 import type { MatchOutput, RouteParams } from '../types';
 
-import { RouterCache } from '../cache';
+import type { RouterCache } from '../cache';
 import { WARMUP_ITERATIONS } from './warmup';
 import {
   CACHE_META,
   DYNAMIC_META,
   EMPTY_PARAMS,
-} from '../internal/null-proto-obj';
+} from '../internal';
 import {
   emitLowerCase,
   emitTrailingSlashTrim,
-} from '../matcher/path-normalize';
+} from './path-normalize';
 
 /**
  * Cache entry shape. Attached at lookup time inside emitted matchImpl.
@@ -29,7 +29,6 @@ export interface MatchConfig<T> {
   readonly trimSlash: boolean;
   readonly lowerCase: boolean;
   readonly hasAnyTree: boolean;
-  readonly anyTester: boolean;
   readonly hasAnyStatic: boolean;
   readonly staticOutputsByMethod: Array<Record<string, MatchOutput<T>> | undefined>;
   readonly methodCodes: Record<string, number>;
@@ -37,7 +36,6 @@ export interface MatchConfig<T> {
   readonly matchState: MatchState;
   readonly handlers: T[];
   readonly hitCacheByMethod: Array<RouterCache<MatchCacheEntry<T>> | undefined>;
-  readonly cacheMaxSize: number;
   readonly activeMethodCodes: ReadonlyArray<readonly [string, number]>;
   /**
    * Packed `Int32Array` slab carrying per-terminal metadata. Two slots
@@ -296,7 +294,7 @@ export function compileMatchFn<T>(cfg: MatchConfig<T>): CompiledMatch<T> {
   const body = src.join('\n');
   const factory = new Function(
     'activeBucket', 'tr0', 'staticOutputsByMethod', 'methodCodes', 'trees', 'matchState', 'handlers',
-    'hitCacheByMethod', 'RouterCache',
+    'hitCacheByMethod',
     'EMPTY_PARAMS', 'CACHE_META', 'DYNAMIC_META', 'terminalSlab', 'paramsFactories',
     `return function match(method, path) {\n${body}\n};`,
   );
@@ -308,7 +306,7 @@ export function compileMatchFn<T>(cfg: MatchConfig<T>): CompiledMatch<T> {
 
   const compiled = factory(
     activeBucket, tr0, cfg.staticOutputsByMethod, cfg.methodCodes, cfg.trees, cfg.matchState, cfg.handlers,
-    cfg.hitCacheByMethod, RouterCache,
+    cfg.hitCacheByMethod,
     EMPTY_PARAMS, CACHE_META, DYNAMIC_META, cfg.terminalSlab, cfg.paramsFactories,
   ) as CompiledMatch<T>;
 

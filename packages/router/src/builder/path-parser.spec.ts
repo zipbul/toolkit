@@ -2,7 +2,8 @@ import { describe, it, expect } from 'bun:test';
 import { isErr } from '@zipbul/result';
 
 import { PathParser } from './path-parser';
-import type { PathParserConfig, PathPart } from './path-parser';
+import type { PathParserConfig } from './path-parser';
+import type { PathPart } from '../tree';
 
 function defaultConfig(overrides: Partial<PathParserConfig> = {}): PathParserConfig {
   return {

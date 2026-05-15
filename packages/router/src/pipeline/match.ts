@@ -1,5 +1,5 @@
-import type { MatchFn, MatchState } from '../matcher/match-state';
-import type { PathNormalizer } from '../matcher/path-normalize';
+import type { MatchFn, MatchState } from '../matcher';
+import type { PathNormalizer } from '../codegen';
 
 
 /**

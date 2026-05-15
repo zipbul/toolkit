@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'bun:test';
 
-import type { PathPart } from './path-parser';
+import type { PathPart } from '../tree';
 import { OptionalParamDefaults } from './optional-param-defaults';
 import { countOptionalSegments, expandOptional, MAX_OPTIONAL_SEGMENTS_PER_ROUTE } from './route-expand';
 

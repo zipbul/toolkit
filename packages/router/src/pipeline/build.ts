@@ -1,21 +1,25 @@
-import type { MatchFn, MatchState } from '../matcher/match-state';
-import type { PathNormalizer } from '../matcher/path-normalize';
 import type { MatchOutput, RouteParams, RouterOptions } from '../types';
 import type { RegistrationSnapshot } from './registration';
 
-import { EMPTY_PARAMS, NullProtoObj, STATIC_META } from '../internal/null-proto-obj';
-import { decoder } from '../matcher/decoder';
-import { createMatchState } from '../matcher/match-state';
-import { buildPathNormalizer } from '../matcher/path-normalize';
-import { createSegmentWalker } from '../matcher/segment-walk';
 import { MethodRegistry } from '../method-registry';
+import { EMPTY_PARAMS, NullProtoObj, STATIC_META } from '../internal';
+import {
+  buildPathNormalizer,
+  type PathNormalizer,
+} from '../codegen';
+import {
+  createMatchState,
+  createSegmentWalker,
+  decoder,
+  type MatchFn,
+  type MatchState,
+} from '../matcher';
 
 /**
  * Configuration for compiled match implementation.
  */
 export interface BuildResult<T> {
   trees: Array<MatchFn | null>;
-  anyTester: boolean;
   staticOutputsByMethod: Array<Record<string, MatchOutput<T>> | undefined>;
   /** Per-static-path 32-bit method-availability mask (bit `methodCode`). */
   staticPathMethodMask: Record<string, number>;
@@ -39,7 +43,6 @@ export function buildFromRegistration<T>(
 ): BuildResult<T> {
   const allCodes = methodRegistry.getAllCodes();
   const methodCodes = methodRegistry.getCodeMap() as Record<string, number>;
-  const anyTester = snapshot.anyTester;
 
   // Materialize the static-output buckets up front so the per-method
   // walker/active-codes loop below can decide activeness in one pass.
@@ -97,7 +100,6 @@ export function buildFromRegistration<T>(
 
   return {
     trees,
-    anyTester,
     staticOutputsByMethod,
     staticPathMethodMask: snapshot.staticPathMethodMask,
     activeMethodCodes,

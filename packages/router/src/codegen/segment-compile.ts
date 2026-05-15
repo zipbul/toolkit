@@ -1,7 +1,9 @@
-import type { SegmentNode } from '../tree/segment-tree';
-import type { MatchFn } from '../matcher/match-state';
-import { forEachStaticChild, hasAnyStaticChild } from '../tree/segment-tree';
-import { hasAmbiguousNode } from '../tree/traversal';
+import type { SegmentNode } from '../tree';
+import type { MatchFn } from '../matcher';
+import type { DecoderFn } from '../matcher';
+import type { PatternTesterFn } from '../tree';
+import { forEachStaticChild, hasAnyStaticChild } from '../tree';
+import { hasAmbiguousNode } from '../tree';
 
 /**
  * Codegen budget thresholds. Trees exceeding either of these fall back to
@@ -99,8 +101,12 @@ export function collectWarmupPaths(root: SegmentNode): string[] {
 }
 
 export interface CompiledPackage {
-  factory: (testers: any[], pass: any, decoder: any) => MatchFn;
-  testers: any[];
+  factory: (
+    testers: PatternTesterFn[],
+    pass: typeof import('../tree/pattern-tester').TESTER_PASS,
+    decoder: DecoderFn,
+  ) => MatchFn;
+  testers: PatternTesterFn[];
 }
 
 /**
@@ -136,7 +142,7 @@ ${body}
   if (source.length > MAX_SOURCE_BYTES_HARD) return null;
 
   try {
-    const factory = new Function('testers', 'TESTER_PASS', 'decoder', source) as any;
+    const factory = new Function('testers', 'TESTER_PASS', 'decoder', source) as CompiledPackage['factory'];
     return { factory, testers: ctx.testers };
   } catch {
     return null;
@@ -145,7 +151,7 @@ ${body}
 
 interface EmitContext {
   bail: boolean;
-  testers: any[];
+  testers: PatternTesterFn[];
 }
 
 function emitRootSlashTerminal(root: SegmentNode): string {

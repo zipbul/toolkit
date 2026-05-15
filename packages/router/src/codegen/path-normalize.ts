@@ -19,7 +19,7 @@ export interface NormalizeCfg {
   lowerCase: boolean;
 }
 
-export type PathNormalizer = (path: string) => string | null;
+export type PathNormalizer = (path: string) => string;
 
 /** Trim a single trailing slash. Emits nothing when `trimSlash` is off. */
 export function emitTrailingSlashTrim(cfg: NormalizeCfg, outVar: string): string {

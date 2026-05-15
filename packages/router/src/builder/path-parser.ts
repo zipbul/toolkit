@@ -13,10 +13,7 @@ import { assessRegexSafety } from './regex-safety';
 
 // ── Types ──
 
-export type PathPart =
-  | { type: 'static'; value: string; segments: string[] }
-  | { type: 'param'; name: string; pattern: string | null; optional: boolean }
-  | { type: 'wildcard'; name: string; origin: 'star' | 'multi' };
+import type { PathPart } from '../tree';
 
 export interface ParseResult {
   parts: PathPart[];

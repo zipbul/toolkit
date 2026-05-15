@@ -1,32 +1,39 @@
 import type { Result } from '@zipbul/result';
-import type { PathPart } from '../builder/path-parser';
-import type { SegmentNode } from '../tree/segment-tree';
-import type { SegmentTreeUndoLog } from '../tree/undo';
-import { applyUndo } from '../tree/undo';
-import type { RouterErrorData, RouteParams } from '../types';
-import type { RouteValidationIssue } from '../types';
-import type { PatternTesterFn } from '../tree/pattern-tester';
-
 import { err, isErr } from '@zipbul/result';
-import { OptionalParamDefaults } from '../builder/optional-param-defaults';
-import { PathParser } from '../builder/path-parser';
-import { countOptionalSegments, expandOptional, MAX_OPTIONAL_SEGMENTS_PER_ROUTE } from '../builder/route-expand';
+
+import type { RouterErrorData, RouteParams, RouteValidationIssue } from '../types';
+import { RouterError } from '../error';
+import { MethodRegistry } from '../method-registry';
+import {
+  OptionalParamDefaults,
+  PathParser,
+  countOptionalSegments,
+  expandOptional,
+  MAX_OPTIONAL_SEGMENTS_PER_ROUTE,
+} from '../builder';
 import {
   computePresentBitmask,
   createFactoryCache,
   getOrCreateSuperFactory,
   type FactoryCache,
-} from '../codegen/super-factory';
-import { RouterError } from '../error';
-import { MethodRegistry } from '../method-registry';
-import { createSegmentNode, insertIntoSegmentTree } from '../tree/segment-tree';
-import { detectTenantFactor, setTenantFactor } from '../tree/factor-detect';
-import { decoder } from '../matcher/decoder';
+} from '../codegen';
+import { decoder } from '../matcher';
+import {
+  applyUndo,
+  createSegmentNode,
+  detectTenantFactor,
+  insertIntoSegmentTree,
+  setTenantFactor,
+  UndoKind,
+  type PathPart,
+  type PatternTesterFn,
+  type SegmentNode,
+  type SegmentTreeUndoLog,
+} from '../tree';
 import { WildcardPrefixIndex, rollbackPlan, type RouteMeta, type CommitPlan } from './wildcard-prefix-index';
 import { IdentityRegistry } from './identity-registry';
 import { packTerminalSlab } from './terminal-slab';
 import { WILDCARD_METHOD, expandWildcardMethodRoutes } from './wildcard-method-expand';
-import { UndoKind } from '../tree/undo';
 
 
 /**
@@ -83,9 +90,6 @@ export interface RegistrationSnapshot<T> {
   handlers: T[];
   terminalSlab: Int32Array;
   paramsFactories: Array<((presentBitmask: number, u: string, v: Int32Array) => RouteParams) | null>;
-  /** True iff any registered route declared a regex pattern tester. The
-   *  full tester cache is build-only and not retained on the snapshot. */
-  anyTester: boolean;
   /** Maximum param count observed across every expanded route. Used at
    *  build-time to size the runtime `MatchState.paramOffsets` Int32Array
    *  exactly — no user option, no arbitrary fallback. */
@@ -288,7 +292,6 @@ export class Registration<T> {
       handlers: state.handlers,
       terminalSlab,
       paramsFactories: state.paramsFactories,
-      anyTester: state.testerCache.size > 0,
       maxParamsObserved: state.maxParamsObserved,
     };
 

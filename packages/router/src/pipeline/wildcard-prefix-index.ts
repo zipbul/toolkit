@@ -1,6 +1,6 @@
 import type { Result } from '@zipbul/result';
 import type { RouterErrorData } from '../types';
-import type { PathPart } from '../builder/path-parser';
+import type { PathPart } from '../tree';
 
 import { err } from '@zipbul/result';
 
@@ -54,7 +54,6 @@ function setWildcardName(node: PrefixTrieNode, value: string | null): void {
 export interface RouteMeta {
   routeIndex: number;
   path: string;
-  expandedPath?: string;
   method: string;
   handlerId: number;
   isOptionalExpansion: boolean;

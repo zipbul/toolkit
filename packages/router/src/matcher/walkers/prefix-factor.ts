@@ -1,10 +1,10 @@
 import type { MatchFn, MatchState } from '../match-state';
 import type { DecoderFn } from '../decoder';
-import type { SegmentNode } from '../../tree/segment-tree';
-import type { TenantFactor } from '../../tree/factor-detect';
+import type { SegmentNode } from '../../tree';
+import type { TenantFactor } from '../../tree';
 
-import { TESTER_PASS } from '../../tree/pattern-tester';
-import { detectTenantFactor, setTenantFactor } from '../../tree/factor-detect';
+import { TESTER_PASS } from '../../tree';
+import { detectTenantFactor, setTenantFactor } from '../../tree';
 
 /**
  * Dry-run variant: detects but does not mutate. Returns the deepest

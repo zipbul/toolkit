@@ -1,5 +1,5 @@
 import type { RouteParams } from '../types';
-import { NullProtoObj } from '../internal/null-proto-obj';
+import { NullProtoObj } from '../internal';
 
 /**
  * Super-factory cache: one compiled `(presentBitmask, u, v) => RouteParams`
