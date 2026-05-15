@@ -10,11 +10,16 @@ import { err, isErr } from '@zipbul/result';
 import { OptionalParamDefaults } from '../builder/optional-param-defaults';
 import { PathParser } from '../builder/path-parser';
 import { countOptionalSegments, expandOptional, MAX_OPTIONAL_SEGMENTS_PER_ROUTE } from '../builder/route-expand';
+import {
+  computePresentBitmask,
+  createFactoryCache,
+  getOrCreateSuperFactory,
+  type FactoryCache,
+} from '../codegen/super-factory';
 import { RouterError } from '../error';
 import { MethodRegistry } from '../method-registry';
 import { createSegmentNode, detectTenantFactor, insertIntoSegmentTree, setTenantFactor } from '../matcher/segment-tree';
 import { decoder } from '../matcher/decoder';
-import { NullProtoObj } from '../internal/null-proto-obj';
 import { WildcardPrefixIndex, rollbackPlan, type RouteMeta, type CommitPlan } from './wildcard-prefix-index';
 
 // One-time wiring: dispatch UndoKind.PrefixIndexPlan from segment-tree's
@@ -185,7 +190,7 @@ export class Registration<T> {
     const issues: RouteValidationIssue[] = [];
     const undo: SegmentTreeUndoLog = [];
 
-    const factoryCache = new Map<string, (presentBitmask: number, u: string, v: Int32Array) => RouteParams>();
+    const factoryCache: FactoryCache = createFactoryCache();
     const omitBehavior = (options.optionalParamBehavior ?? 'omit') === 'omit';
     this.prefixIndex = new WildcardPrefixIndex();
     this.identityRegistry = new IdentityRegistry();
@@ -390,7 +395,7 @@ export class Registration<T> {
     state: BuildState<T>,
     undo: SegmentTreeUndoLog,
     routeID: number,
-    factoryCache: Map<string, (presentBitmask: number, u: string, v: Int32Array) => RouteParams>,
+    factoryCache: FactoryCache,
     omitBehavior: boolean,
     decoder: (s: string) => string,
   ): Result<void, RouterErrorData> {
@@ -486,7 +491,7 @@ export class Registration<T> {
     state: BuildState<T>,
     undo: SegmentTreeUndoLog,
     routeID: number,
-    factoryCache: Map<string, (presentBitmask: number, u: string, v: Int32Array) => RouteParams>,
+    factoryCache: FactoryCache,
     omitBehavior: boolean,
     decoder: (s: string) => string,
   ): Result<void, RouterErrorData> {
@@ -562,60 +567,10 @@ export class Registration<T> {
       const tIdx = state.terminalHandlers.length;
       const isWildcard = expParts.length > 0 && expParts[expParts.length - 1]!.type === 'wildcard';
 
-      // Compute presentBitmask: bit i set ⇔ originalNames[i] is captured
-      // by this expansion variant. The super-factory uses this mask at
-      // match-time to gate per-name assignment, so one factory function
-      // serves every variant of a given route shape (factory count goes
-      // from O(2^N) variants to O(1) per route shape).
-      let presentBitmask = 0;
-      for (let origIdx = 0; origIdx < originalNames.length; origIdx++) {
-        const origName = originalNames[origIdx]!;
-        for (let p = 0; p < present.length; p++) {
-          if (present[p]!.name === origName) {
-            presentBitmask |= (1 << origIdx);
-            break;
-          }
-        }
-      }
-
-      let factory: ((presentBitmask: number, u: string, v: Int32Array) => RouteParams) | null = null;
-      if (present.length > 0 || (!omitBehavior && originalNames.length > 0)) {
-        // cacheKey is variant-independent: one super-factory per route shape
-        // (omitBehavior + originalNames + originalTypes). All 2^N variants
-        // of an optional-heavy route share the same compiled function.
-        let cacheKey = omitBehavior ? 'O:' : 'S:';
-        for (let n = 0; n < originalNames.length; n++) {
-          if (n > 0) cacheKey += ',';
-          cacheKey += originalNames[n]!;
-          cacheKey += originalTypes[n] === 'wildcard' ? '#w' : '#p';
-        }
-        let cached = factoryCache.get(cacheKey);
-
-        if (cached === undefined) {
-          // Super-factory body: walks originalNames in order, gates each
-          // assignment on the corresponding bit in `m` (presentBitmask).
-          // `s` is a sliding paramOffsets cursor — only the present slots
-          // were filled by the walker, so absent ones must be skipped.
-          // omitBehavior=true: drop absent entirely (no key written).
-          // omitBehavior=false: write `undefined` for absent.
-          let body = 'var p = new NullProtoObj();\nvar s = 0;\n';
-          for (let n = 0; n < originalNames.length; n++) {
-            const name = originalNames[n]!;
-            const isWild = originalTypes[n] === 'wildcard';
-            const val = `u.substring(v[s*2], v[s*2+1])`;
-            const assign = isWild ? val : `decoder(${val})`;
-            body += `if (m & ${1 << n}) { p[${JSON.stringify(name)}] = ${assign}; s++; }`;
-            if (!omitBehavior) {
-              body += ` else { p[${JSON.stringify(name)}] = undefined; }`;
-            }
-            body += '\n';
-          }
-          body += 'return p;';
-          cached = new Function('decoder', 'NullProtoObj', 'm', 'u', 'v', body).bind(null, decoder, NullProtoObj) as any;
-          factoryCache.set(cacheKey, cached!);
-        }
-        factory = cached!;
-      }
+      const presentBitmask = computePresentBitmask(originalNames, present);
+      const factory = (present.length > 0 || (!omitBehavior && originalNames.length > 0))
+        ? getOrCreateSuperFactory(factoryCache, originalNames, originalTypes, omitBehavior, decoder)
+        : null;
 
       state.terminalHandlers[tIdx] = hIdx;
       state.isWildcardByTerminal[tIdx] = isWildcard;
