@@ -1,7 +1,8 @@
 import type { Result } from '@zipbul/result';
 import type { PathPart } from '../builder/path-parser';
-import type { SegmentNode, SegmentTreeUndoLog } from '../matcher/segment-tree';
-import { applyUndo, setPrefixIndexRollback } from '../matcher/segment-tree';
+import type { SegmentNode } from '../matcher/segment-tree';
+import type { SegmentTreeUndoLog } from '../matcher/segment-tree-undo';
+import { applyUndo, setPrefixIndexRollback } from '../matcher/segment-tree-undo';
 import type { RouterErrorData, RouteParams } from '../types';
 import type { RouteValidationIssue } from '../types';
 import type { PatternTesterFn } from '../matcher/pattern-tester';
@@ -18,7 +19,8 @@ import {
 } from '../codegen/super-factory';
 import { RouterError } from '../error';
 import { MethodRegistry } from '../method-registry';
-import { createSegmentNode, detectTenantFactor, insertIntoSegmentTree, setTenantFactor } from '../matcher/segment-tree';
+import { createSegmentNode, insertIntoSegmentTree } from '../matcher/segment-tree';
+import { detectTenantFactor, setTenantFactor } from '../matcher/factor-detect';
 import { decoder } from '../matcher/decoder';
 import { WildcardPrefixIndex, rollbackPlan, type RouteMeta, type CommitPlan } from './wildcard-prefix-index';
 
@@ -27,7 +29,7 @@ import { WildcardPrefixIndex, rollbackPlan, type RouteMeta, type CommitPlan } fr
 // layer has no upward dependency on the pipeline layer.
 setPrefixIndexRollback(rollbackPlan as (plan: unknown) => void);
 import { IdentityRegistry } from './identity-registry';
-import { UndoKind } from '../matcher/segment-tree';
+import { UndoKind } from '../matcher/segment-tree-undo';
 
 const WILDCARD_METHOD = '*' as const;
 

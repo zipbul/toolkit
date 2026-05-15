@@ -3,7 +3,8 @@ import type { DecoderFn } from './decoder';
 import type { SegmentNode } from './segment-tree';
 
 import { TESTER_PASS } from './pattern-tester';
-import { compactSegmentTree, getTenantFactor, hasAmbiguousNode } from './segment-tree';
+import { compactSegmentTree, hasAmbiguousNode } from './segment-tree-traversal';
+import { getTenantFactor } from './factor-detect';
 import { compileSegmentTree, collectWarmupPaths } from '../codegen/segment-compile';
 import { detectWildCodegenSpec } from '../codegen/walker-strategy';
 import { WARMUP_ITERATIONS } from '../codegen/warmup';

@@ -1,6 +1,7 @@
 import type { SegmentNode } from '../matcher/segment-tree';
 import type { MatchFn } from '../matcher/match-state';
-import { forEachStaticChild, hasAmbiguousNode, hasAnyStaticChild } from '../matcher/segment-tree';
+import { forEachStaticChild, hasAnyStaticChild } from '../matcher/segment-tree';
+import { hasAmbiguousNode } from '../matcher/segment-tree-traversal';
 
 /**
  * Codegen budget thresholds. Trees exceeding either of these fall back to
