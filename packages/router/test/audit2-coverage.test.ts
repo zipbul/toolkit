@@ -118,4 +118,31 @@ describe('route-parse error suggestions (AUDIT2-010)', () => {
       expect((inner as { suggestion?: string }).suggestion).toBeDefined();
     }
   });
+
+  it('invalid first character in param name includes suggestion', () => {
+    const r = new Router<string>();
+    r.add('GET', '/users/:1id', 'h');
+    try { r.build(); throw new Error('expected throw'); }
+    catch (e) {
+      const err = e as RouterError;
+      if (err.data.kind !== 'route-validation') throw e;
+      const inner = err.data.errors[0]!.error;
+      expect(inner.kind).toBe('route-parse');
+      expect((inner as { suggestion?: string }).suggestion).toBeDefined();
+    }
+  });
+
+  it('invalid subsequent character in param name includes suggestion', () => {
+    const r = new Router<string>();
+    r.add('GET', '/users/:id-x', 'h');
+    try { r.build(); throw new Error('expected throw'); }
+    catch (e) {
+      const err = e as RouterError;
+      if (err.data.kind !== 'route-validation') throw e;
+      const inner = err.data.errors[0]!.error;
+      expect(inner.kind).toBe('route-parse');
+      expect((inner as { suggestion?: string }).suggestion).toBeDefined();
+    }
+  });
+
 });
