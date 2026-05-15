@@ -96,14 +96,12 @@ describe('Router<T> options', () => {
     }
   });
 
-  it('passes malformed encoding through as raw bytes (router does not validate runtime paths)', () => {
+  it('throws on malformed percent encoding at match (caller responsibility)', () => {
     const router = new Router<string>();
     router.add('GET', '/files/:name', 'files');
     router.build();
 
-    const result = router.match('GET', '/files/bad%GG');
-    expect(result).not.toBeNull();
-    expect(result!.params.name).toBe('bad%GG');
+    expect(() => router.match('GET', '/files/bad%GG')).toThrow();
   });
 
   it('should handle optionalParamBehavior=\'set-undefined\'', () => {

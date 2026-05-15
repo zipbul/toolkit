@@ -107,13 +107,10 @@ describe('PathParser', () => {
       }
     });
 
-    it('should store normalized regex pattern sources after anchor stripping', () => {
+    it('should reject anchored regex pattern sources at parse time', () => {
       const result = parse('/users/:id(^\\d+$)');
-      expect(isErr(result)).toBe(false);
-      if (!isErr(result)) {
-        const paramPart = result.parts.find(p => p.type === 'param') as Extract<PathPart, { type: 'param' }>;
-        expect(paramPart.pattern).toBe('\\d+');
-      }
+      expect(isErr(result)).toBe(true);
+      if (isErr(result)) expect(result.data.kind).toBe('route-parse');
     });
 
     it('should parse optional param', () => {
@@ -143,17 +140,13 @@ describe('PathParser', () => {
       if (isErr(result)) expect(result.data.kind).toBe('route-parse');
     });
 
-    it('should treat whitespace-only regex `(   )` as no-pattern (F15 contract)', () => {
-      // Without this, the matcher would compile a literal-whitespace regex —
-      // almost certainly a typo. Empty `()` and whitespace-only `(   )` collapse
-      // to the same no-pattern shape.
+    it('should reject whitespace-only regex `(   )` as parse error', () => {
+      // Whitespace-only patterns are silently-typo cases — the user almost
+      // certainly meant to omit the parentheses entirely. Reject so the
+      // intent is explicit.
       const result = parse('/users/:id(   )');
-      expect(isErr(result)).toBe(false);
-      if (!isErr(result)) {
-        const idPart = result.parts.find(p => p.type === 'param' && p.name === 'id');
-        expect(idPart).toBeDefined();
-        expect((idPart as { pattern: string | null }).pattern).toBeNull();
-      }
+      expect(isErr(result)).toBe(true);
+      if (isErr(result)) expect(result.data.kind).toBe('route-parse');
     });
   });
 
@@ -195,24 +188,16 @@ describe('PathParser', () => {
       if (isErr(result)) expect(result.data.kind).toBe('route-parse');
     });
 
-    it('should parse :name+ as multi wildcard', () => {
+    it('should reject :name+ colon-form wildcard sugar (use *name+ instead)', () => {
       const result = parse('/files/:path+');
-      expect(isErr(result)).toBe(false);
-      if (!isErr(result)) {
-        expect(result.parts[result.parts.length - 1]).toEqual({
-          type: 'wildcard', name: 'path', origin: 'multi',
-        });
-      }
+      expect(isErr(result)).toBe(true);
+      if (isErr(result)) expect(result.data.kind).toBe('route-parse');
     });
 
-    it('should parse :name* as star wildcard', () => {
+    it('should reject :name* colon-form wildcard sugar (use *name instead)', () => {
       const result = parse('/files/:path*');
-      expect(isErr(result)).toBe(false);
-      if (!isErr(result)) {
-        expect(result.parts[result.parts.length - 1]).toEqual({
-          type: 'wildcard', name: 'path', origin: 'star',
-        });
-      }
+      expect(isErr(result)).toBe(true);
+      if (isErr(result)) expect(result.data.kind).toBe('route-parse');
     });
 
     it('should reject :name+ not at last segment', () => {

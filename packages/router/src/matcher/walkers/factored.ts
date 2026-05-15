@@ -16,7 +16,6 @@ import { TESTER_PASS, type SegmentNode } from '../../tree';
  * latency observed in prior bench rounds.
  */
 export function createFactoredWalker(
-  root: SegmentNode,
   decoder: DecoderFn,
   keyToTerminal: Map<string, number>,
   sharedNext: SegmentNode,
@@ -25,14 +24,12 @@ export function createFactoredWalker(
     state.paramCount = 0;
     const len = url.length;
 
-    if (url === '/') {
-      if (root.store !== null) {
-        state.handlerIndex = root.store;
-        return true;
-      }
-      return false;
-    }
-
+    // No `url === '/'` short-circuit: the factor is only attached when
+    // the root has a high-fanout sibling group (which requires
+    // root.store === null; see factor-detect.ts), so a `/` request can
+    // never produce a factored match anyway. The `keyToTerminal.get('')`
+    // lookup below returns undefined for this input and we fall through
+    // to `return false` cleanly.
     let slash1 = 1;
     while (slash1 < len && url.charCodeAt(slash1) !== 47) slash1++;
     const firstSeg = slash1 === len ? url.substring(1) : url.substring(1, slash1);

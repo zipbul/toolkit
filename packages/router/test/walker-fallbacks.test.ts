@@ -256,17 +256,13 @@ describe('decoding under fallback walkers', () => {
     expect(m!.params).toEqual({ user: 'hello world' });
   });
 
-  it('keeps raw value when decodeURIComponent would throw (router does not decode)', () => {
+  it('throws on malformed percent-encoded input (router does not swallow decode errors)', () => {
     const r = new Router<string>();
     r.add('GET', '/api/v1/:user', 'v1');
     r.add('GET', '/api/:ver/users', 'pv');
     r.build();
 
-    const m = r.match('GET', '/api/v1/%E0%A4%A');
-
-    expect(m).not.toBeNull();
-    expect(m!.value).toBe('v1');
-    expect(typeof m!.params.user).toBe('string');
+    expect(() => r.match('GET', '/api/v1/%E0%A4%A')).toThrow();
   });
 });
 

@@ -13,8 +13,6 @@ export function createIterativeWalker(root: SegmentNode, decoder: DecoderFn): Ma
     state.paramCount = 0;
     const len = url.length;
 
-    if (url === '/') return matchRootSlash(root, state);
-
     let node = root;
     let pos = 1;
 
@@ -86,22 +84,6 @@ export function createIterativeWalker(root: SegmentNode, decoder: DecoderFn): Ma
 
     return matchTerminalAtNode(node, len, state);
   };
-}
-
-/** Match `/` against the root: store-first then star-wildcard fallback. */
-function matchRootSlash(root: SegmentNode, state: MatchState): boolean {
-  if (root.store !== null) {
-    state.handlerIndex = root.store;
-    return true;
-  }
-  if (root.wildcardStore !== null && root.wildcardOrigin === 'star') {
-    state.paramOffsets[0] = 1;
-    state.paramOffsets[1] = 1;
-    state.paramCount = 1;
-    state.handlerIndex = root.wildcardStore;
-    return true;
-  }
-  return false;
 }
 
 /** Walk a compacted single-static chain. Returns the new `pos` after

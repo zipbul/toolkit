@@ -7,23 +7,30 @@ describe('normalizeParamPatternSource', () => {
     expect(normalizeParamPatternSource('\\d+')).toBe('\\d+');
   });
 
-  it('strips leading ^ anchor silently', () => {
-    expect(normalizeParamPatternSource('^\\d+')).toBe('\\d+');
+  it('rejects leading ^ anchor', () => {
+    const result = normalizeParamPatternSource('^\\d+');
+    expect(typeof result).toBe('object');
+    if (typeof result !== 'string') expect(result.reason).toBe('anchor');
   });
 
-  it('strips trailing $ anchor silently', () => {
-    expect(normalizeParamPatternSource('\\d+$')).toBe('\\d+');
+  it('rejects trailing $ anchor', () => {
+    const result = normalizeParamPatternSource('\\d+$');
+    expect(typeof result).toBe('object');
+    if (typeof result !== 'string') expect(result.reason).toBe('anchor');
   });
 
-  it('strips both anchors silently', () => {
-    expect(normalizeParamPatternSource('^\\d+$')).toBe('\\d+');
+  it('rejects both anchors', () => {
+    const result = normalizeParamPatternSource('^\\d+$');
+    expect(typeof result).toBe('object');
+    if (typeof result !== 'string') expect(result.reason).toBe('anchor');
   });
 
-  it('normalizes pattern with only anchors to .*', () => {
-    expect(normalizeParamPatternSource('^$')).toBe('.*');
+  it('rejects pattern with only anchors', () => {
+    const result = normalizeParamPatternSource('^$');
+    expect(typeof result).toBe('object');
   });
 
-  it('falls back to .* on whitespace-only input (defensive)', () => {
-    expect(normalizeParamPatternSource('   ')).toBe('.*');
+  it('trims surrounding whitespace from acceptable patterns', () => {
+    expect(normalizeParamPatternSource('  \\d+  ')).toBe('\\d+');
   });
 });

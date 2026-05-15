@@ -13,7 +13,7 @@ function catchRouterError(fn: () => void): RouterError {
 }
 
 describe('Router regression fixes', () => {
-  it('reports anchored and unanchored param patterns as the same route shape at build time', () => {
+  it('rejects anchored param patterns at parse time (^/$ never silently stripped)', () => {
     const router = new Router<string>();
 
     router.add('GET', '/users/:id(\\d+)', 'plain');
@@ -23,7 +23,7 @@ describe('Router regression fixes', () => {
     expect(error.data.kind).toBe('route-validation');
     if (error.data.kind === 'route-validation') {
       expect(error.data.errors).toHaveLength(1);
-      expect(error.data.errors[0]?.error.kind).toBe('route-duplicate');
+      expect(error.data.errors[0]?.error.kind).toBe('route-parse');
     }
   });
 

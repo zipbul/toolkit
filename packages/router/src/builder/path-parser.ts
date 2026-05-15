@@ -220,9 +220,11 @@ export class PathParser {
     core = optionalResult.core;
     isOptional = optionalResult.isOptional;
 
-    // `:name+` / `:name*` (no regex group) parses as a wildcard, not a param.
-    const wildcardFromColon = this.tryParseWildcardFromColon(core, path);
-    if (wildcardFromColon !== null) return wildcardFromColon;
+    // `:name+` / `:name*` is not a supported colon-form wildcard — wildcards
+    // must use the `*name` / `*name+` syntax exclusively. Reject the sugar at
+    // parse time so two surface forms can't represent the same PathPart.
+    const sugarRejection = rejectColonWildcardSugar(core, seg, path);
+    if (sugarRejection !== undefined) return err(sugarRejection);
 
     const nameAndPattern = extractNameAndPattern(core, path);
     if ('kind' in nameAndPattern) return err(nameAndPattern);
@@ -240,27 +242,6 @@ export class PathParser {
     }
 
     return { type: 'param', name, pattern, optional: isOptional };
-  }
-
-  /**
-   * `:name+` / `:name*` (without a regex group) collapses into a wildcard.
-   * Returns the wildcard PathPart on hit, an `Err` Result on validation
-   * failure, or `null` when the segment is not this shape.
-   */
-  private tryParseWildcardFromColon(
-    core: string,
-    path: string,
-  ): Result<PathPart, RouterErrorData> | null {
-    const tail = core.charAt(core.length - 1);
-    if (tail !== '+' && tail !== '*') return null;
-    if (core.includes('(')) return null;
-    const origin: 'star' | 'multi' = tail === '+' ? 'multi' : 'star';
-    const name = core.slice(1, -1); // skip leading ':' and trailing decorator
-    const validation = validateParamName(name, ':', path);
-    if (validation !== null) return validation;
-    const dup = this.registerParam(name, ':', path);
-    if (dup !== null) return dup;
-    return { type: 'wildcard', name, origin };
   }
 
   private parseWildcard(
@@ -410,6 +391,31 @@ function validateParamName(
 }
 
 /**
+ * Reject `:name+` / `:name*` (without a regex group). These are surface
+ * sugar for the canonical `*name+` / `*name` wildcard syntax — accepting
+ * both forms means two distinct strings can register the same logical
+ * route, so we cut the sugar at parse time and force the canonical form.
+ * Returns `undefined` when the segment is not this shape.
+ */
+function rejectColonWildcardSugar(
+  core: string,
+  seg: string,
+  path: string,
+): RouterErrorData | undefined {
+  const tail = core.charAt(core.length - 1);
+  if (tail !== '+' && tail !== '*') return undefined;
+  if (core.includes('(')) return undefined;
+  const canonical = tail === '+' ? `*${core.slice(1, -1)}+` : `*${core.slice(1, -1)}`;
+  return {
+    kind: 'route-parse',
+    message: `Colon-form wildcard '${seg}' is not supported. Use '${canonical}' instead.`,
+    path,
+    segment: seg,
+    suggestion: `Wildcards must use the '*name' (zero-or-more) or '*name+' (one-or-more) syntax — not the ':name${tail}' colon form.`,
+  };
+}
+
+/**
  * Peel the trailing `?` optional decorator. Rejects `:name+?` / `:name*?`
  * combinations as a parse error. Returns `{ core, isOptional }` on
  * success, a `RouterErrorData` carrier on failure (no Result wrapper —
@@ -436,8 +442,8 @@ function stripOptionalDecorator(
 
 /**
  * Split `:name(pattern)` into its name and (possibly null) pattern.
- * Whitespace-only `( )` collapses to no-pattern. Returns the parsed
- * pair on success, a `RouterErrorData` carrier for unclosed groups.
+ * Returns the parsed pair on success, a `RouterErrorData` carrier for
+ * unclosed groups or empty/whitespace-only patterns.
  */
 function extractNameAndPattern(
   core: string,
@@ -457,8 +463,26 @@ function extractNameAndPattern(
     };
   }
   const rawPattern = core.slice(parenIdx + 1, -1);
-  const pattern = rawPattern.trim() === '' ? null : normalizeParamPatternSource(rawPattern);
-  return { name, pattern };
+  if (rawPattern.trim() === '') {
+    return {
+      kind: 'route-parse',
+      message: `Empty regex pattern in parameter ':${name}': ${path}`,
+      path,
+      segment: name,
+      suggestion: `Either remove the parentheses entirely (':${name}') or provide a non-empty pattern.`,
+    };
+  }
+  const normalizeResult = normalizeParamPatternSource(rawPattern);
+  if (typeof normalizeResult !== 'string') {
+    return {
+      kind: 'route-parse',
+      message: `Anchored regex pattern in parameter ':${name}': ${path}`,
+      path,
+      segment: name,
+      suggestion: normalizeResult.suggestion,
+    };
+  }
+  return { name, pattern: normalizeResult };
 }
 
 /** Mutable accumulator that gathers consecutive static segments before

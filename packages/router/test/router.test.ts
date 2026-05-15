@@ -180,9 +180,9 @@ describe('Router<T>', () => {
       expect(result!.params.filepath).toBe('a/b/c');
     });
 
-    it('should match multi-segment dynamic param (:file+)', () => {
+    it('should match multi-segment dynamic param (*file+)', () => {
       const router = new Router<string>();
-      router.add('GET', '/docs/:file+', 'docs');
+      router.add('GET', '/docs/*file+', 'docs');
       router.build();
 
       const result = router.match('GET', '/docs/a/b');

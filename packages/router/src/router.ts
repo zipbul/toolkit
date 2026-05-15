@@ -107,22 +107,20 @@ export class Router<T = unknown> implements RouterPublicApi<T> {
       return this;
     };
 
-    // Hot-path: dispatch the compiled matchImpl directly. Routing
-    // through `matchLayer.match` would add a method-dispatch hop that
-    // breaks JSC's monomorphic IC (verified: static match 300 ps → 13 ns,
-    // param match +5 ns). MatchLayer owns cold-path concerns only.
+    // Hot-path: dispatch the compiled matchImpl directly. Routing through
+    // `matchLayer.match` would add a method-dispatch hop that breaks JSC's
+    // monomorphic IC (verified: static match 300 ps → 13 ns, param match
+    // +5 ns). MatchLayer owns cold-path concerns only.
+    //
+    // No leading-slash guard. Standard HTTP server boundaries
+    // (Node `req.url`, Bun `URL(...).pathname`, Express/Fastify/Hono
+    // request handlers) all guarantee origin-form pathnames per RFC 7230
+    // §5.3.1, and our peer routers (find-my-way, hono, rou3) skip the
+    // check for the same reason. Callers handing the router a non-`/`
+    // input is undefined behavior.
     this.match = (method, path) => {
       const impl = internals.matchImpl;
-      if (impl === undefined) return null;
-      // Pathname must start with `/` per RFC 3986 origin-form. Without
-      // this guard, the iterative/recursive fallback walkers (which
-      // start `pos = 1` and skip the loop when `pos >= len`) can match
-      // an empty string against a root-bearing dynamic tree (e.g.
-      // `/:id?`) and return the wrong handler. The compiled codegen
-      // tier already rejects `len < 2` upstream — the guard here
-      // brings every walker tier in line.
-      if (path.length === 0 || path.charCodeAt(0) !== 47) return null;
-      return impl(method, path);
+      return impl === undefined ? null : impl(method, path);
     };
     this.allowedMethods = (path) => {
       const layer = internals.matchLayer;

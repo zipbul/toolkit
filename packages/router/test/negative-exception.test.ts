@@ -73,17 +73,18 @@ describe('match() never throws on bad input', () => {
     expect(r.match('GET', path)).toBeNull();
   });
 
-  it('does not throw on malformed percent-encoded sequences', () => {
+  it('throws on malformed percent-encoded sequences (caller responsibility)', () => {
     const r = new Router<string>();
     r.add('GET', '/users/:name', 'u');
     r.build();
 
-    // Each malformed: trailing %, % followed by non-hex, % half-byte
+    // `decodeURIComponent` throws on malformed percent escapes and the
+    // router does not swallow it — caller (HTTP server boundary) must
+    // hand the router well-formed pathnames.
     const malformed = ['/users/%', '/users/%XY', '/users/%E0', '/users/abc%'];
 
     for (const path of malformed) {
-      expect(() => r.match('GET', path)).not.toThrow();
-      // Result may be a match with raw value or null — but never a throw.
+      expect(() => r.match('GET', path)).toThrow();
     }
   });
 });
@@ -157,15 +158,11 @@ describe('regex safety', () => {
     expect(() => r.build()).toThrow(RouterError);
   });
 
-  it('strips ^/$ anchors silently (always-on)', () => {
+  it('rejects ^/$ anchors at build (always-on, never silently stripped)', () => {
     const r = new Router<string>();
+    r.add('GET', '/x/:id(^abc$)', 'x');
 
-    expect(() => r.add('GET', '/x/:id(^abc$)', 'x')).not.toThrow();
-    r.build();
-
-    // Anchors stripped → :id(abc) — exact-match only.
-    expect(r.match('GET', '/x/abc')!.value).toBe('x');
-    expect(r.match('GET', '/x/abcd')).toBeNull();
+    expect(() => r.build()).toThrow(RouterError);
   });
 });
 

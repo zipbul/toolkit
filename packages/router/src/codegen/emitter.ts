@@ -304,14 +304,16 @@ function compileMixed<T>(cfg: MatchConfig<T>, singleMethod: SingleMethodSpec | n
  * Warm the compiled match implementation past JSC's baseline thresholds
  * across each active method so the first user request lands on at least
  * baseline-compiled code rather than the cold first-call path.
+ *
+ * Exceptions propagate. A throw from `compiled` would mean a defective
+ * `new Function()` body or a corrupted closure capture — both real
+ * codegen bugs that should crash the build, not be silently swallowed.
  */
 function runWarmup<T>(compiled: CompiledMatch<T>, cfg: MatchConfig<T>): void {
   const warmPaths = ['/__zipbul_warmup__', '/__zipbul_warmup__/sub'];
   for (let it = 0; it < WARMUP_ITERATIONS; it++) {
     for (const [methodName] of cfg.activeMethodCodes) {
-      for (const p of warmPaths) {
-        try { compiled(methodName, p); } catch { /* warmup non-fatal */ }
-      }
+      for (const p of warmPaths) compiled(methodName, p);
     }
   }
 }

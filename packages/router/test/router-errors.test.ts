@@ -285,13 +285,11 @@ describe('Router<T> errors', () => {
     expect(issue.message).toContain('Backreferences');
   });
 
-  it('should silently strip ^/$ anchors and accept the pattern', () => {
+  it('should reject anchored regex patterns at build (^/$ are never silently stripped)', () => {
     const router = new Router<string>();
+    router.add('GET', '/users/:id(^\\d+$)', 'handler');
 
-    expect(() => router.add('GET', '/users/:id(^\\d+$)', 'handler')).not.toThrow();
-    router.build();
-
-    expect(router.match('GET', '/users/42')!.value).toBe('handler');
+    expect(() => router.build()).toThrow();
   });
 
 });

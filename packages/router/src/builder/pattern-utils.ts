@@ -1,18 +1,32 @@
 import { END_ANCHOR_PATTERN, START_ANCHOR_PATTERN } from './constants';
 
 /**
- * Strip leading `^` / trailing `$` anchors from a parameter regex source.
- * The router wraps every param regex in `^(?:...)$` automatically, so the
- * user-supplied anchors are redundant at best and silently shadow the
- * wrapping at worst. Always strip silently.
- *
- * Contract: `PathParser.parseParam` collapses `:name(   )` to a no-pattern
- * param (`pattern = null`) before reaching this function, so `patternSrc`
- * is always non-empty. The post-strip empty check (e.g. user wrote `^$`)
- * still falls back to `.*` so we don't pass an empty pattern downstream.
+ * Carries the rejection reason for an anchored param regex. The pattern
+ * shape `^...` / `...$` is rejected at parse time because the router
+ * already wraps every user pattern in `^(?:...)$` — accepting the user
+ * anchors would silently double-anchor and obscure the user's intent.
  */
-export function normalizeParamPatternSource(patternSrc: string): string {
-  let normalized = patternSrc.trim().replace(START_ANCHOR_PATTERN, '').replace(END_ANCHOR_PATTERN, '');
-  if (normalized === '') return '.*';
-  return normalized;
+export interface PatternRejection {
+  reason: 'anchor';
+  suggestion: string;
+}
+
+/**
+ * Validate and normalize a parameter regex source. Returns the source
+ * unchanged when acceptable, or a `PatternRejection` carrier when the
+ * user supplied a leading `^` / trailing `$` anchor.
+ *
+ * Contract: `PathParser.parseParam` collapses `:name(   )` to a parse
+ * error before reaching this function, so `patternSrc` is guaranteed
+ * non-empty here.
+ */
+export function normalizeParamPatternSource(patternSrc: string): string | PatternRejection {
+  const trimmed = patternSrc.trim();
+  if (START_ANCHOR_PATTERN.test(trimmed) || END_ANCHOR_PATTERN.test(trimmed)) {
+    return {
+      reason: 'anchor',
+      suggestion: 'Remove the leading `^` or trailing `$` — the router wraps every param regex in `^(?:...)$` automatically.',
+    };
+  }
+  return trimmed;
 }

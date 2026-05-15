@@ -7,10 +7,10 @@ import { Router } from '../src/router';
 import { RouterError } from '../src/error';
 
 describe('factored walker — multi-suffix wildcard empty-tail (COV-001)', () => {
-  it('multi-origin wildcard `:rest+` rejects empty tail across factored tier', () => {
+  it('multi-origin wildcard `*rest+` rejects empty tail across factored tier', () => {
     const r = new Router<string>();
     for (let i = 0; i < 1500; i++) {
-      r.add('GET', `/tenant-${i}/files/:rest+`, `multi-${i}`);
+      r.add('GET', `/tenant-${i}/files/*rest+`, `multi-${i}`);
     }
     r.build();
     expect(r.match('GET', '/tenant-0/files/a/b')?.value).toBe('multi-0');

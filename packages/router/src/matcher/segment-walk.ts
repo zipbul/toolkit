@@ -34,8 +34,11 @@ import { createRecursiveWalker } from './walkers/recursive';
  * observed. `collectWarmupPaths()` returns one synthesized path per direct
  * child of the root.
  *
- * Errors from warmup invocations are swallowed: warmup is a best-effort
- * hint to the JIT, not a correctness check.
+ * Walker exceptions during warmup propagate. Walkers are pure dispatch
+ * over freshly-compiled tables — a throw means a real codegen/walker
+ * defect, and swallowing it would hide build bugs behind a green test
+ * suite. Synthesized warmup paths are well-formed origin-form pathnames
+ * so a throw here is always a router bug, never a malformed input.
  */
 function warmupCompiledWalker(
   walker: MatchFn,
@@ -44,9 +47,7 @@ function warmupCompiledWalker(
 ): void {
   const paths = collectWarmupPaths(root);
   for (let it = 0; it < WARMUP_ITERATIONS; it++) {
-    for (const p of paths) {
-      try { walker(p, state); } catch { /* warmup failures are non-fatal */ }
-    }
+    for (const p of paths) walker(p, state);
   }
 }
 
@@ -72,7 +73,7 @@ export function createSegmentWalker(
 ): MatchFn {
   const factorAtEntry = getTenantFactor(root);
   if (factorAtEntry !== undefined) {
-    return createFactoredWalker(root, decoder, factorAtEntry.keyToTerminal, factorAtEntry.sharedNext);
+    return createFactoredWalker(decoder, factorAtEntry.keyToTerminal, factorAtEntry.sharedNext);
   }
 
   const prefixedFactor = tryDetectPrefixedFactor(root);

@@ -11,8 +11,8 @@ describe('decoder', () => {
     expect(decoder('plainpath')).toBe('plainpath');
   });
 
-  it('should return raw string (not error) on invalid percent encoding', () => {
-    expect(decoder('%ZZ')).toBe('%ZZ');
+  it('should throw on invalid percent encoding (caller responsibility)', () => {
+    expect(() => decoder('%ZZ')).toThrow();
   });
 
   it('should decode %2F to / in param values', () => {

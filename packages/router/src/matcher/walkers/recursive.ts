@@ -111,24 +111,8 @@ export function createRecursiveWalker(root: SegmentNode, decoder: DecoderFn): Ma
 
   return function walk(url: string, state: MatchState): boolean {
     state.paramCount = 0;
-    if (url === '/') return matchRootSlash(root, state);
     return match(root, url, 1, state, decoder);
   };
-}
-
-function matchRootSlash(root: SegmentNode, state: MatchState): boolean {
-  if (root.store !== null) {
-    state.handlerIndex = root.store;
-    return true;
-  }
-  if (root.wildcardStore !== null && root.wildcardOrigin === 'star') {
-    state.paramOffsets[0] = 1;
-    state.paramOffsets[1] = 1;
-    state.paramCount = 1;
-    state.handlerIndex = root.wildcardStore;
-    return true;
-  }
-  return false;
 }
 
 function matchTerminalAtNode(node: SegmentNode, len: number, state: MatchState): boolean {

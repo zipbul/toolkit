@@ -130,15 +130,13 @@ describe('Method registry — bulk + custom', () => {
 });
 
 describe('Encoded path edge', () => {
-  it('decoder fallback when percent-encoded byte is invalid', () => {
+  it('throws on malformed percent-encoded input (caller responsibility)', () => {
     const r = new Router<string>();
     r.add('GET', '/x/:p', 'h');
     r.build();
-    // %FF on its own is malformed UTF-8; decoder should fall back to
-    // raw value (no throw)
-    const got = r.match('GET', '/x/%FF');
-    expect(got?.value).toBe('h');
-    // raw byte preserved (decoder fallback returns raw on invalid)
-    expect(typeof got?.params['p']).toBe('string');
+    // %FF on its own is malformed UTF-8 — `decodeURIComponent` throws
+    // and the router does not swallow it. Caller (HTTP server boundary)
+    // is responsible for handing well-formed pathnames.
+    expect(() => r.match('GET', '/x/%FF')).toThrow();
   });
 });
