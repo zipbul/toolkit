@@ -57,15 +57,6 @@ describe('RouterCache', () => {
     expect(cache.get('/c')).toBe('c');
   });
 
-  it('should allow re-insertion after clear', () => {
-    const cache = new RouterCache<string>(2);
-    cache.set('/a', 'a');
-    cache.clear();
-    cache.set('/a', 'new-a');
-
-    expect(cache.get('/a')).toBe('new-a');
-  });
-
   // ── NE ──
 
   it('should return undefined when key was never set', () => {
@@ -86,16 +77,6 @@ describe('RouterCache', () => {
     cache.set('/b', 'b'); // evicts /a
 
     expect(cache.get('/a')).toBeUndefined();
-  });
-
-  it('should return undefined for any key after clear', () => {
-    const cache = new RouterCache<string>(5);
-    cache.set('/a', 'a');
-    cache.set('/b', 'b');
-    cache.clear();
-
-    expect(cache.get('/a')).toBeUndefined();
-    expect(cache.get('/b')).toBeUndefined();
   });
 
   // ── ED ──
@@ -178,19 +159,6 @@ describe('RouterCache', () => {
     expect(cache.get('/c')).toBe('c');
   });
 
-  it('should reset hand, count, entries, and index after clear', () => {
-    const cache = new RouterCache<string>(3);
-    cache.set('/a', 'a');
-    cache.set('/b', 'b');
-    cache.clear();
-
-    // After clear: new inserts should go to slot 0 again
-    cache.set('/new', 'new');
-
-    expect(cache.get('/new')).toBe('new');
-    expect(cache.get('/a')).toBeUndefined();
-  });
-
   it('should evict entry on second clock sweep when entry was given second chance', () => {
     // clock-sweep: first encounter → used=true→false (second chance); second encounter → used=false→evict
     // maxSize=2: insert /a(s0), /b(s1). evict for /c:
@@ -245,15 +213,6 @@ describe('RouterCache', () => {
     expect(cache.get('/stable')).toBe('value');
     expect(cache.get('/stable')).toBe('value');
     expect(cache.get('/stable')).toBe('value');
-  });
-
-  it('should leave cache empty after multiple sequential clear calls', () => {
-    const cache = new RouterCache<string>(5);
-    cache.set('/a', 'a');
-    cache.clear();
-    cache.clear();
-
-    expect(cache.get('/a')).toBeUndefined();
   });
 
   // ── OR ──

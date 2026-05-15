@@ -86,6 +86,11 @@ export class MethodRegistry {
     return offset;
   }
 
+  /**
+   * Lookup a method's code or `undefined` if absent. Production code uses
+   * `getOrCreate()` (which adds the method on first sight); `get()` is the
+   * read-only counterpart used by regression tests to assert codeMap state.
+   */
   get(method: string): number | undefined {
     return this.codeMap[method];
   }

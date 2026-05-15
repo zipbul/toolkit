@@ -18,10 +18,7 @@ export {
   insertIntoSegmentTree,
 } from './segment-tree';
 
-export type {
-  UndoRecord,
-  SegmentTreeUndoLog,
-} from './undo';
+export type { SegmentTreeUndoLog } from './undo';
 export { UndoKind, applyUndo } from './undo';
 
 export {
@@ -37,8 +34,4 @@ export {
 } from './factor-detect';
 
 export type { PatternTesterFn } from './pattern-tester';
-export {
-  TESTER_PASS,
-  TESTER_FAIL,
-  buildPatternTester,
-} from './pattern-tester';
+export { TESTER_PASS } from './pattern-tester';

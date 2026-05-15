@@ -90,13 +90,6 @@ export class RouterCache<T> {
     this.index.set(key, slot);
   }
 
-  clear(): void {
-    this.entries.fill(undefined);
-    this.index.clear();
-    this.hand = 0;
-    this.count = 0;
-  }
-
   private evict(): number {
     while (true) {
       const entry = this.entries[this.hand];

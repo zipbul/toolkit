@@ -82,9 +82,6 @@ export class MatchLayer {
    */
   allowedMethods(path: string): readonly string[] {
     const sp = this.normalizePath(path);
-
-    if (sp === null) return [];
-
     const out: string[] = [];
 
     // Static fast path — single 32-bit mask lookup; iterate via lowest

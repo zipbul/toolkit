@@ -86,7 +86,7 @@ export type RouterErrorData = {
   | { kind: 'route-conflict'; message: string; segment: string; conflictsWith: string }
   | { kind: 'route-unreachable'; message: string; segment?: string; conflictsWith?: string; suggestion?: string }
   | { kind: 'route-parse'; message: string; segment?: string; suggestion?: string }
-  | { kind: 'param-duplicate'; message: string; path: string; segment: string; suggestion: string }
+  | { kind: 'param-duplicate'; message: string; segment: string; suggestion: string }
   | { kind: 'regex-unsafe'; message: string; segment: string; suggestion: string }
   | { kind: 'method-limit'; message: string; method: string; suggestion: string }
   | { kind: 'method-empty'; message: string; suggestion?: string }

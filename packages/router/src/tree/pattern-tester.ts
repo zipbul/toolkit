@@ -5,11 +5,11 @@ type TesterResult = typeof TESTER_FAIL | typeof TESTER_PASS;
 
 /**
  * Pattern tester closure. Hot-path matcher invokes this to validate a
- * captured param against its compiled regex.
- *
- * Lives in matcher/ rather than src/types.ts so the types module
- * stays at the *bottom* of the dependency graph (no `types →
- * matcher` edge).
+ * captured param against its compiled regex. Lives in tree/ alongside
+ * `ParamSegment` (which holds a `tester: PatternTesterFn | null` field)
+ * so the data model owns its own value-type, and codegen/matcher import
+ * the type from the tree barrel without an upward edge to a dedicated
+ * types module.
  */
 export type PatternTesterFn = (value: string) => TesterResult;
 
