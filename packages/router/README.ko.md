@@ -222,7 +222,7 @@ interface RouterOptions {
 | `caseSensitive` | `true` | `/Users` 와 `/users` 가 다른 라우트 |
 | `decodeParams` | `true` | 이름 파라미터 값 퍼센트 디코딩 (와일드카드는 raw 유지) |
 | `enableCache` | `false` | `'dynamic'` 매칭 결과 캐싱 — 이후 적중은 `'cache'` source |
-| `cacheSize` | `1000` | 메서드당 hit 캐시 (LRU) + miss 셋 (FIFO 축출) 의 최대 항목 수 |
+| `cacheSize` | `1000` | 메서드당 hit 캐시 용량 (다음 2의 거듭제곱으로 올림; second-chance / clock 축출). 양의 정수만 허용. |
 | `maxPathLength` | `2048` | 이 길이를 초과하는 경로는 `match()` 가 `null` 반환 |
 | `maxSegmentLength` | `256` | 한 세그먼트가 이 길이를 초과하면 `match()` 가 `null` 반환 |
 | `optionalParamBehavior` | `'omit'` | 누락된 선택적 파라미터의 `params` 형태 — 위 표 참조 |
@@ -230,7 +230,7 @@ interface RouterOptions {
 
 ### 캐시 트레이드오프
 
-`enableCache: true` 는 메서드당 `(path → MatchOutput)` LRU 와 negative miss 셋을 추가합니다. 양쪽 모두 `cacheSize` 로 bound 되어있어 메모리 무한 증가 불가. 활성 path 집합이 라우트 수에 비해 작고 동적 매칭이 핫패스를 차지할 때 사용. 매칭이 이미 <40 ns 이거나 path 가 매우 다양할 때는 비활성. 캐시는 stale 될 수 없습니다 — `build()` 가 라우트 테이블을 봉인하고 이후 등록을 거부.
+`enableCache: true` 는 메서드당 `(path → MatchOutput)` second-chance / clock 캐시를 추가합니다. 용량은 `cacheSize` 로 bound (다음 2의 거듭제곱으로 올림 — slot index 를 단일 mask 로 처리하기 위함) — 메모리 무한 증가 불가. 축출은 clock used-bit 기반 근사 LRU (정확한 LRU 아님 — 최근 접근한 항목은 한 sweep 살아남음). 별도 miss 캐시 없음 — `match()` 미스는 매번 walker 비용. (이전 측정 결과 hit / unique-miss / Zipf 워크로드 모두 dedicated miss 캐시가 net-negative). 활성 path 집합이 라우트 수에 비해 작고 동적 매칭이 핫패스를 차지할 때 사용. 매칭이 이미 <40 ns 이거나 path 가 매우 다양할 때는 비활성. 캐시는 stale 될 수 없습니다 — `build()` 가 라우트 테이블을 봉인하고 이후 등록을 거부.
 
 ### 정규식 안전성
 

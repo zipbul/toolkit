@@ -222,7 +222,7 @@ interface RouterOptions {
 | `caseSensitive` | `true` | `/Users` and `/users` are different routes |
 | `decodeParams` | `true` | Percent-decode named param values (wildcards stay raw) |
 | `enableCache` | `false` | Cache `'dynamic'` matches; subsequent hits return `'cache'` source |
-| `cacheSize` | `1000` | Per-method bound for both hit cache (LRU) and miss set (FIFO eviction) |
+| `cacheSize` | `1000` | Per-method hit-cache capacity (rounded up to next power of two; second-chance / clock eviction). Must be a positive integer. |
 | `maxPathLength` | `2048` | Paths exceeding this length make `match()` return `null` |
 | `maxSegmentLength` | `256` | Paths with any segment exceeding this length make `match()` return `null` |
 | `optionalParamBehavior` | `'omit'` | Shape of `params` when an optional param is missing — see the table above |
@@ -230,7 +230,7 @@ interface RouterOptions {
 
 ### Cache trade-off
 
-`enableCache: true` adds a per-method `(path → MatchOutput)` LRU plus a miss set for negative caching. Both are bounded by `cacheSize`, so memory cannot grow unbounded. Use it when the live path set is small relative to the route count and dynamic matches dominate the hot path; skip it when matches are already <40 ns or paths are highly variable. Cached routes can never go stale: `build()` seals the route table and rejects further registrations.
+`enableCache: true` adds a per-method `(path → MatchOutput)` second-chance / clock cache. Capacity is bounded by `cacheSize` (rounded up to the next power of two so the slot index can be a single mask), so memory cannot grow unbounded. Eviction is approximate-LRU via the clock used-bit, not exact LRU — recently accessed entries survive one sweep. There is no separate miss cache: `match()` misses pay the walker cost every time, which empirically beat dedicated miss caching across hit / unique-miss / Zipf workloads. Use cache when the live path set is small relative to the route count and dynamic matches dominate the hot path; skip it when matches are already <40 ns or paths are highly variable. Cached routes can never go stale: `build()` seals the route table and rejects further registrations.
 
 ### Regex Safety
 
