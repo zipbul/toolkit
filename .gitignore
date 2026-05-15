@@ -7,3 +7,5 @@ dist
 # code coverage
 coverage
 *.lcov
+
+.claude/scheduled_tasks.lock

@@ -7,7 +7,6 @@
 export { PathParser } from './path-parser';
 export {
   MAX_OPTIONAL_SEGMENTS_PER_ROUTE,
-  countOptionalSegments,
   expandOptional,
 } from './route-expand';
 export { OptionalParamDefaults } from './optional-param-defaults';

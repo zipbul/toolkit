@@ -7,7 +7,6 @@ import { MethodRegistry } from '../method-registry';
 import {
   OptionalParamDefaults,
   PathParser,
-  countOptionalSegments,
   expandOptional,
   MAX_OPTIONAL_SEGMENTS_PER_ROUTE,
 } from '../builder';
@@ -456,58 +455,17 @@ export class Registration<T> {
     omitBehavior: boolean,
     decoder: (s: string) => string,
   ): Result<void, RouterErrorData> {
-    const optionalCount = countOptionalSegments(parts);
-    if (optionalCount > MAX_OPTIONAL_SEGMENTS_PER_ROUTE) {
-      return err({
-        kind: 'route-parse',
-        message: `Route has ${optionalCount} optional segments; maximum is ${MAX_OPTIONAL_SEGMENTS_PER_ROUTE} to cap expansion variants before 2^N growth.`,
-        path: route.path,
-        suggestion: `Reduce optional segments to ${MAX_OPTIONAL_SEGMENTS_PER_ROUTE} or fewer, or register explicit routes for the rare combinations.`,
-      });
-    }
+    const shape = collectRouteShape(parts);
+    const capCheck = checkDynamicRouteCaps(route, shape);
+    if (capCheck !== undefined) return err(capCheck);
 
+    const root = ensureSegmentTreeRoot(state, methodCode, undo);
+    const hIdx = pushHandler(state, route.value, undo);
     const expansion = expandOptional(parts, -1, this.optionalParamDefaults);
 
-    const originalNames: string[] = [];
-    const originalTypes: Array<'param' | 'wildcard'> = [];
-    for (const p of parts) {
-      if (p.type === 'param' || p.type === 'wildcard') {
-        originalNames.push(p.name);
-        originalTypes.push(p.type);
-      }
-    }
-
-    // presentBitmask is a 32-bit Int32. `1 << 31` already lands on the
-    // sign bit, and `1 << 32` wraps to 1 in V8/JSC. With more than 31
-    // capturing segments the super-factory's per-name gate would alias
-    // and silently miscompile, so reject at registration time. Real
-    // production routes routinely sit at 1-3 params; 31 is the JSC
-    // bitmask ceiling, well above any observed pattern.
-    if (originalNames.length > 31) {
-      return err({
-        kind: 'route-parse',
-        message: `Route has ${originalNames.length} capturing segments; maximum is 31 (Int32 bitmask ceiling).`,
-        path: route.path,
-        suggestion: 'Reduce the number of :param/*wildcard segments per route.',
-      });
-    }
-
-    let root = state.segmentTrees[methodCode];
-
-    if (root === undefined || root === null) {
-      root = createSegmentNode();
-      state.segmentTrees[methodCode] = root;
-      undo.push({ k: UndoKind.SegmentTreeReset, trees: state.segmentTrees, mc: methodCode });
-    }
-
-    const hIdx = state.handlers.length;
-    state.handlers.push(route.value);
-    undo.push({ k: UndoKind.HandlersTruncate, arr: state.handlers, len: hIdx });
-
     for (const expanded of expansion) {
-      const expParts = expanded.parts;
       const prefixCheck = this.runPrefixIndexPlan(
-        expParts,
+        expanded.parts,
         methodCode,
         route,
         undo,
@@ -515,46 +473,15 @@ export class Registration<T> {
         expanded.isOptionalExpansion,
       );
       if (isErr(prefixCheck)) return prefixCheck;
-      const present: Array<{ name: string; type: 'param' | 'wildcard' }> = [];
-      for (const p of expParts) {
-        if (p.type === 'param' || p.type === 'wildcard') {
-          present.push({ name: p.name, type: p.type });
-        }
-      }
-      if (present.length > state.maxParamsObserved) {
-        state.maxParamsObserved = present.length;
-      }
 
-      const tIdx = state.terminalHandlers.length;
-      const isWildcard = expParts.length > 0 && expParts[expParts.length - 1]!.type === 'wildcard';
-
-      const presentBitmask = computePresentBitmask(originalNames, present);
-      const factory = (present.length > 0 || (!omitBehavior && originalNames.length > 0))
-        ? getOrCreateSuperFactory(factoryCache, originalNames, originalTypes, omitBehavior, decoder)
-        : null;
-
-      state.terminalHandlers[tIdx] = hIdx;
-      state.isWildcardByTerminal[tIdx] = isWildcard;
-      state.paramsFactories[tIdx] = factory;
-      state.presentBitmaskByTerminal[tIdx] = presentBitmask;
-      undo.push({
-        k: UndoKind.TerminalArraysTruncate,
-        t: state.terminalHandlers,
-        w: state.isWildcardByTerminal,
-        f: state.paramsFactories,
-        b: state.presentBitmaskByTerminal,
-        len: tIdx,
-      });
-
-      const insertResult = insertIntoSegmentTree(
-        root,
-        expParts,
-        tIdx,
-        state.testerCache,
-        routeID,
-        undo,
+      const tIdx = recordExpansionTerminal(
+        state, expanded.parts, shape, hIdx,
+        factoryCache, omitBehavior, decoder, undo,
       );
 
+      const insertResult = insertIntoSegmentTree(
+        root, expanded.parts, tIdx, state.testerCache, routeID, undo,
+      );
       if (isErr(insertResult)) {
         const data = insertResult.data;
         if (data.kind === 'route-duplicate') {
@@ -653,4 +580,134 @@ function rollback(undo: SegmentTreeUndoLog, mark: number): void {
   }
 
   undo.length = mark;
+}
+
+interface RouteShape {
+  /** Names of every capturing segment in registration order. */
+  originalNames: ReadonlyArray<string>;
+  /** Param/wildcard discriminator for each `originalNames` entry. */
+  originalTypes: ReadonlyArray<'param' | 'wildcard'>;
+  /** Count of `:name?` optional segments — drives expansion fanout. */
+  optionalCount: number;
+}
+
+/** Walk parts once, collecting both the capture metadata and the
+ *  optional count needed for cap validation. */
+function collectRouteShape(parts: ReadonlyArray<PathPart>): RouteShape {
+  const originalNames: string[] = [];
+  const originalTypes: Array<'param' | 'wildcard'> = [];
+  let optionalCount = 0;
+  for (const p of parts) {
+    if (p.type === 'param') {
+      originalNames.push(p.name);
+      originalTypes.push('param');
+      if (p.optional) optionalCount++;
+    } else if (p.type === 'wildcard') {
+      originalNames.push(p.name);
+      originalTypes.push('wildcard');
+    }
+  }
+  return { originalNames, originalTypes, optionalCount };
+}
+
+/** Reject routes that exceed the optional-fanout cap or the 31-bit
+ *  presentBitmask ceiling. Returns the error data on rejection,
+ *  `undefined` otherwise. */
+function checkDynamicRouteCaps(
+  route: { path: string },
+  shape: RouteShape,
+): RouterErrorData | undefined {
+  if (shape.optionalCount > MAX_OPTIONAL_SEGMENTS_PER_ROUTE) {
+    return {
+      kind: 'route-parse',
+      message: `Route has ${shape.optionalCount} optional segments; maximum is ${MAX_OPTIONAL_SEGMENTS_PER_ROUTE} to cap expansion variants before 2^N growth.`,
+      path: route.path,
+      suggestion: `Reduce optional segments to ${MAX_OPTIONAL_SEGMENTS_PER_ROUTE} or fewer, or register explicit routes for the rare combinations.`,
+    };
+  }
+  // presentBitmask is a 32-bit Int32. `1 << 31` already lands on the sign
+  // bit, and `1 << 32` wraps to 1 in V8/JSC. With more than 31 capturing
+  // segments the super-factory's per-name gate would alias and silently
+  // miscompile, so reject at registration time.
+  if (shape.originalNames.length > 31) {
+    return {
+      kind: 'route-parse',
+      message: `Route has ${shape.originalNames.length} capturing segments; maximum is 31 (Int32 bitmask ceiling).`,
+      path: route.path,
+      suggestion: 'Reduce the number of :param/*wildcard segments per route.',
+    };
+  }
+  return undefined;
+}
+
+/** Resolve `state.segmentTrees[methodCode]` or create a fresh root and
+ *  push the rollback marker. Returns the root node either way. */
+function ensureSegmentTreeRoot<T>(
+  state: BuildState<T>,
+  methodCode: number,
+  undo: SegmentTreeUndoLog,
+): SegmentNode {
+  const existing = state.segmentTrees[methodCode];
+  if (existing !== undefined && existing !== null) return existing;
+  const fresh = createSegmentNode();
+  state.segmentTrees[methodCode] = fresh;
+  undo.push({ k: UndoKind.SegmentTreeReset, trees: state.segmentTrees, mc: methodCode });
+  return fresh;
+}
+
+/** Append `value` to `state.handlers` and record the rollback marker. */
+function pushHandler<T>(
+  state: BuildState<T>,
+  value: T,
+  undo: SegmentTreeUndoLog,
+): number {
+  const hIdx = state.handlers.length;
+  state.handlers.push(value);
+  undo.push({ k: UndoKind.HandlersTruncate, arr: state.handlers, len: hIdx });
+  return hIdx;
+}
+
+/** Append per-expansion terminal slab data (handler, isWildcard,
+ *  presentBitmask, factory) and record the rollback marker. Returns the
+ *  newly assigned terminal index `tIdx`. */
+function recordExpansionTerminal<T>(
+  state: BuildState<T>,
+  expParts: ReadonlyArray<PathPart>,
+  shape: RouteShape,
+  hIdx: number,
+  factoryCache: FactoryCache,
+  omitBehavior: boolean,
+  decoder: (s: string) => string,
+  undo: SegmentTreeUndoLog,
+): number {
+  const present: Array<{ name: string; type: 'param' | 'wildcard' }> = [];
+  for (const p of expParts) {
+    if (p.type === 'param' || p.type === 'wildcard') {
+      present.push({ name: p.name, type: p.type });
+    }
+  }
+  if (present.length > state.maxParamsObserved) {
+    state.maxParamsObserved = present.length;
+  }
+
+  const tIdx = state.terminalHandlers.length;
+  const isWildcard = expParts.length > 0 && expParts[expParts.length - 1]!.type === 'wildcard';
+  const presentBitmask = computePresentBitmask(shape.originalNames, present);
+  const factory = (present.length > 0 || (!omitBehavior && shape.originalNames.length > 0))
+    ? getOrCreateSuperFactory(factoryCache, shape.originalNames, shape.originalTypes, omitBehavior, decoder)
+    : null;
+
+  state.terminalHandlers[tIdx] = hIdx;
+  state.isWildcardByTerminal[tIdx] = isWildcard;
+  state.paramsFactories[tIdx] = factory;
+  state.presentBitmaskByTerminal[tIdx] = presentBitmask;
+  undo.push({
+    k: UndoKind.TerminalArraysTruncate,
+    t: state.terminalHandlers,
+    w: state.isWildcardByTerminal,
+    f: state.paramsFactories,
+    b: state.presentBitmaskByTerminal,
+    len: tIdx,
+  });
+  return tIdx;
 }
