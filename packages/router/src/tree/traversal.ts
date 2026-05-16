@@ -49,31 +49,33 @@ export function compactSegmentTree(root: SegmentNode): void {
   }
 }
 
-/** Single-static-child passthrough probe — peeks the inline cache first,
- *  then the Record. Avoids any `Object.keys()` allocation. */
+/**
+ * Single-static-child passthrough probe — peeks the inline slot first,
+ * then the Record. Avoids any `Object.keys()` allocation.
+ *
+ * `insertIntoSegmentTree` clears the inline slot whenever it promotes to
+ * a Record (the inline-and-Record-coexist transient does not survive a
+ * single insert call), so the two slots are mutually exclusive at the
+ * point compaction reaches each node. The caller (`foldStaticChain`)
+ * also runs only on nodes where `hasAnyStaticChild` is true, so the
+ * "no static at all" outcome cannot reach this function.
+ */
 function peekSingleStaticChild(
   target: SegmentNode,
-): { key: string | null; child: SegmentNode | null; many: boolean } {
-  if (target.singleChildKey !== null && target.singleChildNext !== null && target.staticChildren === null) {
+): { key: string; child: SegmentNode; many: boolean } {
+  if (target.singleChildKey !== null && target.singleChildNext !== null) {
     return { key: target.singleChildKey, child: target.singleChildNext, many: false };
   }
-  if (target.staticChildren !== null) {
-    let only: string | null = null;
-    let onlyChild: SegmentNode | null = null;
-    let many = false;
-    // The Record may contain entries even when an inline child also exists
-    // (during build, before promotion); count both.
-    if (target.singleChildKey !== null) {
-      only = target.singleChildKey;
-      onlyChild = target.singleChildNext;
-    }
-    for (const k in target.staticChildren) {
-      if (only === null) { only = k; onlyChild = target.staticChildren[k]!; }
-      else { many = true; break; }
-    }
-    return { key: only, child: onlyChild, many };
+  // staticChildren Record exclusively from here. Promote always installs
+  // 2+ keys, so the loop short-circuits on the second iteration.
+  let only: string | null = null;
+  let onlyChild: SegmentNode | null = null;
+  let many = false;
+  for (const k in target.staticChildren!) {
+    if (only === null) { only = k; onlyChild = target.staticChildren![k]!; }
+    else { many = true; break; }
   }
-  return { key: null, child: null, many: false };
+  return { key: only!, child: onlyChild!, many };
 }
 
 /** Walk the single-static-chain starting at `start`, returning the

@@ -79,48 +79,21 @@ export function detectTenantFactor(root: SegmentNode, minSiblings = 1000): Tenan
  */
 function subtreeShapesEqual(a: SegmentNode, b: SegmentNode): boolean {
   // Terminal-store presence must match. Two siblings whose subtrees
-  // differ only by an intermediate `store` (e.g. one tenant adds a
-  // mid-route `/data/:type` while every other tenant only registers
-  // `/data/:type/:item`) are NOT factor-equivalent: the factored
-  // walker would fold them under one canonical subtree and override
-  // every leaf with the same handler index, miscompiling matches at
-  // the differing position. The handler value itself differs per
-  // sibling — only presence must match.
+  // differ only by an intermediate `store` are NOT factor-equivalent:
+  // the factored walker would fold them under one canonical subtree
+  // and override every leaf with the same handler index, miscompiling
+  // matches at the differing position. The handler value itself differs
+  // per sibling — only presence must match.
   if ((a.store === null) !== (b.store === null)) return false;
-  if ((a.wildcardStore === null) !== (b.wildcardStore === null)) return false;
-  if (a.wildcardName !== b.wildcardName) return false;
-  if (a.wildcardOrigin !== b.wildcardOrigin) return false;
-
-  const ap = a.staticPrefix;
-  const bp = b.staticPrefix;
-  if ((ap === null) !== (bp === null)) return false;
-  if (ap !== null && bp !== null) {
-    if (ap.length !== bp.length) return false;
-    for (let i = 0; i < ap.length; i++) if (ap[i] !== bp[i]) return false;
-  }
-
+  // wildcardStore / staticPrefix / staticChildren Record fields are
+  // ignored: leafStoreOf rejects every subtree carrying any of them
+  // before this comparison runs (compaction does not touch factor
+  // candidates, and Record/wildcard nodes never produce a unique
+  // chain to a single store).
   if ((a.singleChildKey === null) !== (b.singleChildKey === null)) return false;
   if (a.singleChildKey !== null) {
     if (a.singleChildKey !== b.singleChildKey) return false;
     if (!subtreeShapesEqual(a.singleChildNext!, b.singleChildNext!)) return false;
-  }
-
-  const ac = a.staticChildren;
-  const bc = b.staticChildren;
-  if ((ac === null) !== (bc === null)) return false;
-  if (ac !== null && bc !== null) {
-    const aKeys: string[] = [];
-    const bKeys: string[] = [];
-    for (const k in ac) aKeys.push(k);
-    for (const k in bc) bKeys.push(k);
-    if (aKeys.length !== bKeys.length) return false;
-    aKeys.sort();
-    bKeys.sort();
-    for (let i = 0; i < aKeys.length; i++) {
-      const ak = aKeys[i]!;
-      if (ak !== bKeys[i]) return false;
-      if (!subtreeShapesEqual(ac[ak]!, bc[ak]!)) return false;
-    }
   }
 
   let p1 = a.paramChild;
@@ -181,17 +154,13 @@ function leafStoreOf(node: SegmentNode): number | null {
       cur = cur.singleChildNext;
       continue;
     }
-    if (cur.staticChildren !== null) {
-      let only: SegmentNode | null = null;
-      let many = false;
-      for (const k in cur.staticChildren) {
-        if (only === null) only = cur.staticChildren[k]!;
-        else { many = true; break; }
-      }
-      if (many || only === null) return null;
-      cur = only;
-      continue;
-    }
+    // No further descent is possible from this node:
+    //   - `staticChildren` Record always carries 2+ keys (insert promotes
+    //     from inline only when adding a *second* sibling), so a factor-
+    //     able unique chain cannot continue through it.
+    //   - `wildcardStore`-only nodes have no chainable child.
+    //   - `paramChild` with `nextSibling` (multiple param alternatives)
+    //     was already filtered out above.
     return null;
   }
   return null;
