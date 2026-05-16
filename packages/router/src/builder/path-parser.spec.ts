@@ -243,20 +243,23 @@ describe('PathParser', () => {
 
   });
 
-  describe('regex safety (always-on hardcoded guards)', () => {
-    it('should reject unsafe regex patterns (nested unlimited quantifiers)', () => {
-      const result = parse('/test/:val((a+)+)');
-      expect(isErr(result)).toBe(true);
-      if (isErr(result)) expect(result.data.kind).toBe('regex-unsafe');
+  describe('regex pattern body — router accepts any syntactically valid regex', () => {
+    // ReDoS prevention is the framework / user's responsibility (use a
+    // normalizer plug-in such as `re2` ahead of the router). The router
+    // only rejects regex shapes that fail to compile via `new RegExp()`
+    // at build time, surfaced as `route-parse`.
+
+    it('accepts a vulnerable nested-quantifier pattern (user responsibility)', () => {
+      const result = parse('/test/:val((?:a+)+)');
+      expect(isErr(result)).toBe(false);
     });
 
-    it('should reject backreferences', () => {
-      const result = parse('/test/:val((\\w+)\\1)');
-      expect(isErr(result)).toBe(true);
-      if (isErr(result)) expect(result.data.kind).toBe('regex-unsafe');
+    it('accepts a backreference pattern (user responsibility)', () => {
+      const result = parse('/test/:val((?:\\w+)\\1)');
+      expect(isErr(result)).toBe(false);
     });
 
-    it('should allow safe regex patterns', () => {
+    it('accepts a standard digit-only constraint', () => {
       const result = parse('/test/:val(\\d+)');
       expect(isErr(result)).toBe(false);
     });

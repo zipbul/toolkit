@@ -356,6 +356,7 @@ function routeConflict(why: string, meta: RouteMeta): RouterErrorData {
     conflictsWith: 'sibling at the same position',
     path: meta.path,
     method: meta.method,
+    suggestion: 'Remove or rename one of the colliding routes so each position resolves unambiguously.',
   };
 }
 
@@ -418,6 +419,9 @@ function routeUnreachable(why: string, meta: RouteMeta): RouterErrorData {
     message: `${meta.method} ${meta.path}: ${why}`,
     path: meta.path,
     method: meta.method,
+    segment: meta.path,
+    conflictsWith: 'an earlier wildcard or terminal at this prefix',
+    suggestion: 'Reorder registrations so the broader wildcard is added last, or remove the unreachable route.',
   };
 }
 

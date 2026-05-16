@@ -3,7 +3,7 @@ import { describe, it, expect } from 'bun:test';
 import { Router } from './router';
 import { RouterError } from './error';
 import type { RouterOptions } from './types';
-import { catchRouterError, buildRouter } from '../test/test-utils';
+import { catchRouterError } from '../test/test-utils';
 
 // ── Fixtures ──
 
@@ -15,7 +15,10 @@ function buildWith(
   routes: Array<[string, string, number]>,
   opts: RouterOptions = {},
 ): Router<number> {
-  return buildRouter<number>(routes, opts);
+  const r = new Router<number>(opts);
+  for (const [method, path, value] of routes) r.add(method, path, value);
+  r.build();
+  return r;
 }
 
 describe('Router', () => {

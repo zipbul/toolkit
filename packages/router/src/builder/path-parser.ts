@@ -9,7 +9,6 @@ import {
 } from './constants';
 import { normalizeParamPatternSource } from './pattern-utils';
 import { validatePathChars } from './path-policy';
-import { assessRegexSafety } from './regex-safety';
 
 // ── Types ──
 
@@ -99,12 +98,17 @@ export class PathParser {
       }
     }
 
-    // Single-pass walk: empty-segment check + case-fold for static segments.
+    // Single-pass walk:
+    //   - empty-segment check
+    //   - IRI → URI normalize for static segments (NFC + percent-encode
+    //     non-ASCII UTF-8 per RFC 3986 §2.5)
+    //   - case-fold for static segments (`pathCaseSensitive=false`)
     const caseSensitive = this.config.caseSensitive;
     let caseChanged = false;
+    let iriChanged = false;
 
     for (let i = 0; i < segments.length; i++) {
-      const seg = segments[i]!;
+      let seg = segments[i]!;
 
       if (seg === '') {
         return err({
@@ -122,6 +126,19 @@ export class PathParser {
         continue;
       }
 
+      // IRI normalization (RFC 3987 → RFC 3986). Cheap ASCII-only fast path
+      // first — short-circuit when every byte is < 0x80 so we don't enter
+      // the NFC normalize / UTF-8 encode path on ordinary ASCII paths.
+      let hasNonAscii = false;
+      for (let j = 0; j < seg.length; j++) {
+        if (seg.charCodeAt(j) >= 0x80) { hasNonAscii = true; break; }
+      }
+      if (hasNonAscii) {
+        seg = normalizeIriSegment(seg);
+        segments[i] = seg;
+        iriChanged = true;
+      }
+
       if (!caseSensitive) {
         const lowered = seg.toLowerCase();
         if (lowered !== seg) caseChanged = true;
@@ -130,14 +147,14 @@ export class PathParser {
     }
 
     // Skip the `segments.join('/')` rebuild whenever the path is already
-    // canonical (no case fold applied and no trailing slash trimmed) — the
-    // hot bench measured the rebuild at ~96 ns/route, with `caseSensitive=true`
-    // (the default) and canonical paths it is pure work that produces the
-    // same string we already have.
+    // canonical (no case fold applied, no trailing slash trimmed, no IRI
+    // segment normalized) — the hot bench measured the rebuild at
+    // ~96 ns/route, with `caseSensitive=true` (the default) and canonical
+    // paths it is pure work that produces the same string we already have.
     let normalized: string;
     if (segments.length === 0) {
       normalized = '/';
-    } else if (caseChanged) {
+    } else if (caseChanged || iriChanged) {
       normalized = '/' + segments.join('/');
     } else if (trimmedTrailingSlash) {
       normalized = path.substring(0, path.length - 1);
@@ -225,11 +242,12 @@ export class PathParser {
     const dup = this.registerParam(name, ':', path);
     if (dup !== null) return dup;
 
-    if (pattern !== null) {
-      const safetyResult = this.validatePattern(pattern);
-      if (isErr(safetyResult)) return safetyResult;
-    }
-
+    // Regex pattern safety is the framework / user's responsibility — the
+    // router does not gate against ReDoS-vulnerable shapes. Per policy
+    // ("URL safety = framework responsibility"), security validation
+    // belongs in a normalizer plug-in (e.g. `re2` / `recheck`) layered
+    // ahead of the router. Build-time `new RegExp(...)` compile failure
+    // is still surfaced as `route-parse` by segment-tree.ts.
     return { type: 'param', name, pattern, optional: isOptional };
   }
 
@@ -297,25 +315,6 @@ export class PathParser {
     this.activeParams.add(name);
 
     return null;
-  }
-
-  /**
-   * Strip anchors and apply hardcoded ReDoS guards (length cap, nested
-   * unlimited quantifiers, backreferences). The guards are not user-tunable —
-   * weakening them is a security regression. Failure is reported as
-   * `regex-unsafe` with the specific reason.
-   */
-  private validatePattern(pattern: string): Result<void, RouterErrorData> {
-    const assessment = assessRegexSafety(pattern);
-
-    if (!assessment.safe) {
-      return err<RouterErrorData>({
-        kind: 'regex-unsafe',
-        message: `Unsafe regex pattern: ${assessment.reason}`,
-        segment: pattern,
-        suggestion: 'Simplify the regex (avoid nested unlimited quantifiers and backreferences) or shorten its source.',
-      });
-    }
   }
 }
 
@@ -503,4 +502,45 @@ export function appendStaticSegment(acc: StaticAccumulator, seg: string, hasNext
   acc.segments.push(seg);
   if (hasNext) acc.buf += '/';
 }
+
+/**
+ * IRI → URI segment normalization (RFC 3987 §3.1).
+ *   1. NFC normalize (RFC 3987 §5.3.2.2).
+ *   2. Percent-encode every non-ASCII byte of the UTF-8 encoding
+ *      (RFC 3986 §2.5).
+ *
+ * Caller has already verified `seg` contains at least one non-ASCII
+ * code point, so the cheap ASCII fast path lives in the caller — this
+ * helper always runs both steps.
+ *
+ * Output is RFC 3986 conformant: every code point ≥ 0x80 becomes
+ * `%XX` (uppercase hex) per RFC 3986 §2.1 recommendation.
+ *
+ * @internal exported for unit tests.
+ */
+export function normalizeIriSegment(seg: string): string {
+  const nfc = seg.normalize('NFC');
+  let out = '';
+  const encoder = NFC_ENCODER;
+  // Iterate code points (not UTF-16 code units) so surrogate pairs
+  // encode as a single 4-byte UTF-8 sequence.
+  for (const ch of nfc) {
+    const code = ch.codePointAt(0)!;
+    if (code < 0x80) {
+      out += ch;
+      continue;
+    }
+    const bytes = encoder.encode(ch);
+    for (let i = 0; i < bytes.length; i++) {
+      const b = bytes[i]!;
+      out += '%';
+      out += HEX_UPPER[b >>> 4];
+      out += HEX_UPPER[b & 0x0f];
+    }
+  }
+  return out;
+}
+
+const NFC_ENCODER = new TextEncoder();
+const HEX_UPPER = '0123456789ABCDEF';
 

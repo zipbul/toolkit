@@ -191,6 +191,7 @@ export function insertStaticSegments(
         message: `Static route conflicts with existing wildcard '*${node.wildcardName}' at the same position`,
         segment: seg,
         conflictsWith: `*${node.wildcardName}`,
+        suggestion: `Remove the wildcard '*${node.wildcardName}' or move the static segment to a different prefix.`,
       };
     }
 
@@ -251,6 +252,7 @@ export function insertParamPart(
       message: `Parameter ':${part.name}' conflicts with existing wildcard '*${node.wildcardName}' at the same position`,
       segment: part.name,
       conflictsWith: `*${node.wildcardName}`,
+      suggestion: `Remove the wildcard '*${node.wildcardName}' or move the parameter to a different prefix.`,
     };
   }
 
@@ -288,15 +290,17 @@ export function insertParamPart(
         message: `Parameter ':${part.name}' has conflicting regex patterns`,
         segment: part.name,
         conflictsWith: `:${p.name}${p.patternSource !== null ? `(${p.patternSource})` : ''}`,
+        suggestion: 'Unify the regex pattern across both routes, or rename one parameter.',
       };
     }
 
     if (p.patternSource === null && p.ownerRouteID !== routeID) {
       return {
         kind: 'route-conflict',
-        message: `Parameter ':${part.name}' is unreachable — earlier sibling ':${p.name}' (registered by a different route) has no regex pattern and matches every value at this position. Add a regex pattern to disambiguate, or remove this route.`,
+        message: `Parameter ':${part.name}' is unreachable — earlier sibling ':${p.name}' (registered by a different route) has no regex pattern and matches every value at this position.`,
         segment: part.name,
         conflictsWith: p.name,
+        suggestion: 'Add a regex pattern to disambiguate, or remove this route.',
       };
     }
 
@@ -375,12 +379,13 @@ export function attachWildcardTerminal(
         message: `Wildcard '*${part.name}' conflicts with existing wildcard '*${node.wildcardName}'`,
         segment: part.name,
         conflictsWith: `*${node.wildcardName}`,
+        suggestion: `Rename one wildcard so the prefix has a single capture name, or split the routes across HTTP methods.`,
       };
     }
     return {
       kind: 'route-duplicate',
       message: 'Wildcard route already exists at this position',
-      suggestion: 'Use a different path or HTTP method',
+      suggestion: 'Use a different path or HTTP method.',
     };
   }
 
@@ -390,6 +395,7 @@ export function attachWildcardTerminal(
       message: `Wildcard '*${part.name}' conflicts with existing parameter at the same position`,
       segment: part.name,
       conflictsWith: `:${node.paramChild.name}`,
+      suggestion: `Remove the parameter ':${node.paramChild.name}' or change the wildcard to a static prefix.`,
     };
   }
 
@@ -413,7 +419,7 @@ export function attachStoreTerminal(
     return {
       kind: 'route-duplicate',
       message: 'Terminal route already exists at this position',
-      suggestion: 'Use a different path or HTTP method',
+      suggestion: 'Use a different path or HTTP method.',
     };
   }
   node.store = handlerIndex;

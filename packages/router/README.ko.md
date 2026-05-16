@@ -5,10 +5,12 @@
 [![npm](https://img.shields.io/npm/v/@zipbul/router)](https://www.npmjs.com/package/@zipbul/router)
 ![coverage](https://img.shields.io/endpoint?url=https://gist.githubusercontent.com/parkrevil/3965fb9d1fe2d6fc5c321cb38d88c823/raw/router-coverage.json)
 
-Bun을 위한 고성능 세그먼트 트리 URL 라우터입니다.
-HTTP 메서드별 트리 분리, 정규식 파라미터 패턴, 형제 파라미터 백트래킹, 구조화된 에러 처리를 지원합니다.
+Bun을 위한 고성능 URL 라우터. build-once / match-many. 정적 라우트는
+**1 ns 이하**, 동적 라우트는 8–20 ns에 매치하며, 구조화된 에러 보고와
+작고 명확한 공개 API를 제공합니다.
 
-> 정적 라우트는 O(1) Map 조회로 해소됩니다. 동적 라우트는 `build()` 시점에 라우터 형태에 맞춰 emit 되는 워커 — 코드젠 specialist (정적 prefix 와일드카드), 코드젠 general (`compileSegmentTree`), 반복 (정적/파라미터 모호성 없을 때), 백트래킹 재귀 (범용 폴백) — 로 탐색합니다.
+HTTP 서버 boundary (`Bun.serve`, Node `http`, 각종 어댑터)가 라우터에
+정규화된 origin-form pathname을 넘긴다는 가정 아래 설계되었습니다.
 
 <br>
 
@@ -53,10 +55,10 @@ if (result) {
 
 ```typescript
 const router = new Router<string>();
-const router = new Router<() => Response>({ caseSensitive: false });
+const router = new Router<() => Response>({ pathCaseSensitive: false });
 ```
 
-생성자 끝에서 인스턴스가 `Object.freeze` 됩니다. 모든 메서드는 화살표 함수 인스턴스 필드라 생성자 지역 변수를 클로저로 캡처합니다 — `const m = router.match; m(...)` 같은 detached 호출도 `bind()` 없이 안전합니다.
+모든 메서드는 detached 호출 가능 (`const m = router.match; m('GET', '/x')`) — `this` 를 읽지 않습니다.
 
 ### `router.add(method, path, value)`
 
@@ -69,6 +71,25 @@ router.add('*', '/health', handler);             // 모든 표준 메서드
 ```
 
 `'*'`는 `GET / POST / PUT / PATCH / DELETE / OPTIONS / HEAD` 로 확장됩니다.
+
+#### IRI 등록 (RFC 3987)
+
+raw Unicode 형태(IRI)와 percent-encoded UTF-8 형태(URI) 둘 다 등록 시점에 받습니다. 각 static segment는 NFC normalize 후 non-ASCII 바이트를 percent-encoded UTF-8 (RFC 3986 wire form) 로 변환되어 저장되므로, 두 형태가 같은 라우트로 매핑됩니다:
+
+```typescript
+router.add('GET', '/users/한국', handler);
+// 내부 저장: `/users/%ED%95%9C%EA%B5%AD`. IRI 와 URI 두 형태 모두
+// match() 시 같은 핸들러로 라우팅됩니다.
+router.match('GET', '/users/%ED%95%9C%EA%B5%AD'); // ✓
+```
+
+**`router.match()` 는 입력 경로를 normalize 하지 않습니다.** URI-form pathname (percent-encoded UTF-8) 을 넘기세요. `Bun.serve`, Node `http`, `new URL(...).pathname` 은 이 형태를 자동으로 반환합니다 — 직접 만든 문자열로 `match()` 를 호출할 때만 신경 쓰면 됩니다.
+
+match 시점에 IRI 입력을 라우팅해야 하면 직접 normalize 하세요:
+
+```typescript
+const out = router.match('GET', new URL(`/users/${name}`, 'http://x').pathname);
+```
 
 ### `router.addAll(entries)`
 
@@ -94,7 +115,11 @@ router.build();
 
 ### `router.match(method, path)`
 
-URL을 등록된 라우트와 매칭합니다. `MatchOutput<T> | null` 을 반환합니다. 라우터는 `path` 가 이미 검증된 origin-form pathname (RFC 7230 §5.3.1) 인 것으로 가정합니다 — 잘못된 percent-encoding 은 `decodeURIComponent` 까지 그대로 흘러가 `URIError` 로 전파됩니다. HTTP 서버 경계 (`Bun.serve`, `Node http`, `Express`, `Fastify`, `Hono`) 가 well-formed pathname 을 라우터에 넘기는 책임을 집니다. `build()` 호출 전에 `match()` 를 부르면 `null` 을 반환합니다.
+등록된 라우트와 URL 을 매칭합니다. `MatchOutput<T> | null` 을 반환합니다.
+
+- `path` 는 origin-form pathname 이어야 합니다 (RFC 7230 §5.3.1). 표준 HTTP 서버 경계 (`Bun.serve`, Node `http`, `Express`, `Fastify`, `Hono`) 는 `new URL(req.url).pathname` 으로 이미 이 형태를 만들어 줍니다.
+- `match()` 자체는 path 를 디코딩하지 않습니다. `/` 로 split 한 후 캡처된 param 값만 `decodeURIComponent` 로 디코드합니다. param 슬롯의 `%xx` 가 잘못되면 표준 `URIError` 가 caller 로 전파됩니다 — `400 Bad Request` 로 매핑하려면 `try / catch` 로 감싸세요.
+- `build()` 전 호출은 `null` 반환.
 
 ```typescript
 const result = router.match('GET', '/users/42');
@@ -106,13 +131,13 @@ if (result) {
 }
 ```
 
-`meta.source` 의 의미:
+`meta.source` 는 caller 에게 어떻게 매칭됐는지 알려줍니다:
 
-| 값 | 발생 시점 |
-|:---|:----------|
-| `'static'` | 경로가 `staticMap` 의 O(1) lookup 으로 매칭. 동일 경로 반복 시 *frozen 공유 객체* 가 반환되어 식별자 (`===`) 가 보존됨. |
-| `'cache'` | 이전에 `'dynamic'` 으로 해소된 경로가 메서드별 hit 캐시 (항상 켜져 있고 `cacheSize` 로 제한) 에서 반환된 경우. 캐시는 *스냅샷* 을 저장하므로 반환된 `params` 를 변경해도 다음 hit 에 영향 없음. |
-| `'dynamic'` | 메서드별 트리 워커 (코드젠 specialist / 코드젠 general / 반복 / 재귀) 로 매칭. 매 호출마다 새 `MatchOutput` 과 새 `params` 객체가 반환됨. |
+| 값 | caller 에게 의미 |
+|:---|:-----|
+| `'static'` | 리터럴 경로 (param 없음) 라우트. 반환된 `MatchOutput` 은 호출 간 공유되고 frozen 됨 — 변경 금지. 동일 hit 간 `===` 식별자 보존. |
+| `'cache'` | 이전에 dynamic 으로 해소된 매치가 캐시에서 반환됨. `params` 는 호출별 fresh 스냅샷 — 변경해도 캐시에 영향 없음. |
+| `'dynamic'` | dynamic 라우트의 최초 해소. 매 호출마다 새 `MatchOutput` + 자체 `params` 객체. |
 
 ### `router.allowedMethods(path)`
 
@@ -128,7 +153,7 @@ if (result === null) {
 }
 ```
 
-콜드패스 — `match()` 가 `null` 을 반환한 후에만 호출하세요. 활성 메서드 집합을 순회하며 각 메서드 트리 워커를 한 번씩 실행합니다 (`params` 컨테이너 한 개를 공유).
+**`match()` 가 `null` 을 반환한 후에만 호출하세요** — `path` 에 대해 등록된 모든 메서드 트리를 walk 하므로 `match()` 자체보다 의미 있게 느립니다. 위에서 소개한 404/405 분기 패턴이 권장 용도; hot match 경로에서 호출하라고 만든 함수가 아닙니다.
 
 <br>
 
@@ -153,13 +178,15 @@ router.add('GET', '/users/:id', handler);
 
 ### 정규식 파라미터
 
-인라인 정규식으로 파라미터를 제한합니다. 패턴은 등록 시 ReDoS 안전성이 검증됩니다.
+인라인 정규식으로 파라미터를 제한합니다. `(...)` 안의 본문은 `build()` 시점에 `new RegExp('^(?:body)$')` 로 컴파일됩니다 — 문법적으로 valid 한 모든 JavaScript 정규식 허용.
 
 ```typescript
 router.add('GET', '/users/:id(\\d+)', handler);
 // /users/42   → { id: '42' }
 // /users/abc  → 매칭 안 됨
 ```
+
+> ⚠ 라우터는 정규식 본문의 ReDoS 위험성 (`(?:a+)+`, `(\w+)\1` 등) 을 검사하지 않습니다. 아래 [정규식 본문 — 라우터가 하는 일과 안 하는 일](#정규식-본문--라우터가-하는-일과-안-하는-일) 참고.
 
 ### 선택적 파라미터
 
@@ -213,45 +240,48 @@ interface RouterOptions {
 | `cacheSize` | `1000` | 메서드당 hit 캐시 용량 (다음 2의 거듭제곱으로 올림; second-chance / clock 축출). 1 ~ 2^30 양의 정수만 허용 |
 | `optionalParamBehavior` | `'omit'` | 누락된 선택적 파라미터의 `params` 형태 — `'omit'` 은 키 자체 생략, `'set-undefined'` 는 `undefined` 기록 |
 
-이름 파라미터 퍼센트 디코딩은 항상 켜져 있음 (와일드카드는 raw 유지).
-경로 길이 / 세그먼트 길이 / pathname grammar 제한은 라우터 책임이 아니라
-상위 프레임워크 / HTTP 서버 책임. `:name(...)` 안의 정규식 앵커
-(`^` / `$`) 는 parse 시 `route-parse` 로 거부됨 (라우터가 모든 패턴을
-`^(?:...)$` 로 자동 wrapping 하므로 사용자 anchor 는 중복 또는 모순).
-캐시는 메서드별 lazy 할당이라 빈 라우터는 0 메모리; 토글 없음.
+참고:
 
-### 캐시 트레이드오프
+- 이름 파라미터 값은 항상 percent-decoded; 와일드카드 캡처는 raw (슬래시 보존).
+- path 길이 / 세그먼트 길이 / 라우트 수 제한 없음. bitmask 가 허용하는 한 (32 method) 자유 등록.
+- 캐시는 HTTP 메서드별 lazy 할당이라 빈 라우터는 캐시 메모리 0.
 
-메서드당 `(path → MatchOutput)` second-chance / clock 캐시. 용량은
-`cacheSize` 로 bound (다음 2의 거듭제곱으로 올림 — slot index 를 단일
-mask 로 처리하기 위함) — 메모리 무한 증가 불가. 축출은 clock used-bit
-기반 근사 LRU (정확한 LRU 아님 — 최근 접근한 항목은 한 sweep 살아남음).
-별도 miss 캐시 없음 — `match()` 미스는 매번 walker 비용. (이전 측정
-결과 hit / unique-miss / Zipf 워크로드 모두 dedicated miss 캐시가
-net-negative). 활성 path 집합이 라우트 수에 비해 작고 동적 매칭이
-핫패스를 차지할 때 가장 유용. 캐시는 stale 될 수 없음 — `build()` 가
-라우트 테이블을 봉인하고 이후 등록을 거부.
+### 캐시 — 기대 동작
 
-### 정규식 안전성
+- **Bounded.** `cacheSize` 가 메서드당 상한. 실제 slot 테이블은 다음 2의 거듭제곱으로 올림; 작은 clock / second-chance 알고리즘이 가득 차면 approximate-LRU 로 축출.
+- **스냅샷 의미론.** 캐시된 `MatchOutput.params` 는 호출별 fresh 스냅샷 — 변경해도 다음 hit 영향 없음.
+- **Stale 될 수 없음.** `build()` 가 라우트 테이블 봉인; 캐시 entry 는 등록 핸들러와 절대 어긋나지 않음.
+- **Dynamic 라우트만.** 정적 라우트는 캐시 skip (이미 O(1) lookup). miss 는 캐시에 들어가지 않음.
 
-정규식 파라미터 패턴 (`:id(\d+)` 등) 은 등록 시 검증되며, 다음 가드
-중 하나라도 트리거되면 `regex-unsafe` 로 거부됩니다:
+### 정규식 본문 — 라우터가 하는 일과 안 하는 일
 
-- 중첩 무제한 quantifier (`(a+)+`, `(a*)*`, `(a{1,})+`)
-- 역참조 (`\1`, `\k<name>`)
-- 캡처 / lookaround / lookbehind / inline-flag 그룹 —
-  non-capturing `(?:...)` 만 허용
-- repeat 아래 alternation 의 prefix 중복 (`(a|aa)+`)
+`:id(pattern)` 은 다음 두 조건을 만족할 때만 등록됩니다:
 
-가드는 **항상 켜져 있음** — opt-out 옵션 없음. ReDoS 방지는 보안
-디폴트이고 약화하면 회귀이지 ergonomics knob 이 아니라는 판단.
-거부는 테스트에서 잡히도록 작성하세요.
+1. 본문이 `new RegExp('^(?:body)$')` 컴파일에 성공 — 실패 → `route-parse`.
+2. 본문이 `^` 로 시작하거나 `$` 로 끝나지 않음 — 라우터가 자체 앵커를 적용하므로 사용자 앵커는 중복 또는 모순 → `route-parse`.
+
+끝. 라우터는 ReDoS-vulnerable shape / capturing group / lookaround / 기타 구조적 속성을 **검사하지 않습니다**.
+
+> ⚠ **결과:** `(?:a+)+`, `(\w+)\1`, `(a|aa)*` 같은 패턴은 등록에 성공하며, 악의적 입력에 V8/JavaScriptCore 정규식 엔진을 hang 시킬 수 있습니다. **신뢰할 수 없는 정규식 소스를 받는다면 `Router.add()` 호출 전에 검증하세요.**
+
+검증 옵션:
+
+- **`re2`** ([github.com/uhop/node-re2](https://github.com/uhop/node-re2)) — Google RE2 엔진 (backtracking 없음) 의 `RegExp` 호환 binding. sandbox 또는 패턴 사전 점검 용도.
+- **`recheck`** ([github.com/MakeNowJust/recheck](https://github.com/MakeNowJust/recheck)) — 정적 ReDoS 분석기. `Router.add()` 도달 전에 vulnerable pattern 거부.
+- **Allow-list** — 직접 작성/검토한 패턴만 받기.
 
 <br>
 
 ## 🚨 에러 처리
 
-`add()` / `addAll()` / `build()` 는 구조화된 `data` 객체를 가진 `RouterError` 를 던집니다. `match()` 는 "매칭 라우트 없음" 일 때 `null` 을 반환하지만, 잘못된 percent-encoding 이 들어오면 `decodeURIComponent` 의 `URIError` 를 **그대로 전파**합니다 — caller 책임. `allowedMethods()` 는 라우트가 없으면 `[]` 를 반환하고 절대 throw 하지 않음 (decode 자체를 안 함).
+| 메서드 | Throws | 반환 |
+|:---|:---|:---|
+| `add()` / `addAll()` | 잘못된 경로 / 충돌 / sealed router 시 `RouterError` | `void` |
+| `build()` | 라우트별 실패 전체를 담은 `RouterError({ kind: 'route-validation' })` | `this` |
+| `match()` | 캡처된 param 의 `%xx` 가 잘못된 경우 `URIError` — `400 Bad Request` 로 매핑하려면 `try / catch` 로 감싸세요 | `MatchOutput<T> | null` |
+| `allowedMethods()` | 절대 throw 안 함 | `readonly string[]` |
+
+모든 `RouterError` 는 구조화된 `data` 객체를 들고 옵니다 — `data.kind` (discriminated union) 로 narrow 한 후 kind 별 필드 (`segment`, `conflictsWith`, `suggestion`, `path`, `method`) 에 접근하세요.
 
 ```typescript
 import { Router, RouterError } from '@zipbul/router';
@@ -277,10 +307,9 @@ try {
 | `'route-conflict'` | 구조적 충돌 — 같은 메서드의 `/files/*a` 후 `/files/*b`, 또는 `/files/*path` 후 `/files/x` 등 |
 | `'route-parse'` | 잘못된 경로 문법 (선행 슬래시 없음, 미닫힌 정규식 그룹, 파라미터 이름의 금지 문자 등) |
 | `'param-duplicate'` | 한 경로에 동일 파라미터 이름 두 번 (`/x/:id/y/:id`) |
-| `'regex-unsafe'` | 정규식 파라미터가 안전성 검사 실패 (중첩 무제한 quantifier / 역참조 / 캡처-or-lookaround 그룹 / repeat 아래 alternation prefix 중복) |
 | `'method-limit'` | 32 개를 초과하는 고유 HTTP 메서드 |
 | `'method-empty'` / `'method-invalid-token'` | method 토큰이 HTTP token grammar 위반 (RFC 9110 §5.6.2) |
-| `'path-missing-leading-slash'` / `'path-query'` / `'path-fragment'` / `'path-control-char'` / `'path-non-ascii'` / `'path-invalid-pchar'` / `'path-malformed-percent'` / `'path-invalid-utf8'` / `'path-encoded-slash'` / `'path-encoded-control'` / `'path-dot-segment'` / `'path-empty-segment'` | 등록된 path 가 router-grammar 검사 실패 |
+| `'path-missing-leading-slash'` / `'path-query'` / `'path-fragment'` / `'path-control-char'` / `'path-invalid-pchar'` / `'path-malformed-percent'` / `'path-invalid-utf8'` / `'path-encoded-slash'` / `'path-dot-segment'` / `'path-empty-segment'` | 등록된 path 가 router-grammar / RFC 부합 검사 실패 |
 | `'router-options-invalid'` | `RouterOptions` 필드 검증 실패 (예: `cacheSize` 가 `[1, 2^30]` 범위 밖) |
 | `'route-validation'` | `build()` 중 한 개 이상의 라우트 검증 실패 — `data.errors` 가 라우트별 실패 목록을 담음 |
 
@@ -350,22 +379,51 @@ Bun.serve({
 
 ## ⚡ 성능
 
-Bun 1.3.13, Intel i7-13700K @ 5.45 GHz 환경에서 측정. 수치는 `bench/comparison.bench.ts` 의 p75. 낮을수록 좋고 **굵은 글씨** 가 해당 시나리오의 1위입니다.
+### 자체 벤치 (`bench/regression-snapshot.ts`)
 
-| 시나리오 | @zipbul/router | memoirist | find-my-way | rou3 | hono RegExp | koa-tree |
-|:---------|:---------------|:----------|:------------|:-----|:------------|:---------|
-| 정적 (100 라우트) | **207 ps** | 34.35 ns | 98.33 ns | 87 ps | 35.00 ns | 42.66 ns |
-| 파라미터 1개 | **29.69 ns** | 34.74 ns | 72.19 ns | 41.33 ns | 115.00 ns | 97.84 ns |
-| 파라미터 3개 | **53.55 ns** | 64.90 ns | 134.61 ns | 64.95 ns | 84.52 ns | 243.99 ns |
-| 와일드카드 | 27.09 ns | **23.45 ns** | 59.95 ns | 75.91 ns | 89.00 ns | 115.97 ns |
-| 미스 | 15.11 ns | **14.22 ns** | 48.79 ns | 44.73 ns | 20.06 ns | 25.15 ns |
+11 trial, Bessel 보정 sample stddev. `σ` 칼럼이 신뢰도 신호: `σ > 10%` 행은 노이즈 도미넌트 (sub-10 ns 연산은 clock 해상도 floor 에 걸림) — 이 경우 median 보다 `min` 이 더 의미 있음.
 
-`rou3` 의 정적 lookup 이 약 120 ps 차이로 앞서는 것은 path 정규화
-패스를 생략하기 때문입니다 — 동적 라우트 (파라미터 / 와일드카드) 에서는
-그 격차가 역전됩니다. `memoirist` 의 와일드카드 / 미스 우위는 ~1 ns
-이내 변동이며, regex-safety 검증과 구조화된 에러 처리를 핫패스에 유지한
-결과입니다. 위 수치는 1회 측정의 p75 입니다 — 리더보드에 의존하기 전에
-`bench/comparison.bench.ts` 를 본인 하드웨어에서 직접 실행하세요.
+| 시나리오 | min | median | p99 | σ |
+|:---|---:|---:|---:|---:|
+| build / 10 라우트 | 1.93 ms | 2.06 ms | 2.37 ms | 6.7% |
+| build / 100 | 1.84 ms | 1.97 ms | 2.06 ms | 3.3% |
+| build / 1 000 | 3.53 ms | 3.97 ms | 4.20 ms | 4.3% |
+| build / 10 000 | 24.23 ms | 28.84 ms | 33.21 ms | 8.6% |
+| match · hit/static | **0.45 ns** | 2.52 ns | 5.21 ns | 51.9% |
+| match · hit/dynamic (캐시 warm) | 7.75 ns | 10.22 ns | 15.00 ns | 24.5% |
+| match · hit/dynamic (cold) | 500 ns | 526 ns | 568 ns | 3.4% |
+| match · miss/unknown path | 7.80 ns | 8.53 ns | 40.06 ns | 77.0% |
+| match · miss/wrong method | 1.98 ns | 3.07 ns | 5.93 ns | 38.6% |
+
+> Bun 1.3.13, Linux x64. 본인 하드웨어에서 재현: `bun bench/regression-snapshot.ts`. 머신마다 ±20% 변동 가능 — portable 비교는 아래 cross-router 섹션 참고.
+
+### Cross-router 비교 (`bench/comparison.bench.ts`)
+
+[`mitata`](https://github.com/evanwashere/mitata) 로 `memoirist`, `find-my-way`, `rou3`, `hono` (RegExp + Trie), `koa-tree-router` 와 head-to-head.
+
+```bash
+bun bench/comparison.bench.ts
+```
+
+마지막 측정 (Bun 1.3.13, Linux x64, 23 시나리오):
+
+| Bucket | zipbul 순위 | 비고 |
+|:---|:---:|:---|
+| 모든 `hit` 시나리오 (8) — static + param-1 + param-3 + wildcard + github-static + github-param | **8개 전부 1위** | 2위 대비 1.11× – 5.04× 앞섬 |
+| `static/miss`, `static/wrong-method`, `param-1/wrong-method`, `miss/miss` | **1위** | 1.05× – 2.18× 앞섬 |
+| `param-1/miss`, `wildcard/miss`, `wildcard/wrong-method` | 2위 | 1위와 1.09× – 1.33× (sub-10 ns 노이즈 범위) |
+| `param-3/miss`, `param-3/wrong-method`, `github-static/wrong-method`, `github-param/miss`, `github-param/wrong-method` | 2 – 3위 | 1위 (`memoirist`) 와 1.16× – 2.44× |
+| `github-static/miss` | 5위 | 유일한 약점 — `memoirist` 가 5.59× 빠름 (65-route deep-trie miss 시나리오) |
+
+**요약**: 실제 routing 의 hot path 인 **모든 hit 시나리오 1위**. miss/wrong-method 8개 중 4개도 1위. 나머지 대부분 노이즈 범위 내 2-3위. 단 하나 `github-static/miss` 에서만 `memoirist` 우위 — 본인 워크로드가 그 shape 면 검토 필요.
+
+sub-10 ns 연산은 하드웨어 변동 큼 — 의존하기 전에 본인 호스트에서 직접 실행하세요.
+
+<br>
+
+## 🔒 보안
+
+보안 이슈를 발견하셨다면 [`SECURITY.md`](./SECURITY.md) 의 비공개 신고 채널을 이용하세요. 보안 신고는 **공개 GitHub 이슈로 올리지 마세요**.
 
 <br>
 

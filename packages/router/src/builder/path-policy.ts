@@ -7,12 +7,15 @@ import { CC_SLASH } from './constants';
 /**
  * Single-pass scan over a registered path. Rejects bytes the path
  * grammar forbids at registration time: raw `?`/`#` (except the
- * `:name?` decorator), C0/DEL controls, raw non-ASCII, malformed
- * percent escapes, dot segments (literal and percent-encoded), and
- * ASCII chars outside `unreserved / pct-encoded / sub-delims / ":" / "@"`.
+ * `:name?` decorator), C0/DEL controls, malformed percent escapes,
+ * dot segments (literal and percent-encoded), and ASCII chars outside
+ * `unreserved / pct-encoded / sub-delims / ":" / "@"`. Raw non-ASCII
+ * bytes are *accepted* here (RFC 3987 IRI) and normalized to URI form
+ * by `PathParser.tokenize`.
  *
- * Inside a regex group `(...)` only the first three rules apply —
- * body chars pass through to the regex-safety pass.
+ * Inside a regex group `(...)` only the universal byte rules apply —
+ * the regex body is opaque to the router (regex safety is the caller's
+ * responsibility per project policy; see SECURITY.md).
  *
  * This runs once per `add()` call. There is no "compat" relaxation —
  * registered paths are code, not user input, and code that violates
@@ -26,6 +29,7 @@ export function validatePathChars(
       kind: 'path-missing-leading-slash',
       message: `Path must start with '/': ${path}`,
       path,
+      suggestion: 'Prefix the route pattern with `/` (e.g. `users` → `/users`).',
     });
   }
 
@@ -48,14 +52,12 @@ export function validatePathChars(
       });
     }
 
-    if (c >= 0x80) {
-      return err({
-        kind: 'path-non-ascii',
-        message: `Path must not contain raw non-ASCII bytes (charCode 0x${c.toString(16)}): ${path}`,
-        path,
-        suggestion: 'Represent non-ASCII characters as percent-encoded UTF-8.',
-      });
-    }
+    // Raw non-ASCII bytes are accepted (RFC 3987 IRI conformance).
+    // `PathParser.tokenize` normalizes each static segment to NFC and
+    // converts non-ASCII to percent-encoded UTF-8 (RFC 3986 URI wire
+    // form) before the path enters the segment tree. `/users/한국` and
+    // `/users/%ED%95%9C%EA%B5%AD` both store the same canonical URI.
+    if (c >= 0x80) continue;
 
     if (c === 0x25) {
       if (i + 2 >= len || !isHex(path.charCodeAt(i + 1)) || !isHex(path.charCodeAt(i + 2))) {
@@ -70,7 +72,9 @@ export function validatePathChars(
 
     // Inside a regex group `(...)` the router-grammar tokens `?` `#` and
     // the pchar-restriction are skipped — those bytes are part of the
-    // user's regex AST, which is validated separately by regex-safety.
+    // user's regex AST. The router does not gate the body for ReDoS
+    // (see SECURITY.md → Out-of-scope); only `new RegExp(...)` compile
+    // failure at build time surfaces as `route-parse`.
     if (parenDepth > 0) {
       if (c === CC_SLASH || i === len - 1) {
         // Dot-segment / segStart bookkeeping still runs so a regex group
@@ -134,7 +138,8 @@ export function validatePathChars(
         kind: 'path-invalid-pchar',
         message: `Path contains invalid character '${path[i]}' (charCode 0x${c.toString(16)}): ${path}`,
         path,
-        suggestion: 'Use the percent-encoded form for characters outside the path-segment grammar.',
+        segment: path[i]!,
+        suggestion: 'Use the percent-encoded form for characters outside the path-segment grammar (RFC 3986 §3.3 pchar).',
       });
     }
   }
@@ -148,7 +153,7 @@ function isHex(c: number): boolean {
   return (c >= 0x30 && c <= 0x39) || (c >= 0x41 && c <= 0x46) || (c >= 0x61 && c <= 0x66);
 }
 
-type DecodeFailKind = 'path-encoded-control' | 'path-encoded-slash' | 'path-invalid-utf8';
+type DecodeFailKind = 'path-encoded-slash' | 'path-invalid-utf8';
 
 function failDecode(
   kind: DecodeFailKind,
@@ -172,10 +177,15 @@ function hexValue(c: number): number {
  * well-formed UTF-8.
  *
  * Rejects:
- *   - `%00`-`%1F`, `%7F`        → `path-encoded-control`
- *   - `%2F` (encoded `/`)        → `path-encoded-slash`
+ *   - `%2F` (encoded `/`)        → `path-encoded-slash` (router grammar:
+ *     `/` is the segment separator and cannot appear inside one segment)
  *   - overlong / surrogate /
- *     truncated UTF-8 sequences  → `path-invalid-utf8`
+ *     truncated UTF-8 sequences  → `path-invalid-utf8` (RFC 3629 §3
+ *     well-formed UTF-8 conformance)
+ *
+ * Encoded control bytes (`%00`-`%1F`, `%7F`) are NOT rejected — the RFC
+ * does not require this and "URL byte safety" is the framework /
+ * normalizer's responsibility per project policy.
  *
  * Dot-segment detection (`.`, `..`, `%2e`, etc.) already happens in the
  * earlier pass via `isDotSegment`, so it is intentionally not duplicated
@@ -184,7 +194,8 @@ function hexValue(c: number): number {
  * a slash, which is the entire point of single-pass.
  *
  * Bytes inside a regex group `(...)` are skipped: their contents are
- * the user's regex AST and are validated by `assessRegexSafety`.
+ * the user's regex AST and are the framework / user's responsibility
+ * (no in-router ReDoS guard per policy).
  */
 function validateDecodedBytes(path: string): Result<void, RouterErrorData> {
   const len = path.length;
@@ -220,12 +231,10 @@ function validateDecodedBytes(path: string): Result<void, RouterErrorData> {
     i += 3;
 
     if (expect === 0) {
-      // Starting a new byte. Classify ASCII first.
-      if ((b >= 0x00 && b <= 0x1f) || b === 0x7f) {
-        return failDecode('path-encoded-control',
-          `Path contains percent-encoded control byte %${b.toString(16).padStart(2, '0').toUpperCase()}`,
-          'Control bytes (0x00-0x1F, 0x7F) are not permitted in registered paths.', path);
-      }
+      // Starting a new byte. Encoded control bytes are passed through
+      // (framework responsibility per policy). Encoded slash is rejected
+      // because `/` is the router's segment separator — accepting %2F
+      // would create two ways to spell the same path.
       if (b === 0x2f) {
         return failDecode('path-encoded-slash',
           'Path contains percent-encoded `/` (%2F)',
