@@ -124,8 +124,11 @@ describe('built router exposes a read-only contract', () => {
     }).toThrow();
   });
 
-  it('Router instance itself is frozen — no field rewrites possible', () => {
+  it('Router instance is frozen after build() — no field rewrites possible', () => {
     const r = new Router<string>();
+    expect(Object.isFrozen(r)).toBe(false);
+    r.add('GET', '/x', 'x');
+    r.build();
     expect(Object.isFrozen(r)).toBe(true);
   });
 });

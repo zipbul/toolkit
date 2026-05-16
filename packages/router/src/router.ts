@@ -24,6 +24,11 @@ import {
  */
 export const ROUTER_INTERNALS_KEY: unique symbol = Symbol.for('@zipbul/router/internals');
 
+/** Frozen empty-string array returned by `allowedMethods()` before build().
+ *  Single shared instance — avoids per-call allocation on the pre-build
+ *  stub path. */
+const EMPTY_METHODS: readonly string[] = Object.freeze([]);
+
 export interface RouterInternals<T> {
   matchImpl: ((method: string, path: string) => MatchOutput<T> | null) | undefined;
   matchLayer: MatchLayer | undefined;
@@ -57,8 +62,8 @@ export class Router<T = unknown> implements RouterPublicApi<T> {
   ) => void;
   readonly addAll: (entries: ReadonlyArray<readonly [string, string, T]>) => void;
   readonly build: () => RouterPublicApi<T>;
-  readonly match: (method: string, path: string) => MatchOutput<T> | null;
-  readonly allowedMethods: (path: string) => readonly string[];
+  match: (method: string, path: string) => MatchOutput<T> | null;
+  allowedMethods: (path: string) => readonly string[];
 
   constructor(options: RouterOptions = {}) {
     const routerOptions: RouterOptions = { ...options };
@@ -86,6 +91,15 @@ export class Router<T = unknown> implements RouterPublicApi<T> {
       const built = runBuildPipeline<T>(registration, methodRegistry, routerOptions, cache);
       internals.matchImpl = built.matchImpl;
       internals.matchLayer = built.matchLayer;
+      // Hot-path: rebind this.match directly to the compiled implementation.
+      // The earlier `(m, p) => internals.matchImpl(m, p)` arrow added a
+      // closure-call hop on every dispatch; rebinding skips the hop and
+      // exposes matchImpl as a monomorphic call site to JSC. The layer
+      // facade keeps allowedMethods cold-path correct.
+      this.match = built.matchImpl;
+      this.allowedMethods = (path) => built.matchLayer.allowedMethods(path);
+      // Re-freeze after rebind so the post-build surface stays immutable.
+      Object.freeze(this);
     };
 
     this.add = (method, path, value) => {
@@ -107,10 +121,9 @@ export class Router<T = unknown> implements RouterPublicApi<T> {
       return this;
     };
 
-    // Hot-path: dispatch the compiled matchImpl directly. Routing through
-    // `matchLayer.match` would add a method-dispatch hop that breaks JSC's
-    // monomorphic IC (verified: static match 300 ps → 13 ns, param match
-    // +5 ns). MatchLayer owns cold-path concerns only.
+    // Pre-build stubs. match() before build() returns null; allowedMethods
+    // returns []. Both are replaced in performBuild() with direct closure
+    // captures of the compiled implementation.
     //
     // No leading-slash guard. Standard HTTP server boundaries
     // (Node `req.url`, Bun `URL(...).pathname`, Express/Fastify/Hono
@@ -118,16 +131,8 @@ export class Router<T = unknown> implements RouterPublicApi<T> {
     // §5.3.1, and our peer routers (find-my-way, hono, rou3) skip the
     // check for the same reason. Callers handing the router a non-`/`
     // input is undefined behavior.
-    this.match = (method, path) => {
-      const impl = internals.matchImpl;
-      return impl === undefined ? null : impl(method, path);
-    };
-    this.allowedMethods = (path) => {
-      const layer = internals.matchLayer;
-      return layer === undefined ? [] : layer.allowedMethods(path);
-    };
-
-    Object.freeze(this);
+    this.match = () => null;
+    this.allowedMethods = () => EMPTY_METHODS;
   }
 }
 
