@@ -104,19 +104,28 @@ function emitNormalize(cfg: NormalizeCfg, outVar: string): string {
   return lines.join('\n');
 }
 
-/** Emit the post-normalize static-bucket probe. */
-function emitStaticBucketProbe(singleMethod: SingleMethodSpec | null, key: string): string {
+/** Emit the post-normalize static-bucket probe. `gateOnNormalize=true`
+ *  wraps the probe in `if (sp !== path)` — callers that already ran the
+ *  pre-normalize probe should set this so the lookup is skipped when
+ *  normalization was a no-op (default config: trim=false, lower=false). */
+function emitStaticBucketProbe(
+  singleMethod: SingleMethodSpec | null,
+  key: string,
+  gateOnNormalize: boolean,
+): string {
+  const open = gateOnNormalize ? `if (${key} !== path) {\n` : '';
+  const close = gateOnNormalize ? `\n}` : '';
   if (singleMethod !== null) {
     return `
-      var out = activeBucket[${key}];
-      if (out !== undefined) return out;`;
+      ${open}var out = activeBucket[${key}];
+      if (out !== undefined) return out;${close}`;
   }
   return `
-      var bucket = staticOutputsByMethod[mc];
+      ${open}var bucket = staticOutputsByMethod[mc];
       if (bucket !== undefined) {
         var out = bucket[${key}];
         if (out !== undefined) return out;
-      }`;
+      }${close}`;
 }
 
 /** Emit pre-normalize fast-path bucket probe (mixed routers only). */
@@ -272,7 +281,9 @@ function compileMixed<T>(cfg: MatchConfig<T>, singleMethod: SingleMethodSpec | n
   }
   lines.push(emitNormalize(cfg, 'sp'));
   if (cfg.hasAnyStatic) {
-    lines.push(emitStaticBucketProbe(singleMethod, 'sp'));
+    // Gate the post-normalize probe on `sp !== path` — when normalization
+    // is a no-op (default config) the pre-probe already covered this key.
+    lines.push(emitStaticBucketProbe(singleMethod, 'sp', /* gateOnNormalize */ true));
   }
   lines.push(emitHitCacheProbe());
   lines.push(cfg.hasAnyTree ? emitWalkerAndPack(cfg, singleMethod) : 'return null;');
