@@ -361,7 +361,12 @@ describe('shape specialization gating', () => {
     r.add('POST', '/upload/*filepath', 2);
     r.build();
     const impl = getRouterInternals(r).matchImpl as { toString: () => string };
-    expect(impl.toString()).toContain('methodCodes[method]');
+    // Multi-method dispatch now emits `switch (method) { case "GET": ... }`
+    // — a JSC string-switch hash that absorbs the active-method check into
+    // the default arm. The presence of the switch over `method` is the
+    // post-specialization signal that single-method literal compare did
+    // NOT kick in.
+    expect(impl.toString()).toContain('switch (method)');
     expect(r.match('GET', '/static/foo')!.value).toBe(1);
     expect(r.match('POST', '/upload/bar')!.value).toBe(2);
   });

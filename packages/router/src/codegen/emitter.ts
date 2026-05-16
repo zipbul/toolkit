@@ -102,18 +102,28 @@ export function compileMatchFn<T>(cfg: MatchConfig<T>): CompiledMatch<T> {
 
 type SingleMethodSpec = readonly [string, number];
 
-/** Emit method-dispatch prelude. Single-method specialises to a literal compare.
- *  Multi-method form bakes the active-method check into the same branch as the
- *  codeMap miss: `methodCodes` carries 7 default HTTP methods on every router,
- *  so `mc !== undefined` does not imply the method is active. Without the
- *  `activeMethodMask[mc]` guard, wrong-method calls (e.g. DELETE against a
- *  GET-only route set) fall through pre-probe + cache get + walker dispatch
- *  before returning null. Memoirist's `root[method]` short-circuit returns
- *  null in one step; this guard matches that. */
-function emitMethodDispatch(singleMethod: SingleMethodSpec | null): string {
+/** Emit method-dispatch prelude. Single-method specialises to a literal
+ *  compare. Multi-method emits a `switch (method)` over active method names —
+ *  each case folds to a constant `mc` and the `default` branch returns null
+ *  in one branch (matches memoirist's `root[method] === undefined` early
+ *  exit). This replaces a `methodCodes[method]` Record lookup +
+ *  `activeMethodMask[mc]` typed-array load with a single JSC string-switch
+ *  hash dispatch — fewer memory loads, fewer dependent branches, and the
+ *  inactive-method short-circuit is absorbed into the default arm. */
+function emitMethodDispatch(
+  singleMethod: SingleMethodSpec | null,
+  activeMethodCodes: ReadonlyArray<readonly [string, number]> | null,
+): string {
   if (singleMethod !== null) {
     const [name, code] = singleMethod;
     return `if (method !== ${JSON.stringify(name)}) return null;\nvar mc = ${code};`;
+  }
+  if (activeMethodCodes !== null && activeMethodCodes.length > 0) {
+    let body = '';
+    for (const [name, code] of activeMethodCodes) {
+      body += `case ${JSON.stringify(name)}: mc = ${code}; break;\n`;
+    }
+    return `var mc; switch (method) {\n${body}default: return null;\n}`;
   }
   return `var mc = methodCodes[method]; if (mc === undefined || activeMethodMask[mc] === 0) return null;`;
 }
@@ -248,7 +258,7 @@ function compileStaticOnlySingleMethod<T>(
   singleMethod: SingleMethodSpec,
 ): CompiledMatch<T> {
   const body = [
-    emitMethodDispatch(singleMethod),
+    emitMethodDispatch(singleMethod, null),
     `
       var out = activeBucket[path];
       if (out !== undefined) return out;`,
@@ -282,7 +292,7 @@ function compileStaticOnlySingleMethod<T>(
  */
 function compileStaticOnlyMultiMethod<T>(cfg: MatchConfig<T>): CompiledMatch<T> {
   const body = [
-    emitMethodDispatch(null),
+    emitMethodDispatch(null, cfg.activeMethodCodes),
     emitNormalize(cfg, 'sp'),
     `
       var bucket = staticOutputsByMethod[mc];
@@ -309,7 +319,7 @@ function compileStaticOnlyMultiMethod<T>(cfg: MatchConfig<T>): CompiledMatch<T> 
  * cache, then walker + slab unpack + cache write.
  */
 function compileMixed<T>(cfg: MatchConfig<T>, singleMethod: SingleMethodSpec | null): CompiledMatch<T> {
-  const lines: string[] = [emitMethodDispatch(singleMethod)];
+  const lines: string[] = [emitMethodDispatch(singleMethod, cfg.activeMethodCodes)];
 
   if (cfg.hasAnyStatic && cfg.hasAnyTree) {
     lines.push(emitPreNormalizeStaticProbe(singleMethod));
