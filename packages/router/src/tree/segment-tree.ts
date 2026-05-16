@@ -166,7 +166,7 @@ export function insertIntoSegmentTree(
  * for missing children. Returns the descended node on success, or a
  * `RouterErrorData` carrier (no Result wrapper — caller runs rollback).
  */
-function insertStaticSegments(
+export function insertStaticSegments(
   node: SegmentNode,
   segs: ReadonlyArray<string>,
   undoLog: SegmentTreeUndoLog,
@@ -238,7 +238,7 @@ function insertStaticSegments(
  * Returns `{ node }` on success or a `RouterErrorData` on conflict
  * (caller runs rollback).
  */
-function insertParamPart(
+export function insertParamPart(
   node: SegmentNode,
   part: { type: 'param'; name: string; pattern: string | null; optional: boolean },
   testerCache: Map<string, PatternTesterFn>,
@@ -334,7 +334,7 @@ export function isResolvedTesterError(
   return result !== null && typeof result === 'object' && 'kind' in result;
 }
 
-function resolveOrCompileTester(
+export function resolveOrCompileTester(
   part: { name: string; pattern: string | null },
   testerCache: Map<string, PatternTesterFn>,
   undoLog: SegmentTreeUndoLog,
@@ -362,7 +362,7 @@ function resolveOrCompileTester(
  * Attach a wildcard terminal at `node`. Returns `undefined` on success
  * or a `RouterErrorData` on conflict.
  */
-function attachWildcardTerminal(
+export function attachWildcardTerminal(
   node: SegmentNode,
   part: { type: 'wildcard'; name: string; origin: 'star' | 'multi' },
   handlerIndex: number,
@@ -404,7 +404,7 @@ function attachWildcardTerminal(
  * Attach a non-wildcard terminal store at `node`. Returns `undefined`
  * on success or a `RouterErrorData` on duplicate.
  */
-function attachStoreTerminal(
+export function attachStoreTerminal(
   node: SegmentNode,
   handlerIndex: number,
   undoLog: SegmentTreeUndoLog,

@@ -364,7 +364,7 @@ function routeConflict(why: string, meta: RouteMeta): RouterErrorData {
  * `partial.freshX` carriers so revert can run cleanly on rejection.
  * Returns an `Err` Result on conflict, `undefined` on success.
  */
-function attachWildcardTail(
+export function attachWildcardTail(
   node: PrefixTrieNode,
   name: string,
   visited: PrefixTrieNode[],
@@ -385,7 +385,7 @@ function attachWildcardTail(
  * permitted optional-expansion duplicate, an `Err` Result on conflict,
  * `undefined` on a normal commit.
  */
-function attachTerminal(
+export function attachTerminal(
   node: PrefixTrieNode,
   visited: PrefixTrieNode[],
   partial: CommitPlan,

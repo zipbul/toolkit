@@ -587,7 +587,7 @@ interface RouteShape {
 
 /** Walk parts once, collecting both the capture metadata and the
  *  optional count needed for cap validation. */
-function collectRouteShape(parts: ReadonlyArray<PathPart>): RouteShape {
+export function collectRouteShape(parts: ReadonlyArray<PathPart>): RouteShape {
   const originalNames: string[] = [];
   const originalTypes: Array<'param' | 'wildcard'> = [];
   let optionalCount = 0;
@@ -607,7 +607,7 @@ function collectRouteShape(parts: ReadonlyArray<PathPart>): RouteShape {
 /** Reject routes that exceed the optional-fanout cap or the 31-bit
  *  presentBitmask ceiling. Returns the error data on rejection,
  *  `undefined` otherwise. */
-function checkDynamicRouteCaps(
+export function checkDynamicRouteCaps(
   route: { path: string },
   shape: RouteShape,
 ): RouterErrorData | undefined {
@@ -636,7 +636,7 @@ function checkDynamicRouteCaps(
 
 /** Resolve `state.segmentTrees[methodCode]` or create a fresh root and
  *  push the rollback marker. Returns the root node either way. */
-function ensureSegmentTreeRoot<T>(
+export function ensureSegmentTreeRoot<T>(
   state: BuildState<T>,
   methodCode: number,
   undo: SegmentTreeUndoLog,
@@ -650,7 +650,7 @@ function ensureSegmentTreeRoot<T>(
 }
 
 /** Append `value` to `state.handlers` and record the rollback marker. */
-function pushHandler<T>(
+export function pushHandler<T>(
   state: BuildState<T>,
   value: T,
   undo: SegmentTreeUndoLog,
@@ -664,7 +664,7 @@ function pushHandler<T>(
 /** Append per-expansion terminal slab data (handler, isWildcard,
  *  presentBitmask, factory) and record the rollback marker. Returns the
  *  newly assigned terminal index `tIdx`. */
-function recordExpansionTerminal<T>(
+export function recordExpansionTerminal<T>(
   state: BuildState<T>,
   expParts: ReadonlyArray<PathPart>,
   shape: RouteShape,

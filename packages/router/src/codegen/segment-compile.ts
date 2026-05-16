@@ -157,7 +157,7 @@ interface EmitContext {
   testers: PatternTesterFn[];
 }
 
-function emitRootSlashTerminal(root: SegmentNode): string {
+export function emitRootSlashTerminal(root: SegmentNode): string {
   if (root.store !== null) {
     return `      state.handlerIndex = ${root.store};\n      return true;`;
   }
@@ -199,7 +199,7 @@ function emitNode(
 
 /** Emit one `if (url.startsWith(seg, pos)) { … }` block per static child
  *  of `node`. Each block recursively emits the child's subtree. */
-function emitStaticChildren(
+export function emitStaticChildren(
   ctx: EmitContext,
   node: SegmentNode,
   posVar: string,
@@ -231,7 +231,7 @@ ${emitTerminalAt(child)}
  *  general descent into `param.next`. Bails if param has siblings
  *  (codegen only handles single-param positions; ambiguous fall through
  *  to the recursive walker). */
-function emitParamBranch(
+export function emitParamBranch(
   ctx: EmitContext,
   param: NonNullable<SegmentNode['paramChild']>,
   posVar: string,
@@ -291,13 +291,13 @@ ${inner}
   return code;
 }
 
-function emitTesterCheck(testerIdx: number, posVar: string, slashVar: string): string {
+export function emitTesterCheck(testerIdx: number, posVar: string, slashVar: string): string {
   if (testerIdx === -1) return '';
   return `
       if (testers[${testerIdx}](decoder(url.substring(${posVar}, ${slashVar} === -1 ? len : ${slashVar}))) !== TESTER_PASS) return false;`;
 }
 
-function emitStrictTerminal(
+export function emitStrictTerminal(
   posVar: string,
   slashVar: string,
   testerCheck: string,
@@ -315,7 +315,7 @@ function emitStrictTerminal(
     }`;
 }
 
-function emitMultiWildcardTerminal(
+export function emitMultiWildcardTerminal(
   posVar: string,
   slashVar: string,
   testerCheck: string,
@@ -335,7 +335,7 @@ function emitMultiWildcardTerminal(
     }`;
 }
 
-function emitWildcardStore(node: SegmentNode, posVar: string): string {
+export function emitWildcardStore(node: SegmentNode, posVar: string): string {
   const guard = node.wildcardOrigin === 'star' ? `${posVar} <= len` : `${posVar} < len`;
   return `
     if (${guard}) {
