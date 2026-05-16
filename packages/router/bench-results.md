@@ -91,31 +91,33 @@ over zipbul.
 
 | Scenario | zipbul ns | 1st place | gap |
 |:---|---:|:---|---:|
-| static/hit-0 | 4.49 | **zipbul** | 1st |
-| static/hit-1 | 9.64 | **zipbul** | 1st |
-| static/hit-2 | 10.85 | **zipbul** | 1st |
-| static/miss | 10.54 | **zipbul** | 1st |
-| static/wrong-method | 7.77 | **zipbul** | 1st |
-| param-1/hit | 27.97 | **zipbul** | 1st |
-| param-1/miss | 15.49 | **zipbul** | 1st |
-| param-1/wrong-method | 13.11 | koa-tree-router | 1.4× |
-| param-3/hit | 27.87 | **zipbul** | 1st |
-| param-3/miss | 72.91 | memoirist | 1.6× |
-| param-3/wrong-method | 9.85 | memoirist | ~1.2× |
-| wildcard/hit-0 | 21.53 | **zipbul** | 1st |
-| wildcard/hit-1 | 22.65 | **zipbul** | 1st |
-| wildcard/miss | 13.50 | **zipbul** | 1st |
-| wildcard/wrong-method | 11.99 | koa-tree-router | 1.3× |
-| github-static/hit | 12.43 | **zipbul** | 1st |
-| github-static/miss | 17.83 | **zipbul** | 1st |
-| github-static/wrong-method | 17.57 | **zipbul** | 1st |
-| github-param/hit | 22.53 | **zipbul** | 1st |
-| github-param/miss | 230.88 | memoirist | ~5× |
-| github-param/wrong-method | 47.82 | **zipbul** | 1st |
-| miss/miss | 12.04 | **zipbul** | 1st |
-| miss/wrong-method | 12.05 | memoirist | ~2× |
+| static/hit-0 | 4.65 | **zipbul** | 1st |
+| static/hit-1 | 10.09 | **zipbul** | 1st |
+| static/hit-2 | 9.94 | **zipbul** | 1st |
+| static/miss | 10.09 | **zipbul** | 1st |
+| static/wrong-method | 7.53 | **zipbul** | 1st |
+| param-1/hit | 24.97 | **zipbul** | 1st |
+| param-1/miss | 14.82 | **zipbul** | 1st |
+| param-1/wrong-method | 12.56 | memoirist | ~3× |
+| param-3/hit | 25.96 | **zipbul** | 1st |
+| param-3/miss | 59.09 | memoirist | 1.6× |
+| param-3/wrong-method | 9.21 | memoirist | ~3× |
+| wildcard/hit-0 | 25.78 | **zipbul** | 1st |
+| wildcard/hit-1 | 23.73 | **zipbul** | 1st |
+| wildcard/miss | 13.67 | **zipbul** | 1st |
+| wildcard/wrong-method | 12.02 | koa-tree-router | 1.5× |
+| github-static/hit | 13.68 | **zipbul** | 1st |
+| github-static/miss | 17.42 | **zipbul** | 1st |
+| github-static/wrong-method | 18.39 | **zipbul** | 1st |
+| github-param/hit | 23.64 | **zipbul** | 1st |
+| github-param/miss | 167.45 | memoirist | ~4× |
+| github-param/wrong-method | 50.73 | hono-regexp | 1.05× |
+| miss/miss | 12.22 | **zipbul** | 1st |
+| miss/wrong-method | 12.86 | memoirist | ~3× |
 
-**Counts**: **17/23 1st place** (all 8 hit scenarios + 9 miss/wrong-method).
+**Counts**: **16/23 1st place** (all 8 hit scenarios + 8 miss/wrong-method).
+Run-to-run variance ±1 on single mitata measurements; cross-run intersection
+is 14-15 stable 1st-place scenarios.
 
 **Remaining 6 not-1st are all algorithmic gaps**:
 - **wrong-method × 4** (param-1/3, wildcard, miss) — memoirist's
@@ -137,24 +139,30 @@ production-realistic numbers run `bench/comparison-solo.bench.ts`.
 mitata block**, no IC polymorphism from other adapters. Reflects what a
 real HTTP server measures when a single Router handles every request.
 
-Last recorded run (Bun 1.3.13, 3-run median):
+Last recorded run (Bun 1.3.13, 3-run median, post `04b3657` charCodeAt
+method dispatch):
 
 | Scenario | zipbul ns | memoirist ns | zipbul rank |
 |:---|---:|---:|:---:|
-| github-static/hit | 10.18 | 30+ | **1st** |
-| github-static/miss | 14.24 | 27+ | **1st** |
-| github-static/wrong-method | 12.43 | 24+ | **1st** |
-| github-param/wrong-method | 42.42 | 49 | **1st** |
-| static/wrong-method | 6.90 | 5.50-6.76 | tie |
-| param-1/wrong-method | 7.60 | 3.21-3.32 | 2.3× behind |
-| param-3/wrong-method | 7.56 | 3.32-6.72 | up to 2.3× behind |
-| wildcard/wrong-method | 8.44 | 3.37-6.61 | up to 2.5× behind |
-| miss/wrong-method | 5.47 | 3.07-7.93 | tie / variance |
+| github-static/hit | 10.60 | 30+ | **1st** |
+| github-static/miss | 11.31 | 27+ | **1st** |
+| github-static/wrong-method | 10.93 | 24+ | **1st** |
+| github-param/wrong-method | ~48 | 49+ | **1st** |
+| param-1/miss | 11.0 | 27+ | **1st** |
+| **miss/wrong-method** | **5.48** | 3-7 | **tie** (matches memoirist floor) |
+| static/wrong-method | 7.02 | 5.50-6.76 | ~tie |
+| param-1/wrong-method | 7.53 | 3.16-3.32 | 2.3× behind |
+| param-3/wrong-method | 7.96 | 3.32-3.50 | 2.3× behind |
+| wildcard/wrong-method | 8.15 | 3.36-3.54 | 2.4× behind |
 
-Solo bench reveals the **memoirist wrong-method 2-3× lead is real and
-algorithmic** — `root[method]` undefined short-circuit cannot be
-matched by zipbul's prelude without a structural rewrite. Hit-path and
-github static scenarios remain 1st in both bench modes.
+Solo bench reveals zipbul's structural pattern: **dominant on every
+github-static scenario** (root-mask + active-method gates) and ties
+`miss/wrong-method` to memoirist. The remaining 2-3× wrong-method gap
+for param/wildcard scenarios is the cost of zipbul's `new Function()`
+matchImpl closure prologue vs memoirist's regular class-method
+`this.root[method]` lookup — closing it requires abandoning codegen
+specialization (the entire perf foundation), so the trade-off does not
+favor a rewrite.
 
 ## How to update
 

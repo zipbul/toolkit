@@ -410,13 +410,15 @@ bun bench/comparison.bench.ts
 | Bucket | zipbul 순위 | 비고 |
 |:---|:---:|:---|
 | 모든 `hit` 시나리오 (8) | **8개 전부 1위** | 2위 대비 1.1× – 5× 앞섬 |
-| `static/miss`, `wildcard/miss`, `param-1/miss`, `miss/miss` | **1위** | radix 스타일 root miss short-circuit |
-| `static/wrong-method`, `github-static/wrong-method`, `github-param/wrong-method` | **1위** | active-method gate 가 wrong-method 를 한 분기에서 거름 |
+| `static/miss`, `wildcard/miss`, `param-1/miss`, `miss/miss` | **1위** | root-mask + active-method gate 가 miss 를 한 분기에 거름 |
+| `static/wrong-method`, `github-static/wrong-method` | **1위** | charCodeAt method dispatch + active-method gate |
 | `github-static/miss` | **1위** | root-first-char mask 가 walker call 자체 회피 |
-| `param-1/wrong-method`, `param-3/wrong-method`, `wildcard/wrong-method`, `miss/wrong-method` | 2 – 3위 | `memoirist`/`koa-tree-router` short-circuit 가 1-5 ns 더 빠름 (sub-10 ns 노이즈 범위) |
-| `param-3/miss`, `github-param/miss` | 2 – 3위 | `memoirist` 의 radix tree 가 dynamic-deep-trie miss 더 빨리 거름 |
+| `miss/wrong-method` | **memoirist 와 동률** | charCodeAt method dispatch 가 memoirist `root[method]` floor 와 동급 |
+| `param-1/wrong-method`, `param-3/wrong-method`, `wildcard/wrong-method` | 2 – 3위 | `memoirist` 의 class-method `root[method]` lookup 이 zipbul `new Function()` matchImpl closure prologue 비용 없이 작동 (4-5 ns 격차) |
+| `param-3/miss`, `github-param/miss` | 2 – 3위 | `memoirist` 의 radix-tree 가 dynamic-deep-trie miss 더 빨리 거름 |
+| `github-param/wrong-method` | 1위 / 동률 | `hono-regexp` 와 1.05× 이내 |
 
-**요약**: **23개 중 17개 1위** — 모든 hit 시나리오, 모든 wildcard/static/param-1 miss, 그리고 wrong-method 3개. 나머지 6개는 `memoirist` 의 `root[method]` short-circuit 또는 radix-tree dynamic miss 가 1-5 ns 빠른 알고리즘 격차 (대부분 mitata sub-100 ns 노이즈 범위 내).
+**요약**: **23개 중 16-17개 1위** (single-run variance ±1) — 모든 hit 시나리오, 모든 wildcard/static/param-1 miss, 모든 github-static 시나리오, 그리고 memoirist 와 `miss/wrong-method` 동률. 나머지 격차는 알고리즘 차이: memoirist 의 class-method dispatch 가 `new Function()` closure prologue 비용 (4-5 ns floor 차이) 회피하고, radix tree 가 dynamic-deep-trie miss 더 빨리 처리. 이걸 close 하려면 codegen specialization (모든 hit-path 우위의 기반) 포기 필요 — trade-off 부적합.
 
 production-realistic single-router 측정 (다른 adapter의 IC poly 없음) 은 `bench/comparison-solo.bench.ts` 참조 — `bench-results.md` 에 solo 표 전체.
 

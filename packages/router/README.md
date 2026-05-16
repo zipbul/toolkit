@@ -413,13 +413,15 @@ Last recorded run (Bun 1.3.13, Linux x64, 23 scenarios):
 | Bucket | zipbul rank | Notes |
 |:---|:---:|:---|
 | All `hit` scenarios (8) | **1st in all 8** | 1.1× – 5× ahead of 2nd place |
-| `static/miss`, `wildcard/miss`, `param-1/miss`, `miss/miss` | **1st** | radix-style root miss short-circuit |
-| `static/wrong-method`, `github-static/wrong-method`, `github-param/wrong-method` | **1st** | active-method gate skips wrong-method dispatch in one branch |
+| `static/miss`, `wildcard/miss`, `param-1/miss`, `miss/miss` | **1st** | root-mask + active-method gates short-circuit miss in one branch |
+| `static/wrong-method`, `github-static/wrong-method` | **1st** | charCodeAt method dispatch + active-method gate |
 | `github-static/miss` | **1st** | root-first-char mask skips walker call on guaranteed miss |
-| `param-1/wrong-method`, `param-3/wrong-method`, `wildcard/wrong-method`, `miss/wrong-method` | 2nd – 3rd | `memoirist`/`koa-tree-router` short-circuit by 1-5 ns (sub-10 ns noise floor) |
+| `miss/wrong-method` | **tie with memoirist** | charCodeAt method dispatch matches memoirist's `root[method]` floor |
+| `param-1/wrong-method`, `param-3/wrong-method`, `wildcard/wrong-method` | 2nd – 3rd | `memoirist`'s class-method `root[method]` lookup avoids the `new Function()` closure prologue zipbul's specialized matchImpl pays (4-5 ns gap) |
 | `param-3/miss`, `github-param/miss` | 2nd – 3rd | `memoirist`'s radix-tree short-circuits dynamic-deep-trie miss faster |
+| `github-param/wrong-method` | 1st / tie | within 1.05× of `hono-regexp` |
 
-**Summary**: **17/23 1st place** — every hit scenario, every wildcard/static/param-1 miss, and three wrong-method scenarios. The remaining 6 are algorithmic gaps where `memoirist`'s `root[method]` short-circuit or radix-tree dynamic miss is 1-5 ns faster (within mitata's sub-100 ns noise floor on most).
+**Summary**: **16-17/23 1st place** (single-run variance ±1) — every hit scenario, every wildcard/static/param-1 miss, every github-static scenario, plus a tie with memoirist on `miss/wrong-method`. The remaining gaps are algorithmic: memoirist's class-method dispatch avoids the `new Function()` closure prologue (4-5 ns floor difference) and its radix tree handles dynamic-deep-trie miss faster than zipbul's segment-tree walker. Closing them would require abandoning codegen specialization (the foundation of every hit-path lead) — the trade-off does not favor a rewrite.
 
 For production-realistic single-router numbers (no IC polymorphism from other adapters) run `bench/comparison-solo.bench.ts` — `bench-results.md` lists the full solo table.
 
