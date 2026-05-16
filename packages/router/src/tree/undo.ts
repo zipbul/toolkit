@@ -63,6 +63,43 @@ export type UndoRecord =
 // keep the entry shape monomorphic and avoid per-entry scope alloc.
 export type SegmentTreeUndoLog = UndoRecord[];
 
+/**
+ * Type-safe push for `UndoKind.StaticBucketReset`. The undo log stores
+ * buckets as `Array<Record<string, unknown>>` because it is shape-only
+ * carrier (it never reads the values) — call sites with a typed
+ * `Array<Record<string, T>>` would otherwise need a `as unknown as`
+ * widening cast at every push. This helper performs the widening once
+ * inside the undo module.
+ */
+export function pushStaticBucketResetUndo<T>(
+  undoLog: SegmentTreeUndoLog,
+  buckets: Array<Record<string, T> | undefined>,
+  mc: number,
+): void {
+  undoLog.push({
+    k: UndoKind.StaticBucketReset,
+    buckets: buckets as unknown as Array<Record<string, unknown> | undefined>,
+    mc,
+  });
+}
+
+/**
+ * Type-safe push for `UndoKind.StaticMapDelete`. Same rationale as
+ * `pushStaticBucketResetUndo` — collapses the `T → unknown` boundary
+ * cast into one location.
+ */
+export function pushStaticMapDeleteUndo<T>(
+  undoLog: SegmentTreeUndoLog,
+  map: Record<string, T>,
+  key: string,
+): void {
+  undoLog.push({
+    k: UndoKind.StaticMapDelete,
+    map: map as unknown as Record<string, unknown>,
+    key,
+  });
+}
+
 export function applyUndo(entry: UndoRecord): void {
   switch (entry.k) {
     case UndoKind.StaticChildrenInit:

@@ -263,3 +263,37 @@ describe('rollback after route validation failure (R1)', () => {
     expect(e1.data.errors[0]!.error.kind).toBe(e2.data.errors[0]!.error.kind);
   });
 });
+
+describe('coverage: ParamSiblingAdd undo + LEAF_STORE_MAX_DEPTH removal', () => {
+  it('rolls back a fresh param-sibling on bulk seal failure (UndoKind.ParamSiblingAdd)', () => {
+    const r = new Router<string>();
+    // Same regex pattern, different param names — wildcard-prefix-index
+    // matches the regex AST (allowing the shared trie node), but
+    // segment-tree's insertParamPart sees a name mismatch and appends a
+    // fresh ParamSegment via `tail.nextSibling = fresh`. That's the
+    // single insert path that pushes UndoKind.ParamSiblingAdd.
+    r.add('GET', '/users/:a(\\d+)/x', 'first');
+    r.add('GET', '/users/:b(\\d+)/y', 'second');
+    // Malformed path triggers a parse failure → seal() runs a bulk
+    // `rollback(undo, 0)` over every entry, including the
+    // ParamSiblingAdd record from the route above.
+    r.add('GET', '?bad-path', 'broken');
+    expect(() => r.build()).toThrow(RouterError);
+  });
+
+  it('factors a >64-segment chain (no LEAF_STORE_MAX_DEPTH ceiling)', () => {
+    // 70-segment chain per tenant — would have been silently rejected
+    // by the prior 64-depth cap inside leafStoreOf. Now factor detection
+    // descends the full chain.
+    const r = new Router<string>();
+    const chain = Array.from({ length: 70 }, (_, i) => `s${i}`).join('/');
+    for (let i = 0; i < 1500; i++) {
+      r.add('GET', `/tenant-${i}/${chain}/:final`, `deep-${i}`);
+    }
+    r.build();
+    const probe = `/tenant-0/${chain}/X`;
+    expect(r.match('GET', probe)?.value).toBe('deep-0');
+    const tail = `/tenant-1499/${chain}/Y`;
+    expect(r.match('GET', tail)?.value).toBe('deep-1499');
+  });
+});

@@ -111,24 +111,22 @@ function subtreeShapesEqual(a: SegmentNode, b: SegmentNode): boolean {
 }
 
 /**
- * Hard ceiling on chain-walk depth in `leafStoreOf`. Production paths
- * never approach this (median depth ≤ 6); the cap is a safety net for
- * malformed trees that would otherwise loop until the runtime stack
- * pops. Increasing it only changes the depth at which the safety net
- * trips — no other code reads this value.
- */
-const LEAF_STORE_MAX_DEPTH = 64;
-
-/**
  * Walk to the unique terminal node and return its `store`. Returns null
  * if there is no unique terminal (multiple stores on the path) or if an
  * intermediate node carries both a store and descendants (multi-terminal
  * subtree — not factor-safe).
+ *
+ * No depth cap: the segment tree is constructed exclusively by
+ * `insertIntoSegmentTree`, which only ever attaches fresh nodes from
+ * `createSegmentNode()`. There is no rewiring path that could form a
+ * cycle, so the descent terminates on every reachable shape (param-,
+ * single-static-, or store-terminating chain) without an arbitrary
+ * limit. A previous 64-depth ceiling silently rejected any route with
+ * 64+ segments from the factor optimization — that ceiling is gone.
  */
 function leafStoreOf(node: SegmentNode): number | null {
   let cur: SegmentNode = node;
-  let depth = 0;
-  while (depth++ < LEAF_STORE_MAX_DEPTH) {
+  while (true) {
     if (cur.store !== null) {
       // Multi-terminal subtree (intermediate node carries a store AND
       // has descendants) is not factor-safe: the factored walker keeps
@@ -163,5 +161,4 @@ function leafStoreOf(node: SegmentNode): number | null {
     //     was already filtered out above.
     return null;
   }
-  return null;
 }

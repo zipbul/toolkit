@@ -19,7 +19,12 @@ export {
 } from './segment-tree';
 
 export type { SegmentTreeUndoLog } from './undo';
-export { UndoKind, applyUndo } from './undo';
+export {
+  UndoKind,
+  applyUndo,
+  pushStaticBucketResetUndo,
+  pushStaticMapDeleteUndo,
+} from './undo';
 
 export {
   compactSegmentTree,

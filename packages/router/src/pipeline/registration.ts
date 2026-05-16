@@ -22,6 +22,8 @@ import {
   createSegmentNode,
   detectTenantFactor,
   insertIntoSegmentTree,
+  pushStaticBucketResetUndo,
+  pushStaticMapDeleteUndo,
   setTenantFactor,
   UndoKind,
   type PathPart,
@@ -407,11 +409,7 @@ export class Registration<T> {
     if (bucket === undefined) {
       bucket = Object.create(null) as Record<string, T>;
       state.staticByMethod[methodCode] = bucket;
-      undo.push({
-        k: UndoKind.StaticBucketReset,
-        buckets: state.staticByMethod as unknown as Array<Record<string, unknown> | undefined>,
-        mc: methodCode,
-      });
+      pushStaticBucketResetUndo(undo, state.staticByMethod, methodCode);
     }
 
     if (normalized in bucket) {
@@ -427,11 +425,7 @@ export class Registration<T> {
     bucket[normalized] = route.value;
     const prevMask = state.staticPathMethodMask[normalized] ?? 0;
     state.staticPathMethodMask[normalized] = prevMask | (1 << methodCode);
-    undo.push({
-      k: UndoKind.StaticMapDelete,
-      map: bucket as unknown as Record<string, unknown>,
-      key: normalized,
-    });
+    pushStaticMapDeleteUndo(undo, bucket, normalized);
     // Restore the path's method-mask bit on rollback. Tagged record keeps
     // the prior mask in a monomorphic shape so 100k static-route builds
     // don't allocate 100k distinct closures (each freshly capturing
