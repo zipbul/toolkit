@@ -32,6 +32,12 @@ export interface MatchConfig<T> {
   readonly hasAnyStatic: boolean;
   readonly staticOutputsByMethod: Array<Record<string, MatchOutput<T>> | undefined>;
   readonly methodCodes: Readonly<Record<string, number>>;
+  /** Per-methodCode active-flag table. `1` if any route is registered under
+   *  this method's code, `0` otherwise. `methodCodes` carries 7 HTTP
+   *  defaults on every router, so a hit there does not imply the method is
+   *  active — the active-method short-circuit in `emitMethodDispatch` reads
+   *  this mask to return null in one step for wrong-method calls. */
+  readonly activeMethodMask: Int32Array;
   readonly trees: Array<MatchFn | null>;
   readonly matchState: MatchState;
   readonly handlers: T[];
@@ -85,13 +91,20 @@ export function compileMatchFn<T>(cfg: MatchConfig<T>): CompiledMatch<T> {
 
 type SingleMethodSpec = readonly [string, number];
 
-/** Emit method-dispatch prelude. Single-method specialises to a literal compare. */
+/** Emit method-dispatch prelude. Single-method specialises to a literal compare.
+ *  Multi-method form bakes the active-method check into the same branch as the
+ *  codeMap miss: `methodCodes` carries 7 default HTTP methods on every router,
+ *  so `mc !== undefined` does not imply the method is active. Without the
+ *  `activeMethodMask[mc]` guard, wrong-method calls (e.g. DELETE against a
+ *  GET-only route set) fall through pre-probe + cache get + walker dispatch
+ *  before returning null. Memoirist's `root[method]` short-circuit returns
+ *  null in one step; this guard matches that. */
 function emitMethodDispatch(singleMethod: SingleMethodSpec | null): string {
   if (singleMethod !== null) {
     const [name, code] = singleMethod;
     return `if (method !== ${JSON.stringify(name)}) return null;\nvar mc = ${code};`;
   }
-  return `var mc = methodCodes[method]; if (mc === undefined) return null;`;
+  return `var mc = methodCodes[method]; if (mc === undefined || activeMethodMask[mc] === 0) return null;`;
 }
 
 /** Emit `var sp = path;` plus the active normalization steps. */
@@ -259,11 +272,11 @@ function compileStaticOnlyMultiMethod<T>(cfg: MatchConfig<T>): CompiledMatch<T> 
   ].join('\n');
 
   const factory = new Function(
-    'staticOutputsByMethod', 'methodCodes',
+    'staticOutputsByMethod', 'methodCodes', 'activeMethodMask',
     `return function match(method, path) {\n${body}\n};`,
   );
 
-  const compiled = factory(cfg.staticOutputsByMethod, cfg.methodCodes) as CompiledMatch<T>;
+  const compiled = factory(cfg.staticOutputsByMethod, cfg.methodCodes, cfg.activeMethodMask) as CompiledMatch<T>;
   runWarmup(compiled, cfg);
   return compiled;
 }
@@ -290,7 +303,7 @@ function compileMixed<T>(cfg: MatchConfig<T>, singleMethod: SingleMethodSpec | n
 
   const body = lines.join('\n');
   const factory = new Function(
-    'activeBucket', 'tr0', 'staticOutputsByMethod', 'methodCodes', 'trees', 'matchState', 'handlers',
+    'activeBucket', 'tr0', 'staticOutputsByMethod', 'methodCodes', 'activeMethodMask', 'trees', 'matchState', 'handlers',
     'hitCacheByMethod',
     'EMPTY_PARAMS', 'CACHE_META', 'DYNAMIC_META', 'terminalSlab', 'paramsFactories',
     `return function match(method, path) {\n${body}\n};`,
@@ -302,7 +315,7 @@ function compileMixed<T>(cfg: MatchConfig<T>, singleMethod: SingleMethodSpec | n
   const tr0 = singleMethod !== null ? (cfg.trees[singleMethod[1]] ?? null) : null;
 
   const compiled = factory(
-    activeBucket, tr0, cfg.staticOutputsByMethod, cfg.methodCodes, cfg.trees, cfg.matchState, cfg.handlers,
+    activeBucket, tr0, cfg.staticOutputsByMethod, cfg.methodCodes, cfg.activeMethodMask, cfg.trees, cfg.matchState, cfg.handlers,
     cfg.hitCacheByMethod,
     EMPTY_PARAMS, CACHE_META, DYNAMIC_META, cfg.terminalSlab, cfg.paramsFactories,
   ) as CompiledMatch<T>;

@@ -26,13 +26,14 @@ function staticBucket<T>(entries: Record<string, T>): Record<string, MatchOutput
 }
 
 function baseConfig<T>(overrides: Partial<Cfg<T>> = {}): Cfg<T> {
-  return {
+  const merged = {
     trimSlash: false,
     lowerCase: false,
     hasAnyTree: false,
     hasAnyStatic: false,
     staticOutputsByMethod: [],
     methodCodes: Object.create(null) as Record<string, number>,
+    activeMethodMask: new Int32Array(32),
     trees: [],
     matchState: createMatchState(4),
     handlers: [],
@@ -41,7 +42,17 @@ function baseConfig<T>(overrides: Partial<Cfg<T>> = {}): Cfg<T> {
     terminalSlab: new Int32Array(0),
     paramsFactories: [],
     ...overrides,
-  };
+  } as Cfg<T>;
+  // Auto-fill activeMethodMask from activeMethodCodes when caller did not
+  // supply one — keeps existing test fixtures concise.
+  if (overrides.activeMethodMask === undefined) {
+    const mask = new Int32Array(32);
+    for (let i = 0; i < merged.activeMethodCodes.length; i++) {
+      mask[merged.activeMethodCodes[i]![1]] = 1;
+    }
+    (merged as { activeMethodMask: Int32Array }).activeMethodMask = mask;
+  }
+  return merged;
 }
 
 describe('compileMatchFn — static-only, single active method', () => {
@@ -154,6 +165,8 @@ describe('compileMatchFn — mixed (dynamic walker + cache + slab unpack)', () =
       return p;
     };
 
+    const activeMethodMask = new Int32Array(32);
+    activeMethodMask[code] = 1;
     return {
       trimSlash: opts.trimSlash ?? false,
       lowerCase: opts.lowerCase ?? false,
@@ -161,6 +174,7 @@ describe('compileMatchFn — mixed (dynamic walker + cache + slab unpack)', () =
       hasAnyStatic: false,
       staticOutputsByMethod: [],
       methodCodes,
+      activeMethodMask,
       trees: [walker],
       matchState,
       handlers: ['user'],
@@ -222,6 +236,8 @@ describe('compileMatchFn — trailing-slash recheck on strict (trimSlash off) mo
     const slab = new Int32Array(3);
     slab[0] = 0; slab[1] = 0; slab[2] = 0b1;
 
+    const activeMethodMask = new Int32Array(32);
+    activeMethodMask[code] = 1;
     const cfg: Cfg<string> = {
       trimSlash: false,
       lowerCase: false,
@@ -229,6 +245,7 @@ describe('compileMatchFn — trailing-slash recheck on strict (trimSlash off) mo
       hasAnyStatic: false,
       staticOutputsByMethod: [],
       methodCodes,
+      activeMethodMask,
       trees: [walker],
       matchState: state,
       handlers: ['h'],

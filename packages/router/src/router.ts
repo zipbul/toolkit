@@ -250,6 +250,18 @@ function buildMatchConfig<T>(
   cache: CacheContainers<T>,
   hasAnyStatic: boolean,
 ): MatchConfig<T> {
+  // Per-method active-flag table for the emitter's wrong-method fast path.
+  // `methodCodes` carries 7 default HTTP method codes on every router, so
+  // `methodCodes[method] !== undefined` is necessary but not sufficient —
+  // the emitted prelude reads activeMethodMask[mc] to short-circuit a
+  // wrong-method dispatch in one branch instead of falling through pre-probe,
+  // cache get, and walker dispatch. Sized to MAX_METHODS (32) so a typed-array
+  // index never goes out of bounds.
+  const activeMethodMask = new Int32Array(32);
+  for (let i = 0; i < r.activeMethodCodes.length; i++) {
+    activeMethodMask[r.activeMethodCodes[i]![1]] = 1;
+  }
+
   return {
     trimSlash: r.ignoreTrailingSlash,
     lowerCase: !r.caseSensitive,
@@ -257,6 +269,7 @@ function buildMatchConfig<T>(
     hasAnyStatic,
     staticOutputsByMethod: r.staticOutputsByMethod,
     methodCodes: r.methodCodes,
+    activeMethodMask,
     trees: r.trees,
     matchState: r.matchState,
     handlers: snapshot.handlers,
