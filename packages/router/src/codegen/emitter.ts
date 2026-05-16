@@ -118,14 +118,20 @@ function emitMethodDispatch(
     const [name, code] = singleMethod;
     return `if (method !== ${JSON.stringify(name)}) return null;\nvar mc = ${code};`;
   }
-  if (activeMethodCodes !== null && activeMethodCodes.length > 0) {
-    let body = '';
+  // Multi-method (including empty-active-set): always emit a string
+  // switch. With zero active methods the switch collapses to the
+  // `default: return null` arm, which costs the same one-branch
+  // short-circuit. This keeps methodCodes / activeMethodMask out of
+  // the closure entirely — Try G dropped both args from the factory
+  // signature so a fallback that referenced them would throw
+  // ReferenceError on the empty-router code path.
+  let body = '';
+  if (activeMethodCodes !== null) {
     for (const [name, code] of activeMethodCodes) {
       body += `case ${JSON.stringify(name)}: mc = ${code}; break;\n`;
     }
-    return `var mc; switch (method) {\n${body}default: return null;\n}`;
   }
-  return `var mc = methodCodes[method]; if (mc === undefined || activeMethodMask[mc] === 0) return null;`;
+  return `var mc; switch (method) {\n${body}default: return null;\n}`;
 }
 
 /** Emit `var sp = path;` plus the active normalization steps. */
@@ -276,15 +282,17 @@ function compileStaticOnlySingleMethod<T>(
       return null;`,
   ].join('\n');
 
+  // Closure args: single-method literal-compare prelude never touches
+  // methodCodes or staticOutputsByMethod — only the closure-captured
+  // activeBucket. Dropping the unused captures keeps the matchImpl
+  // closure small, which JSC's IC partition prefers.
   const factory = new Function(
-    'activeBucket', 'methodCodes', 'staticOutputsByMethod',
+    'activeBucket',
     `return function match(method, path) {\n${body}\n};`,
   );
 
   const compiled = factory(
     cfg.staticOutputsByMethod[singleMethod[1]] ?? Object.create(null),
-    cfg.methodCodes,
-    cfg.staticOutputsByMethod,
   ) as CompiledMatch<T>;
 
   runWarmup(compiled, cfg);
@@ -308,12 +316,14 @@ function compileStaticOnlyMultiMethod<T>(cfg: MatchConfig<T>): CompiledMatch<T> 
       return null;`,
   ].join('\n');
 
+  // string-switch dispatch elides the methodCodes + activeMethodMask
+  // loads — drop those captures so the closure stays small.
   const factory = new Function(
-    'staticOutputsByMethod', 'methodCodes', 'activeMethodMask',
+    'staticOutputsByMethod',
     `return function match(method, path) {\n${body}\n};`,
   );
 
-  const compiled = factory(cfg.staticOutputsByMethod, cfg.methodCodes, cfg.activeMethodMask) as CompiledMatch<T>;
+  const compiled = factory(cfg.staticOutputsByMethod) as CompiledMatch<T>;
   runWarmup(compiled, cfg);
   return compiled;
 }
@@ -345,8 +355,12 @@ function compileMixed<T>(cfg: MatchConfig<T>, singleMethod: SingleMethodSpec | n
   lines.push(cfg.hasAnyTree ? emitWalkerAndPack(cfg, singleMethod) : 'return null;');
 
   const body = lines.join('\n');
+  // string-switch dispatch elides methodCodes + activeMethodMask loads.
+  // Dropping the unused captures keeps the matchImpl closure small —
+  // JSC's IC partition tracks every closure cell, and unused captures
+  // cost prologue time on every dispatch.
   const factory = new Function(
-    'activeBucket', 'tr0', 'rootMaskSingle', 'staticOutputsByMethod', 'methodCodes', 'activeMethodMask',
+    'activeBucket', 'tr0', 'rootMaskSingle', 'staticOutputsByMethod',
     'rootFirstCharMaskByMethod', 'trees', 'matchState', 'handlers',
     'hitCacheByMethod',
     'EMPTY_PARAMS', 'CACHE_META', 'DYNAMIC_META', 'terminalSlab', 'paramsFactories',
@@ -363,7 +377,7 @@ function compileMixed<T>(cfg: MatchConfig<T>, singleMethod: SingleMethodSpec | n
     : null;
 
   const compiled = factory(
-    activeBucket, tr0, rootMaskSingle, cfg.staticOutputsByMethod, cfg.methodCodes, cfg.activeMethodMask,
+    activeBucket, tr0, rootMaskSingle, cfg.staticOutputsByMethod,
     cfg.rootFirstCharMaskByMethod, cfg.trees, cfg.matchState, cfg.handlers,
     cfg.hitCacheByMethod,
     EMPTY_PARAMS, CACHE_META, DYNAMIC_META, cfg.terminalSlab, cfg.paramsFactories,
