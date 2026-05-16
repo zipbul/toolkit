@@ -118,20 +118,31 @@ function emitMethodDispatch(
     const [name, code] = singleMethod;
     return `if (method !== ${JSON.stringify(name)}) return null;\nvar mc = ${code};`;
   }
-  // Multi-method (including empty-active-set): always emit a string
-  // switch. With zero active methods the switch collapses to the
-  // `default: return null` arm, which costs the same one-branch
-  // short-circuit. This keeps methodCodes / activeMethodMask out of
-  // the closure entirely — Try G dropped both args from the factory
-  // signature so a fallback that referenced them would throw
-  // ReferenceError on the empty-router code path.
-  let body = '';
+  // Multi-method: switch on `method.charCodeAt(0)` with case-grouped
+  // string compares. JSC compiles charCode switches into a dense jump
+  // table; string-switch falls back to interned-pointer hash chasing.
+  // HTTP method names rarely collide on first char (GET/POST/DELETE
+  // each have a unique starter; only P-prefix routes — POST/PUT/PATCH —
+  // share an arm), so most active sets pay a single jump + one
+  // string compare. Empty-active-set collapses to default-only.
+  const byFirst = new Map<number, Array<readonly [string, number]>>();
   if (activeMethodCodes !== null) {
-    for (const [name, code] of activeMethodCodes) {
-      body += `case ${JSON.stringify(name)}: mc = ${code}; break;\n`;
+    for (const entry of activeMethodCodes) {
+      const c = entry[0].charCodeAt(0);
+      let bucket = byFirst.get(c);
+      if (bucket === undefined) { bucket = []; byFirst.set(c, bucket); }
+      bucket.push(entry);
     }
   }
-  return `var mc; switch (method) {\n${body}default: return null;\n}`;
+  let arms = '';
+  for (const [c, bucket] of byFirst) {
+    let inner = '';
+    for (const [name, code] of bucket) {
+      inner += `if (method === ${JSON.stringify(name)}) { mc = ${code}; break; }\n`;
+    }
+    arms += `case ${c}: {\n${inner}return null;\n}`;
+  }
+  return `var mc; switch (method.charCodeAt(0)) {\n${arms}default: return null;\n}`;
 }
 
 /** Emit `var sp = path;` plus the active normalization steps. */
