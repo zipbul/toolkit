@@ -197,22 +197,93 @@ function emitNode(
   return code;
 }
 
+/** Threshold at which `emitStaticChildren` switches from a linear
+ *  `if (startsWith) { … }` chain to a `switch (charCodeAt) { case … }`
+ *  dispatch. Below this count the chain wins (no switch overhead, JSC
+ *  cmovs the comparisons); at and above, the single charCodeAt + jump
+ *  table beats N sequential startsWith probes on miss-heavy paths.
+ *  The 4 boundary is empirical — verified on github-static/miss and
+ *  github-param/miss benches. */
+const STATIC_CHILD_DISPATCH_THRESHOLD = 4;
+
 /** Emit one `if (url.startsWith(seg, pos)) { … }` block per static child
- *  of `node`. Each block recursively emits the child's subtree. */
+ *  of `node`. Sibling-dense nodes (≥ THRESHOLD) get a first-char switch
+ *  prelude so a miss returns after a single charCodeAt instead of N
+ *  failed startsWith probes. Each block recursively emits the child's
+ *  subtree. */
 export function emitStaticChildren(
   ctx: EmitContext,
   node: SegmentNode,
   posVar: string,
   innerPos: string,
 ): string {
+  const siblings: Array<{ seg: string; child: SegmentNode }> = [];
+  forEachStaticChild(node, (seg, child) => { siblings.push({ seg, child }); });
+  if (siblings.length === 0) return '';
+
+  if (siblings.length >= STATIC_CHILD_DISPATCH_THRESHOLD) {
+    return emitStaticChildrenSwitch(ctx, siblings, posVar, innerPos);
+  }
+
   let code = '';
-  forEachStaticChild(node, (seg, child) => {
-    if (ctx.bail) return;
-    const segLen = seg.length;
-    const nextPos = `${innerPos}_s${seg.replace(/[^a-z0-9]/gi, '_')}`;
-    const childInner = emitNode(ctx, child, nextPos);
-    if (ctx.bail) return;
-    code += `
+  for (const { seg, child } of siblings) {
+    if (ctx.bail) return '';
+    code += emitStaticChildBlock(ctx, seg, child, posVar, innerPos);
+    if (ctx.bail) return '';
+  }
+  return code;
+}
+
+/** Emit `switch (url.charCodeAt(pos)) { case <c>: …; break; … }`. Siblings
+ *  sharing a first char are grouped into a single case so the inner blocks
+ *  still chain `startsWith` for disambiguation (rare — e.g. `commits` vs
+ *  `contents` under the same `:repo`). */
+function emitStaticChildrenSwitch(
+  ctx: EmitContext,
+  siblings: ReadonlyArray<{ seg: string; child: SegmentNode }>,
+  posVar: string,
+  innerPos: string,
+): string {
+  const byFirstChar = new Map<number, Array<{ seg: string; child: SegmentNode }>>();
+  for (const s of siblings) {
+    const code = s.seg.charCodeAt(0);
+    let bucket = byFirstChar.get(code);
+    if (bucket === undefined) { bucket = []; byFirstChar.set(code, bucket); }
+    bucket.push(s);
+  }
+
+  let body = '';
+  for (const [charCode, bucket] of byFirstChar) {
+    let inner = '';
+    for (const { seg, child } of bucket) {
+      inner += emitStaticChildBlock(ctx, seg, child, posVar, innerPos);
+      if (ctx.bail) return '';
+    }
+    body += `
+      case ${charCode}: {${inner}
+        break;
+      }`;
+  }
+
+  return `
+    switch (url.charCodeAt(${posVar})) {${body}
+    }`;
+}
+
+/** Emit the per-sibling `if (startsWith) { … }` block shared by both
+ *  the chain and the switch paths. */
+function emitStaticChildBlock(
+  ctx: EmitContext,
+  seg: string,
+  child: SegmentNode,
+  posVar: string,
+  innerPos: string,
+): string {
+  const segLen = seg.length;
+  const nextPos = `${innerPos}_s${seg.replace(/[^a-z0-9]/gi, '_')}`;
+  const childInner = emitNode(ctx, child, nextPos);
+  if (ctx.bail) return '';
+  return `
     if (url.startsWith(${JSON.stringify(seg)}, ${posVar})) {
       var c = url.charCodeAt(${posVar} + ${segLen});
       if (c === 47) { // '/'
@@ -222,8 +293,6 @@ ${childInner}
 ${emitTerminalAt(child)}
       }
     }`;
-  });
-  return code;
 }
 
 /** Emit param-segment dispatch: scan to next `/`, then either the
