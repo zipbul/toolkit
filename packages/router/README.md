@@ -415,10 +415,10 @@ Last recorded run (Bun 1.3.13, Linux x64, 23 scenarios):
 | All `hit` scenarios (8) — static + param-1 + param-3 + wildcard + github-static + github-param | **1st in all 8** | 1.11× – 5.04× ahead of the 2nd-place router |
 | `static/miss`, `static/wrong-method`, `param-1/wrong-method`, `miss/miss` | **1st** | 1.05× – 2.18× ahead |
 | `param-1/miss`, `wildcard/miss`, `wildcard/wrong-method` | 2nd | within 1.09× – 1.33× of leader (sub-10 ns noise floor) |
-| `param-3/miss`, `param-3/wrong-method`, `github-static/wrong-method`, `github-param/miss`, `github-param/wrong-method` | 2nd – 3rd | within 1.16× – 2.44× of leader (`memoirist`) |
-| `github-static/miss` | 5th | the one weak spot — `memoirist` is 5.59× faster on this specific 65-route deep-trie miss; reproduction welcome |
+| `param-3/miss`, `param-3/wrong-method`, `github-static/miss`, `github-static/wrong-method`, `github-param/wrong-method` | 2nd – 3rd | within 1.02× – 1.87× of leader (`memoirist`) |
+| `github-param/miss` | 4th | the one weak spot — `memoirist` is 4.5× faster on dynamic-deep-trie miss; reproduction welcome |
 
-**Summary**: 1st on **every hit-path scenario** (the hot path of real routing) plus 4 of the 8 miss/wrong-method scenarios. 2nd – 3rd on most of the rest within noise-range margins. One outlier (`github-static/miss`) where `memoirist` decisively wins — investigate if your workload matches that shape.
+**Summary**: 1st on **every hit-path scenario** (the hot path of real routing) plus 4 of the 8 miss/wrong-method scenarios. 2nd – 3rd on most of the rest within noise-range margins. One outlier (`github-param/miss`) where `memoirist` decisively wins — investigate if your workload matches that shape.
 
 Hardware variation is significant for sub-10 ns ops — run on the host you care about before depending on any specific ratio.
 

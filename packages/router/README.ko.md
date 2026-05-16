@@ -412,10 +412,10 @@ bun bench/comparison.bench.ts
 | 모든 `hit` 시나리오 (8) — static + param-1 + param-3 + wildcard + github-static + github-param | **8개 전부 1위** | 2위 대비 1.11× – 5.04× 앞섬 |
 | `static/miss`, `static/wrong-method`, `param-1/wrong-method`, `miss/miss` | **1위** | 1.05× – 2.18× 앞섬 |
 | `param-1/miss`, `wildcard/miss`, `wildcard/wrong-method` | 2위 | 1위와 1.09× – 1.33× (sub-10 ns 노이즈 범위) |
-| `param-3/miss`, `param-3/wrong-method`, `github-static/wrong-method`, `github-param/miss`, `github-param/wrong-method` | 2 – 3위 | 1위 (`memoirist`) 와 1.16× – 2.44× |
-| `github-static/miss` | 5위 | 유일한 약점 — `memoirist` 가 5.59× 빠름 (65-route deep-trie miss 시나리오) |
+| `param-3/miss`, `param-3/wrong-method`, `github-static/miss`, `github-static/wrong-method`, `github-param/wrong-method` | 2 – 3위 | 1위 (`memoirist`) 와 1.02× – 1.87× |
+| `github-param/miss` | 4위 | 유일한 약점 — `memoirist` 가 4.5× 빠름 (dynamic-deep-trie miss 시나리오) |
 
-**요약**: 실제 routing 의 hot path 인 **모든 hit 시나리오 1위**. miss/wrong-method 8개 중 4개도 1위. 나머지 대부분 노이즈 범위 내 2-3위. 단 하나 `github-static/miss` 에서만 `memoirist` 우위 — 본인 워크로드가 그 shape 면 검토 필요.
+**요약**: 실제 routing 의 hot path 인 **모든 hit 시나리오 1위**. miss/wrong-method 8개 중 4개도 1위. 나머지 대부분 노이즈 범위 내 2-3위. 단 하나 `github-param/miss` 에서만 `memoirist` 우위 — 본인 워크로드가 그 shape 면 검토 필요.
 
 sub-10 ns 연산은 하드웨어 변동 큼 — 의존하기 전에 본인 호스트에서 직접 실행하세요.
 

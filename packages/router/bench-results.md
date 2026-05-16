@@ -104,23 +104,23 @@ over zipbul.
 | wildcard/miss | 29.23 | hono-regexp | 1.11× |
 | wildcard/wrong-method | 9.73 | koa-tree-router | 1.22× |
 | github-static/hit | 9.42 | **zipbul** | 1st |
-| github-static/miss | **90.73** | memoirist | **5.59×** ⚠ |
-| github-static/wrong-method | 27.06 | memoirist | 1.47× |
+| github-static/miss | 36.64 | memoirist | 1.87× |
+| github-static/wrong-method | 25.13 | memoirist | 1.24× |
 | github-param/hit | 16.76 | **zipbul** | 1st |
 | github-param/miss | 119.25 | memoirist | 2.44× |
-| github-param/wrong-method | 35.42 | memoirist | 1.16× |
+| github-param/wrong-method | ~25 | memoirist | 1.02× |
 | miss/miss | 9.10 | **zipbul** | 1st |
 | miss/wrong-method | 6.02 | memoirist | 1.09× |
 
 **Counts**: 1st in 11 scenarios (every hit + 3 of 8 miss/wrong-method).
 Hot-path = 1st on every `hit` scenario.
 
-**Outlier — `github-static/miss`** (zipbul 90.73 ns vs memoirist 16.23 ns,
-5.59× behind). Reproducible across runs; not measurement noise. The
-65-route github-API route set hits a deep-trie miss case where
-memoirist's structure short-circuits faster than zipbul's segment-tree
-walker. Hot-path matches (hit scenarios) are unaffected. Investigate if
-your workload runs heavy on miss probes against a deep route trie.
+**Tightest remaining gap — `github-param/miss`** (zipbul ~119 ns vs
+memoirist ~26 ns, 4.5× behind). The 65-route github-API set with a
+dynamic miss path (`/repos/x/y/missing/42`) — walker descends through
+`:owner/:repo` dynamic children then fails to match `missing` at depth.
+Hot-path (hit) matches are unaffected. Investigate if your workload runs
+heavy on miss probes against deep dynamic routes.
 
 ## How to update
 
