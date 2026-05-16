@@ -193,26 +193,31 @@ function emitHitCacheProbe(): string {
     }`;
 }
 
+/** Emit the root-fast-miss gate (single- or multi-method variant). When
+ *  the method tree's root holds only static children (no param /
+ *  wildcard / compacted prefix), a single-byte mask lookup proves a
+ *  miss before paying the hit-cache probe AND the walker call's
+ *  function-call + state setup cost. Cache write never happens for
+ *  mask-0 paths (the walker would return false), so skipping the cache
+ *  probe is safe. */
+function emitRootMaskGate(singleMethod: SingleMethodSpec | null): string {
+  return singleMethod !== null
+    ? `if (rootMaskSingle !== null && sp.length > 1 && rootMaskSingle[sp.charCodeAt(1)] === 0) return null;`
+    : `var rm = rootFirstCharMaskByMethod[mc]; if (rm !== null && sp.length > 1 && rm[sp.charCodeAt(1)] === 0) return null;`;
+}
+
 /**
  * Emit walker dispatch + terminal-slab unpack + cache write. Only used
  * by the mixed/dynamic compiler; static-only emitters never reach here.
+ * Root-fast-miss gate is emitted separately in the prelude (before the
+ * hit-cache probe) so a guaranteed miss skips both the cache Map.get
+ * and the walker call.
  */
 function emitWalkerAndPack(cfg: MatchConfig<unknown>, singleMethod: SingleMethodSpec | null): string {
-  // Root-fast-miss gate: when the method tree's root has only static
-  // children (no param, no wildcard, no compacted prefix that could
-  // route an unknown first byte), a single-byte mask lookup proves a
-  // miss before paying the walker call's function-call + state setup
-  // cost. Saves ~5 ns on root-miss-heavy paths (github-static/miss).
-  // Skipped when mask is null (root carries dynamic dispatch).
-  const rootGate = singleMethod !== null
-    ? `if (rootMaskSingle !== null && sp.length > 1 && rootMaskSingle[sp.charCodeAt(1)] === 0) return null;`
-    : `var rm = rootFirstCharMaskByMethod[mc]; if (rm !== null && sp.length > 1 && rm[sp.charCodeAt(1)] === 0) return null;`;
-
   const dispatch = singleMethod !== null
-    ? `${rootGate}\nvar ok = tr0(sp, matchState);`
+    ? `var ok = tr0(sp, matchState);`
     : `var tr = trees[mc];
        if (!tr) return null;
-       ${rootGate}
        var ok = tr(sp, matchState);`;
 
   // Trailing-slash recheck wrapped in `if (ok)` only matters when the
@@ -329,6 +334,12 @@ function compileMixed<T>(cfg: MatchConfig<T>, singleMethod: SingleMethodSpec | n
     // Gate the post-normalize probe on `sp !== path` — when normalization
     // is a no-op (default config) the pre-probe already covered this key.
     lines.push(emitStaticBucketProbe(singleMethod, 'sp', /* gateOnNormalize */ true));
+  }
+  // Root-fast-miss gate emitted before the hit-cache probe so a
+  // guaranteed miss skips both the cache Map.get and the walker call.
+  // Tree-bearing routers only — static-only never reach the walker.
+  if (cfg.hasAnyTree) {
+    lines.push(emitRootMaskGate(singleMethod));
   }
   lines.push(emitHitCacheProbe());
   lines.push(cfg.hasAnyTree ? emitWalkerAndPack(cfg, singleMethod) : 'return null;');
