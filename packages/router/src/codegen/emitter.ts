@@ -38,6 +38,17 @@ export interface MatchConfig<T> {
    *  active — the active-method short-circuit in `emitMethodDispatch` reads
    *  this mask to return null in one step for wrong-method calls. */
   readonly activeMethodMask: Int32Array;
+  /** Per-methodCode first-byte mask of the root segment-tree's static
+   *  children. `mask[charCode] === 1` iff at least one root-level static
+   *  child of this method's tree starts with that byte. `null` when the
+   *  root holds a param-child, wildcard-store, or compacted prefix that
+   *  would route a path the mask cannot prove absent — in which case the
+   *  emitted prelude skips the gate and falls through to walker dispatch.
+   *
+   *  Memoirist achieves the same one-branch root miss via
+   *  `root[method].inert[url.charCodeAt(endIndex)]` (`memoirist/src/index.ts:365-373`).
+   *  This mask replicates that effect for zipbul's segment-tree walker. */
+  readonly rootFirstCharMaskByMethod: Array<Int32Array | null>;
   readonly trees: Array<MatchFn | null>;
   readonly matchState: MatchState;
   readonly handlers: T[];
@@ -177,10 +188,21 @@ function emitHitCacheProbe(): string {
  * by the mixed/dynamic compiler; static-only emitters never reach here.
  */
 function emitWalkerAndPack(cfg: MatchConfig<unknown>, singleMethod: SingleMethodSpec | null): string {
+  // Root-fast-miss gate: when the method tree's root has only static
+  // children (no param, no wildcard, no compacted prefix that could
+  // route an unknown first byte), a single-byte mask lookup proves a
+  // miss before paying the walker call's function-call + state setup
+  // cost. Saves ~5 ns on root-miss-heavy paths (github-static/miss).
+  // Skipped when mask is null (root carries dynamic dispatch).
+  const rootGate = singleMethod !== null
+    ? `if (rootMaskSingle !== null && sp.length > 1 && rootMaskSingle[sp.charCodeAt(1)] === 0) return null;`
+    : `var rm = rootFirstCharMaskByMethod[mc]; if (rm !== null && sp.length > 1 && rm[sp.charCodeAt(1)] === 0) return null;`;
+
   const dispatch = singleMethod !== null
-    ? `var ok = tr0(sp, matchState);`
+    ? `${rootGate}\nvar ok = tr0(sp, matchState);`
     : `var tr = trees[mc];
        if (!tr) return null;
+       ${rootGate}
        var ok = tr(sp, matchState);`;
 
   // Trailing-slash recheck wrapped in `if (ok)` only matters when the
@@ -303,7 +325,8 @@ function compileMixed<T>(cfg: MatchConfig<T>, singleMethod: SingleMethodSpec | n
 
   const body = lines.join('\n');
   const factory = new Function(
-    'activeBucket', 'tr0', 'staticOutputsByMethod', 'methodCodes', 'activeMethodMask', 'trees', 'matchState', 'handlers',
+    'activeBucket', 'tr0', 'rootMaskSingle', 'staticOutputsByMethod', 'methodCodes', 'activeMethodMask',
+    'rootFirstCharMaskByMethod', 'trees', 'matchState', 'handlers',
     'hitCacheByMethod',
     'EMPTY_PARAMS', 'CACHE_META', 'DYNAMIC_META', 'terminalSlab', 'paramsFactories',
     `return function match(method, path) {\n${body}\n};`,
@@ -314,8 +337,13 @@ function compileMixed<T>(cfg: MatchConfig<T>, singleMethod: SingleMethodSpec | n
     : Object.create(null);
   const tr0 = singleMethod !== null ? (cfg.trees[singleMethod[1]] ?? null) : null;
 
+  const rootMaskSingle = singleMethod !== null
+    ? (cfg.rootFirstCharMaskByMethod[singleMethod[1]] ?? null)
+    : null;
+
   const compiled = factory(
-    activeBucket, tr0, cfg.staticOutputsByMethod, cfg.methodCodes, cfg.activeMethodMask, cfg.trees, cfg.matchState, cfg.handlers,
+    activeBucket, tr0, rootMaskSingle, cfg.staticOutputsByMethod, cfg.methodCodes, cfg.activeMethodMask,
+    cfg.rootFirstCharMaskByMethod, cfg.trees, cfg.matchState, cfg.handlers,
     cfg.hitCacheByMethod,
     EMPTY_PARAMS, CACHE_META, DYNAMIC_META, cfg.terminalSlab, cfg.paramsFactories,
   ) as CompiledMatch<T>;

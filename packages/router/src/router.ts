@@ -15,6 +15,7 @@ import {
   MatchLayer,
   Registration,
 } from './pipeline';
+import { forEachStaticChild, type SegmentNode } from './tree';
 
 /**
  * Symbol-keyed slot for the internal-inspection hatch. Symbol identity
@@ -28,6 +29,27 @@ export const ROUTER_INTERNALS_KEY: unique symbol = Symbol.for('@zipbul/router/in
  *  Single shared instance — avoids per-call allocation on the pre-build
  *  stub path. */
 const EMPTY_METHODS: readonly string[] = Object.freeze([]);
+
+/** Build the root-fast-miss mask for one method's segment-tree root.
+ *  Returns null when the root could route a path the mask cannot prove
+ *  absent (param-child / wildcard-store / compacted prefix chain). When
+ *  non-null, `mask[byte] === 1` iff at least one root-level static child
+ *  starts with that byte — the emitter reads this to skip walker
+ *  dispatch on a guaranteed root miss. */
+function buildRootFirstCharMask(root: SegmentNode): Int32Array | null {
+  if (root.paramChild !== null) return null;
+  if (root.wildcardStore !== null) return null;
+  if (root.staticPrefix !== null) return null;
+  const mask = new Int32Array(256);
+  let hasAny = false;
+  forEachStaticChild(root, (key) => {
+    if (key.length > 0) {
+      mask[key.charCodeAt(0)] = 1;
+      hasAny = true;
+    }
+  });
+  return hasAny ? mask : null;
+}
 
 export interface RouterInternals<T> {
   matchImpl: ((method: string, path: string) => MatchOutput<T> | null) | undefined;
@@ -262,6 +284,22 @@ function buildMatchConfig<T>(
     activeMethodMask[r.activeMethodCodes[i]![1]] = 1;
   }
 
+  // Root-fast-miss mask: per-method byte-keyed presence table of the root
+  // segment-tree's static children. Null when the root carries a param,
+  // wildcard, or compacted prefix that could route an unknown byte (the
+  // mask cannot prove a miss in those cases). The emitter's walker
+  // prelude reads this mask to skip walker dispatch entirely when the
+  // first path byte is unknown.
+  const rootFirstCharMaskByMethod: Array<Int32Array | null> = [];
+  for (let i = 0; i < 32; i++) rootFirstCharMaskByMethod[i] = null;
+  for (let i = 0; i < r.activeMethodCodes.length; i++) {
+    const code = r.activeMethodCodes[i]![1];
+    const root = snapshot.segmentTrees[code];
+    if (root != null) {
+      rootFirstCharMaskByMethod[code] = buildRootFirstCharMask(root);
+    }
+  }
+
   return {
     trimSlash: r.ignoreTrailingSlash,
     lowerCase: !r.caseSensitive,
@@ -270,6 +308,7 @@ function buildMatchConfig<T>(
     staticOutputsByMethod: r.staticOutputsByMethod,
     methodCodes: r.methodCodes,
     activeMethodMask,
+    rootFirstCharMaskByMethod,
     trees: r.trees,
     matchState: r.matchState,
     handlers: snapshot.handlers,

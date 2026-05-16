@@ -34,6 +34,7 @@ function baseConfig<T>(overrides: Partial<Cfg<T>> = {}): Cfg<T> {
     staticOutputsByMethod: [],
     methodCodes: Object.create(null) as Record<string, number>,
     activeMethodMask: new Int32Array(32),
+    rootFirstCharMaskByMethod: new Array(32).fill(null) as Array<Int32Array | null>,
     trees: [],
     matchState: createMatchState(4),
     handlers: [],
@@ -167,6 +168,7 @@ describe('compileMatchFn — mixed (dynamic walker + cache + slab unpack)', () =
 
     const activeMethodMask = new Int32Array(32);
     activeMethodMask[code] = 1;
+    const rootFirstCharMaskByMethod = new Array(32).fill(null) as Array<Int32Array | null>;
     return {
       trimSlash: opts.trimSlash ?? false,
       lowerCase: opts.lowerCase ?? false,
@@ -175,6 +177,7 @@ describe('compileMatchFn — mixed (dynamic walker + cache + slab unpack)', () =
       staticOutputsByMethod: [],
       methodCodes,
       activeMethodMask,
+      rootFirstCharMaskByMethod,
       trees: [walker],
       matchState,
       handlers: ['user'],
@@ -238,6 +241,7 @@ describe('compileMatchFn — trailing-slash recheck on strict (trimSlash off) mo
 
     const activeMethodMask = new Int32Array(32);
     activeMethodMask[code] = 1;
+    const rootFirstCharMaskByMethod = new Array(32).fill(null) as Array<Int32Array | null>;
     const cfg: Cfg<string> = {
       trimSlash: false,
       lowerCase: false,
@@ -246,6 +250,7 @@ describe('compileMatchFn — trailing-slash recheck on strict (trimSlash off) mo
       staticOutputsByMethod: [],
       methodCodes,
       activeMethodMask,
+      rootFirstCharMaskByMethod,
       trees: [walker],
       matchState: state,
       handlers: ['h'],
