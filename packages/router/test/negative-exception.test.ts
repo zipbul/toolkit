@@ -2,22 +2,25 @@
  * Negative paths + exception/error code paths.
  *
  * "Happy" coverage exercises the router with valid input. This file
- * complements that with: malformed input that should be rejected, error
- * scenarios at registration time, and exception channels (regex timeout,
- * decoder failure on bad encodings, etc.) that production traffic eventually
- * encounters.
+ * complements that with two contract surfaces:
  *
- * Each test asserts the router fails *gracefully* — never throws on match()
- * (that's the contract), and throws RouterError on register-time misuse.
+ *   1. match() tolerates structurally odd but well-formed pathnames
+ *      (NUL bytes, BOM, doubled slashes, etc.) without throwing —
+ *      result may be null or a match, but never an exception.
+ *   2. match() *propagates* `URIError` from `decodeURIComponent` when
+ *      the caller hands it malformed percent-encoded input — the router
+ *      treats well-formed-pathname as a caller invariant, not a value
+ *      it re-validates per request.
+ *   3. add() / build() throw `RouterError` on register-time misuse.
  */
 import { describe, it, expect } from 'bun:test';
 
 import { Router } from '../src/router';
 import { RouterError } from '../src/error';
 
-// ── match() never throws regardless of bad URL input ──────────────────────
+// ── match() tolerates structurally odd but well-formed input ──────────────
 
-describe('match() never throws on bad input', () => {
+describe('match() tolerates structurally odd well-formed paths', () => {
   function setupGenericRouter() {
     const r = new Router<string>();
     r.add('GET', '/users/:id', 'u');
@@ -73,7 +76,10 @@ describe('match() never throws on bad input', () => {
     expect(r.match('GET', path)).toBeNull();
   });
 
-  it('throws on malformed percent-encoded sequences (caller responsibility)', () => {
+});
+
+describe('match() propagates URIError on malformed percent-encoded paths', () => {
+  it('throws on every malformed percent-escape variant (caller responsibility)', () => {
     const r = new Router<string>();
     r.add('GET', '/users/:name', 'u');
     r.build();

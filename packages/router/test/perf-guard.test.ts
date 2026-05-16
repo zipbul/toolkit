@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'bun:test';
 
 import { Router } from '../src/router';
-import { getRouterInternals } from '../internal';
+import { getRegistrationSnapshot } from './_helpers';
 
 describe('performance guard invariants', () => {
   it('optional expansions share one handler index across all expansion variants', () => {
@@ -12,10 +12,10 @@ describe('performance guard invariants', () => {
     r.add('GET', '/items/:id?', 'handler');
     r.build();
 
-    const snapshot = (getRouterInternals(r).registration as any).snapshot;
+    const snapshot = getRegistrationSnapshot(r);
 
     expect(snapshot.handlers.length).toBe(1);
-    const slab = snapshot.terminalSlab as Int32Array;
+    const slab = snapshot.terminalSlab;
     const terminals = slab.length / 3;
     expect(terminals).toBeGreaterThanOrEqual(1);
     for (let t = 0; t < terminals; t++) {

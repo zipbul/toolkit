@@ -122,15 +122,17 @@ describe('param-name validation', () => {
     expect(() => r.build()).toThrow(RouterError);
   });
 
-  it('rejects slash in param name', () => {
+  it('treats `/` after a param as a segment boundary, not part of the name', () => {
+    // `/:a/b/c` parses as `[param :a, static b, static c]`. The grammar
+    // makes it impossible to get a `/` inside a param name because the
+    // tokenizer splits on `/` before parseParam runs — this test pins
+    // that property end-to-end through build() + match().
     const r = new Router<string>();
-    // Note: / is normally a segment separator, but within a param name (after
-    // colon) it should still be rejected if somehow constructed.
-    expect(() => r.add('GET', '/:a/b/c', 'x')).not.toThrow();
-    // /:a/b/c is actually three segments: param :a, static b, static c.
-    // That's valid. We're checking the negative case where the parser
-    // somehow ended up with a slash inside the name — this is harder to
-    // construct directly so we just confirm the slash-as-separator works.
+    r.add('GET', '/:a/b/c', 'val');
+    r.build();
+
+    expect(r.match('GET', '/x/b/c')!.value).toBe('val');
+    expect(r.match('GET', '/x/b/c')!.params.a).toBe('x');
   });
 
   it('rejects hyphen in param name', () => {
@@ -141,8 +143,13 @@ describe('param-name validation', () => {
 
   it('accepts underscore and digits in param name', () => {
     const r = new Router<string>();
+    r.add('GET', '/x/:v2_underscore', 'u');
+    r.build();
 
-    expect(() => r.add('GET', '/x/v2_underscore', 'u')).not.toThrow();
+    const got = r.match('GET', '/x/sample-value');
+    expect(got).not.toBeNull();
+    expect(got!.value).toBe('u');
+    expect(got!.params.v2_underscore).toBe('sample-value');
   });
 
   it('rejects names starting with underscore', () => {

@@ -1,17 +1,8 @@
 import { describe, it, expect } from 'bun:test';
 
 import { Router } from '../src/router';
-import { RouterError } from '../src/error';
 
-function catchRouterError(fn: () => void): RouterError {
-  try {
-    fn();
-  } catch (e) {
-    expect(e).toBeInstanceOf(RouterError);
-    return e as RouterError;
-  }
-  throw new Error('Expected RouterError to be thrown');
-}
+import { catchRouterError } from './_helpers';
 
 describe('Router<T> options', () => {
   it('should not match different case when caseSensitive=true', () => {

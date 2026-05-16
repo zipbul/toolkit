@@ -6,18 +6,18 @@ import { describe, it, expect } from 'bun:test';
 
 import { Router } from '../src/router';
 import { RouterError } from '../src/error';
-import type { RouterErrorData } from '../src/types';
+import type { RouterErrorData, RouterErrorKind } from '../src/types';
 
-function expectKindOnAdd(fn: () => void, kind: string): void {
+function expectKindOnAdd(fn: () => void, kind: RouterErrorKind): void {
   try { fn(); } catch (e) {
     expect(e).toBeInstanceOf(RouterError);
-    expect((e as RouterError).data.kind).toBe(kind as any);
+    expect((e as RouterError).data.kind).toBe(kind);
     return;
   }
   throw new Error(`expected RouterError(${kind}) on add()`);
 }
 
-function expectKindOnBuild(register: (r: Router<string>) => void, kind: string): RouterErrorData {
+function expectKindOnBuild(register: (r: Router<string>) => void, kind: RouterErrorKind): RouterErrorData {
   const r = new Router<string>();
   register(r);
   try { r.build(); } catch (e) {
@@ -25,10 +25,10 @@ function expectKindOnBuild(register: (r: Router<string>) => void, kind: string):
     const err = e as RouterError;
     if (err.data.kind === 'route-validation') {
       const inner = err.data.errors[0]!.error;
-      expect(inner.kind).toBe(kind as any);
+      expect(inner.kind as string).toBe(kind);
       return inner;
     }
-    expect(err.data.kind).toBe(kind as any);
+    expect(err.data.kind as string).toBe(kind);
     return err.data;
   }
   throw new Error(`expected RouterError(${kind}) on build()`);

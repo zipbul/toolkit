@@ -3,6 +3,7 @@ import { describe, it, expect } from 'bun:test';
 import { Router } from './router';
 import { RouterError } from './error';
 import type { RouterOptions } from './types';
+import { catchRouterError, buildRouter } from '../test/_helpers';
 
 // ── Fixtures ──
 
@@ -14,25 +15,7 @@ function buildWith(
   routes: Array<[string, string, number]>,
   opts: RouterOptions = {},
 ): Router<number> {
-  const r = makeRouter<number>(opts);
-
-  for (const [method, path, handler] of routes) {
-    r.add(method as any, path, handler);
-  }
-
-  r.build();
-
-  return r;
-}
-
-function catchRouterError(fn: () => void): RouterError {
-  try {
-    fn();
-  } catch (e) {
-    expect(e).toBeInstanceOf(RouterError);
-    return e as RouterError;
-  }
-  throw new Error('Expected RouterError to be thrown');
+  return buildRouter<number>(routes, opts);
 }
 
 describe('Router', () => {

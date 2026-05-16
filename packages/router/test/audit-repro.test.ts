@@ -9,7 +9,7 @@ test('AUDIT match() returns null for unregistered custom method', () => {
   r.add('GET', '/foo', 'x');
   r.build();
 
-  expect(r.match('PURGE' as any, '/foo')).toBeNull();
+  expect(r.match('PURGE', '/foo')).toBeNull();
 });
 
 test('AUDIT match() returns null for standard method with no routes', () => {
@@ -31,11 +31,11 @@ test('AUDIT match() returns null when called before build', () => {
 
 test('AUDIT different-method query returns null', () => {
   const r = new Router<string>();
-  r.add('PURGE' as any, '/a', 'x');
+  r.add('PURGE', '/a', 'x');
   r.build();
 
-  expect(r.match('PURGE' as any, '/missing')).toBeNull();
-  expect(r.match('MKCOL' as any, '/a')).toBeNull();
+  expect(r.match('PURGE', '/missing')).toBeNull();
+  expect(r.match('MKCOL', '/a')).toBeNull();
 });
 
 // ─── add() array failure atomicity ───
@@ -43,10 +43,10 @@ test('AUDIT different-method query returns null', () => {
 test('AUDIT add() array validation is reported during build without publishing partial state', () => {
   const r = new Router<string>();
   for (let i = 0; i < 25; i++) {
-    r.add(`M${i}` as any, '/warm', 'x');
+    r.add(`M${i}`, '/warm', 'x');
   }
 
-  r.add(['GET' as any, 'NEWMETHOD' as any], '/a', 'y');
+  r.add(['GET', 'NEWMETHOD'], '/a', 'y');
 
   expect(() => r.build()).toThrow(RouterError);
   expect(r.match('GET', '/a')).toBeNull();
@@ -61,12 +61,20 @@ test('AUDIT expandOptional: rejects 10 differently-named optionals (paramName co
   expect(() => r.build()).toThrow();
 });
 
-test('AUDIT expandOptional: 10 optionals with shared paramName register in reasonable time', () => {
+test('expandOptional: a single optional segment registers and matches both variants', () => {
+  // Behavioral test for the optional-expansion fast path. A single
+  // `?`-decorated segment produces two registered variants: present
+  // and dropped. Both must match the corresponding URL.
   const r = new Router<string>();
-  const path = '/x/:tail?';
-  const t0 = Bun.nanoseconds();
-  r.add('GET', path, 'x');
+  r.add('GET', '/x/:tail?', 'x');
   r.build();
-  const elapsed = (Bun.nanoseconds() - t0) / 1e6;
-  expect(elapsed).toBeLessThan(5000);
+
+  const present = r.match('GET', '/x/abc');
+  expect(present).not.toBeNull();
+  expect(present!.value).toBe('x');
+  expect(present!.params.tail).toBe('abc');
+
+  const dropped = r.match('GET', '/x');
+  expect(dropped).not.toBeNull();
+  expect(dropped!.value).toBe('x');
 });

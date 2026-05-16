@@ -2,16 +2,7 @@ import { describe, it, expect } from 'bun:test';
 
 import { Router } from '../src/router';
 import { RouterError } from '../src/error';
-
-function catchRouterError(fn: () => void): RouterError {
-  try {
-    fn();
-  } catch (e) {
-    expect(e).toBeInstanceOf(RouterError);
-    return e as RouterError;
-  }
-  throw new Error('Expected RouterError to be thrown');
-}
+import { catchRouterError } from './_helpers';
 
 describe('Router<T>', () => {
   // ── HP: Happy Path (21 tests) ──
@@ -229,10 +220,10 @@ describe('Router<T>', () => {
 
     it('should register and match custom HTTP method', () => {
       const router = new Router<string>();
-      router.add('PURGE' as any, '/cache', 'purge');
+      router.add('PURGE', '/cache', 'purge');
       router.build();
 
-      const result = router.match('PURGE' as any, '/cache');
+      const result = router.match('PURGE', '/cache');
       expect(result).not.toBeNull();
       expect(result!.value).toBe('purge');
     });
@@ -829,23 +820,22 @@ describe('Router<T>', () => {
       expect(router.match('GET', '/users/42')).toBeNull();
     });
 
-    it('should overwrite cached null entry when same path later matches a real route value', () => {
+    it('repeated misses on the same path stay null and do not poison sibling routes', () => {
       const router = new Router<string>({});
       router.add('GET', '/exists/:id', 'val');
       router.build();
 
-      // First match: path not found → null cached
-      const r1 = router.match('GET', '/nope/1');
-      expect(r1).toBeNull();
+      // Repeated probe on a missing path returns null both times — the
+      // walker doesn't cache misses (the hit cache only stores positive
+      // resolutions), so both calls take the same path through the tree.
+      expect(router.match('GET', '/nope/1')).toBeNull();
+      expect(router.match('GET', '/nope/1')).toBeNull();
 
-      // Second match: same path → still null (from cache, consistently)
-      const r2 = router.match('GET', '/nope/1');
-      expect(r2).toBeNull();
-
-      // Existing route still works (separate cache entry)
-      const r3 = router.match('GET', '/exists/42');
-      expect(r3).not.toBeNull();
-      expect(r3!.value).toBe('val');
+      // The repeated miss on /nope/1 must not corrupt the cache slot
+      // for an unrelated path that DOES match.
+      const hit = router.match('GET', '/exists/42');
+      expect(hit).not.toBeNull();
+      expect(hit!.value).toBe('val');
     });
 
     it('should return same handler reference identity across multiple matches', () => {

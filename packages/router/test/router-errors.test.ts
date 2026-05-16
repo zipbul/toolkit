@@ -3,31 +3,12 @@ import { describe, it, expect } from 'bun:test';
 import { Router } from '../src/router';
 import { RouterError } from '../src/error';
 import { MAX_OPTIONAL_SEGMENTS_PER_ROUTE } from '../src/builder/route-expand';
-import type { RouterErrorData } from '../src/types';
-
-// ── Helpers ──
-
-function catchRouterError(fn: () => void): RouterError {
-  try {
-    fn();
-  } catch (e) {
-    expect(e).toBeInstanceOf(RouterError);
-    return e as RouterError;
-  }
-  throw new Error('Expected RouterError to be thrown');
-}
+import { catchRouterError, firstBuildIssue } from './_helpers';
 
 function fillMethodsToLimit(router: Router<string>): void {
   for (let i = 0; i < 25; i++) {
-    router.add(`CUSTOM_${i}` as any, `/limit-${i}`, `limit-${i}`);
+    router.add(`CUSTOM_${i}`, `/limit-${i}`, `limit-${i}`);
   }
-}
-
-function firstBuildIssue(router: Router<string>): RouterErrorData {
-  const err = catchRouterError(() => router.build());
-  expect(err.data.kind).toBe('route-validation');
-  if (err.data.kind !== 'route-validation') throw err;
-  return err.data.errors[0]!.error;
 }
 
 describe('Router<T> errors', () => {
@@ -112,7 +93,7 @@ describe('Router<T> errors', () => {
   it('should throw kind=\'method-limit\' when exceeding 32 methods', () => {
     const router = new Router<string>();
     fillMethodsToLimit(router);
-    router.add('OVERFLOW_METHOD' as any, '/overflow', 'overflow');
+    router.add('OVERFLOW_METHOD', '/overflow', 'overflow');
 
     const issue = firstBuildIssue(router);
     expect(issue.kind).toBe('method-limit');

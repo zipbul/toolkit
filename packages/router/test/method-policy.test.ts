@@ -12,17 +12,17 @@ describe('method token grammar accepts valid custom tokens', () => {
   ])('accepts %s', (method) => {
     const r = new Router<string>();
     expect(() => {
-      r.add(method as any, '/x', 'h');
+      r.add(method, '/x', 'h');
       r.build();
     }).not.toThrow();
-    expect(r.match(method as any, '/x')?.value).toBe('h');
+    expect(r.match(method, '/x')?.value).toBe('h');
   });
 
   test('accepts a method exactly 64 ASCII bytes (boundary)', () => {
     const r = new Router<string>();
     const m = 'X'.repeat(64);
     expect(() => {
-      r.add(m as any, '/x', 'h');
+      r.add(m, '/x', 'h');
       r.build();
     }).not.toThrow();
   });
@@ -30,10 +30,10 @@ describe('method token grammar accepts valid custom tokens', () => {
   test('case-sensitive: GET and get are distinct registrations', () => {
     const r = new Router<string>();
     r.add('GET', '/x', 'upper');
-    r.add('get' as any, '/x', 'lower');
+    r.add('get', '/x', 'lower');
     r.build();
     expect(r.match('GET', '/x')?.value).toBe('upper');
-    expect(r.match('get' as any, '/x')?.value).toBe('lower');
+    expect(r.match('get', '/x')?.value).toBe('lower');
   });
 });
 
@@ -41,7 +41,7 @@ describe('32-method limit boundary', () => {
   test('accepts exactly 32 distinct method tokens (7 default + 25 custom)', () => {
     const r = new Router<string>();
     for (let i = 0; i < 25; i++) {
-      r.add(`CUSTOM${i}` as any, '/x', `h${i}`);
+      r.add(`CUSTOM${i}`, '/x', `h${i}`);
     }
     expect(() => r.build()).not.toThrow();
   });
@@ -49,7 +49,7 @@ describe('32-method limit boundary', () => {
   test('rejects the 33rd distinct method with method-limit', () => {
     const r = new Router<string>();
     for (let i = 0; i < 26; i++) {
-      r.add(`CUSTOM${i}` as any, '/x', `h${i}`);
+      r.add(`CUSTOM${i}`, '/x', `h${i}`);
     }
     let kind: string | undefined;
     try { r.build(); } catch (e: any) {
@@ -82,7 +82,7 @@ describe('method token validation', () => {
   test('empty method must throw on add()/build()', () => {
     const r = new Router<string>();
     expect(() => {
-      r.add('' as any, '/x', 'h');
+      r.add('', '/x', 'h');
       r.build();
     }).toThrow();
   });
@@ -90,7 +90,7 @@ describe('method token validation', () => {
   test('whitespace method "GET POST" must throw', () => {
     const r = new Router<string>();
     expect(() => {
-      r.add('GET POST' as any, '/x', 'h');
+      r.add('GET POST', '/x', 'h');
       r.build();
     }).toThrow();
   });
@@ -98,7 +98,7 @@ describe('method token validation', () => {
   test('method with control char "GET\\t" must throw', () => {
     const r = new Router<string>();
     expect(() => {
-      r.add('GET\t' as any, '/x', 'h');
+      r.add('GET\t', '/x', 'h');
       r.build();
     }).toThrow();
   });
@@ -106,7 +106,7 @@ describe('method token validation', () => {
   test('method with delimiter "GET/" must throw', () => {
     const r = new Router<string>();
     expect(() => {
-      r.add('GET/' as any, '/x', 'h');
+      r.add('GET/', '/x', 'h');
       r.build();
     }).toThrow();
   });
@@ -115,8 +115,8 @@ describe('method token validation', () => {
     const r = new Router<string>();
     // No throw expected — only the bitmask-driven 32-method cap applies, and
     // tchar-grammar invalidity. Length itself is unbounded.
-    r.add('A'.repeat(1024) as any, '/x', 'h');
+    r.add('A'.repeat(1024), '/x', 'h');
     r.build();
-    expect(r.match('A'.repeat(1024) as any, '/x')?.value).toBe('h');
+    expect(r.match('A'.repeat(1024), '/x')?.value).toBe('h');
   });
 });

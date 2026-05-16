@@ -1,25 +1,14 @@
 /**
- * Regression fixtures for the final-review fixes (commits 46593b0, 7fab673).
- * Each suite mirrors a finding that was reproduced and fixed.
+ * Regression fixtures. Each suite locks down a behavior that a prior
+ * audit pass found broken; the test name (or in-test comment) documents
+ * the specific shape under test. Commit hashes belong in `git log`,
+ * not here.
  */
 import { describe, it, expect } from 'bun:test';
 
 import { Router } from '../src/router';
 import { RouterError } from '../src/error';
-import type { RouterErrorData } from '../src/types';
-
-function firstBuildIssue(router: Router<string>): RouterErrorData {
-  try {
-    router.build();
-  } catch (e) {
-    expect(e).toBeInstanceOf(RouterError);
-    const err = e as RouterError;
-    expect(err.data.kind).toBe('route-validation');
-    if (err.data.kind !== 'route-validation') throw err;
-    return err.data.errors[0]!.error;
-  }
-  throw new Error('Expected build() to throw');
-}
+import { firstBuildIssue } from './_helpers';
 
 describe('subtreeShapesEqual: terminal-store presence (C-03/04/05/06)', () => {
   it('rejects factor when one tenant adds a mid-route terminal that other tenants do not have', () => {

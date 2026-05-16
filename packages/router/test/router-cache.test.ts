@@ -147,14 +147,14 @@ describe('Router<T> cache', () => {
   it('should cache results independently per custom method', () => {
     const router = new Router<string>({});
     router.add('GET', '/users/:id', 'get-user');
-    router.add('PURGE' as any, '/users/:id', 'purge-user');
+    router.add('PURGE', '/users/:id', 'purge-user');
     router.build();
 
     router.match('GET', '/users/1');
     const getCached = router.match('GET', '/users/1');
 
-    router.match('PURGE' as any, '/users/1');
-    const purgeCached = router.match('PURGE' as any, '/users/1');
+    router.match('PURGE', '/users/1');
+    const purgeCached = router.match('PURGE', '/users/1');
 
     expect(getCached!.value).toBe('get-user');
     expect(getCached!.meta.source).toBe('cache');
@@ -209,7 +209,7 @@ describe('Router<T> cache', () => {
 
     expect(() => {
       'use strict';
-      (a!.params as any).id = 'POISONED';
+      (a!.params).id = 'POISONED';
     }).toThrow(TypeError);
 
     const b = r.match('GET', '/users/42');

@@ -48,13 +48,17 @@ describe('RouterCache', () => {
     expect(cache.get('/c')).toBe('c');
   });
 
-  it('should increments count on each new insert and trigger eviction only past maxSize', () => {
+  it('should increment count on each insert and only evict the oldest entry once capacity is exceeded', () => {
     const cache = new RouterCache<string>(2);
     cache.set('/a', 'a');
     cache.set('/b', 'b');
-    cache.set('/c', 'c'); // triggers eviction — no error
+    cache.set('/c', 'c'); // triggers eviction of the oldest used entry
 
+    // /c (just inserted) and exactly one of {/a, /b} must survive.
+    // The other must have been evicted to make room.
     expect(cache.get('/c')).toBe('c');
+    const survivors = [cache.get('/a'), cache.get('/b')].filter(v => v !== undefined);
+    expect(survivors).toHaveLength(1);
   });
 
   // ── NE ──

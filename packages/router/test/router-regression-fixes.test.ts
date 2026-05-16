@@ -1,16 +1,7 @@
 import { describe, expect, it } from 'bun:test';
 
-import { Router, RouterError } from '../index';
-function catchRouterError(fn: () => void): RouterError {
-  try {
-    fn();
-  } catch (e) {
-    expect(e).toBeInstanceOf(RouterError);
-    return e as RouterError;
-  }
-
-  throw new Error('Expected RouterError');
-}
+import { Router } from '../index';
+import { catchRouterError } from './_helpers';
 
 describe('Router regression fixes', () => {
   it('rejects anchored param patterns at parse time (^/$ never silently stripped)', () => {
