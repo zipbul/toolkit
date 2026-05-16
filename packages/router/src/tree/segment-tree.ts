@@ -328,7 +328,7 @@ function insertParamPart(
 /** Type guard so callers can narrow `resolveOrCompileTester` results
  *  without an `as` cast. RouterErrorData always carries a `kind` string;
  *  PatternTesterFn (function value) does not. */
-function isResolvedTesterError(
+export function isResolvedTesterError(
   result: PatternTesterFn | null | RouterErrorData,
 ): result is RouterErrorData {
   return result !== null && typeof result === 'object' && 'kind' in result;

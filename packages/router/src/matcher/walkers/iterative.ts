@@ -88,7 +88,7 @@ export function createIterativeWalker(root: SegmentNode, decoder: DecoderFn): Ma
 
 /** Walk a compacted single-static chain. Returns the new `pos` after
  *  the prefix matches, or `-1` to signal mismatch. */
-function consumeStaticPrefix(
+export function consumeStaticPrefix(
   sp: ReadonlyArray<string>,
   url: string,
   pos: number,
@@ -108,7 +108,7 @@ function consumeStaticPrefix(
 
 /** Resolve a terminal at the end-of-input position: store first, then
  *  star-wildcard fallback. */
-function matchTerminalAtNode(node: SegmentNode, len: number, state: MatchState): boolean {
+export function matchTerminalAtNode(node: SegmentNode, len: number, state: MatchState): boolean {
   if (node.store !== null) {
     state.handlerIndex = node.store;
     return true;

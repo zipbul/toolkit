@@ -8,7 +8,7 @@ import { describe, it, expect } from 'bun:test';
 
 import { Router } from '../src/router';
 import { RouterError } from '../src/error';
-import { firstBuildIssue } from './_helpers';
+import { firstBuildIssue } from './test-utils';
 
 describe('subtreeShapesEqual: terminal-store presence (C-03/04/05/06)', () => {
   it('rejects factor when one tenant adds a mid-route terminal that other tenants do not have', () => {

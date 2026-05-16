@@ -1,7 +1,7 @@
 import { describe, test, expect } from 'bun:test';
 import { Router } from '../src/router';
 import type { RouterErrorKind } from '../src/types';
-import { firstBuildIssue } from './_helpers';
+import { firstBuildIssue } from './test-utils';
 
 describe('registration path policy accepts well-formed routes', () => {
   test.each([

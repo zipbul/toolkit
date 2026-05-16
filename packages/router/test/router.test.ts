@@ -2,7 +2,7 @@ import { describe, it, expect } from 'bun:test';
 
 import { Router } from '../src/router';
 import { RouterError } from '../src/error';
-import { catchRouterError } from './_helpers';
+import { catchRouterError } from './test-utils';
 
 describe('Router<T>', () => {
   // ── HP: Happy Path (21 tests) ──

@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'bun:test';
 
 import { Router } from '../index';
-import { catchRouterError } from './_helpers';
+import { catchRouterError } from './test-utils';
 
 describe('Router regression fixes', () => {
   it('rejects anchored param patterns at parse time (^/$ never silently stripped)', () => {

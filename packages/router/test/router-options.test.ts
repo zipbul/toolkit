@@ -2,7 +2,7 @@ import { describe, it, expect } from 'bun:test';
 
 import { Router } from '../src/router';
 
-import { catchRouterError } from './_helpers';
+import { catchRouterError } from './test-utils';
 
 describe('Router<T> options', () => {
   it('should not match different case when caseSensitive=true', () => {

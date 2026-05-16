@@ -1,6 +1,7 @@
 import { BACKREFERENCE_PATTERN } from './constants';
 
-interface QuantifierFrame {
+/** @internal exported for unit tests. */
+export interface QuantifierFrame {
   hadUnlimited: boolean;
 }
 
@@ -79,8 +80,9 @@ function hasNestedUnlimitedQuantifiers(pattern: string): boolean {
 
 /** Pop the top group frame and propagate its `hadUnlimited` upward.
  *  Returns whether the group itself contained an unlimited quantifier
- *  so callers can treat the group as a "lastAtomUnlimited" candidate. */
-function closeGroup(stack: QuantifierFrame[]): boolean {
+ *  so callers can treat the group as a "lastAtomUnlimited" candidate.
+ *  @internal exported for unit tests. */
+export function closeGroup(stack: QuantifierFrame[]): boolean {
   const frame = stack.pop();
   const groupUnlimited = Boolean(frame?.hadUnlimited);
   if (groupUnlimited) markTopFrameUnlimited(stack);
@@ -89,8 +91,9 @@ function closeGroup(stack: QuantifierFrame[]): boolean {
 
 /** No-op when the stack is empty; otherwise mark the innermost group as
  *  containing an unlimited quantifier so the next quantifier on it can
- *  be detected as nested. */
-function markTopFrameUnlimited(stack: QuantifierFrame[]): void {
+ *  be detected as nested.
+ *  @internal exported for unit tests. */
+export function markTopFrameUnlimited(stack: QuantifierFrame[]): void {
   if (stack.length === 0) return;
   const top = stack[stack.length - 1];
   if (top !== undefined) top.hadUnlimited = true;
@@ -98,8 +101,9 @@ function markTopFrameUnlimited(stack: QuantifierFrame[]): void {
 
 /** Parse `{m,n}` / `{m,}` / `{m}` starting at `pattern[i]` (`{`).
  *  Returns the quantifier kind plus the index of the closing `}`,
- *  or `null` for an unterminated brace (caller treats as literal). */
-function parseBracedQuantifier(
+ *  or `null` for an unterminated brace (caller treats as literal).
+ *  @internal exported for unit tests. */
+export function parseBracedQuantifier(
   pattern: string,
   start: number,
 ): { unlimited: boolean; closeIdx: number } | null {

@@ -260,7 +260,7 @@ export function createMultiPrefixFactoredWalker(
 
 /** Consume `prefixSegs` against `url` starting at `pos`. Returns the new
  *  position after the prefix matches, or `-1` on mismatch. */
-function consumeFixedPrefix(
+export function consumeFixedPrefix(
   prefixSegs: ReadonlyArray<string>,
   prefixCount: number,
   url: string,
@@ -280,7 +280,7 @@ function consumeFixedPrefix(
 }
 
 /** Scan `url` from `pos` to the next `/` or end. */
-function scanSegmentEnd(url: string, pos: number, len: number): number {
+export function scanSegmentEnd(url: string, pos: number, len: number): number {
   let end = pos;
   while (end < len && url.charCodeAt(end) !== 47) end++;
   return end;

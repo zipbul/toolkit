@@ -129,7 +129,7 @@ function enumerateExpansions(
  * slash. Each surviving optional flips its `optional: true` flag off
  * because the insertion path treats it as required for that variant.
  */
-function filterDroppedSegments(
+export function filterDroppedSegments(
   parts: PathPart[],
   optionalIndices: number[],
   dropMask: number,
@@ -147,7 +147,7 @@ function filterDroppedSegments(
 }
 
 /** Bit `j` set in `dropMask` ⇔ `optionalIndices[j]` is dropped. */
-function isDroppedAt(
+export function isDroppedAt(
   partIndex: number,
   optionalIndices: number[],
   dropMask: number,
@@ -165,7 +165,7 @@ function isDroppedAt(
  * that one fixes double slashes produced by concatenation; this one
  * fixes single trailing slashes left by drops.
  */
-function trimTrailingSlashOnDrop(filtered: PathPart[]): void {
+export function trimTrailingSlashOnDrop(filtered: PathPart[]): void {
   if (filtered.length === 0) return;
   const prev = filtered[filtered.length - 1]!;
   if (prev.type !== 'static' || !prev.value.endsWith('/')) return;

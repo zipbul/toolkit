@@ -122,3 +122,77 @@ describe('expandOptional', () => {
     });
   });
 });
+
+import { filterDroppedSegments, isDroppedAt, trimTrailingSlashOnDrop } from './route-expand';
+
+describe('isDroppedAt', () => {
+  it('returns true when partIndex is in optionalIndices and the matching bit is set', () => {
+    expect(isDroppedAt(2, [1, 2, 4], 0b010)).toBe(true);
+  });
+
+  it('returns false when partIndex matches but the bit is unset', () => {
+    expect(isDroppedAt(2, [1, 2, 4], 0b001)).toBe(false);
+  });
+
+  it('returns false when partIndex is not in optionalIndices', () => {
+    expect(isDroppedAt(3, [1, 2, 4], 0b111)).toBe(false);
+  });
+
+  it('returns false for an empty optionalIndices list', () => {
+    expect(isDroppedAt(0, [], 0xff)).toBe(false);
+  });
+});
+
+describe('trimTrailingSlashOnDrop', () => {
+  it('is a no-op on an empty list', () => {
+    const xs: PathPart[] = [];
+    trimTrailingSlashOnDrop(xs);
+    expect(xs).toEqual([]);
+  });
+
+  it('peels a single trailing slash from the last static segment', () => {
+    const xs: PathPart[] = [{ type: 'static', value: '/users/', segments: ['users', ''] }];
+    trimTrailingSlashOnDrop(xs);
+    expect(xs[0]).toMatchObject({ type: 'static', value: '/users' });
+  });
+
+  it('removes the segment entirely when trimming would leave only the leading slash', () => {
+    const xs: PathPart[] = [{ type: 'static', value: '/', segments: [''] }];
+    trimTrailingSlashOnDrop(xs);
+    expect(xs).toEqual([]);
+  });
+
+  it('leaves non-trailing-slash statics alone', () => {
+    const xs: PathPart[] = [{ type: 'static', value: '/users', segments: ['users'] }];
+    trimTrailingSlashOnDrop(xs);
+    expect(xs[0]).toMatchObject({ type: 'static', value: '/users' });
+  });
+
+  it('does not touch a non-static last entry', () => {
+    const xs: PathPart[] = [{ type: 'param', name: 'id', pattern: null, optional: false }];
+    trimTrailingSlashOnDrop(xs);
+    expect(xs[0]).toMatchObject({ type: 'param', name: 'id' });
+  });
+});
+
+describe('filterDroppedSegments', () => {
+  it('returns the input shape with optional flags flipped to required when no drops', () => {
+    const parts: PathPart[] = [
+      { type: 'static', value: '/users', segments: ['users'] },
+      { type: 'param', name: 'id', pattern: null, optional: true },
+    ];
+    const filtered = filterDroppedSegments(parts, [1], 0);
+    expect(filtered).toHaveLength(2);
+    expect(filtered[1]).toMatchObject({ type: 'param', name: 'id', optional: false });
+  });
+
+  it('drops the indicated optional and trims trailing slash on the prior static', () => {
+    const parts: PathPart[] = [
+      { type: 'static', value: '/users/', segments: ['users', ''] },
+      { type: 'param', name: 'id', pattern: null, optional: true },
+    ];
+    const filtered = filterDroppedSegments(parts, [1], 0b1);
+    expect(filtered).toHaveLength(1);
+    expect(filtered[0]).toMatchObject({ type: 'static', value: '/users' });
+  });
+});

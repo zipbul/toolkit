@@ -3,7 +3,7 @@ import { describe, it, expect } from 'bun:test';
 import { Router } from './router';
 import { RouterError } from './error';
 import type { RouterOptions } from './types';
-import { catchRouterError, buildRouter } from '../test/_helpers';
+import { catchRouterError, buildRouter } from '../test/test-utils';
 
 // ── Fixtures ──
 
@@ -444,5 +444,44 @@ describe('Router', () => {
       }
       expect(r.match('POST', '/x')).toBeNull();
     });
+  });
+});
+
+import { validateCacheSize } from './router';
+
+describe('validateCacheSize', () => {
+  it('accepts an undefined input and returns the default 1000', () => {
+    expect(validateCacheSize(undefined)).toBe(1000);
+  });
+
+  it('returns the input value when it is a positive integer in range', () => {
+    expect(validateCacheSize(1)).toBe(1);
+    expect(validateCacheSize(2048)).toBe(2048);
+    expect(validateCacheSize(0x4000_0000)).toBe(0x4000_0000);
+  });
+
+  it('throws router-options-invalid for zero', () => {
+    expect(() => validateCacheSize(0)).toThrow(RouterError);
+  });
+
+  it('throws router-options-invalid for negative integers', () => {
+    expect(() => validateCacheSize(-1)).toThrow(RouterError);
+  });
+
+  it('throws router-options-invalid for non-integer values', () => {
+    expect(() => validateCacheSize(1.5)).toThrow(RouterError);
+  });
+
+  it('throws router-options-invalid for NaN', () => {
+    expect(() => validateCacheSize(Number.NaN)).toThrow(RouterError);
+  });
+
+  it('throws router-options-invalid for values above 2^30', () => {
+    expect(() => validateCacheSize(0x4000_0001)).toThrow(RouterError);
+  });
+
+  it('attaches kind=router-options-invalid to the thrown error', () => {
+    const err = catchRouterError(() => validateCacheSize(-1));
+    expect(err.data.kind).toBe('router-options-invalid');
   });
 });

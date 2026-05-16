@@ -115,7 +115,7 @@ export function createRecursiveWalker(root: SegmentNode, decoder: DecoderFn): Ma
   };
 }
 
-function matchTerminalAtNode(node: SegmentNode, len: number, state: MatchState): boolean {
+export function matchTerminalAtNode(node: SegmentNode, len: number, state: MatchState): boolean {
   if (node.store !== null) {
     state.handlerIndex = node.store;
     return true;
@@ -131,7 +131,7 @@ function matchTerminalAtNode(node: SegmentNode, len: number, state: MatchState):
   return false;
 }
 
-function consumeStaticPrefixRec(
+export function consumeStaticPrefixRec(
   sp: ReadonlyArray<string>,
   path: string,
   pos: number,
@@ -149,7 +149,7 @@ function consumeStaticPrefixRec(
   return pos;
 }
 
-function tryWildcardCapture(
+export function tryWildcardCapture(
   node: SegmentNode,
   pos: number,
   len: number,

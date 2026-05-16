@@ -3,7 +3,7 @@ import { describe, it, expect } from 'bun:test';
 import { Router } from '../src/router';
 import { RouterError } from '../src/error';
 import { MAX_OPTIONAL_SEGMENTS_PER_ROUTE } from '../src/builder/route-expand';
-import { catchRouterError, firstBuildIssue } from './_helpers';
+import { catchRouterError, firstBuildIssue } from './test-utils';
 
 function fillMethodsToLimit(router: Router<string>): void {
   for (let i = 0; i < 25; i++) {

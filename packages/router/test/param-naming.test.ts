@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'bun:test';
 import { Router } from '../index';
-import { firstBuildIssue } from './_helpers';
+import { firstBuildIssue } from './test-utils';
 
 describe('parameter name grammar', () => {
   it('accepts snake_case and camelCase names', () => {

@@ -1,6 +1,12 @@
 import { describe, it, expect } from 'bun:test';
 
-import { assessRegexSafety } from './regex-safety';
+import {
+  assessRegexSafety,
+  closeGroup,
+  markTopFrameUnlimited,
+  parseBracedQuantifier,
+  type QuantifierFrame,
+} from './regex-safety';
 
 // Capturing groups `(...)`, named captures `(?<name>...)`, lookaround
 // `(?=...)/(?!...)/(?<=...)/(?<!...)`, and inline-flag groups `(?i)/(?m)/(?s)`
@@ -226,5 +232,69 @@ describe('assessRegexSafety', () => {
     const result = assessRegexSafety('(?:a|b)+');
 
     expect(result.safe).toBe(true);
+  });
+});
+
+// ─── Internal helpers (exported for test) ────────────────────────────
+
+describe('parseBracedQuantifier', () => {
+  it('returns unlimited=false for `{m}`', () => {
+    expect(parseBracedQuantifier('a{3}', 1)).toEqual({ unlimited: false, closeIdx: 3 });
+  });
+
+  it('returns unlimited=true for `{m,n}`', () => {
+    expect(parseBracedQuantifier('a{2,5}', 1)).toEqual({ unlimited: true, closeIdx: 5 });
+  });
+
+  it('returns unlimited=true for `{m,}` (open upper bound)', () => {
+    expect(parseBracedQuantifier('a{2,}', 1)).toEqual({ unlimited: true, closeIdx: 4 });
+  });
+
+  it('returns null for unterminated brace', () => {
+    expect(parseBracedQuantifier('a{2', 1)).toBeNull();
+  });
+
+  it('handles empty body `{}` as bounded', () => {
+    expect(parseBracedQuantifier('a{}', 1)).toEqual({ unlimited: false, closeIdx: 2 });
+  });
+});
+
+describe('markTopFrameUnlimited', () => {
+  it('is a no-op on an empty stack', () => {
+    const stack: QuantifierFrame[] = [];
+    markTopFrameUnlimited(stack);
+    expect(stack).toEqual([]);
+  });
+
+  it('marks the innermost frame as unlimited', () => {
+    const outer: QuantifierFrame = { hadUnlimited: false };
+    const inner: QuantifierFrame = { hadUnlimited: false };
+    markTopFrameUnlimited([outer, inner]);
+    expect(inner.hadUnlimited).toBe(true);
+    expect(outer.hadUnlimited).toBe(false);
+  });
+});
+
+describe('closeGroup', () => {
+  it('returns false when the popped group had no unlimited quantifier', () => {
+    const stack: QuantifierFrame[] = [{ hadUnlimited: false }];
+    expect(closeGroup(stack)).toBe(false);
+    expect(stack.length).toBe(0);
+  });
+
+  it('returns true and propagates `hadUnlimited` to the parent frame', () => {
+    const parent: QuantifierFrame = { hadUnlimited: false };
+    const child: QuantifierFrame = { hadUnlimited: true };
+    const stack = [parent, child];
+
+    expect(closeGroup(stack)).toBe(true);
+    expect(parent.hadUnlimited).toBe(true);
+    expect(stack).toEqual([parent]);
+  });
+
+  it('returns true at root depth without throwing (no parent to propagate to)', () => {
+    const stack: QuantifierFrame[] = [{ hadUnlimited: true }];
+    expect(closeGroup(stack)).toBe(true);
+    expect(stack).toEqual([]);
   });
 });

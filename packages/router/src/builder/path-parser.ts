@@ -386,7 +386,7 @@ function validateParamName(
  * route, so we cut the sugar at parse time and force the canonical form.
  * Returns `undefined` when the segment is not this shape.
  */
-function rejectColonWildcardSugar(
+export function rejectColonWildcardSugar(
   core: string,
   seg: string,
   path: string,
@@ -416,7 +416,7 @@ function rejectColonWildcardSugar(
  * Returns `{ core, isOptional }` on success, a `RouterErrorData` carrier
  * on failure (no Result wrapper — caller already wraps in `err()`).
  */
-function stripOptionalDecorator(
+export function stripOptionalDecorator(
   core: string,
   seg: string,
   path: string,
@@ -440,7 +440,7 @@ function stripOptionalDecorator(
  * Returns the parsed pair on success, a `RouterErrorData` carrier for
  * unclosed groups or empty/whitespace-only patterns.
  */
-function extractNameAndPattern(
+export function extractNameAndPattern(
   core: string,
   path: string,
 ): { name: string; pattern: string | null } | RouterErrorData {
@@ -489,7 +489,7 @@ interface StaticAccumulator {
 
 /** Flush whatever the accumulator holds into `parts` and reset it.
  *  No-op when the accumulator is empty. */
-function flushStaticBuffer(acc: StaticAccumulator, parts: PathPart[]): void {
+export function flushStaticBuffer(acc: StaticAccumulator, parts: PathPart[]): void {
   if (acc.buf.length === 0) return;
   parts.push({ type: 'static', value: acc.buf, segments: acc.segments });
   acc.buf = '';
@@ -498,7 +498,7 @@ function flushStaticBuffer(acc: StaticAccumulator, parts: PathPart[]): void {
 
 /** Append one literal segment to the accumulator. `hasNext` controls
  *  whether a trailing slash is appended for the next segment join. */
-function appendStaticSegment(acc: StaticAccumulator, seg: string, hasNext: boolean): void {
+export function appendStaticSegment(acc: StaticAccumulator, seg: string, hasNext: boolean): void {
   acc.buf += seg;
   acc.segments.push(seg);
   if (hasNext) acc.buf += '/';

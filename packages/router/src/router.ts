@@ -135,8 +135,10 @@ export class Router<T = unknown> implements RouterPublicApi<T> {
  * Validate `cacheSize` before handing it to `RouterCache`. nextPow2 silently
  * converts garbage (negative/NaN/non-integer) into a 1-slot cache and rounds
  * 1000 → 1024; this guard surfaces actionable errors instead.
+ *
+ * @internal exported for unit tests.
  */
-function validateCacheSize(rawCacheSize: number | undefined): number {
+export function validateCacheSize(rawCacheSize: number | undefined): number {
   const requested = rawCacheSize ?? 1000;
   if (
     !Number.isInteger(requested) ||

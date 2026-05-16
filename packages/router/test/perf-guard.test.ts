@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'bun:test';
 
 import { Router } from '../src/router';
-import { getRegistrationSnapshot } from './_helpers';
+import { getRegistrationSnapshot } from './test-utils';
 
 describe('performance guard invariants', () => {
   it('optional expansions share one handler index across all expansion variants', () => {
