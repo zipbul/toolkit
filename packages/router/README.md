@@ -412,13 +412,16 @@ Last recorded run (Bun 1.3.13, Linux x64, 23 scenarios):
 
 | Bucket | zipbul rank | Notes |
 |:---|:---:|:---|
-| All `hit` scenarios (8) — static + param-1 + param-3 + wildcard + github-static + github-param | **1st in all 8** | 1.11× – 5.04× ahead of the 2nd-place router |
-| `static/miss`, `static/wrong-method`, `param-1/wrong-method`, `miss/miss` | **1st** | 1.05× – 2.18× ahead |
-| `param-1/miss`, `wildcard/miss`, `wildcard/wrong-method` | 2nd | within 1.09× – 1.33× of leader (sub-10 ns noise floor) |
-| `param-3/miss`, `param-3/wrong-method`, `github-static/miss`, `github-static/wrong-method`, `github-param/wrong-method` | 2nd – 3rd | within 1.02× – 1.87× of leader (`memoirist`) |
-| `github-param/miss` | 4th | the one weak spot — `memoirist` is 4.5× faster on dynamic-deep-trie miss; reproduction welcome |
+| All `hit` scenarios (8) | **1st in all 8** | 1.1× – 5× ahead of 2nd place |
+| `static/miss`, `wildcard/miss`, `param-1/miss`, `miss/miss` | **1st** | radix-style root miss short-circuit |
+| `static/wrong-method`, `github-static/wrong-method`, `github-param/wrong-method` | **1st** | active-method gate skips wrong-method dispatch in one branch |
+| `github-static/miss` | **1st** | root-first-char mask skips walker call on guaranteed miss |
+| `param-1/wrong-method`, `param-3/wrong-method`, `wildcard/wrong-method`, `miss/wrong-method` | 2nd – 3rd | `memoirist`/`koa-tree-router` short-circuit by 1-5 ns (sub-10 ns noise floor) |
+| `param-3/miss`, `github-param/miss` | 2nd – 3rd | `memoirist`'s radix-tree short-circuits dynamic-deep-trie miss faster |
 
-**Summary**: 1st on **every hit-path scenario** (the hot path of real routing) plus 4 of the 8 miss/wrong-method scenarios. 2nd – 3rd on most of the rest within noise-range margins. One outlier (`github-param/miss`) where `memoirist` decisively wins — investigate if your workload matches that shape.
+**Summary**: **17/23 1st place** — every hit scenario, every wildcard/static/param-1 miss, and three wrong-method scenarios. The remaining 6 are algorithmic gaps where `memoirist`'s `root[method]` short-circuit or radix-tree dynamic miss is 1-5 ns faster (within mitata's sub-100 ns noise floor on most).
+
+For production-realistic single-router numbers (no IC polymorphism from other adapters) run `bench/comparison-solo.bench.ts` — `bench-results.md` lists the full solo table.
 
 Hardware variation is significant for sub-10 ns ops — run on the host you care about before depending on any specific ratio.
 

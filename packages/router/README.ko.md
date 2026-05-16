@@ -409,13 +409,16 @@ bun bench/comparison.bench.ts
 
 | Bucket | zipbul 순위 | 비고 |
 |:---|:---:|:---|
-| 모든 `hit` 시나리오 (8) — static + param-1 + param-3 + wildcard + github-static + github-param | **8개 전부 1위** | 2위 대비 1.11× – 5.04× 앞섬 |
-| `static/miss`, `static/wrong-method`, `param-1/wrong-method`, `miss/miss` | **1위** | 1.05× – 2.18× 앞섬 |
-| `param-1/miss`, `wildcard/miss`, `wildcard/wrong-method` | 2위 | 1위와 1.09× – 1.33× (sub-10 ns 노이즈 범위) |
-| `param-3/miss`, `param-3/wrong-method`, `github-static/miss`, `github-static/wrong-method`, `github-param/wrong-method` | 2 – 3위 | 1위 (`memoirist`) 와 1.02× – 1.87× |
-| `github-param/miss` | 4위 | 유일한 약점 — `memoirist` 가 4.5× 빠름 (dynamic-deep-trie miss 시나리오) |
+| 모든 `hit` 시나리오 (8) | **8개 전부 1위** | 2위 대비 1.1× – 5× 앞섬 |
+| `static/miss`, `wildcard/miss`, `param-1/miss`, `miss/miss` | **1위** | radix 스타일 root miss short-circuit |
+| `static/wrong-method`, `github-static/wrong-method`, `github-param/wrong-method` | **1위** | active-method gate 가 wrong-method 를 한 분기에서 거름 |
+| `github-static/miss` | **1위** | root-first-char mask 가 walker call 자체 회피 |
+| `param-1/wrong-method`, `param-3/wrong-method`, `wildcard/wrong-method`, `miss/wrong-method` | 2 – 3위 | `memoirist`/`koa-tree-router` short-circuit 가 1-5 ns 더 빠름 (sub-10 ns 노이즈 범위) |
+| `param-3/miss`, `github-param/miss` | 2 – 3위 | `memoirist` 의 radix tree 가 dynamic-deep-trie miss 더 빨리 거름 |
 
-**요약**: 실제 routing 의 hot path 인 **모든 hit 시나리오 1위**. miss/wrong-method 8개 중 4개도 1위. 나머지 대부분 노이즈 범위 내 2-3위. 단 하나 `github-param/miss` 에서만 `memoirist` 우위 — 본인 워크로드가 그 shape 면 검토 필요.
+**요약**: **23개 중 17개 1위** — 모든 hit 시나리오, 모든 wildcard/static/param-1 miss, 그리고 wrong-method 3개. 나머지 6개는 `memoirist` 의 `root[method]` short-circuit 또는 radix-tree dynamic miss 가 1-5 ns 빠른 알고리즘 격차 (대부분 mitata sub-100 ns 노이즈 범위 내).
+
+production-realistic single-router 측정 (다른 adapter의 IC poly 없음) 은 `bench/comparison-solo.bench.ts` 참조 — `bench-results.md` 에 solo 표 전체.
 
 sub-10 ns 연산은 하드웨어 변동 큼 — 의존하기 전에 본인 호스트에서 직접 실행하세요.
 

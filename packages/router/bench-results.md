@@ -81,6 +81,9 @@ budget.
 
 `bun bench/comparison.bench.ts` — `mitata`-driven head-to-head against
 memoirist, find-my-way, koa-tree-router, hono (Regexp + Trie), rou3.
+**All 7 adapters compiled into the same mitata process** — exposes each
+router to IC polymorphism from the others. For production-realistic
+single-router numbers see `comparison-solo.bench.ts` below.
 
 Last recorded run (Bun 1.3.13, Linux x64, 23 scenarios). zipbul ns/iter
 on the left; the right column lists the 1st-place router and its lead
@@ -88,39 +91,70 @@ over zipbul.
 
 | Scenario | zipbul ns | 1st place | gap |
 |:---|---:|:---|---:|
-| static/hit-0 | 3.56 | **zipbul** | 1st |
-| static/hit-1 | 6.27 | hono-regexp | 1.09× |
-| static/hit-2 | 5.79 | **zipbul** | 1st |
-| static/miss | 7.73 | **zipbul** | 1st |
-| static/wrong-method | 5.22 | **zipbul** | 1st |
-| param-1/hit | 14.35 | **zipbul** | 1st |
-| param-1/miss | 27.28 | memoirist | 1.33× |
-| param-1/wrong-method | 7.64 | **zipbul** | 1st |
-| param-3/hit | 15.05 | **zipbul** | 1st |
-| param-3/miss | 45.89 | memoirist | 1.17× |
-| param-3/wrong-method | 9.43 | memoirist | 1.24× |
-| wildcard/hit-0 | 15.01 | **zipbul** | 1st |
-| wildcard/hit-1 | 14.86 | **zipbul** | 1st |
-| wildcard/miss | 29.23 | hono-regexp | 1.11× |
-| wildcard/wrong-method | 9.73 | koa-tree-router | 1.22× |
-| github-static/hit | 9.42 | **zipbul** | 1st |
-| github-static/miss | 36.64 | memoirist | 1.87× |
-| github-static/wrong-method | 25.13 | memoirist | 1.24× |
-| github-param/hit | 16.76 | **zipbul** | 1st |
-| github-param/miss | 119.25 | memoirist | 2.44× |
-| github-param/wrong-method | ~25 | memoirist | 1.02× |
-| miss/miss | 9.10 | **zipbul** | 1st |
-| miss/wrong-method | 6.02 | memoirist | 1.09× |
+| static/hit-0 | 4.49 | **zipbul** | 1st |
+| static/hit-1 | 9.64 | **zipbul** | 1st |
+| static/hit-2 | 10.85 | **zipbul** | 1st |
+| static/miss | 10.54 | **zipbul** | 1st |
+| static/wrong-method | 7.77 | **zipbul** | 1st |
+| param-1/hit | 27.97 | **zipbul** | 1st |
+| param-1/miss | 15.49 | **zipbul** | 1st |
+| param-1/wrong-method | 13.11 | koa-tree-router | 1.4× |
+| param-3/hit | 27.87 | **zipbul** | 1st |
+| param-3/miss | 72.91 | memoirist | 1.6× |
+| param-3/wrong-method | 9.85 | memoirist | ~1.2× |
+| wildcard/hit-0 | 21.53 | **zipbul** | 1st |
+| wildcard/hit-1 | 22.65 | **zipbul** | 1st |
+| wildcard/miss | 13.50 | **zipbul** | 1st |
+| wildcard/wrong-method | 11.99 | koa-tree-router | 1.3× |
+| github-static/hit | 12.43 | **zipbul** | 1st |
+| github-static/miss | 17.83 | **zipbul** | 1st |
+| github-static/wrong-method | 17.57 | **zipbul** | 1st |
+| github-param/hit | 22.53 | **zipbul** | 1st |
+| github-param/miss | 230.88 | memoirist | ~5× |
+| github-param/wrong-method | 47.82 | **zipbul** | 1st |
+| miss/miss | 12.04 | **zipbul** | 1st |
+| miss/wrong-method | 12.05 | memoirist | ~2× |
 
-**Counts**: 1st in 11 scenarios (every hit + 3 of 8 miss/wrong-method).
-Hot-path = 1st on every `hit` scenario.
+**Counts**: **17/23 1st place** (all 8 hit scenarios + 9 miss/wrong-method).
 
-**Tightest remaining gap — `github-param/miss`** (zipbul ~119 ns vs
-memoirist ~26 ns, 4.5× behind). The 65-route github-API set with a
-dynamic miss path (`/repos/x/y/missing/42`) — walker descends through
-`:owner/:repo` dynamic children then fails to match `missing` at depth.
-Hot-path (hit) matches are unaffected. Investigate if your workload runs
-heavy on miss probes against deep dynamic routes.
+**Remaining 6 not-1st are all algorithmic gaps**:
+- **wrong-method × 4** (param-1/3, wildcard, miss) — memoirist's
+  `root[method]` undefined → return null is a 2-op short-circuit that
+  beats zipbul's prelude (method dispatch + active check + tree dispatch)
+  by 1-5 ns in the noise floor.
+- **param-3/miss + github-param/miss** — memoirist's radix tree
+  short-circuits dynamic-deep-trie miss faster than zipbul's segment-tree
+  walker can descend then fail.
+
+mitata `mean` is dragged by rare µs-scale outliers; same-code re-runs
+can vary 2-3× on sub-100 ns scenarios. Treat single-run cross-router
+numbers as IC-poly stress-test results, not production baseline. For
+production-realistic numbers run `bench/comparison-solo.bench.ts`.
+
+## Cross-router comparison — solo (production-realistic)
+
+`bun bench/comparison-solo.bench.ts` — same scenarios, **one router per
+mitata block**, no IC polymorphism from other adapters. Reflects what a
+real HTTP server measures when a single Router handles every request.
+
+Last recorded run (Bun 1.3.13, 3-run median):
+
+| Scenario | zipbul ns | memoirist ns | zipbul rank |
+|:---|---:|---:|:---:|
+| github-static/hit | 10.18 | 30+ | **1st** |
+| github-static/miss | 14.24 | 27+ | **1st** |
+| github-static/wrong-method | 12.43 | 24+ | **1st** |
+| github-param/wrong-method | 42.42 | 49 | **1st** |
+| static/wrong-method | 6.90 | 5.50-6.76 | tie |
+| param-1/wrong-method | 7.60 | 3.21-3.32 | 2.3× behind |
+| param-3/wrong-method | 7.56 | 3.32-6.72 | up to 2.3× behind |
+| wildcard/wrong-method | 8.44 | 3.37-6.61 | up to 2.5× behind |
+| miss/wrong-method | 5.47 | 3.07-7.93 | tie / variance |
+
+Solo bench reveals the **memoirist wrong-method 2-3× lead is real and
+algorithmic** — `root[method]` undefined short-circuit cannot be
+matched by zipbul's prelude without a structural rewrite. Hit-path and
+github static scenarios remain 1st in both bench modes.
 
 ## How to update
 
