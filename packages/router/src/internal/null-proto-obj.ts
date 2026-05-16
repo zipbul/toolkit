@@ -18,6 +18,15 @@ export const NullProtoObj: { new (): Record<string, unknown> } = (() => {
 })();
 
 /**
+ * Typed factory for a prototype-less bucket. Wraps the `NullProtoObj`
+ * constructor so callers do not need a `as Record<string, V>` cast at
+ * every call site to specialize the value type.
+ */
+export function createNullProtoBucket<V>(): Record<string, V> {
+  return new NullProtoObj() as Record<string, V>;
+}
+
+/**
  * Singleton frozen empty params object. Returned for every static-route
  * match so callers see a consistent (and harmless) reference. Frozen so a
  * downstream caller cannot mutate it and corrupt other matches.

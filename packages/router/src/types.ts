@@ -162,5 +162,9 @@ export interface MatchState {
  */
 export type MatchFn = (url: string, state: MatchState) => boolean;
 
-/** URL-segment decoder. Falls back to the raw input on percent decode failure. */
+/**
+ * URL-segment decoder. Throws when `decodeURIComponent` would throw —
+ * malformed percent escapes are the caller's (HTTP server boundary)
+ * responsibility, not the router's.
+ */
 export type DecoderFn = (raw: string) => string;

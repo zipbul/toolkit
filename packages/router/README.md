@@ -94,7 +94,7 @@ After `build()`, `add()` and `addAll()` throw `RouterError({ kind: 'router-seale
 
 ### `router.match(method, path)`
 
-Matches a URL against registered routes. Returns `MatchOutput<T> | null`. **Never throws** — invalid input (called before build, path exceeds `maxPathLength`, segment exceeds `maxSegmentLength`, no matching route) returns `null`.
+Matches a URL against registered routes. Returns `MatchOutput<T> | null`. The router treats `path` as an already-validated origin-form pathname (per RFC 7230 §5.3.1) — invalid percent-encoded sequences fall through to `decodeURIComponent` and propagate as `URIError`. The HTTP server boundary (`Bun.serve`, `Node http`, `Express`, `Fastify`, `Hono`) is responsible for handing the router a well-formed pathname. Calling `match()` before `build()` returns `null`.
 
 ```typescript
 const result = router.match('GET', '/users/42');
@@ -111,7 +111,7 @@ if (result) {
 | Value | When |
 |:------|:-----|
 | `'static'` | Path matched a literal route via O(1) `staticMap` lookup. The returned `MatchOutput` is shared and frozen — identical hits return the same object (`===` identity preserved). |
-| `'cache'` | `enableCache: true` and the path was previously resolved as `'dynamic'`. The cache stores a snapshot; mutating the returned `params` does not affect future hits. |
+| `'cache'` | The path was previously resolved as `'dynamic'` and is being served from the per-method hit cache (always-on, sized by `cacheSize`). The cache stores a snapshot; mutating the returned `params` does not affect future hits. |
 | `'dynamic'` | Path matched via a per-method tree walker (codegen specialist / codegen general / iterative / recursive). Each call returns a fresh `MatchOutput` with its own `params` object. |
 
 ### `router.allowedMethods(path)`
@@ -143,7 +143,7 @@ router.add('GET', '/api/v1/health', handler);
 
 ### Named parameters
 
-Capture a single path segment. Param values are percent-decoded by default (`decodeParams: true`).
+Capture a single path segment. Param values are always percent-decoded.
 
 ```typescript
 router.add('GET', '/users/:id', handler);
@@ -172,29 +172,26 @@ router.add('GET', '/:lang?/docs', handler);
 | `optionalParamBehavior` | `/en/docs` | `/docs` |
 |:------------------------|:-----------|:--------|
 | `'omit'` (default) | `{ lang: 'en' }` | `{}` (key absent) |
-| `'setUndefined'` | `{ lang: 'en' }` | `{ lang: undefined }` (key present) |
-| `'setEmptyString'` | `{ lang: 'en' }` | `{ lang: '' }` |
+| `'set-undefined'` | `{ lang: 'en' }` | `{ lang: undefined }` (key present) |
 
 ### Wildcards
 
-Capture the rest of the URL, including slashes. Wildcard values are **not** percent-decoded. Two semantics, two preferred spellings:
+Capture the rest of the URL, including slashes. Wildcard values are **not** percent-decoded. Two semantics, two distinct spellings — colon-form sugar (`:name+` / `:name*`) is rejected at parse time:
 
 | Pattern | Semantics | Empty match |
 |:--------|:----------|:------------|
-| `*name` | Star — match zero or more characters | `'/files'` against `/files/*path` → `{ path: '' }` |
-| `:name+` | Multi — match one or more characters | `'/assets'` against `/assets/:file+` → no match |
+| `*name`  | Star — match zero or more segments  | `'/files'` against `/files/*path` → `{ path: '' }` |
+| `*name+` | Multi — match one or more segments  | `'/assets'` against `/assets/*file+` → no match |
 
 ```typescript
 router.add('GET', '/files/*path', handler);
 // /files/a/b/c.txt → { path: 'a/b/c.txt' }
 // /files            → { path: '' }
 
-router.add('GET', '/assets/:file+', handler);
+router.add('GET', '/assets/*file+', handler);
 // /assets/style.css → { file: 'style.css' }
-// /assets           → no match
+// /assets           → no match (multi origin requires non-empty tail)
 ```
-
-The aliases `:name*` (≡ `*name`) and `*name+` (≡ `:name+`) are also accepted by the parser but the spellings above are preferred.
 
 <br>
 
@@ -216,11 +213,14 @@ interface RouterOptions {
 | `cacheSize` | `1000` | Per-method hit-cache capacity (rounded up to next power of two; second-chance / clock eviction). Must be a positive integer between 1 and 2^30 |
 | `optionalParamBehavior` | `'omit'` | Shape of `params` when an optional param is missing — `'omit'` drops the key, `'set-undefined'` writes `undefined` |
 
-Percent-decoding is always on for named params (wildcards stay raw). Path
-length and segment length are not bounded by the router — that gate
-belongs to the upstream framework / HTTP server. Regex anchors (`^` / `$`)
-are stripped silently. There is no `enableCache` toggle; the cache is
-always allocated lazily per-method (zero memory for an empty router).
+Percent-decoding is always on for named params (wildcards stay raw).
+Path length, segment length, and pathname grammar are not bounded by the
+router — those gates belong to the upstream framework / HTTP server.
+Regex anchors (`^` / `$`) inside `:name(...)` are rejected at parse time
+as `route-parse` (the router wraps every pattern in `^(?:...)$`
+automatically; user anchors would either double-anchor or contradict the
+wrapper). The cache is always allocated lazily per-method — zero memory
+for an empty router; no toggle.
 
 ### Cache trade-off
 
@@ -238,24 +238,29 @@ rejects further registrations.
 
 ### Regex Safety
 
-```typescript
-interface RegexSafetyOptions {
-  mode?: 'error' | 'warn';                   // Default: 'error'
-  maxLength?: number;                         // Default: 256
-  forbidBacktrackingTokens?: boolean;         // Default: true
-  forbidBackreferences?: boolean;             // Default: true
-  maxExecutionMs?: number;                    // Optional per-tester timeout
-  validator?: (pattern: string) => void;      // Custom validator
-}
-```
+Regex param patterns (`:id(\d+)` and similar) are validated at
+registration time and rejected as `regex-unsafe` when any of these
+guards trigger:
 
-By default, regex patterns are validated at registration time to prevent ReDoS. Patterns with backtracking-prone tokens (`.*`, `.+`, `(a+)+`) or backreferences are rejected. Set `mode: 'warn'` to log via `onWarn` instead of throwing.
+- nested unlimited quantifiers (`(a+)+`, `(a*)*`, `(a{1,})+`)
+- backreferences (`\1`, `\k<name>`)
+- capturing / lookaround / lookbehind / inline-flag groups —
+  only non-capturing `(?:...)` is allowed
+- alternation under repeat with overlapping branches (`(a|aa)+`)
+
+The guards are **always on** — there is no opt-out option. Reasoning:
+ReDoS prevention is a security default and weakening it is a regression,
+not an ergonomics knob. Catch the rejection in your test suite.
 
 <br>
 
 ## 🚨 Error Handling
 
-`add()`, `addAll()`, and `build()` throw `RouterError` with a structured `data` object. `match()` and `allowedMethods()` never throw — they return `null` / `[]` on failure.
+`add()`, `addAll()`, and `build()` throw `RouterError` with a structured
+`data` object. `match()` returns `null` for "no route matched" but
+**propagates** `URIError` from `decodeURIComponent` when handed a
+malformed percent-encoded pathname — caller responsibility. `allowedMethods()`
+returns `[]` for no routes and never throws (it never decodes).
 
 ```typescript
 import { Router, RouterError } from '@zipbul/router';
@@ -281,10 +286,12 @@ try {
 | `'route-conflict'` | Structural conflict — e.g. registering `/files/*a` then `/files/*b` for the same method, or registering `/files/x` after `/files/*path` |
 | `'route-parse'` | Invalid path syntax (no leading slash, unclosed regex group, illegal char in param name, etc.) |
 | `'param-duplicate'` | Same param name appears twice in one path (`/x/:id/y/:id`) |
-| `'regex-unsafe'` | Regex param failed the safety check (length / backtracking tokens / backreferences) |
-| `'regex-anchor'` | Regex param contains `^` or `$` (when `regexAnchorPolicy: 'error'`) |
+| `'regex-unsafe'` | Regex param failed the safety check (nested unlimited quantifier / backreference / capturing-or-lookaround group / overlapping alternation under repeat) |
 | `'method-limit'` | More than 32 distinct HTTP methods registered |
-| `'segment-limit'` | Segment length exceeds `maxSegmentLength`, segment count exceeds 64, or parameter count exceeds 32 per path |
+| `'method-empty'` / `'method-invalid-token'` | Method token violates the HTTP token grammar (RFC 9110 §5.6.2) |
+| `'path-missing-leading-slash'` / `'path-query'` / `'path-fragment'` / `'path-control-char'` / `'path-non-ascii'` / `'path-invalid-pchar'` / `'path-malformed-percent'` / `'path-invalid-utf8'` / `'path-encoded-slash'` / `'path-encoded-control'` / `'path-dot-segment'` / `'path-empty-segment'` | The registered path violates the router-grammar gate at registration time |
+| `'router-options-invalid'` | A `RouterOptions` field failed validation (e.g. `cacheSize` outside `[1, 2^30]`) |
+| `'route-validation'` | One or more routes failed validation during `build()` — `data.errors` lists each per-route failure |
 
 ### Conflict examples
 
@@ -326,7 +333,10 @@ Bun.serve({
     const url = new URL(request.url);
     const method = request.method as HttpMethod;
 
-    // match() never throws — null means no route matched.
+    // match() returns null for no route. `URL(...).pathname` is always
+    // origin-form per RFC 7230, so `decodeURIComponent` failures only
+    // surface here on adversarial requests with malformed `%xx` — wrap
+    // in try/catch if you want to map them to 400 Bad Request.
     const result = router.match(method, url.pathname);
     if (result) return result.value(result.params);
 
@@ -359,7 +369,14 @@ Benchmarked on Bun 1.3.13, Intel i7-13700K @ 5.45 GHz. Numbers are p75 from `ben
 | wildcard | 27.09 ns | **23.45 ns** | 59.95 ns | 75.91 ns | 89.00 ns | 115.97 ns |
 | miss | 15.11 ns | **14.22 ns** | 48.79 ns | 44.73 ns | 20.06 ns | 25.15 ns |
 
-`rou3`'s static lookup edges ahead by ~120 ps because it skips the path-normalization pass; the dynamic-route gap (param / wildcard) widens once parsing is involved. The wildcard / miss leads of `memoirist` are within ~1 ns and reflect its leaner safety surface — `@zipbul/router` keeps `regexSafety`, `maxPathLength`, `maxSegmentLength`, and structured-error handling on the hot path.
+`rou3`'s static lookup edges ahead by ~120 ps because it skips the
+path-normalization pass; the dynamic-route gap (param / wildcard)
+widens once parsing is involved. The wildcard / miss leads of `memoirist`
+are within ~1 ns and reflect its leaner safety surface — `@zipbul/router`
+keeps regex-safety validation and structured error handling on the hot
+path. Numbers above are p75 from a single bench run; rerun
+`bench/comparison.bench.ts` against your own hardware before depending
+on the leaderboard.
 
 <br>
 

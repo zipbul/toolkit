@@ -31,7 +31,7 @@ export interface MatchConfig<T> {
   readonly hasAnyTree: boolean;
   readonly hasAnyStatic: boolean;
   readonly staticOutputsByMethod: Array<Record<string, MatchOutput<T>> | undefined>;
-  readonly methodCodes: Record<string, number>;
+  readonly methodCodes: Readonly<Record<string, number>>;
   readonly trees: Array<MatchFn | null>;
   readonly matchState: MatchState;
   readonly handlers: T[];

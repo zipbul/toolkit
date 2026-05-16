@@ -8,7 +8,7 @@ import type {
 import type { RegistrationSnapshot } from './registration';
 
 import { MethodRegistry } from '../method-registry';
-import { EMPTY_PARAMS, NullProtoObj, STATIC_META } from '../internal';
+import { EMPTY_PARAMS, STATIC_META, createNullProtoBucket } from '../internal';
 import {
   buildPathNormalizer,
   type PathNormalizer,
@@ -28,7 +28,7 @@ export interface BuildResult<T> {
   /** Per-static-path 32-bit method-availability mask (bit `methodCode`). */
   staticPathMethodMask: Record<string, number>;
   activeMethodCodes: ReadonlyArray<readonly [string, number]>;
-  methodCodes: Record<string, number>;
+  methodCodes: Readonly<Record<string, number>>;
   matchState: MatchState;
   normalizePath: PathNormalizer;
   terminalSlab: Int32Array;
@@ -46,7 +46,7 @@ export function buildFromRegistration<T>(
   methodRegistry: MethodRegistry,
 ): BuildResult<T> {
   const allCodes = methodRegistry.getAllCodes();
-  const methodCodes = methodRegistry.getCodeMap() as Record<string, number>;
+  const methodCodes = methodRegistry.getCodeMap();
 
   // Materialize the static-output buckets up front so the per-method
   // walker/active-codes loop below can decide activeness in one pass.
@@ -55,7 +55,7 @@ export function buildFromRegistration<T>(
     const inputBucket = snapshot.staticByMethod[mc];
     if (inputBucket === undefined) continue;
 
-    const outBucket = new NullProtoObj() as Record<string, MatchOutput<T>>;
+    const outBucket = createNullProtoBucket<MatchOutput<T>>();
     staticOutputsByMethod[mc] = outBucket;
 
     for (const path in inputBucket) {

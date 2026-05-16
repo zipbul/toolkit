@@ -255,8 +255,8 @@ function insertParamPart(
   }
 
   const testerOrErr = resolveOrCompileTester(part, testerCache, undoLog);
-  if (testerOrErr !== null && 'kind' in testerOrErr) return testerOrErr;
-  const tester = testerOrErr as PatternTesterFn | null;
+  if (isResolvedTesterError(testerOrErr)) return testerOrErr;
+  const tester = testerOrErr;
 
   if (node.paramChild === null) {
     const created: ParamSegment = {
@@ -325,6 +325,15 @@ function insertParamPart(
  * `null` for an unconstrained param, the cached/compiled tester on
  * success, or a `RouterErrorData` for a regex compile failure.
  */
+/** Type guard so callers can narrow `resolveOrCompileTester` results
+ *  without an `as` cast. RouterErrorData always carries a `kind` string;
+ *  PatternTesterFn (function value) does not. */
+function isResolvedTesterError(
+  result: PatternTesterFn | null | RouterErrorData,
+): result is RouterErrorData {
+  return result !== null && typeof result === 'object' && 'kind' in result;
+}
+
 function resolveOrCompileTester(
   part: { name: string; pattern: string | null },
   testerCache: Map<string, PatternTesterFn>,

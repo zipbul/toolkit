@@ -1,5 +1,6 @@
 export {
   NullProtoObj,
+  createNullProtoBucket,
   EMPTY_PARAMS,
   STATIC_META,
   CACHE_META,

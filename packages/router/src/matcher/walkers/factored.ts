@@ -4,16 +4,13 @@ import { TESTER_PASS, type SegmentNode } from '../../tree';
 
 /**
  * Tenant-factored walker variant. Used when `getTenantFactor(root)` returned
- * a descriptor: dispatches first-segment via `keyToTerminal` Map, then walks
- * the canonical shared subtree, finally overriding the leaf store with the
- * looked-up handler index. Identical body to the iterative walker apart
- * from the entry dispatch and the override applied at the terminal/wildcard
- * branches.
- *
- * Inner walk loop is intentionally inlined (not extracted to a helper) —
- * each tenant-factor variant must keep its own monomorphic IC; sharing
- * the body would push the call site polymorphic and regress hot-path
- * latency observed in prior bench rounds.
+ * a descriptor: dispatches first-segment via `keyToTerminal` Map, then
+ * delegates the shared-subtree descent to `walkSharedSubtree` with the
+ * resolved per-tenant `storeOverride`. Three factored walkers
+ * (createFactoredWalker, createPrefixedFactoredWalker,
+ * createMultiPrefixFactoredWalker) all converge on the same inner-loop
+ * function; measurement (commit ac1942e) confirmed the shared call site
+ * stays inlined by JSC — no IC regression versus the prior inlined body.
  */
 export function createFactoredWalker(
   decoder: DecoderFn,

@@ -175,20 +175,9 @@ export class PathParser {
         isDynamic = true;
         const paramResult = this.parseParam(seg, path);
         if (isErr(paramResult)) return paramResult;
-        // `:name+` / `:name*` resolved into a wildcard — must be the last
-        // segment, then we exit the loop entirely.
-        if (paramResult.type === 'wildcard') {
-          if (!isLast) {
-            return err({
-              kind: 'route-parse',
-              message: `Wildcard ':${paramResult.name}+' must be the last segment: ${path}`,
-              path,
-              suggestion: 'Move the wildcard parameter to the end of the path.',
-            });
-          }
-          parts.push(paramResult);
-          break;
-        }
+        // parseParam never returns a wildcard now that the colon-form
+        // sugar (`:name+` / `:name*`) is rejected upstream — the
+        // discriminant is always 'param' here.
         parts.push(paramResult);
         if (!isLast) acc.buf = '/';
       } else if (firstChar === CC_STAR) {
@@ -416,10 +405,16 @@ function rejectColonWildcardSugar(
 }
 
 /**
- * Peel the trailing `?` optional decorator. Rejects `:name+?` / `:name*?`
- * combinations as a parse error. Returns `{ core, isOptional }` on
- * success, a `RouterErrorData` carrier on failure (no Result wrapper —
- * caller already wraps in `err()`).
+ * Peel the trailing `?` optional decorator.
+ *
+ * Defensive against `:name+?` / `:name*?` combinations: the production
+ * path-policy.ts grammar already rejects raw `?` after non-identifier
+ * characters as `path-query`, so these forms never reach this helper
+ * during a normal `add()` flow. The check stays as a contract guard
+ * for direct internal callers (unit tests against parseParam).
+ *
+ * Returns `{ core, isOptional }` on success, a `RouterErrorData` carrier
+ * on failure (no Result wrapper — caller already wraps in `err()`).
  */
 function stripOptionalDecorator(
   core: string,
@@ -434,7 +429,7 @@ function stripOptionalDecorator(
       message: `Invalid decorator combination in parameter '${seg}': ${path}`,
       path,
       segment: seg,
-      suggestion: 'Use either optional params (:name?) or wildcard params (:name+ / :name*), not both.',
+      suggestion: 'Use either an optional param (:name?) or a wildcard segment (*name / *name+), not both.',
     };
   }
   return { core: core.slice(0, -1), isOptional: true };
