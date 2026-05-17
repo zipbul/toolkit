@@ -77,6 +77,32 @@ unbounded growth across repeated builds** (verified in
 `test/integration/memory-bounds.test.ts`), not a strict per-build
 budget.
 
+## 100k routes baseline — zipbul vs memoirist (head-to-head)
+
+Re-measured after the 14 perf commits to confirm the codegen
+architecture still scales. Both adapters benchmarked via
+`bench/100k-verification.ts` (zipbul) and `bench/100k-external-baselines.ts`
+(memoirist), Bun 1.3.13 / Linux x64.
+
+| Scenario | zipbul build | zipbul match | zipbul RSS | memoirist build | memoirist match | memoirist RSS |
+|:---|---:|---:|---:|---:|---:|---:|
+| 100k static | 513 ms | 2.88-4.09 ns | 107 MB | 30 817 ms | 67-89 ns | 24 MB |
+| 100k param | 671 ms | 8.65-10.87 ns | 222 MB | **TIMEOUT** (>71 s) | n/a | n/a |
+| 100k mixed | 644 ms | 4.74-17.64 ns | 137 MB | (skipped) | (skipped) | (skipped) |
+
+**Read**:
+- zipbul codegen wins **build by 60-100×** and **match by 17-22×** on 100k.
+- `100k param` is a memoirist hard-stop — the radix-tree build exceeded
+  the 60-second cap on Bun 1.3.13.
+- zipbul pays the trade-off in RSS (~4× higher than memoirist on static)
+  because of the specialized `new Function()` matchImpl + per-method
+  hit cache.
+
+This rules out the recurring "rewrite to memoirist's radix structure"
+suggestion. The numbers above are the same shape that originally led
+to the codegen design choice — and the gap has *widened* after the
+recent perf commits, not closed.
+
 ## Cross-router comparison
 
 `bun bench/comparison.bench.ts` — `mitata`-driven head-to-head against
