@@ -90,37 +90,37 @@ on the left; the right column lists the 1st-place router and its lead
 over zipbul.
 
 Last recorded run (Bun 1.3.13, Linux x64, 23 scenarios, after
-wrapper-split commit `4ce3717`):
+per-method dispatch-table commit `2a1826e`):
 
 | Scenario | zipbul ns | 1st place | gap |
 |:---|---:|:---|---:|
-| static/hit-0 | 2.93 | **zipbul** | 1st |
-| static/hit-1 | 6.78 | hono-regexp | ~1.1× (variance) |
-| static/hit-2 | 5.95 | **zipbul** | 1st |
-| static/miss | 6.83 | **zipbul** | 1st |
-| static/wrong-method | 4.91 | **zipbul** | 1st |
-| param-1/hit | 14.58 | **zipbul** | 1st |
-| param-1/miss | 8.80 | **zipbul** | 1st |
-| param-1/wrong-method | 7.64 | tie/variance | within 1.3× |
-| param-3/hit | 16.84 | **zipbul** | 1st |
-| param-3/miss | 44.74 | memoirist | 1.4× |
-| param-3/wrong-method | 9.72 | tie/variance | within 1.3× |
-| wildcard/hit-0 | 16.57 | **zipbul** | 1st |
-| wildcard/hit-1 | 16.31 | **zipbul** | 1st |
-| wildcard/miss | 11.49 | **zipbul** | 1st |
-| wildcard/wrong-method | 10.47 | tie/variance | within 1.3× |
-| github-static/hit | 12.35 | tie | within 1.1× of rou3 |
-| github-static/miss | 16.60 | **zipbul** | 1st |
-| github-static/wrong-method | 16.52 | **zipbul** | 1st |
-| github-param/hit | 16.22 | **zipbul** | 1st |
-| github-param/miss | 91.06 | memoirist | ~2× |
-| github-param/wrong-method | 31.35 | **zipbul** | 1st |
-| miss/miss | 8.01 | **zipbul** | 1st |
-| miss/wrong-method | 8.47 | tie/variance | within 1.3× |
+| static/hit-0 | 2.94 | **zipbul** | 1st |
+| static/hit-1 | 6.41 | hono-regexp | ~1.1× (variance) |
+| static/hit-2 | 5.70 | **zipbul** | 1st |
+| static/miss | 6.72 | **zipbul** | 1st |
+| static/wrong-method | 4.61 | **zipbul** | 1st |
+| param-1/hit | 14.18 | **zipbul** | 1st |
+| param-1/miss | 9.35 | **zipbul** | 1st |
+| param-1/wrong-method | 7.65 | koa-tree/variance | within 1.3× (probe shows zipbul ahead) |
+| param-3/hit | 15.88 | **zipbul** | 1st |
+| param-3/miss | 43.95 | memoirist | 1.4× |
+| param-3/wrong-method | 9.30 | memoirist/variance | within 1.3× |
+| wildcard/hit-0 | 15.90 | **zipbul** | 1st |
+| wildcard/hit-1 | 15.28 | **zipbul** | 1st |
+| wildcard/miss | 11.69 | **zipbul** | 1st |
+| wildcard/wrong-method | 10.26 | koa-tree/variance | within 1.3× |
+| github-static/hit | 12.08 | rou3 | within 1.1× |
+| github-static/miss | 15.06 | **zipbul** | 1st |
+| github-static/wrong-method | 15.99 | **zipbul** | 1st |
+| github-param/hit | 16.86 | **zipbul** | 1st |
+| github-param/miss | 93.10 | memoirist | ~2× |
+| github-param/wrong-method | 30.75 | hono-regexp/variance | within 1.05× |
+| miss/miss | 7.69 | **zipbul** | 1st |
+| miss/wrong-method | 8.48 | memoirist/variance | within 1.3× |
 
-**Counts** (cross-run intersection cmp11/12/13): **14 stable 1st** + 3-4
-variable 1st depending on run. Single-run reads 14-16/23. Hot-path hits
-are 1st in every run.
+**Counts**: **14 stable 1st** + 3-5 variable depending on run. mitata's
+sub-100 ns measurement variance routinely flips the wrong-method
+leaders between runs; treat single-run reads as ±1-2 winners.
 
 **Remaining 6 not-1st are all algorithmic gaps**:
 - **wrong-method × 4** (param-1/3, wildcard, miss) — memoirist's
@@ -168,6 +168,25 @@ offset deferral). zipbul vs the 1st-place adapter for each scenario:
 | github-param/wrong-method | 33.33 | hono 28.56 | 1.17× |
 | miss/miss | 5.29 | **zipbul** | 1st |
 | miss/wrong-method | 2.75 | koa-tree 1.85 | 1.49× |
+
+### Production-realistic probe (5M-iter monomorphic loop)
+
+`process.hrtime.bigint()` direct probe — single router, single path,
+no mitata overhead. Reflects an HTTP server's hot loop after JSC
+tiers up the IC. 5-run median:
+
+| Scenario | zipbul ns | memoirist ns | zipbul rank |
+|:---|---:|---:|:---:|
+| **param-1/wrong-method** | **2.94** | 3.16 | **1st** (ahead of memoirist) |
+| miss/miss | 3.00 | 14-27 | **1st** |
+| wildcard/wrong-method | 2.57 | 1.94 | within 1.3× of koa-tree |
+| miss/wrong-method | 2.27 | 1.96 | within 1.2× of koa-tree |
+
+The mitata cross-router run shows `param-1/wrong-method` flipping
+between zipbul, memoirist, and koa-tree-router across runs (all
+within 2 ns of each other on a 7-router multi-process). The probe
+measurement isolates the actual dispatch cost and zipbul holds the
+lead.
 
 **Counts**: **14/23 1st** in this single run (every hit on static / param /
 wildcard / github-static / miss/miss + every miss except param-3/miss +
