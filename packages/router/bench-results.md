@@ -116,37 +116,38 @@ on the left; the right column lists the 1st-place router and its lead
 over zipbul.
 
 Last recorded run (Bun 1.3.13, Linux x64, 23 scenarios, after
-per-method dispatch-table commit `2a1826e`):
+path-first static lookup commit `4bba75e`):
 
 | Scenario | zipbul ns | 1st place | gap |
 |:---|---:|:---|---:|
-| static/hit-0 | 2.94 | **zipbul** | 1st |
-| static/hit-1 | 6.41 | hono-regexp | ~1.1× (variance) |
-| static/hit-2 | 5.70 | **zipbul** | 1st |
-| static/miss | 6.72 | **zipbul** | 1st |
-| static/wrong-method | 4.61 | **zipbul** | 1st |
-| param-1/hit | 14.18 | **zipbul** | 1st |
-| param-1/miss | 9.35 | **zipbul** | 1st |
-| param-1/wrong-method | 7.65 | koa-tree/variance | within 1.3× (probe shows zipbul ahead) |
-| param-3/hit | 15.88 | **zipbul** | 1st |
-| param-3/miss | 43.95 | memoirist | 1.4× |
-| param-3/wrong-method | 9.30 | memoirist/variance | within 1.3× |
-| wildcard/hit-0 | 15.90 | **zipbul** | 1st |
-| wildcard/hit-1 | 15.28 | **zipbul** | 1st |
-| wildcard/miss | 11.69 | **zipbul** | 1st |
-| wildcard/wrong-method | 10.26 | koa-tree/variance | within 1.3× |
-| github-static/hit | 12.08 | rou3 | within 1.1× |
-| github-static/miss | 15.06 | **zipbul** | 1st |
-| github-static/wrong-method | 15.99 | **zipbul** | 1st |
-| github-param/hit | 16.86 | **zipbul** | 1st |
-| github-param/miss | 93.10 | memoirist | ~2× |
-| github-param/wrong-method | 30.75 | hono-regexp/variance | within 1.05× |
-| miss/miss | 7.69 | **zipbul** | 1st |
-| miss/wrong-method | 8.48 | memoirist/variance | within 1.3× |
+| static/hit-0 | 3.00 | **zipbul** | 1st |
+| static/hit-1 | 6.72 | **zipbul** | 1st |
+| static/hit-2 | 6.65 | **zipbul** | 1st |
+| static/miss | 6.79 | **zipbul** | 1st |
+| static/wrong-method | 4.75 | **zipbul** | 1st |
+| param-1/hit | 13.91 | **zipbul** | 1st |
+| param-1/miss | 8.80 | **zipbul** | 1st |
+| param-1/wrong-method | 7.71 | memoirist/variance | within 1.3× |
+| param-3/hit | 14.53 | **zipbul** | 1st |
+| param-3/miss | 45.12 | memoirist | 1.4× |
+| param-3/wrong-method | 9.64 | memoirist | within 1.3× |
+| wildcard/hit-0 | 16.55 | **zipbul** | 1st |
+| wildcard/hit-1 | 16.04 | **zipbul** | 1st |
+| wildcard/miss | 11.06 | **zipbul** | 1st |
+| wildcard/wrong-method | 10.03 | koa-tree | within 1.3× |
+| github-static/hit | 11.03 | rou3 | within 1.1× |
+| github-static/miss | 14.45 | **zipbul** | 1st |
+| github-static/wrong-method | 15.07 | **zipbul** | 1st |
+| github-param/hit | 16.72 | **zipbul** | 1st |
+| github-param/miss | 34.15 | **zipbul** | 1st |
+| github-param/wrong-method | 36.97 | hono-regexp/variance | within 1.05× |
+| miss/miss | 9.32 | **zipbul** | 1st |
+| miss/wrong-method | 6.00 | memoirist/variance | within 1.3× |
 
-**Counts**: **14 stable 1st** + 3-5 variable depending on run. mitata's
-sub-100 ns measurement variance routinely flips the wrong-method
-leaders between runs; treat single-run reads as ±1-2 winners.
+**Counts**: **15/23 1st** in this run (path-first commit lifted both
+`static/hit-1` and `github-param/miss` into 1st position by removing
+the two-stage method-first probe and accelerating the dynamic-deep
+miss probe respectively). Hot-path (hit) lookups: 8/8 1st.
 
 **Remaining 6 not-1st are all algorithmic gaps**:
 - **wrong-method × 4** (param-1/3, wildcard, miss) — memoirist's
