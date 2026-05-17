@@ -118,13 +118,20 @@ function emitMethodDispatch(
     const [name, code] = singleMethod;
     return `if (method !== ${JSON.stringify(name)}) return null;\nvar mc = ${code};`;
   }
-  // Multi-method: switch on `method.charCodeAt(0)` with case-grouped
-  // string compares. JSC compiles charCode switches into a dense jump
-  // table; string-switch falls back to interned-pointer hash chasing.
-  // HTTP method names rarely collide on first char (GET/POST/DELETE
-  // each have a unique starter; only P-prefix routes — POST/PUT/PATCH —
-  // share an arm), so most active sets pay a single jump + one
-  // string compare. Empty-active-set collapses to default-only.
+  return `var mc; ${emitMethodCharSwitch(activeMethodCodes, 'mc = $CODE; break;', 'return null;')}`;
+}
+
+/** Emit a `switch (method.charCodeAt(0))` over the active method names.
+ *  `onHit` is templated with `$CODE` replaced by the method's numeric
+ *  code; `onMiss` is the body for the default arm and the per-bucket
+ *  fall-through. Used by both the inline multi-method dispatch and the
+ *  wrapper-split dispatch. JSC compiles charCode switches into a dense
+ *  jump table; string switches degrade to interned-pointer hash chasing. */
+function emitMethodCharSwitch(
+  activeMethodCodes: ReadonlyArray<readonly [string, number]> | null,
+  onHit: string,
+  onMiss: string,
+): string {
   const byFirst = new Map<number, Array<readonly [string, number]>>();
   if (activeMethodCodes !== null) {
     for (const entry of activeMethodCodes) {
@@ -138,11 +145,11 @@ function emitMethodDispatch(
   for (const [c, bucket] of byFirst) {
     let inner = '';
     for (const [name, code] of bucket) {
-      inner += `if (method === ${JSON.stringify(name)}) { mc = ${code}; break; }\n`;
+      inner += `if (method === ${JSON.stringify(name)}) { ${onHit.replace('$CODE', String(code))} }\n`;
     }
-    arms += `case ${c}: {\n${inner}return null;\n}`;
+    arms += `case ${c}: {\n${inner}${onMiss}\n}`;
   }
-  return `var mc; switch (method.charCodeAt(0)) {\n${arms}default: return null;\n}`;
+  return `switch (method.charCodeAt(0)) {\n${arms}default: ${onMiss}\n}`;
 }
 
 /** Emit `var sp = path;` plus the active normalization steps. */
@@ -343,49 +350,78 @@ function compileStaticOnlyMultiMethod<T>(cfg: MatchConfig<T>): CompiledMatch<T> 
  * Mixed router (any tree, optionally with statics). Pre-probes static on
  * the raw path, normalizes, retries static on the normalized path, then
  * cache, then walker + slab unpack + cache write.
+ *
+ * Multi-method form uses a wrapper-split: a tiny `match(method, path)`
+ * fans out via a charCode switch into a `matchActive(mc, path)` body.
+ * Wrong-method calls return in two ops from the wrapper without
+ * activating the full body's closure prologue — matching memoirist's
+ * one-step `this.root[method] === undefined` short-circuit while
+ * keeping the codegen-specialized hot-path body for active methods.
  */
 function compileMixed<T>(cfg: MatchConfig<T>, singleMethod: SingleMethodSpec | null): CompiledMatch<T> {
-  const lines: string[] = [emitMethodDispatch(singleMethod, cfg.activeMethodCodes)];
-
-  if (cfg.hasAnyStatic && cfg.hasAnyTree) {
-    lines.push(emitPreNormalizeStaticProbe(singleMethod));
+  // Body lines shared by both single-method (inline) and multi-method
+  // (matchActive) shapes. `singleMethod === null` here means the
+  // emitted code uses the runtime `mc` variable (set by either the
+  // inline method dispatch or the wrapper's switch arm).
+  function emitBodyLines(specForBody: SingleMethodSpec | null): string[] {
+    const out: string[] = [];
+    if (cfg.hasAnyStatic && cfg.hasAnyTree) {
+      out.push(emitPreNormalizeStaticProbe(specForBody));
+    }
+    out.push(emitNormalize(cfg, 'sp'));
+    if (cfg.hasAnyStatic) {
+      out.push(emitStaticBucketProbe(specForBody, 'sp', /* gateOnNormalize */ true));
+    }
+    if (cfg.hasAnyTree) {
+      out.push(emitRootMaskGate(specForBody));
+    }
+    out.push(emitHitCacheProbe());
+    out.push(cfg.hasAnyTree ? emitWalkerAndPack(cfg, specForBody) : 'return null;');
+    return out;
   }
-  lines.push(emitNormalize(cfg, 'sp'));
-  if (cfg.hasAnyStatic) {
-    // Gate the post-normalize probe on `sp !== path` — when normalization
-    // is a no-op (default config) the pre-probe already covered this key.
-    lines.push(emitStaticBucketProbe(singleMethod, 'sp', /* gateOnNormalize */ true));
-  }
-  // Root-fast-miss gate emitted before the hit-cache probe so a
-  // guaranteed miss skips both the cache Map.get and the walker call.
-  // Tree-bearing routers only — static-only never reach the walker.
-  if (cfg.hasAnyTree) {
-    lines.push(emitRootMaskGate(singleMethod));
-  }
-  lines.push(emitHitCacheProbe());
-  lines.push(cfg.hasAnyTree ? emitWalkerAndPack(cfg, singleMethod) : 'return null;');
-
-  const body = lines.join('\n');
-  // string-switch dispatch elides methodCodes + activeMethodMask loads.
-  // Dropping the unused captures keeps the matchImpl closure small —
-  // JSC's IC partition tracks every closure cell, and unused captures
-  // cost prologue time on every dispatch.
-  const factory = new Function(
-    'activeBucket', 'tr0', 'rootMaskSingle', 'staticOutputsByMethod',
-    'rootFirstCharMaskByMethod', 'trees', 'matchState', 'handlers',
-    'hitCacheByMethod',
-    'EMPTY_PARAMS', 'CACHE_META', 'DYNAMIC_META', 'terminalSlab', 'paramsFactories',
-    `return function match(method, path) {\n${body}\n};`,
-  );
 
   const activeBucket = singleMethod !== null
     ? cfg.staticOutputsByMethod[singleMethod[1]] ?? Object.create(null)
     : Object.create(null);
   const tr0 = singleMethod !== null ? (cfg.trees[singleMethod[1]] ?? null) : null;
-
   const rootMaskSingle = singleMethod !== null
     ? (cfg.rootFirstCharMaskByMethod[singleMethod[1]] ?? null)
     : null;
+
+  let source: string;
+  if (singleMethod !== null) {
+    // Single-method: inline method dispatch + body. No wrapper-split —
+    // the literal `if (method !== "GET") return null;` is already a
+    // one-branch wrong-method exit.
+    const body = [emitMethodDispatch(singleMethod, cfg.activeMethodCodes), ...emitBodyLines(singleMethod)].join('\n');
+    source = `return function match(method, path) {\n${body}\n};`;
+  } else {
+    // Multi-method wrapper-split: tiny `match` fans out into `matchActive`
+    // via a charCode switch. Wrong-method exits before entering the
+    // active body's closure prologue.
+    const activeBody = emitBodyLines(null).join('\n');
+    const wrapperSwitch = emitMethodCharSwitch(
+      cfg.activeMethodCodes,
+      'return matchActive($CODE, path);',
+      'return null;',
+    );
+    source = `
+      function matchActive(mc, path) {
+        ${activeBody}
+      }
+      return function match(method, path) {
+        ${wrapperSwitch}
+      };
+    `;
+  }
+
+  const factory = new Function(
+    'activeBucket', 'tr0', 'rootMaskSingle', 'staticOutputsByMethod',
+    'rootFirstCharMaskByMethod', 'trees', 'matchState', 'handlers',
+    'hitCacheByMethod',
+    'EMPTY_PARAMS', 'CACHE_META', 'DYNAMIC_META', 'terminalSlab', 'paramsFactories',
+    source,
+  );
 
   const compiled = factory(
     activeBucket, tr0, rootMaskSingle, cfg.staticOutputsByMethod,
