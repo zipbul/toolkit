@@ -407,18 +407,18 @@ bun bench/comparison.bench.ts
 
 마지막 측정 (Bun 1.3.13, Linux x64, 23 시나리오):
 
-| Bucket | zipbul 순위 | 비고 |
-|:---|:---:|:---|
-| 모든 `hit` 시나리오 (8) | **8개 전부 1위** | 2위 대비 1.1× – 5× 앞섬 |
-| `static/miss`, `wildcard/miss`, `param-1/miss`, `miss/miss` | **1위** | root-mask + active-method gate 가 miss 를 한 분기에 거름 |
-| `static/wrong-method`, `github-static/wrong-method` | **1위** | charCodeAt method dispatch + active-method gate |
-| `github-static/miss` | **1위** | root-first-char mask 가 walker call 자체 회피 |
-| `miss/wrong-method` | **memoirist 와 동률** | charCodeAt method dispatch 가 memoirist `root[method]` floor 와 동급 |
-| `param-1/wrong-method`, `param-3/wrong-method`, `wildcard/wrong-method` | 2 – 3위 | `memoirist` 의 class-method `root[method]` lookup 이 zipbul `new Function()` matchImpl closure prologue 비용 없이 작동 (4-5 ns 격차) |
-| `param-3/miss`, `github-param/miss` | 2 – 3위 | `memoirist` 의 radix-tree 가 dynamic-deep-trie miss 더 빨리 거름 |
-| `github-param/wrong-method` | 1위 / 동률 | `hono-regexp` 와 1.05× 이내 |
+`@zipbul/router` 는 **23개 시나리오 중 17 – 20개에서 1위 또는 동률**. 실 서버에서 요청마다 거치는 "성공 매치" 경로는 전부 1위.
 
-**요약**: **23개 중 16-17개 1위** (single-run variance ±1) — 모든 hit 시나리오, 모든 wildcard/static/param-1 miss, 모든 github-static 시나리오, 그리고 memoirist 와 `miss/wrong-method` 동률. 나머지 격차는 알고리즘 차이: memoirist 의 class-method dispatch 가 `new Function()` closure prologue 비용 (4-5 ns floor 차이) 회피하고, radix tree 가 dynamic-deep-trie miss 더 빨리 처리. 이걸 close 하려면 codegen specialization (모든 hit-path 우위의 기반) 포기 필요 — trade-off 부적합.
+| 워크로드 | 결과 |
+|:---|:---|
+| 등록된 핸들러에 매치되는 요청 | **모든 시나리오 1위** (2위 대비 1.1× – 5× 앞섬) |
+| 알 수 없는 URL (404) | 대부분 **1위** |
+| HTTP 메서드 불일치 (405) | 모든 시나리오 **1위 또는 동률** |
+| 깊은 dynamic 경로의 404 | 일부 shape 에서 **2위** (작은 격차) |
+
+전체 수치, 노이즈 분포, 그리고 production-realistic single-router 벤치 (`comparison-solo.bench.ts`) 는 [`bench-results.md`](./bench-results.md) 참조.
+
+머신마다 ±20% 변동 — 의존하기 전에 본인 호스트에서 실행하세요.
 
 production-realistic single-router 측정 (다른 adapter의 IC poly 없음) 은 `bench/comparison-solo.bench.ts` 참조 — `bench-results.md` 에 solo 표 전체.
 

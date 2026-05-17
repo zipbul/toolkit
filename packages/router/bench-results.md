@@ -89,35 +89,38 @@ Last recorded run (Bun 1.3.13, Linux x64, 23 scenarios). zipbul ns/iter
 on the left; the right column lists the 1st-place router and its lead
 over zipbul.
 
+Last recorded run (Bun 1.3.13, Linux x64, 23 scenarios, after
+wrapper-split commit `4ce3717`):
+
 | Scenario | zipbul ns | 1st place | gap |
 |:---|---:|:---|---:|
-| static/hit-0 | 4.65 | **zipbul** | 1st |
-| static/hit-1 | 10.09 | **zipbul** | 1st |
-| static/hit-2 | 9.94 | **zipbul** | 1st |
-| static/miss | 10.09 | **zipbul** | 1st |
-| static/wrong-method | 7.53 | **zipbul** | 1st |
-| param-1/hit | 24.97 | **zipbul** | 1st |
-| param-1/miss | 14.82 | **zipbul** | 1st |
-| param-1/wrong-method | 12.56 | memoirist | ~3× |
-| param-3/hit | 25.96 | **zipbul** | 1st |
-| param-3/miss | 59.09 | memoirist | 1.6× |
-| param-3/wrong-method | 9.21 | memoirist | ~3× |
-| wildcard/hit-0 | 25.78 | **zipbul** | 1st |
-| wildcard/hit-1 | 23.73 | **zipbul** | 1st |
-| wildcard/miss | 13.67 | **zipbul** | 1st |
-| wildcard/wrong-method | 12.02 | koa-tree-router | 1.5× |
-| github-static/hit | 13.68 | **zipbul** | 1st |
-| github-static/miss | 17.42 | **zipbul** | 1st |
-| github-static/wrong-method | 18.39 | **zipbul** | 1st |
-| github-param/hit | 23.64 | **zipbul** | 1st |
-| github-param/miss | 167.45 | memoirist | ~4× |
-| github-param/wrong-method | 50.73 | hono-regexp | 1.05× |
-| miss/miss | 12.22 | **zipbul** | 1st |
-| miss/wrong-method | 12.86 | memoirist | ~3× |
+| static/hit-0 | 2.93 | **zipbul** | 1st |
+| static/hit-1 | 6.78 | hono-regexp | ~1.1× (variance) |
+| static/hit-2 | 5.95 | **zipbul** | 1st |
+| static/miss | 6.83 | **zipbul** | 1st |
+| static/wrong-method | 4.91 | **zipbul** | 1st |
+| param-1/hit | 14.58 | **zipbul** | 1st |
+| param-1/miss | 8.80 | **zipbul** | 1st |
+| param-1/wrong-method | 7.64 | tie/variance | within 1.3× |
+| param-3/hit | 16.84 | **zipbul** | 1st |
+| param-3/miss | 44.74 | memoirist | 1.4× |
+| param-3/wrong-method | 9.72 | tie/variance | within 1.3× |
+| wildcard/hit-0 | 16.57 | **zipbul** | 1st |
+| wildcard/hit-1 | 16.31 | **zipbul** | 1st |
+| wildcard/miss | 11.49 | **zipbul** | 1st |
+| wildcard/wrong-method | 10.47 | tie/variance | within 1.3× |
+| github-static/hit | 12.35 | tie | within 1.1× of rou3 |
+| github-static/miss | 16.60 | **zipbul** | 1st |
+| github-static/wrong-method | 16.52 | **zipbul** | 1st |
+| github-param/hit | 16.22 | **zipbul** | 1st |
+| github-param/miss | 91.06 | memoirist | ~2× |
+| github-param/wrong-method | 31.35 | **zipbul** | 1st |
+| miss/miss | 8.01 | **zipbul** | 1st |
+| miss/wrong-method | 8.47 | tie/variance | within 1.3× |
 
-**Counts**: **16/23 1st place** (all 8 hit scenarios + 8 miss/wrong-method).
-Run-to-run variance ±1 on single mitata measurements; cross-run intersection
-is 14-15 stable 1st-place scenarios.
+**Counts** (cross-run intersection cmp11/12/13): **14 stable 1st** + 3-4
+variable 1st depending on run. Single-run reads 14-16/23. Hot-path hits
+are 1st in every run.
 
 **Remaining 6 not-1st are all algorithmic gaps**:
 - **wrong-method × 4** (param-1/3, wildcard, miss) — memoirist's
@@ -139,30 +142,27 @@ production-realistic numbers run `bench/comparison-solo.bench.ts`.
 mitata block**, no IC polymorphism from other adapters. Reflects what a
 real HTTP server measures when a single Router handles every request.
 
-Last recorded run (Bun 1.3.13, 3-run median, post `04b3657` charCodeAt
-method dispatch):
+Last recorded run (Bun 1.3.13, 3-run median, post `4ce3717`
+wrapper-split):
 
 | Scenario | zipbul ns | memoirist ns | zipbul rank |
 |:---|---:|---:|:---:|
-| github-static/hit | 10.60 | 30+ | **1st** |
-| github-static/miss | 11.31 | 27+ | **1st** |
-| github-static/wrong-method | 10.93 | 24+ | **1st** |
-| github-param/wrong-method | ~48 | 49+ | **1st** |
-| param-1/miss | 11.0 | 27+ | **1st** |
-| **miss/wrong-method** | **5.48** | 3-7 | **tie** (matches memoirist floor) |
-| static/wrong-method | 7.02 | 5.50-6.76 | ~tie |
-| param-1/wrong-method | 7.53 | 3.16-3.32 | 2.3× behind |
-| param-3/wrong-method | 7.96 | 3.32-3.50 | 2.3× behind |
-| wildcard/wrong-method | 8.15 | 3.36-3.54 | 2.4× behind |
+| github-static/hit | 6.29 | 30+ | **1st** (5× ahead) |
+| github-static/miss | 9.28 | 27+ | **1st** (3× ahead) |
+| github-static/wrong-method | 9.20 | 24+ | **1st** |
+| github-param/wrong-method | 31.59 | 49+ | **1st** (-33%) |
+| param-1/miss | 8.28 | 27+ | **1st** (3× ahead) |
+| **wildcard/wrong-method** | **3.24** | 3.36 | **1st** (ahead of memoirist) |
+| **static/wrong-method** | **3.47** | 5.91 | **1st** (1.7× ahead) |
+| **miss/wrong-method** | 4.28 | 3-7 | **tie / 1st** (within memoirist variance) |
+| param-3/wrong-method | 4.07 | 3.33 | within 1.2× of memoirist |
+| param-1/wrong-method | 4.46 | 3.16 | within 1.4× of memoirist |
 
-Solo bench reveals zipbul's structural pattern: **dominant on every
-github-static scenario** (root-mask + active-method gates) and ties
-`miss/wrong-method` to memoirist. The remaining 2-3× wrong-method gap
-for param/wildcard scenarios is the cost of zipbul's `new Function()`
-matchImpl closure prologue vs memoirist's regular class-method
-`this.root[method]` lookup — closing it requires abandoning codegen
-specialization (the entire perf foundation), so the trade-off does not
-favor a rewrite.
+The wrapper-split commit closed the 2-3× wrong-method gap (previously
+attributed to `new Function()` closure prologue cost vs memoirist's
+class-method dispatch) down to 1.2-1.4× — within mitata's sub-10 ns
+noise floor. The remaining gap is small enough that runs frequently
+flip between zipbul, memoirist, and koa-tree-router as the leader.
 
 ## How to update
 

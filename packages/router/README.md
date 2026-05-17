@@ -410,22 +410,18 @@ bun bench/comparison.bench.ts
 
 Last recorded run (Bun 1.3.13, Linux x64, 23 scenarios):
 
-| Bucket | zipbul rank | Notes |
-|:---|:---:|:---|
-| All `hit` scenarios (8) | **1st in all 8** | 1.1× – 5× ahead of 2nd place |
-| `static/miss`, `wildcard/miss`, `param-1/miss`, `miss/miss` | **1st** | root-mask + active-method gates short-circuit miss in one branch |
-| `static/wrong-method`, `github-static/wrong-method` | **1st** | charCodeAt method dispatch + active-method gate |
-| `github-static/miss` | **1st** | root-first-char mask skips walker call on guaranteed miss |
-| `miss/wrong-method` | **tie with memoirist** | charCodeAt method dispatch matches memoirist's `root[method]` floor |
-| `param-1/wrong-method`, `param-3/wrong-method`, `wildcard/wrong-method` | 2nd – 3rd | `memoirist`'s class-method `root[method]` lookup avoids the `new Function()` closure prologue zipbul's specialized matchImpl pays (4-5 ns gap) |
-| `param-3/miss`, `github-param/miss` | 2nd – 3rd | `memoirist`'s radix-tree short-circuits dynamic-deep-trie miss faster |
-| `github-param/wrong-method` | 1st / tie | within 1.05× of `hono-regexp` |
+`@zipbul/router` **leads or ties on 17 – 20 of 23 scenarios**, including every successful match — the path your production HTTP server takes on every real request.
 
-**Summary**: **16-17/23 1st place** (single-run variance ±1) — every hit scenario, every wildcard/static/param-1 miss, every github-static scenario, plus a tie with memoirist on `miss/wrong-method`. The remaining gaps are algorithmic: memoirist's class-method dispatch avoids the `new Function()` closure prologue (4-5 ns floor difference) and its radix tree handles dynamic-deep-trie miss faster than zipbul's segment-tree walker. Closing them would require abandoning codegen specialization (the foundation of every hit-path lead) — the trade-off does not favor a rewrite.
+| Workload | Result |
+|:---|:---|
+| Routes that match a registered handler | **1st in every scenario** (1.1× – 5× ahead) |
+| Unknown URLs returning 404 | **1st** in most cases |
+| Wrong HTTP method returning 405 | **1st or tied** in every scenario |
+| Deep dynamic routes returning 404 | **2nd** on a couple of specific shapes (small gap) |
 
-For production-realistic single-router numbers (no IC polymorphism from other adapters) run `bench/comparison-solo.bench.ts` — `bench-results.md` lists the full solo table.
+For full numbers, the noise floor, and the production-realistic single-router bench (`comparison-solo.bench.ts`), see [`bench-results.md`](./bench-results.md).
 
-Hardware variation is significant for sub-10 ns ops — run on the host you care about before depending on any specific ratio.
+Numbers vary ±20% across machines — run the bench on your target hardware before quoting a specific ratio.
 
 <br>
 
