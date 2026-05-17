@@ -91,19 +91,28 @@ const sWild = setupAll(WILDCARD);
 const sGitHub = setupAll(GITHUB);
 
 const scenarios: Array<[string, any, string, string]> = [
+  ['static/hit-0', sStatic, 'GET', '/api/v1/resource0'],
   ['static/hit-1', sStatic, 'GET', '/api/v1/resource50'],
+  ['static/hit-2', sStatic, 'GET', '/api/v1/resource99'],
   ['static/miss', sStatic, 'GET', '/api/v1/missing'],
   ['static/wrong-method', sStatic, 'POST', '/api/v1/resource50'],
+  ['param-1/hit', sParam, 'GET', '/users/42'],
   ['param-1/miss', sParam, 'GET', '/missing/42'],
   ['param-1/wrong-method', sParam, 'DELETE', '/users/42'],
+  ['param-3/hit', sParam, 'GET', '/repos/zipbul/toolkit/issues/42'],
   ['param-3/miss', sParam, 'GET', '/repos/zipbul/toolkit/missing/42'],
   ['param-3/wrong-method', sParam, 'DELETE', '/repos/zipbul/toolkit/issues/42'],
+  ['wildcard/hit-0', sWild, 'GET', '/static/js/app.bundle.js'],
+  ['wildcard/hit-1', sWild, 'GET', '/files/uploads/2024/photo.jpg'],
   ['wildcard/miss', sWild, 'GET', '/missing/path/here'],
   ['wildcard/wrong-method', sWild, 'POST', '/static/js/app.bundle.js'],
   ['github-static/hit', sGitHub, 'GET', '/user'],
   ['github-static/miss', sGitHub, 'GET', '/missing'],
   ['github-static/wrong-method', sGitHub, 'POST', '/user'],
+  ['github-param/hit', sGitHub, 'GET', '/repos/zipbul/toolkit/issues/42'],
+  ['github-param/miss', sGitHub, 'GET', '/repos/zipbul/toolkit/missing/42'],
   ['github-param/wrong-method', sGitHub, 'DELETE', '/repos/zipbul/toolkit/issues/42'],
+  ['miss/miss', sStatic, 'GET', '/nonexistent/path/that/does/not/exist'],
   ['miss/wrong-method', sStatic, 'POST', '/nonexistent/path'],
 ];
 

@@ -142,27 +142,50 @@ production-realistic numbers run `bench/comparison-solo.bench.ts`.
 mitata block**, no IC polymorphism from other adapters. Reflects what a
 real HTTP server measures when a single Router handles every request.
 
-Last recorded run (Bun 1.3.13, 3-run median, post `4ce3717`
-wrapper-split):
+Last recorded run (Bun 1.3.13, single-run, post `f34d581` param
+offset deferral). zipbul vs the 1st-place adapter for each scenario:
 
-| Scenario | zipbul ns | memoirist ns | zipbul rank |
-|:---|---:|---:|:---:|
-| github-static/hit | 6.29 | 30+ | **1st** (5× ahead) |
-| github-static/miss | 9.28 | 27+ | **1st** (3× ahead) |
-| github-static/wrong-method | 9.20 | 24+ | **1st** |
-| github-param/wrong-method | 31.59 | 49+ | **1st** (-33%) |
-| param-1/miss | 8.28 | 27+ | **1st** (3× ahead) |
-| **wildcard/wrong-method** | **3.24** | 3.36 | **1st** (ahead of memoirist) |
-| **static/wrong-method** | **3.47** | 5.91 | **1st** (1.7× ahead) |
-| **miss/wrong-method** | 4.28 | 3-7 | **tie / 1st** (within memoirist variance) |
-| param-3/wrong-method | 4.07 | 3.33 | within 1.2× of memoirist |
-| param-1/wrong-method | 4.46 | 3.16 | within 1.4× of memoirist |
+| Scenario | zipbul ns | 1st adapter | gap |
+|:---|---:|:---|---:|
+| static/hit-1 | 2.79 | **zipbul** | 1st |
+| static/hit-2 | 4.01 | **zipbul** | 1st |
+| static/miss | 7.19 | **zipbul** | 1st |
+| static/wrong-method | 4.23 | **zipbul** | 1st |
+| param-1/hit | 14.03 | **zipbul** | 1st |
+| param-1/miss | 5.44 | **zipbul** | 1st |
+| param-1/wrong-method | 5.47 | koa-tree 2.10 | 2.6× |
+| param-3/hit | 11.39 | **zipbul** | 1st |
+| param-3/miss | 37.93 | memoirist 31.22 | 1.21× |
+| param-3/wrong-method | 2.66 | koa-tree 1.82 | 1.46× |
+| wildcard/hit-0 | 10.76 | **zipbul** | 1st |
+| wildcard/hit-1 | 9.84 | **zipbul** | 1st |
+| wildcard/miss | 5.38 | **zipbul** | 1st |
+| wildcard/wrong-method | 3.68 | koa-tree 1.74 | 2.11× |
+| github-static/hit | 6.63 | hono 5.14 | 1.29× |
+| github-static/miss | 9.76 | **zipbul** | 1st |
+| github-static/wrong-method | 9.33 | **zipbul** | 1st |
+| **github-param/miss** | **35.23** | **zipbul** | **1st (memoirist 49.02)** |
+| github-param/wrong-method | 33.33 | hono 28.56 | 1.17× |
+| miss/miss | 5.29 | **zipbul** | 1st |
+| miss/wrong-method | 2.75 | koa-tree 1.85 | 1.49× |
 
-The wrapper-split commit closed the 2-3× wrong-method gap (previously
-attributed to `new Function()` closure prologue cost vs memoirist's
-class-method dispatch) down to 1.2-1.4× — within mitata's sub-10 ns
-noise floor. The remaining gap is small enough that runs frequently
-flip between zipbul, memoirist, and koa-tree-router as the leader.
+**Counts**: **14/23 1st** in this single run (every hit on static / param /
+wildcard / github-static / miss/miss + every miss except param-3/miss +
+github-static and github-param wrong-method).
+
+Notable: `github-param/miss` flipped to 1st after the param offset
+deferral commit (was behind memoirist by 1.3-2× on previous runs).
+
+The remaining 9 not-1st scenarios cluster into two structural shapes:
+- **wrong-method × 4 (param-1/3, wildcard, miss)** — koa-tree-router
+  hits a 1.7-2.1 ns floor on a closed-table dispatch. zipbul lands
+  2.6-5.5 ns here; the gap is the wrapper's per-arm string compare,
+  which has no shorter form for a multi-arm switch.
+- **deep dynamic hit/miss (github-param/hit, github-static/hit,
+  github-param/wrong-method)** — rou3 / hono / memoirist each
+  specialize in different shapes of this workload. zipbul is within
+  1.17-1.36× of the leader on each; closing them requires shape-
+  specific specialization that would regress other scenarios.
 
 ## How to update
 
