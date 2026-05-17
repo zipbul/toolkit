@@ -30,10 +30,6 @@
     ".": {
       "types": "./dist/index.d.ts",
       "import": "./dist/index.js"
-    },
-    "./internal": {
-      "types": "./dist/internal.d.ts",
-      "import": "./dist/internal.js"
     }
   },
   "files": [
@@ -44,7 +40,7 @@
     "provenance": true
   },
   "scripts": {
-    "build": "bun build index.ts internal.ts --outdir dist --target bun --format esm --packages external --production && tsc -p tsconfig.build.json",
+    "build": "bun build index.ts --outdir dist --target bun --format esm --packages external --production && tsc -p tsconfig.build.json",
     "test": "bun test",
     "bench": "bun run bench/router.bench.ts",
     "coverage": "bun test --coverage"
