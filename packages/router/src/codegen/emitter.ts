@@ -408,26 +408,25 @@ function compileMixed<T>(cfg: MatchConfig<T>, singleMethod: SingleMethodSpec | n
     const body = [emitMethodDispatch(singleMethod, cfg.activeMethodCodes), ...emitBodyLines(singleMethod)].join('\n');
     source = `return function match(method, path) {\n${body}\n};`;
   } else {
-    // Multi-method per-method dispatch table (Option A). The wrapper
-    // reduces to a single null-proto-object lookup + call, matching
-    // memoirist's `this.root[method]` and koa-tree's `methodMap[method]`
-    // shape. Each active method gets a bound `f(path)` closure that
-    // forwards to the shared `matchActive(mc, path)` body — keeps the
-    // single codegen-specialized body but pays only one prop lookup +
-    // one closure call on dispatch.
+    // Multi-method per-method dispatch table. The wrapper reduces to a
+    // single null-proto-object lookup + call, matching memoirist's
+    // `this.root[method]` and koa-tree's `methodMap[method]` shape.
+    // The table stores numeric method codes; matchActive is called
+    // directly with `(mc, path)` — no bound-fn intermediate, no extra
+    // closure allocation per method.
     const activeBody = emitBodyLines(null).join('\n');
     const tableInit = cfg.activeMethodCodes
-      .map(([name, code]) => `matchByMethod[${JSON.stringify(name)}] = function(path) { return matchActive(${code}, path); };`)
+      .map(([name, code]) => `mcByMethod[${JSON.stringify(name)}] = ${code};`)
       .join('\n');
     source = `
       function matchActive(mc, path) {
         ${activeBody}
       }
-      var matchByMethod = Object.create(null);
+      var mcByMethod = Object.create(null);
       ${tableInit}
       return function match(method, path) {
-        var f = matchByMethod[method];
-        return f === undefined ? null : f(path);
+        var mc = mcByMethod[method];
+        return mc === undefined ? null : matchActive(mc, path);
       };
     `;
   }
