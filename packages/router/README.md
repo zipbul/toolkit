@@ -5,9 +5,7 @@
 [![npm](https://img.shields.io/npm/v/@zipbul/router)](https://www.npmjs.com/package/@zipbul/router)
 ![coverage](https://img.shields.io/endpoint?url=https://gist.githubusercontent.com/parkrevil/3965fb9d1fe2d6fc5c321cb38d88c823/raw/router-coverage.json)
 
-A high-performance URL router for Bun. Build-once / match-many. Static
-routes match in **sub-1 ns**, dynamic routes in 8–20 ns, with structured
-error reporting and a single small public API surface.
+A high-performance URL router for Bun. Build-once / match-many. Hot static paths land in **single-digit nanoseconds**, dynamic routes in 8–20 ns, with structured error reporting and a single small public API surface.
 
 Designed for HTTP server boundaries (`Bun.serve`, Node `http`,
 adapters) that hand the router a normalized origin-form pathname.
@@ -25,7 +23,7 @@ bun add @zipbul/router
 ## 🚀 Quick Start
 
 ```typescript
-import { Router, RouterError } from '@zipbul/router';
+import { Router } from '@zipbul/router';
 
 const router = new Router<string>();
 
@@ -136,7 +134,7 @@ if (result) {
 | Value | What it means for the caller |
 |:------|:-----|
 | `'static'` | A literal-path route (no params). The returned `MatchOutput` is shared across calls and frozen — do not mutate. `===` identity is preserved across identical hits. |
-| `'cache'` | A previously-resolved dynamic match served from cache. `params` is a fresh per-call snapshot; mutations don't affect the cache. |
+| `'cache'` | A previously-resolved dynamic match served from cache. The cached `params` object is frozen and reused across hits — do not mutate, and do not rely on per-call identity. |
 | `'dynamic'` | First-time resolution for a dynamic route. Each call returns a fresh `MatchOutput` with its own `params` object. |
 
 ### `router.allowedMethods(path)`
@@ -178,7 +176,7 @@ router.add('GET', '/users/:id', handler);
 
 ### Regex parameters
 
-Constrain params with inline regex. The body inside `(...)` is compiled via `new RegExp('^(?:body)$')` at `build()` time — any syntactically valid JavaScript regex is accepted.
+Constrain params with inline regex. The body inside `(...)` is compiled via `new RegExp('^(?:body)$')` at `build()` time. The router applies its own anchors, so a body that starts with `^` or ends with `$` is rejected; otherwise any JavaScript-valid regex body is accepted.
 
 ```typescript
 router.add('GET', '/users/:id(\\d+)', handler);
@@ -237,19 +235,19 @@ interface RouterOptions {
 |:-------|:--------|:------------|
 | `trailingSlash` | `'ignore'` | `'strict'` keeps `/a` and `/a/` distinct; `'ignore'` collapses one trailing slash on registration and at match time |
 | `pathCaseSensitive` | `true` | `/Users` and `/users` are different routes |
-| `cacheSize` | `1000` | Per-method hit-cache capacity (rounded up to next power of two; second-chance / clock eviction). Must be a positive integer between 1 and 2^30 |
+| `cacheSize` | `1000` | Per-method hit-cache capacity (rounded up to next power of two; bounded approximate-LRU eviction). Positive integer in `[1, 2³⁰]` |
 | `optionalParamBehavior` | `'omit'` | Shape of `params` when an optional param is missing — `'omit'` drops the key, `'set-undefined'` writes `undefined` |
 
 Notes:
 
 - Named param values are always percent-decoded; wildcard captures are returned raw (slash-preserving).
-- No path-length, segment-length, or route-count cap. Register as many as the bitmask permits (32 methods).
-- The cache is lazily allocated per HTTP method — an empty router uses zero cache memory.
+- No total route-count cap. Per-route limits: **≤ 4 optional segments** and **≤ 31 captured params** (param + wildcard). Up to **32 distinct HTTP methods** per router.
+- Empty routers allocate zero cache memory; `build()` pre-allocates a bounded hit cache for each active method.
 
 ### Cache — what to expect
 
-- **Bounded.** `cacheSize` is the per-method ceiling. The actual slot table is rounded up to the next power of two; a small clock/second-chance algorithm evicts approximately-LRU entries when full.
-- **Snapshot semantics.** A cached `MatchOutput.params` is a fresh per-call snapshot — mutating it does not affect future cache hits.
+- **Bounded.** `cacheSize` is the per-method ceiling, rounded up to the next power of two. Approximate-LRU eviction kicks in when the slot table fills.
+- **Frozen + reused.** `MatchOutput.params` from a cache hit is `Object.freeze`d and shared across hits — do not mutate.
 - **Never stale.** `build()` seals the route table; cached entries cannot diverge from registered handlers afterward.
 - **Dynamic-route only.** Static routes skip the cache (they're already an O(1) lookup). Misses never populate the cache.
 
@@ -305,6 +303,7 @@ try {
 | `'router-sealed'` | `add()` / `addAll()` called after `build()` |
 | `'route-duplicate'` | Same `(method, path)` already registered |
 | `'route-conflict'` | Structural conflict — e.g. registering `/files/*a` then `/files/*b` for the same method, or registering `/files/x` after `/files/*path` |
+| `'route-unreachable'` | A new route would be shadowed by an existing wildcard / terminal at the same prefix — e.g. registering `/files/list` after `/files/*path` for the same method |
 | `'route-parse'` | Invalid path syntax (no leading slash, unclosed regex group, illegal char in param name, etc.) |
 | `'param-duplicate'` | Same param name appears twice in one path (`/x/:id/y/:id`) |
 | `'method-limit'` | More than 32 distinct HTTP methods registered |
@@ -338,7 +337,6 @@ router.add('GET',  '/files/list', listHandler);       // throws
 
 ```typescript
 import { Router } from '@zipbul/router';
-import type { HttpMethod } from '@zipbul/shared';
 
 type Handler = (params: Record<string, string | undefined>) => Response;
 
@@ -351,13 +349,12 @@ router.build();
 Bun.serve({
   fetch(request) {
     const url = new URL(request.url);
-    const method = request.method as HttpMethod;
 
     // match() returns null for no route. `URL(...).pathname` is always
     // origin-form per RFC 7230, so `decodeURIComponent` failures only
     // surface here on adversarial requests with malformed `%xx` — wrap
     // in try/catch if you want to map them to 400 Bad Request.
-    const result = router.match(method, url.pathname);
+    const result = router.match(request.method, url.pathname);
     if (result) return result.value(result.params);
 
     // Disambiguate 404 vs 405 via the cold-path API.
@@ -379,49 +376,25 @@ Bun.serve({
 
 ## ⚡ Performance
 
-### Self-bench (`bench/regression-snapshot.ts`)
+Indicative hot-path numbers (Bun 1.3.13, Linux x64):
 
-11 trials, sample stddev with Bessel correction. The `σ` column is the
-trust signal: rows with `σ > 10%` are noise-dominated (sub-10 ns ops
-hit the clock-granularity floor), and the `min` column carries more
-signal than the median for those.
+| Workload | Range |
+|:---|---:|
+| `build()` — 100 routes | ~2 ms |
+| `build()` — 10 000 routes | ~25 ms |
+| `match()` — hit / static | single-digit ns |
+| `match()` — hit / dynamic (warm cache) | ~10 ns |
+| `match()` — miss / wrong method | ~3 ns |
 
-| Scenario | min | median | p99 | σ |
-|:---|---:|---:|---:|---:|
-| build / 10 routes | 1.93 ms | 2.06 ms | 2.37 ms | 6.7% |
-| build / 100 | 1.84 ms | 1.97 ms | 2.06 ms | 3.3% |
-| build / 1 000 | 3.53 ms | 3.97 ms | 4.20 ms | 4.3% |
-| build / 10 000 | 24.23 ms | 28.84 ms | 33.21 ms | 8.6% |
-| match · hit/static | **0.45 ns** | 2.52 ns | 5.21 ns | 51.9% |
-| match · hit/dynamic (warm cache) | 7.75 ns | 10.22 ns | 15.00 ns | 24.5% |
-| match · hit/dynamic (cold) | 500 ns | 526 ns | 568 ns | 3.4% |
-| match · miss/unknown path | 7.80 ns | 8.53 ns | 40.06 ns | 77.0% |
-| match · miss/wrong method | 1.98 ns | 3.07 ns | 5.93 ns | 38.6% |
+Head-to-head against `memoirist`, `find-my-way`, `rou3`, `hono` (RegExp + Trie), and `koa-tree-router`, `@zipbul/router` leads on every successful-match scenario and ties or wins most miss / wrong-method cases.
 
-> Bun 1.3.13, Linux x64. Reproduce on your hardware: `bun bench/regression-snapshot.ts`. Numbers may shift ±20% across machines — for portable comparison see the cross-router section below.
-
-### Cross-router comparison (`bench/comparison.bench.ts`)
-
-Head-to-head against `memoirist`, `find-my-way`, `rou3`, `hono` (RegExp + Trie), `koa-tree-router` via [`mitata`](https://github.com/evanwashere/mitata).
+Hardware variance is ±20 % and sub-10 ns ops hit clock-granularity noise — for the full table, noise distribution, and the production-realistic single-router bench, see [`bench-results.md`](./bench-results.md). Reproduce locally with:
 
 ```bash
-bun bench/comparison.bench.ts
+bun bench/regression-snapshot.ts   # self-bench (11 trials, σ-annotated)
+bun bench/comparison.bench.ts      # 23-scenario cross-router head-to-head
+bun bench/comparison-solo.bench.ts # production-realistic per-router probe
 ```
-
-Last recorded run (Bun 1.3.13, Linux x64, 23 scenarios):
-
-`@zipbul/router` **leads or ties on 17 – 20 of 23 scenarios**, including every successful match — the path your production HTTP server takes on every real request.
-
-| Workload | Result |
-|:---|:---|
-| Routes that match a registered handler | **1st in every scenario** (1.1× – 5× ahead) |
-| Unknown URLs returning 404 | **1st** in most cases |
-| Wrong HTTP method returning 405 | **1st or tied** in every scenario |
-| Deep dynamic routes returning 404 | **2nd** on a couple of specific shapes (small gap) |
-
-For full numbers, the noise floor, and the production-realistic single-router bench (`comparison-solo.bench.ts`), see [`bench-results.md`](./bench-results.md).
-
-Numbers vary ±20% across machines — run the bench on your target hardware before quoting a specific ratio.
 
 <br>
 

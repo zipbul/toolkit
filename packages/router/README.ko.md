@@ -5,9 +5,7 @@
 [![npm](https://img.shields.io/npm/v/@zipbul/router)](https://www.npmjs.com/package/@zipbul/router)
 ![coverage](https://img.shields.io/endpoint?url=https://gist.githubusercontent.com/parkrevil/3965fb9d1fe2d6fc5c321cb38d88c823/raw/router-coverage.json)
 
-Bun을 위한 고성능 URL 라우터. build-once / match-many. 정적 라우트는
-**1 ns 이하**, 동적 라우트는 8–20 ns에 매치하며, 구조화된 에러 보고와
-작고 명확한 공개 API를 제공합니다.
+Bun 을 위한 고성능 URL 라우터. build-once / match-many. 정적 hot path 는 **단일 자릿 nanosecond**, 동적 라우트는 8–20 ns 에 매치하며, 구조화된 에러 보고와 작고 명확한 공개 API 를 제공합니다.
 
 HTTP 서버 boundary (`Bun.serve`, Node `http`, 각종 어댑터)가 라우터에
 정규화된 origin-form pathname을 넘긴다는 가정 아래 설계되었습니다.
@@ -25,7 +23,7 @@ bun add @zipbul/router
 ## 🚀 빠른 시작
 
 ```typescript
-import { Router, RouterError } from '@zipbul/router';
+import { Router } from '@zipbul/router';
 
 const router = new Router<string>();
 
@@ -136,7 +134,7 @@ if (result) {
 | 값 | caller 에게 의미 |
 |:---|:-----|
 | `'static'` | 리터럴 경로 (param 없음) 라우트. 반환된 `MatchOutput` 은 호출 간 공유되고 frozen 됨 — 변경 금지. 동일 hit 간 `===` 식별자 보존. |
-| `'cache'` | 이전에 dynamic 으로 해소된 매치가 캐시에서 반환됨. `params` 는 호출별 fresh 스냅샷 — 변경해도 캐시에 영향 없음. |
+| `'cache'` | 이전에 dynamic 으로 해소된 매치가 캐시에서 반환됨. 캐시된 `params` 객체는 frozen + 재사용 — 변경 금지, 호출별 identity 의존 금지. |
 | `'dynamic'` | dynamic 라우트의 최초 해소. 매 호출마다 새 `MatchOutput` + 자체 `params` 객체. |
 
 ### `router.allowedMethods(path)`
@@ -178,7 +176,7 @@ router.add('GET', '/users/:id', handler);
 
 ### 정규식 파라미터
 
-인라인 정규식으로 파라미터를 제한합니다. `(...)` 안의 본문은 `build()` 시점에 `new RegExp('^(?:body)$')` 로 컴파일됩니다 — 문법적으로 valid 한 모든 JavaScript 정규식 허용.
+인라인 정규식으로 파라미터를 제한합니다. `(...)` 안의 본문은 `build()` 시점에 `new RegExp('^(?:body)$')` 로 컴파일됩니다. 라우터가 자체 앵커를 적용하므로 본문이 `^` 로 시작하거나 `$` 로 끝나면 거부됩니다; 그 외에는 JavaScript-valid 한 정규식 본문 모두 허용됩니다.
 
 ```typescript
 router.add('GET', '/users/:id(\\d+)', handler);
@@ -237,19 +235,19 @@ interface RouterOptions {
 |:-----|:-------|:-----|
 | `trailingSlash` | `'ignore'` | `'strict'` 면 `/a` 와 `/a/` 가 다름; `'ignore'` 면 등록/매치 시점에 trailing slash 1개 collapse |
 | `pathCaseSensitive` | `true` | `/Users` 와 `/users` 가 다른 라우트 |
-| `cacheSize` | `1000` | 메서드당 hit 캐시 용량 (다음 2의 거듭제곱으로 올림; second-chance / clock 축출). 1 ~ 2^30 양의 정수만 허용 |
+| `cacheSize` | `1000` | 메서드당 hit 캐시 용량 (다음 2의 거듭제곱으로 올림; bounded approximate-LRU 축출). `[1, 2³⁰]` 범위의 양의 정수 |
 | `optionalParamBehavior` | `'omit'` | 누락된 선택적 파라미터의 `params` 형태 — `'omit'` 은 키 자체 생략, `'set-undefined'` 는 `undefined` 기록 |
 
 참고:
 
 - 이름 파라미터 값은 항상 percent-decoded; 와일드카드 캡처는 raw (슬래시 보존).
-- path 길이 / 세그먼트 길이 / 라우트 수 제한 없음. bitmask 가 허용하는 한 (32 method) 자유 등록.
-- 캐시는 HTTP 메서드별 lazy 할당이라 빈 라우터는 캐시 메모리 0.
+- 라우트 총 수 제한 없음. 라우트당 제한: **optional segment ≤ 4 개**, **capture param ≤ 31 개** (param + wildcard). 라우터당 HTTP method **최대 32 개**.
+- 빈 라우터는 캐시 메모리 0; `build()` 가 활성 메서드마다 bounded hit 캐시를 pre-allocate 합니다.
 
 ### 캐시 — 기대 동작
 
-- **Bounded.** `cacheSize` 가 메서드당 상한. 실제 slot 테이블은 다음 2의 거듭제곱으로 올림; 작은 clock / second-chance 알고리즘이 가득 차면 approximate-LRU 로 축출.
-- **스냅샷 의미론.** 캐시된 `MatchOutput.params` 는 호출별 fresh 스냅샷 — 변경해도 다음 hit 영향 없음.
+- **Bounded.** `cacheSize` 가 메서드당 상한. 실제 slot 테이블은 다음 2의 거듭제곱으로 올림; slot 이 가득 차면 approximate-LRU 로 축출.
+- **Frozen + 재사용.** cache hit 의 `MatchOutput.params` 는 `Object.freeze` 되어 있고 hit 간 공유 — 변경 금지.
 - **Stale 될 수 없음.** `build()` 가 라우트 테이블 봉인; 캐시 entry 는 등록 핸들러와 절대 어긋나지 않음.
 - **Dynamic 라우트만.** 정적 라우트는 캐시 skip (이미 O(1) lookup). miss 는 캐시에 들어가지 않음.
 
@@ -305,6 +303,7 @@ try {
 | `'router-sealed'` | `build()` 이후 `add()` / `addAll()` 호출 |
 | `'route-duplicate'` | 동일 `(method, path)` 가 이미 등록됨 |
 | `'route-conflict'` | 구조적 충돌 — 같은 메서드의 `/files/*a` 후 `/files/*b`, 또는 `/files/*path` 후 `/files/x` 등 |
+| `'route-unreachable'` | 같은 prefix 의 기존 wildcard / terminal 에 의해 새 라우트가 도달 불가 — 예: 같은 메서드에서 `/files/*path` 후 `/files/list` 등록 |
 | `'route-parse'` | 잘못된 경로 문법 (선행 슬래시 없음, 미닫힌 정규식 그룹, 파라미터 이름의 금지 문자 등) |
 | `'param-duplicate'` | 한 경로에 동일 파라미터 이름 두 번 (`/x/:id/y/:id`) |
 | `'method-limit'` | 32 개를 초과하는 고유 HTTP 메서드 |
@@ -338,7 +337,6 @@ router.add('GET',  '/files/list', listHandler);       // throw
 
 ```typescript
 import { Router } from '@zipbul/router';
-import type { HttpMethod } from '@zipbul/shared';
 
 type Handler = (params: Record<string, string | undefined>) => Response;
 
@@ -351,13 +349,12 @@ router.build();
 Bun.serve({
   fetch(request) {
     const url = new URL(request.url);
-    const method = request.method as HttpMethod;
 
     // match() 는 매칭 라우트 없으면 null 을 반환합니다. `URL(...).pathname`
     // 은 RFC 7230 origin-form 보장이라 `decodeURIComponent` 실패는 잘못된
     // `%xx` 가 들어온 적대적 요청에서만 발생합니다 — 400 Bad Request 로
     // 매핑하려면 try/catch 로 감싸세요.
-    const result = router.match(method, url.pathname);
+    const result = router.match(request.method, url.pathname);
     if (result) return result.value(result.params);
 
     // 콜드패스 API 로 404 vs 405 구분.
@@ -379,50 +376,25 @@ Bun.serve({
 
 ## ⚡ 성능
 
-### 자체 벤치 (`bench/regression-snapshot.ts`)
+대표 hot-path 수치 (Bun 1.3.13, Linux x64):
 
-11 trial, Bessel 보정 sample stddev. `σ` 칼럼이 신뢰도 신호: `σ > 10%` 행은 노이즈 도미넌트 (sub-10 ns 연산은 clock 해상도 floor 에 걸림) — 이 경우 median 보다 `min` 이 더 의미 있음.
+| 워크로드 | 범위 |
+|:---|---:|
+| `build()` — 100 라우트 | ~2 ms |
+| `build()` — 10 000 라우트 | ~25 ms |
+| `match()` — hit / static | 단일 자릿 ns |
+| `match()` — hit / dynamic (캐시 warm) | ~10 ns |
+| `match()` — miss / wrong method | ~3 ns |
 
-| 시나리오 | min | median | p99 | σ |
-|:---|---:|---:|---:|---:|
-| build / 10 라우트 | 1.93 ms | 2.06 ms | 2.37 ms | 6.7% |
-| build / 100 | 1.84 ms | 1.97 ms | 2.06 ms | 3.3% |
-| build / 1 000 | 3.53 ms | 3.97 ms | 4.20 ms | 4.3% |
-| build / 10 000 | 24.23 ms | 28.84 ms | 33.21 ms | 8.6% |
-| match · hit/static | **0.45 ns** | 2.52 ns | 5.21 ns | 51.9% |
-| match · hit/dynamic (캐시 warm) | 7.75 ns | 10.22 ns | 15.00 ns | 24.5% |
-| match · hit/dynamic (cold) | 500 ns | 526 ns | 568 ns | 3.4% |
-| match · miss/unknown path | 7.80 ns | 8.53 ns | 40.06 ns | 77.0% |
-| match · miss/wrong method | 1.98 ns | 3.07 ns | 5.93 ns | 38.6% |
+`memoirist`, `find-my-way`, `rou3`, `hono` (RegExp + Trie), `koa-tree-router` 와 head-to-head 에서 `@zipbul/router` 는 모든 "성공 매치" 시나리오 1위, 대부분 miss / wrong-method 시나리오에서 1위 또는 동률.
 
-> Bun 1.3.13, Linux x64. 본인 하드웨어에서 재현: `bun bench/regression-snapshot.ts`. 머신마다 ±20% 변동 가능 — portable 비교는 아래 cross-router 섹션 참고.
-
-### Cross-router 비교 (`bench/comparison.bench.ts`)
-
-[`mitata`](https://github.com/evanwashere/mitata) 로 `memoirist`, `find-my-way`, `rou3`, `hono` (RegExp + Trie), `koa-tree-router` 와 head-to-head.
+하드웨어 변동 ±20%, sub-10 ns 연산은 clock 해상도 노이즈 — 전체 표, 노이즈 분포, production-realistic single-router 벤치는 [`bench-results.md`](./bench-results.md) 참조. 로컬 재현:
 
 ```bash
-bun bench/comparison.bench.ts
+bun bench/regression-snapshot.ts   # 자체 벤치 (11 trial, σ annotated)
+bun bench/comparison.bench.ts      # 23 시나리오 cross-router head-to-head
+bun bench/comparison-solo.bench.ts # production-realistic per-router probe
 ```
-
-마지막 측정 (Bun 1.3.13, Linux x64, 23 시나리오):
-
-`@zipbul/router` 는 **23개 시나리오 중 17 – 20개에서 1위 또는 동률**. 실 서버에서 요청마다 거치는 "성공 매치" 경로는 전부 1위.
-
-| 워크로드 | 결과 |
-|:---|:---|
-| 등록된 핸들러에 매치되는 요청 | **모든 시나리오 1위** (2위 대비 1.1× – 5× 앞섬) |
-| 알 수 없는 URL (404) | 대부분 **1위** |
-| HTTP 메서드 불일치 (405) | 모든 시나리오 **1위 또는 동률** |
-| 깊은 dynamic 경로의 404 | 일부 shape 에서 **2위** (작은 격차) |
-
-전체 수치, 노이즈 분포, 그리고 production-realistic single-router 벤치 (`comparison-solo.bench.ts`) 는 [`bench-results.md`](./bench-results.md) 참조.
-
-머신마다 ±20% 변동 — 의존하기 전에 본인 호스트에서 실행하세요.
-
-production-realistic single-router 측정 (다른 adapter의 IC poly 없음) 은 `bench/comparison-solo.bench.ts` 참조 — `bench-results.md` 에 solo 표 전체.
-
-sub-10 ns 연산은 하드웨어 변동 큼 — 의존하기 전에 본인 호스트에서 직접 실행하세요.
 
 <br>
 
