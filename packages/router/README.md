@@ -10,7 +10,30 @@ A high-performance URL router for Bun. Build-once / match-many. Hot static paths
 Designed for HTTP server boundaries (`Bun.serve`, Node `http`,
 adapters) that hand the router a normalized origin-form pathname.
 
-<br>
+> [!NOTE]
+> This package targets **Bun ≥ 1.0**. The code uses Bun-specific build artifacts (`bun:jsc` for JIT tier-up hints) and is not published as a Node-compatible build.
+
+---
+
+## 📑 Table of Contents
+
+- [📦 Installation](#-installation)
+- [🚀 Quick Start](#-quick-start)
+- [📚 API Reference](#-api-reference)
+  - [`new Router<T>(options?)`](#new-routertoptions)
+  - [`router.add(method, path, value)`](#routeraddmethod-path-value)
+  - [`router.addAll(entries)`](#routeraddallentries)
+  - [`router.build()`](#routerbuild)
+  - [`router.match(method, path)`](#routermatchmethod-path)
+  - [`router.allowedMethods(path)`](#routerallowedmethodspath)
+- [🛤️ Route Patterns](#️-route-patterns)
+- [⚙️ Options](#️-options)
+- [🚨 Error Handling](#-error-handling)
+- [🔌 Framework Integration](#-framework-integration)
+- [⚡ Performance](#-performance)
+- [🔒 Security](#-security)
+
+---
 
 ## 📦 Installation
 
@@ -18,7 +41,7 @@ adapters) that hand the router a normalized origin-form pathname.
 bun add @zipbul/router
 ```
 
-<br>
+---
 
 ## 🚀 Quick Start
 
@@ -43,7 +66,7 @@ if (result) {
 }
 ```
 
-<br>
+---
 
 ## 📚 API Reference
 
@@ -72,18 +95,19 @@ router.add('*', '/health', handler);             // all standard methods
 
 #### IRI registration (RFC 3987)
 
-Both IRI (raw Unicode) and URI (percent-encoded UTF-8) forms are accepted at registration. The router NFC-normalizes each static segment and converts non-ASCII to percent-encoded UTF-8 (RFC 3986 wire form) before storing, so the two forms become aliases for one route:
+Both IRI (raw Unicode) and URI (percent-encoded UTF-8) forms are accepted **at registration**. Each static segment is NFC-normalized and converted to percent-encoded UTF-8 (RFC 3986 wire form) before storage, so both spellings collapse to one route entry:
 
 ```typescript
 router.add('GET', '/users/한국', handler);
-// Internally stored as `/users/%ED%95%9C%EA%B5%AD`. Both IRI and URI
-// match() requests resolve to the same handler.
-router.match('GET', '/users/%ED%95%9C%EA%B5%AD'); // ✓
+// Stored internally as `/users/%ED%95%9C%EA%B5%AD`.
+router.match('GET', '/users/%ED%95%9C%EA%B5%AD'); // ✓ matches
+router.match('GET', '/users/한국');                // ✗ does NOT match (see below)
 ```
 
-**`router.match()` does not normalize input paths.** Pass a URI-form pathname (percent-encoded UTF-8). `Bun.serve`, Node `http`, and `new URL(...).pathname` all return this form automatically; you only need to think about it if you call `match()` with a hand-constructed string.
+> [!IMPORTANT]
+> `router.match()` **does not normalize input paths**. Pass a URI-form pathname (percent-encoded UTF-8) — the form `Bun.serve`, Node `http`, and `new URL(req.url).pathname` always produce. The asymmetry is intentional: every HTTP server boundary delivers URI form, so paying the normalization cost on every `match()` would be wasted work on the hot path.
 
-If you must route an IRI input at match time, normalize first:
+For a hand-constructed IRI input, normalize at the boundary:
 
 ```typescript
 const out = router.match('GET', new URL(`/users/${name}`, 'http://x').pathname);
@@ -151,9 +175,10 @@ if (result === null) {
 }
 ```
 
-Call this **only after `match()` returns `null`** — it walks every registered method's tree for `path` and is meaningfully slower than `match()` itself. The recommended pattern is the 404/405 disambiguation shown above; calling it on hot match paths is not what it's tuned for.
+> [!TIP]
+> Call `allowedMethods()` **only after `match()` returns `null`**. It walks every registered method's tree for `path` and is meaningfully slower than `match()` itself. The 404/405 disambiguation shown above is the intended use; do not call it on hot match paths.
 
-<br>
+---
 
 ## 🛤️ Route Patterns
 
@@ -184,7 +209,8 @@ router.add('GET', '/users/:id(\\d+)', handler);
 // /users/abc  → no match
 ```
 
-> ⚠ The router does not gate regex bodies for ReDoS-vulnerable shapes (`(?:a+)+`, `(\w+)\1`, etc.). See [Regex bodies](#regex-bodies--what-the-router-does-and-does-not-do) below.
+> [!WARNING]
+> The router does **not** gate regex bodies for ReDoS-vulnerable shapes (`(?:a+)+`, `(\w+)\1`, etc.). See [Regex bodies](#regex-bodies--what-the-router-does-and-does-not-do) below for the validation pattern.
 
 ### Optional parameters
 
@@ -218,7 +244,7 @@ router.add('GET', '/assets/*file+', handler);
 // /assets           → no match (multi origin requires non-empty tail)
 ```
 
-<br>
+---
 
 ## ⚙️ Options
 
@@ -260,7 +286,8 @@ Notes:
 
 That's it. The router does **not** inspect the body for ReDoS-vulnerable shapes, capturing groups, lookaround, or any other structural property.
 
-> ⚠ **Consequence:** patterns like `(?:a+)+`, `(\w+)\1`, or `(a|aa)*` register successfully and can hang the V8/JavaScriptCore regex engine on a crafted input. **If you accept untrusted regex sources, validate them before calling `Router.add()`.**
+> [!CAUTION]
+> Patterns like `(?:a+)+`, `(\w+)\1`, or `(a|aa)*` register successfully and can hang the V8/JavaScriptCore regex engine on a crafted input. **If you accept untrusted regex sources, validate them before calling `Router.add()`.**
 
 Validation options:
 
@@ -268,7 +295,7 @@ Validation options:
 - **`recheck`** ([github.com/MakeNowJust/recheck](https://github.com/MakeNowJust/recheck)) — static ReDoS analyzer. Reject vulnerable patterns before they reach `Router.add()`.
 - **Allow-list** — accept only patterns you've handwritten and audited.
 
-<br>
+---
 
 ## 🚨 Error Handling
 
@@ -328,7 +355,7 @@ router.add('GET',  '/files/*path', getHandler);
 router.add('GET',  '/files/list', listHandler);       // throws
 ```
 
-<br>
+---
 
 ## 🔌 Framework Integration
 
@@ -372,7 +399,7 @@ Bun.serve({
 
 </details>
 
-<br>
+---
 
 ## ⚡ Performance
 
@@ -396,13 +423,13 @@ bun bench/comparison.bench.ts      # 23-scenario cross-router head-to-head
 bun bench/comparison-solo.bench.ts # production-realistic per-router probe
 ```
 
-<br>
+---
 
 ## 🔒 Security
 
 Found a security issue? See [`SECURITY.md`](./SECURITY.md) for the private reporting channel. **Do not** open a public GitHub issue for security reports.
 
-<br>
+---
 
 ## 📄 License
 
