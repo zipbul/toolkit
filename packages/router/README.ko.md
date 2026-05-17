@@ -5,7 +5,7 @@
 [![npm](https://img.shields.io/npm/v/@zipbul/router)](https://www.npmjs.com/package/@zipbul/router)
 ![coverage](https://img.shields.io/endpoint?url=https://gist.githubusercontent.com/parkrevil/3965fb9d1fe2d6fc5c321cb38d88c823/raw/router-coverage.json)
 
-Bun 을 위한 고성능 URL 라우터. build-once / match-many. 정적 hot path 는 **단일 자릿 nanosecond**, 동적 라우트는 8–20 ns 에 매치하며, 구조화된 에러 보고와 작고 명확한 공개 API 를 제공합니다.
+Bun 을 위한 고성능 URL 라우터. build-once / match-many. 정적 hot path 는 **단일 자릿 nanosecond**, 동적 hit 은 캐시 warm 시 **~10 ns**, 작고 명확한 공개 API 와 구조화된 에러 보고를 제공합니다.
 
 HTTP 서버 boundary (`Bun.serve`, Node `http`, 각종 어댑터)가 라우터에
 정규화된 origin-form pathname을 넘긴다는 가정 아래 설계되었습니다.
@@ -276,7 +276,7 @@ interface RouterOptions {
 |:---|:---|:---|
 | `add()` / `addAll()` | 잘못된 경로 / 충돌 / sealed router 시 `RouterError` | `void` |
 | `build()` | 라우트별 실패 전체를 담은 `RouterError({ kind: 'route-validation' })` | `this` |
-| `match()` | 캡처된 param 의 `%xx` 가 잘못된 경우 `URIError` — `400 Bad Request` 로 매핑하려면 `try / catch` 로 감싸세요 | `MatchOutput<T> | null` |
+| `match()` | 캡처된 param 의 `%xx` 가 잘못된 경우 `URIError` — `400 Bad Request` 로 매핑하려면 `try / catch` 로 감싸세요 | `MatchOutput<T> \| null` |
 | `allowedMethods()` | 절대 throw 안 함 | `readonly string[]` |
 
 모든 `RouterError` 는 구조화된 `data` 객체를 들고 옵니다 — `data.kind` (discriminated union) 로 narrow 한 후 kind 별 필드 (`segment`, `conflictsWith`, `suggestion`, `path`, `method`) 에 접근하세요.
@@ -288,7 +288,7 @@ try {
   router.add('GET', '/bad/(unmatched', handler);
 } catch (e) {
   if (e instanceof RouterError) {
-    e.data.kind;       // RouterErrKind — 식별자
+    e.data.kind;       // RouterErrorKind — 식별자
     e.data.message;    // 사람이 읽을 수 있는 설명
     e.data.path;       // 문제가 된 경로 (해당 시)
     e.data.method;     // HTTP 메서드 (해당 시)
@@ -309,7 +309,7 @@ try {
 | `'method-limit'` | 32 개를 초과하는 고유 HTTP 메서드 |
 | `'method-empty'` / `'method-invalid-token'` | method 토큰이 HTTP token grammar 위반 (RFC 9110 §5.6.2) |
 | `'path-missing-leading-slash'` / `'path-query'` / `'path-fragment'` / `'path-control-char'` / `'path-invalid-pchar'` / `'path-malformed-percent'` / `'path-invalid-utf8'` / `'path-encoded-slash'` / `'path-dot-segment'` / `'path-empty-segment'` | 등록된 path 가 router-grammar / RFC 부합 검사 실패 |
-| `'router-options-invalid'` | `RouterOptions` 필드 검증 실패 (예: `cacheSize` 가 `[1, 2^30]` 범위 밖) |
+| `'router-options-invalid'` | `RouterOptions` 필드 검증 실패 (예: `cacheSize` 가 `[1, 2³⁰]` 범위 밖) |
 | `'route-validation'` | `build()` 중 한 개 이상의 라우트 검증 실패 — `data.errors` 가 라우트별 실패 목록을 담음 |
 
 ### 충돌 예시

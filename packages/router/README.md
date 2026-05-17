@@ -5,7 +5,7 @@
 [![npm](https://img.shields.io/npm/v/@zipbul/router)](https://www.npmjs.com/package/@zipbul/router)
 ![coverage](https://img.shields.io/endpoint?url=https://gist.githubusercontent.com/parkrevil/3965fb9d1fe2d6fc5c321cb38d88c823/raw/router-coverage.json)
 
-A high-performance URL router for Bun. Build-once / match-many. Hot static paths land in **single-digit nanoseconds**, dynamic routes in 8–20 ns, with structured error reporting and a single small public API surface.
+A high-performance URL router for Bun. Build-once / match-many. Hot static paths land in **single-digit nanoseconds**, dynamic hits around **~10 ns** with a warm cache, all surfaced through a small public API with structured error reporting.
 
 Designed for HTTP server boundaries (`Bun.serve`, Node `http`,
 adapters) that hand the router a normalized origin-form pathname.
@@ -276,7 +276,7 @@ Validation options:
 |:---|:---|:---|
 | `add()` / `addAll()` | `RouterError` on invalid path, conflict, or sealed router | `void` |
 | `build()` | `RouterError({ kind: 'route-validation' })` listing every per-route failure | `this` |
-| `match()` | `URIError` if a captured param's `%xx` is malformed — wrap in `try / catch` to map to `400 Bad Request` | `MatchOutput<T> | null` |
+| `match()` | `URIError` if a captured param's `%xx` is malformed — wrap in `try / catch` to map to `400 Bad Request` | `MatchOutput<T> \| null` |
 | `allowedMethods()` | Never throws | `readonly string[]` |
 
 Every `RouterError` carries a structured `data` object — narrow on `data.kind` (discriminated union) to access kind-specific fields like `segment`, `conflictsWith`, `suggestion`, `path`, `method`.
@@ -288,7 +288,7 @@ try {
   router.add('GET', '/bad/(unmatched', handler);
 } catch (e) {
   if (e instanceof RouterError) {
-    e.data.kind;       // RouterErrKind — discriminant
+    e.data.kind;       // RouterErrorKind — discriminant
     e.data.message;    // Human-readable description
     e.data.path;       // The problematic path (when applicable)
     e.data.method;     // The HTTP method (when applicable)
@@ -309,7 +309,7 @@ try {
 | `'method-limit'` | More than 32 distinct HTTP methods registered |
 | `'method-empty'` / `'method-invalid-token'` | Method token violates the HTTP token grammar (RFC 9110 §5.6.2) |
 | `'path-missing-leading-slash'` / `'path-query'` / `'path-fragment'` / `'path-control-char'` / `'path-invalid-pchar'` / `'path-malformed-percent'` / `'path-invalid-utf8'` / `'path-encoded-slash'` / `'path-dot-segment'` / `'path-empty-segment'` | The registered path violates the router-grammar / RFC-conformance gate at registration time |
-| `'router-options-invalid'` | A `RouterOptions` field failed validation (e.g. `cacheSize` outside `[1, 2^30]`) |
+| `'router-options-invalid'` | A `RouterOptions` field failed validation (e.g. `cacheSize` outside `[1, 2³⁰]`) |
 | `'route-validation'` | One or more routes failed validation during `build()` — `data.errors` lists each per-route failure |
 
 ### Conflict examples
