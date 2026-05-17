@@ -38,6 +38,11 @@ export interface MatchConfig<T> {
    *  active — the active-method short-circuit in `emitMethodDispatch` reads
    *  this mask to return null in one step for wrong-method calls. */
   readonly activeMethodMask: Int32Array;
+  /** Path-first static lookup table. Maps `path → { mask, outputs[mc] }`.
+   *  Multi-method emitters use this for the static probe instead of the
+   *  per-method bucket pair — ULTIMATE measured path-first 1.70 ns/op vs
+   *  method-first 2.63 ns/op on production-realistic 8-method × 12500 routes. */
+  readonly staticByPath: Record<string, { mask: number; outputs: Array<MatchOutput<T> | undefined> }>;
   /** Per-methodCode first-byte mask of the root segment-tree's static
    *  children. `mask[charCode] === 1` iff at least one root-level static
    *  child of this method's tree starts with that byte. `null` when the
@@ -186,15 +191,19 @@ function emitStaticBucketProbe(
   const open = gateOnNormalize ? `if (${key} !== path) {\n` : '';
   const close = gateOnNormalize ? `\n}` : '';
   if (singleMethod !== null) {
+    // Single-method stays on the method-first activeBucket — one obj
+    // prop lookup beats path-first (lookup + mask AND + outputs[mc]).
     return `
       ${open}var out = activeBucket[${key}];
       if (out !== undefined) return out;${close}`;
   }
+  // Multi-method uses path-first: one staticByPath lookup, mask check,
+  // outputs[mc] — ULTIMATE 1.70 ns vs method-first 2.63 ns on
+  // production-realistic 8-method × 12500 routes.
   return `
-      ${open}var bucket = staticOutputsByMethod[mc];
-      if (bucket !== undefined) {
-        var out = bucket[${key}];
-        if (out !== undefined) return out;
+      ${open}var entry = staticByPath[${key}];
+      if (entry !== undefined && (entry.mask & (1 << mc)) !== 0) {
+        return entry.outputs[mc];
       }${close}`;
 }
 
@@ -206,10 +215,9 @@ function emitPreNormalizeStaticProbe(singleMethod: SingleMethodSpec | null): str
       if (preOut !== undefined) return preOut;`;
   }
   return `
-      var preBucket = staticOutputsByMethod[mc];
-      if (preBucket !== undefined) {
-        var preOut = preBucket[path];
-        if (preOut !== undefined) return preOut;
+      var preEntry = staticByPath[path];
+      if (preEntry !== undefined && (preEntry.mask & (1 << mc)) !== 0) {
+        return preEntry.outputs[mc];
       }`;
 }
 
@@ -338,22 +346,20 @@ function compileStaticOnlyMultiMethod<T>(cfg: MatchConfig<T>): CompiledMatch<T> 
     emitMethodDispatch(null, cfg.activeMethodCodes),
     emitNormalize(cfg, 'sp'),
     `
-      var bucket = staticOutputsByMethod[mc];
-      if (bucket !== undefined) {
-        var out = bucket[sp];
-        if (out !== undefined) return out;
+      var entry = staticByPath[sp];
+      if (entry !== undefined && (entry.mask & (1 << mc)) !== 0) {
+        return entry.outputs[mc];
       }
       return null;`,
   ].join('\n');
 
-  // string-switch dispatch elides the methodCodes + activeMethodMask
-  // loads — drop those captures so the closure stays small.
+  // Multi-method static-only uses path-first staticByPath probe.
   const factory = new Function(
-    'staticOutputsByMethod',
+    'staticByPath',
     `return function match(method, path) {\n${body}\n};`,
   );
 
-  const compiled = factory(cfg.staticOutputsByMethod) as CompiledMatch<T>;
+  const compiled = factory(cfg.staticByPath) as CompiledMatch<T>;
   runWarmup(compiled, cfg);
   return compiled;
 }
@@ -432,7 +438,7 @@ function compileMixed<T>(cfg: MatchConfig<T>, singleMethod: SingleMethodSpec | n
   }
 
   const factory = new Function(
-    'activeBucket', 'tr0', 'rootMaskSingle', 'staticOutputsByMethod',
+    'activeBucket', 'tr0', 'rootMaskSingle', 'staticByPath',
     'rootFirstCharMaskByMethod', 'trees', 'matchState', 'handlers',
     'hitCacheByMethod',
     'EMPTY_PARAMS', 'CACHE_META', 'DYNAMIC_META', 'terminalSlab', 'paramsFactories',
@@ -440,7 +446,7 @@ function compileMixed<T>(cfg: MatchConfig<T>, singleMethod: SingleMethodSpec | n
   );
 
   const compiled = factory(
-    activeBucket, tr0, rootMaskSingle, cfg.staticOutputsByMethod,
+    activeBucket, tr0, rootMaskSingle, cfg.staticByPath,
     cfg.rootFirstCharMaskByMethod, cfg.trees, cfg.matchState, cfg.handlers,
     cfg.hitCacheByMethod,
     EMPTY_PARAMS, CACHE_META, DYNAMIC_META, cfg.terminalSlab, cfg.paramsFactories,

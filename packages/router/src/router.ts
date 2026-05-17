@@ -306,6 +306,7 @@ function buildMatchConfig<T>(
     hasAnyTree: r.trees.some(t => t != null),
     hasAnyStatic,
     staticOutputsByMethod: r.staticOutputsByMethod,
+    staticByPath: r.staticByPath,
     methodCodes: r.methodCodes,
     activeMethodMask,
     rootFirstCharMaskByMethod,

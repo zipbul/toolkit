@@ -34,6 +34,7 @@ function baseConfig<T>(overrides: Partial<Cfg<T>> = {}): Cfg<T> {
     staticOutputsByMethod: [],
     methodCodes: Object.create(null) as Record<string, number>,
     activeMethodMask: new Int32Array(32),
+    staticByPath: Object.create(null),
     rootFirstCharMaskByMethod: new Array(32).fill(null) as Array<Int32Array | null>,
     trees: [],
     matchState: createMatchState(4),
@@ -52,6 +53,23 @@ function baseConfig<T>(overrides: Partial<Cfg<T>> = {}): Cfg<T> {
       mask[merged.activeMethodCodes[i]![1]] = 1;
     }
     (merged as { activeMethodMask: Int32Array }).activeMethodMask = mask;
+  }
+  // Auto-fill staticByPath from staticOutputsByMethod when caller did not
+  // supply one — emitter's path-first probe reads staticByPath instead of
+  // the per-method bucket array.
+  if (overrides.staticByPath === undefined && merged.staticOutputsByMethod.length > 0) {
+    const byPath: Record<string, { mask: number; outputs: Array<MatchOutput<T> | undefined> }> = Object.create(null);
+    for (let mc = 0; mc < merged.staticOutputsByMethod.length; mc++) {
+      const bucket = merged.staticOutputsByMethod[mc];
+      if (bucket === undefined) continue;
+      for (const path in bucket) {
+        let e = byPath[path];
+        if (e === undefined) { e = { mask: 0, outputs: [] }; byPath[path] = e; }
+        e.mask |= 1 << mc;
+        e.outputs[mc] = bucket[path];
+      }
+    }
+    (merged as { staticByPath: typeof byPath }).staticByPath = byPath;
   }
   return merged;
 }
@@ -177,6 +195,7 @@ describe('compileMatchFn — mixed (dynamic walker + cache + slab unpack)', () =
       staticOutputsByMethod: [],
       methodCodes,
       activeMethodMask,
+      staticByPath: Object.create(null),
       rootFirstCharMaskByMethod,
       trees: [walker],
       matchState,
@@ -250,6 +269,7 @@ describe('compileMatchFn — trailing-slash recheck on strict (trimSlash off) mo
       staticOutputsByMethod: [],
       methodCodes,
       activeMethodMask,
+      staticByPath: Object.create(null),
       rootFirstCharMaskByMethod,
       trees: [walker],
       matchState: state,

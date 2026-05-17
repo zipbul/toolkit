@@ -25,6 +25,10 @@ import {
 export interface BuildResult<T> {
   trees: Array<MatchFn | null>;
   staticOutputsByMethod: Array<Record<string, MatchOutput<T>> | undefined>;
+  /** Path-first static lookup table. Maps `path → { mask, outputs[mc] }`.
+   *  Emitter uses this for the static probe — ULTIMATE measured
+   *  path-first lookup 1.70 ns/op vs method-first 2.63 ns/op. */
+  staticByPath: Record<string, { mask: number; outputs: Array<MatchOutput<T> | undefined> }>;
   /** Per-static-path 32-bit method-availability mask (bit `methodCode`). */
   staticPathMethodMask: Record<string, number>;
   activeMethodCodes: ReadonlyArray<readonly [string, number]>;
@@ -50,7 +54,12 @@ export function buildFromRegistration<T>(
 
   // Materialize the static-output buckets up front so the per-method
   // walker/active-codes loop below can decide activeness in one pass.
+  // Build BOTH representations: method-first (legacy compileMixed shape)
+  // and path-first (compact path-keyed entry with method bitmask +
+  // outputs array). The emitter selects path-first for the static
+  // probe — ULTIMATE measured 1.70 ns/op vs 2.63 ns/op for method-first.
   const staticOutputsByMethod: Array<Record<string, MatchOutput<T>> | undefined> = [];
+  const staticByPath: Record<string, { mask: number; outputs: Array<MatchOutput<T> | undefined> }> = createNullProtoBucket();
   for (let mc = 0; mc < snapshot.staticByMethod.length; mc++) {
     const inputBucket = snapshot.staticByMethod[mc];
     if (inputBucket === undefined) continue;
@@ -59,11 +68,20 @@ export function buildFromRegistration<T>(
     staticOutputsByMethod[mc] = outBucket;
 
     for (const path in inputBucket) {
-      outBucket[path] = Object.freeze({
+      const output = Object.freeze({
         value: inputBucket[path] as T,
         params: EMPTY_PARAMS,
         meta: STATIC_META,
       }) as MatchOutput<T>;
+      outBucket[path] = output;
+
+      let entry = staticByPath[path];
+      if (entry === undefined) {
+        entry = { mask: 0, outputs: [] };
+        staticByPath[path] = entry;
+      }
+      entry.mask |= 1 << mc;
+      entry.outputs[mc] = output;
     }
   }
 
@@ -105,6 +123,7 @@ export function buildFromRegistration<T>(
   return {
     trees,
     staticOutputsByMethod,
+    staticByPath,
     staticPathMethodMask: snapshot.staticPathMethodMask,
     activeMethodCodes,
     methodCodes,
