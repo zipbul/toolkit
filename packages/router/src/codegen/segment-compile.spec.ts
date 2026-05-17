@@ -30,9 +30,11 @@ describe('emitTesterCheck', () => {
   });
 });
 
+const emptyCtx = () => ({ bail: false, testers: [], pendingParams: [] });
+
 describe('emitStrictTerminal', () => {
   it('emits the end-of-URL strict terminal block with the supplied store index', () => {
-    const out = emitStrictTerminal('pos0', 's0', '', 7);
+    const out = emitStrictTerminal(emptyCtx(), 'pos0', 's0', '', 7);
     expect(out).toContain('s0 === -1 && pos0 < len');
     expect(out).toContain('state.handlerIndex = 7');
     expect(out).toContain('return true');
@@ -40,7 +42,7 @@ describe('emitStrictTerminal', () => {
 
   it('inlines the tester-check fragment into the strict-terminal body', () => {
     const tester = emitTesterCheck(2, 'pos0', 's0');
-    const out = emitStrictTerminal('pos0', 's0', tester, 5);
+    const out = emitStrictTerminal(emptyCtx(), 'pos0', 's0', tester, 5);
     expect(out).toContain('testers[2]');
     expect(out).toContain('state.handlerIndex = 5');
   });
@@ -48,17 +50,17 @@ describe('emitStrictTerminal', () => {
 
 describe('emitMultiWildcardTerminal', () => {
   it('emits two paramOffsets writes for the leading param + multi tail', () => {
-    const out = emitMultiWildcardTerminal('pos0', 's0', '', 11);
-    expect(out).toContain('state.paramOffsets[pc] = pos0');
-    expect(out).toContain('state.paramOffsets[pc + 1] = s0');
-    expect(out).toContain('state.paramOffsets[pc + 2] = s0 + 1');
-    expect(out).toContain('state.paramOffsets[pc + 3] = len');
-    expect(out).toContain('state.paramCount += 2');
+    const out = emitMultiWildcardTerminal(emptyCtx(), 'pos0', 's0', '', 11);
+    expect(out).toContain('state.paramOffsets[0] = pos0');
+    expect(out).toContain('state.paramOffsets[1] = s0');
+    expect(out).toContain('state.paramOffsets[2] = s0 + 1');
+    expect(out).toContain('state.paramOffsets[3] = len');
+    expect(out).toContain('state.paramCount = 2');
     expect(out).toContain('state.handlerIndex = 11');
   });
 
   it('requires a non-empty tail (`s0 + 1 < len`) before matching', () => {
-    const out = emitMultiWildcardTerminal('pos0', 's0', '', 11);
+    const out = emitMultiWildcardTerminal(emptyCtx(), 'pos0', 's0', '', 11);
     expect(out).toContain('s0 + 1 < len');
   });
 });
@@ -66,14 +68,14 @@ describe('emitMultiWildcardTerminal', () => {
 describe('emitWildcardStore', () => {
   it('emits the inclusive `<= len` guard for star-origin wildcards', () => {
     const node: SegmentNode = { ...createSegmentNode(), wildcardStore: 4, wildcardOrigin: 'star' };
-    const out = emitWildcardStore(node, 'pos0');
+    const out = emitWildcardStore(emptyCtx(), node, 'pos0');
     expect(out).toContain('pos0 <= len');
     expect(out).toContain('state.handlerIndex = 4');
   });
 
   it('emits the exclusive `< len` guard for multi-origin wildcards', () => {
     const node: SegmentNode = { ...createSegmentNode(), wildcardStore: 8, wildcardOrigin: 'multi' };
-    const out = emitWildcardStore(node, 'pos0');
+    const out = emitWildcardStore(emptyCtx(), node, 'pos0');
     expect(out).toContain('pos0 < len');
     expect(out).not.toContain('pos0 <= len');
   });

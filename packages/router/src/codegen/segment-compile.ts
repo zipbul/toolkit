@@ -122,7 +122,7 @@ export function compileSegmentTree(root: SegmentNode): CompiledPackage | null {
 
   if (estimateSegmentTreeCodegen(root, MAX_NODES_DEFAULT).oversized) return null;
 
-  const ctx: EmitContext = { bail: false, testers: [] };
+  const ctx: EmitContext = { bail: false, testers: [], pendingParams: [] };
   const body = emitNode(ctx, root, 'pos0');
   if (ctx.bail) return null;
 
@@ -155,6 +155,39 @@ ${body}
 interface EmitContext {
   bail: boolean;
   testers: PatternTesterFn[];
+  /** Stack of [startExpr, endExpr] pairs for param descents that have
+   *  not yet been written to `state.paramOffsets`. Each `emitParamBranch`
+   *  push the descent's `[posVar, slashVar]` before recursing into the
+   *  child subtree and pop after; every terminal emitter (strict, multi-
+   *  wildcard, wildcard-store, terminal-at-node) flushes the entire
+   *  stack into `state.paramOffsets` before its own writes — so a
+   *  walker that fails inside the child subtree returns false without
+   *  paying for the offset writes. Mirrors memoirist's "materialize
+   *  params after the child route succeeds" pattern. */
+  pendingParams: Array<readonly [string, string]>;
+}
+
+/** Emit the `state.paramOffsets[...] = ...; state.paramCount = ...;`
+ *  block that flushes pending param descents plus any terminal-local
+ *  params (e.g. the strict-terminal's own `[posVar, len]` pair). */
+function emitFlushPendingWrites(
+  pending: ReadonlyArray<readonly [string, string]>,
+  extra: ReadonlyArray<readonly [string, string]> = [],
+): string {
+  let s = '';
+  let i = 0;
+  for (const [start, end] of pending) {
+    s += `state.paramOffsets[${i * 2}] = ${start};\n`;
+    s += `state.paramOffsets[${i * 2 + 1}] = ${end};\n`;
+    i++;
+  }
+  for (const [start, end] of extra) {
+    s += `state.paramOffsets[${i * 2}] = ${start};\n`;
+    s += `state.paramOffsets[${i * 2 + 1}] = ${end};\n`;
+    i++;
+  }
+  s += `state.paramCount = ${i};\n`;
+  return s;
 }
 
 export function emitRootSlashTerminal(root: SegmentNode): string {
@@ -191,7 +224,7 @@ function emitNode(
   }
 
   if (node.wildcardStore !== null) {
-    code += emitWildcardStore(node, posVar);
+    code += emitWildcardStore(ctx, node, posVar);
   }
 
   return code;
@@ -290,7 +323,7 @@ function emitStaticChildBlock(
         var ${nextPos} = ${posVar} + ${segLen} + 1;
 ${childInner}
       } else if (c !== c) { // NaN — past end-of-string → terminal
-${emitTerminalAt(child)}
+${emitTerminalAt(ctx, child)}
       }
     }`;
 }
@@ -332,30 +365,32 @@ export function emitParamBranch(
   const testerCheck = emitTesterCheck(testerIdx, posVar, slashVar);
 
   if (strictTerminal) {
-    code += emitStrictTerminal(posVar, slashVar, testerCheck, next.store!);
+    code += emitStrictTerminal(ctx, posVar, slashVar, testerCheck, next.store!);
     return code;
   }
   if (wildcardTerminal && next.wildcardOrigin === 'multi') {
-    code += emitMultiWildcardTerminal(posVar, slashVar, testerCheck, next.wildcardStore!);
+    code += emitMultiWildcardTerminal(ctx, posVar, slashVar, testerCheck, next.wildcardStore!);
     return code;
   }
 
+  // Push this descent's [start, end] onto the pending-params stack;
+  // every terminal inside the inner subtree flushes the stack into
+  // state.paramOffsets before returning true. If the inner subtree
+  // fails (returns false), the pending writes are never paid.
+  ctx.pendingParams.push([posVar, slashVar] as const);
   const inner = emitNode(ctx, next, innerPos);
+  ctx.pendingParams.pop();
   if (ctx.bail) return '';
 
   code += `
     if (${slashVar} !== -1 && ${slashVar} > ${posVar}) {
       ${testerCheck}
-      var pc = state.paramCount * 2;
-      state.paramOffsets[pc] = ${posVar};
-      state.paramOffsets[pc + 1] = ${slashVar};
-      state.paramCount++;
       var ${innerPos} = ${slashVar} + 1;
 ${inner}
     }`;
 
   if (next.store !== null) {
-    code += emitStrictTerminal(posVar, slashVar, testerCheck, next.store);
+    code += emitStrictTerminal(ctx, posVar, slashVar, testerCheck, next.store);
   }
   return code;
 }
@@ -367,63 +402,59 @@ export function emitTesterCheck(testerIdx: number, posVar: string, slashVar: str
 }
 
 export function emitStrictTerminal(
+  ctx: EmitContext,
   posVar: string,
   slashVar: string,
   testerCheck: string,
   storeIdx: number,
 ): string {
+  const flush = emitFlushPendingWrites(ctx.pendingParams, [[posVar, 'len']]);
   return `
     if (${slashVar} === -1 && ${posVar} < len) {
       ${testerCheck}
-      var pc = state.paramCount * 2;
-      state.paramOffsets[pc] = ${posVar};
-      state.paramOffsets[pc + 1] = len;
-      state.paramCount++;
-      state.handlerIndex = ${storeIdx};
+      ${flush}state.handlerIndex = ${storeIdx};
       return true;
     }`;
 }
 
 export function emitMultiWildcardTerminal(
+  ctx: EmitContext,
   posVar: string,
   slashVar: string,
   testerCheck: string,
   wildcardStoreIdx: number,
 ): string {
+  const flush = emitFlushPendingWrites(ctx.pendingParams, [
+    [posVar, slashVar],
+    [`${slashVar} + 1`, 'len'],
+  ]);
   return `
     if (${slashVar} !== -1 && ${slashVar} > ${posVar} && ${slashVar} + 1 < len) {
       ${testerCheck}
-      var pc = state.paramCount * 2;
-      state.paramOffsets[pc] = ${posVar};
-      state.paramOffsets[pc + 1] = ${slashVar};
-      state.paramOffsets[pc + 2] = ${slashVar} + 1;
-      state.paramOffsets[pc + 3] = len;
-      state.paramCount += 2;
-      state.handlerIndex = ${wildcardStoreIdx};
+      ${flush}state.handlerIndex = ${wildcardStoreIdx};
       return true;
     }`;
 }
 
-export function emitWildcardStore(node: SegmentNode, posVar: string): string {
+export function emitWildcardStore(ctx: EmitContext, node: SegmentNode, posVar: string): string {
   const guard = node.wildcardOrigin === 'star' ? `${posVar} <= len` : `${posVar} < len`;
+  const flush = emitFlushPendingWrites(ctx.pendingParams, [[posVar, 'len']]);
   return `
     if (${guard}) {
-      var pc = state.paramCount * 2;
-      state.paramOffsets[pc] = ${posVar};
-      state.paramOffsets[pc + 1] = len;
-      state.paramCount++;
-      state.handlerIndex = ${node.wildcardStore};
+      ${flush}state.handlerIndex = ${node.wildcardStore};
       return true;
     }`;
 }
 
-function emitTerminalAt(node: SegmentNode): string {
+function emitTerminalAt(ctx: EmitContext, node: SegmentNode): string {
   if (node.store !== null) {
-    return `        state.handlerIndex = ${node.store};\n        return true;`;
+    const flush = emitFlushPendingWrites(ctx.pendingParams);
+    return `        ${flush}state.handlerIndex = ${node.store};\n        return true;`;
   }
 
   if (node.wildcardStore !== null && node.wildcardOrigin === 'star') {
-    return `        var pc = state.paramCount * 2;\n        state.paramOffsets[pc] = url.length;\n        state.paramOffsets[pc + 1] = url.length;\n        state.paramCount++;\n        state.handlerIndex = ${node.wildcardStore};\n        return true;`;
+    const flush = emitFlushPendingWrites(ctx.pendingParams, [['url.length', 'url.length']]);
+    return `        ${flush}state.handlerIndex = ${node.wildcardStore};\n        return true;`;
   }
 
   return '';
