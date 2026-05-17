@@ -361,11 +361,11 @@ describe('shape specialization gating', () => {
     r.add('POST', '/upload/*filepath', 2);
     r.build();
     const impl = getRouterInternals(r).matchImpl as { toString: () => string };
-    // Multi-method dispatch emits `switch (method.charCodeAt(0))` with
-    // case-grouped string compares. The charCode-switch shape is the
-    // post-specialization signal that single-method literal compare did
-    // NOT kick in.
-    expect(impl.toString()).toContain('switch (method.charCodeAt(0))');
+    // Multi-method dispatch reduces to `matchByMethod[method]` table
+    // lookup; the table's `Object.create(null)` and the per-method
+    // bound function are the post-specialization signal that single-
+    // method literal compare did NOT kick in.
+    expect(impl.toString()).toContain('matchByMethod[method]');
     expect(r.match('GET', '/static/foo')!.value).toBe(1);
     expect(r.match('POST', '/upload/bar')!.value).toBe(2);
   });

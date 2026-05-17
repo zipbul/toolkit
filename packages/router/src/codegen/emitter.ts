@@ -408,21 +408,26 @@ function compileMixed<T>(cfg: MatchConfig<T>, singleMethod: SingleMethodSpec | n
     const body = [emitMethodDispatch(singleMethod, cfg.activeMethodCodes), ...emitBodyLines(singleMethod)].join('\n');
     source = `return function match(method, path) {\n${body}\n};`;
   } else {
-    // Multi-method wrapper-split: tiny `match` fans out into `matchActive`
-    // via a charCode switch. Wrong-method exits before entering the
-    // active body's closure prologue.
+    // Multi-method per-method dispatch table (Option A). The wrapper
+    // reduces to a single null-proto-object lookup + call, matching
+    // memoirist's `this.root[method]` and koa-tree's `methodMap[method]`
+    // shape. Each active method gets a bound `f(path)` closure that
+    // forwards to the shared `matchActive(mc, path)` body — keeps the
+    // single codegen-specialized body but pays only one prop lookup +
+    // one closure call on dispatch.
     const activeBody = emitBodyLines(null).join('\n');
-    const wrapperSwitch = emitMethodCharSwitch(
-      cfg.activeMethodCodes,
-      'return matchActive($CODE, path);',
-      'return null;',
-    );
+    const tableInit = cfg.activeMethodCodes
+      .map(([name, code]) => `matchByMethod[${JSON.stringify(name)}] = function(path) { return matchActive(${code}, path); };`)
+      .join('\n');
     source = `
       function matchActive(mc, path) {
         ${activeBody}
       }
+      var matchByMethod = Object.create(null);
+      ${tableInit}
       return function match(method, path) {
-        ${wrapperSwitch}
+        var f = matchByMethod[method];
+        return f === undefined ? null : f(path);
       };
     `;
   }
