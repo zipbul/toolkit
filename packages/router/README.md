@@ -61,7 +61,7 @@ const result = router.match('GET', '/users/42');
 
 if (result) {
   console.log(result.value); // 'get-user'
-  console.log(result.params.id); // '42'
+  console.log(result.params['id']); // '42'
   console.log(result.meta.source); // 'dynamic'
 }
 ```
@@ -410,15 +410,30 @@ Bun.serve({
 
 ## ⚡ Performance
 
-Hot-path checkpoints (Bun 1.3.13, Linux x64):
+Measured on `bun 1.3.13`, Linux x64, Intel i7-13700K, 11-trial median per
+`regression-snapshot.ts` row, fresh-process-per-pair for the cross-router
+table. Full numbers, σ, RSS, and reproduction procedure in
+[`bench-results.md`](./bench-results.md).
 
-| Workload                               |           Range |
-| :------------------------------------- | --------------: |
-| `build()` — 100 routes                 |        a few ms |
-| `build()` — 10 000 routes              |      tens of ms |
-| `match()` — hit / static               | single-digit ns |
-| `match()` — hit / dynamic (warm cache) |          ~10 ns |
-| `match()` — miss / wrong method        |        a few ns |
+| Workload                               |   median |
+| :------------------------------------- | -------: |
+| `build()` — 100 routes                 |  2.51 ms |
+| `build()` — 10 000 routes              | 27.62 ms |
+| `match()` — hit / static               |  3.64 ns |
+| `match()` — hit / dynamic (warm cache) |  9.06 ns |
+| `match()` — miss / wrong method        |  2.64 ns |
+
+Cross-router single-param hit (`/users/:id`), fresh-process-per-adapter:
+
+| Adapter         | avg ns/op |
+| :-------------- | --------: |
+| **zipbul**      | **12.15** |
+| memoirist       |     40.03 |
+| rou3            |     50.81 |
+| hono-regexp     |    106.42 |
+| koa-tree-router |    118.48 |
+| find-my-way     |    119.07 |
+| hono-trie       |    236.57 |
 
 Hardware variance is ±20 % and sub-10 ns ops hit clock-granularity noise. Reproduce locally with:
 

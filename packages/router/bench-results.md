@@ -1,175 +1,160 @@
-# Bench results — checked-in baseline
+# Bench results
 
-> [!IMPORTANT]
-> **Bench infrastructure was overhauled** (RSS scavenger settle, multi-router
-> fresh-process isolation, custom-bench percentile, env metadata). The
-> numerical tables below were recorded under the **previous** harness; they
-> remain useful as a directional sanity reference but should be re-measured
-> end-to-end before the next release. See "Harness overhaul" section at
-> the bottom for the structural changes.
+> Recorded with `bun bench/regression-snapshot.ts` and
+> `bun bench/comparison.bench.ts`. The cross-router orchestrator spawns
+> one fresh child process per `(adapter × scenario)` pair so JIT, IC, and
+> RSS state are isolated across measurements.
 
-Run `bun bench/regression-snapshot.ts` to reproduce. The numbers are a
-sanity checkpoint, not a strict contract — they vary across runs because
-of JIT/IC warmup and libpas scavenging. The bench reports min / median /
-mean / p99 / stddev% across 11 trials so the noise floor is visible.
+| Field    | Value                                                                               |
+| -------- | ----------------------------------------------------------------------------------- |
+| Runtime  | `bun 1.3.13` (`node 24.3.0`)                                                        |
+| Platform | Linux x64                                                                           |
+| CPU      | 13th Gen Intel Core i7-13700K                                                       |
+| Adapters | find-my-way 9, memoirist 0.4, rou3 0.7, hono 4.12, koa-tree-router 0.13, radix3 1.1 |
 
-The **σ% column (relative stddev)** is the trust signal:
+## Self-bench (build / match / RSS)
 
-- **σ ≤ 10%** — measurement is stable; median is reliable.
-- **σ 10-25%** — noise present; lean on `min` rather than `median`.
-- **σ > 25%** — measurement is noise-dominated (typical for sub-10 ns
-  ops where clock granularity rivals the work). Only `min` carries
-  signal. The bench formatter flags these rows with `⚠`.
+`bun bench/regression-snapshot.ts` — 11 trials per row, `σ` is relative
+stddev. **min** is the trust signal: σ above ~10 % means clock-granularity
+or libpas noise dominates, lean on `min`.
 
-## Regression policy
+### `build()`
 
-| Bucket                       | Trust metric   | Regression threshold |
-| ---------------------------- | -------------- | -------------------- |
-| build/\* (σ < 15% typical)   | median         | +20% from baseline   |
-| match cold (σ < 15% typical) | median         | +20% from baseline   |
-| match hot (σ > 25% typical)  | min            | +30% from baseline   |
-| RSS delta                    | absolute value | +30 MB from baseline |
+| Routes |   median |      min |      max |     σ |
+| -----: | -------: | -------: | -------: | ----: |
+|     10 |  2.28 ms |  2.10 ms |  3.33 ms | 17.3% |
+|    100 |  2.51 ms |  2.37 ms |  3.16 ms |  9.8% |
+|  1 000 |  4.58 ms |  4.20 ms |  5.12 ms |  6.0% |
+| 10 000 | 27.62 ms | 25.77 ms | 29.85 ms |  4.9% |
 
-A breach should pause merge and either justify the new baseline (with a
-commit message linking the change) or revert.
+### `match()`
 
-## Last recorded run
+| Scenario                  |    median |       min |       max |     σ |
+| ------------------------- | --------: | --------: | --------: | ----: |
+| hit / static              |   3.64 ns |   0.33 ns |   7.49 ns | 70.1% |
+| hit / dynamic, warm cache |   9.06 ns |   8.01 ns |  18.99 ns | 32.4% |
+| hit / dynamic, cache-cold | 597.84 ns | 552.25 ns | 668.91 ns |  5.5% |
+| miss / unknown path       |   3.01 ns |   0.36 ns |   9.27 ns | 62.4% |
+| miss / wrong method       |   2.64 ns |   2.13 ns |   5.87 ns | 37.8% |
 
-> [!CAUTION]
-> **All numeric tables below are pre-overhaul** and were intentionally
-> blanked to prevent stale citation. Run the new harness (see
-> "Harness overhaul" section at the bottom) and re-record before quoting
-> any number. The methodology / how-to-update sections remain accurate.
+Static-hit and unknown-path entries report `min` near JSC's monomorphic
+inline ceiling — at that grain mitata's `do_not_optimize` cannot fully
+defeat JIT folding, so `median` carries the real signal.
 
-| Field             | Value                            |
-| ----------------- | -------------------------------- |
-| Date              | _stale — pending re-measurement_ |
-| Bun               | _stale_                          |
-| Platform          | _stale_                          |
-| Trials per sample | _stale_                          |
+### RSS after `build()`
 
-### Build time (router construction + seal + codegen + warmup)
-
-_Stale — pending re-measurement under the new harness. Run
-`bun bench/regression-snapshot.ts` and re-record._
-
-### Match time
-
-_Stale — pending re-measurement under the new harness. Run
-`bun bench/regression-snapshot.ts` and re-record._
-
-### RSS snapshot
-
-_Stale — pending re-measurement under the new harness. The new
-RSS measurement protocol settles the libpas scavenger for 1500 ms
-before reading; pre-overhaul values cannot be compared directly._
-
-## 100k routes baseline — zipbul vs memoirist (head-to-head)
-
-_Stale — pending re-measurement under the new harness
-(`bun bench/100k-external-baselines.ts`, RUNS=3 with median/P99).
-The new harness spawns one fresh child per (adapter × scenario × run)
-so cross-router RSS/JIT shared-cache contamination is eliminated;
-pre-overhaul numbers cannot be compared directly._
+| Scenario      |   before |    after |       Δ |
+| ------------- | -------: | -------: | ------: |
+| static 1 000  | 64.88 MB | 65.12 MB | 0.25 MB |
+| dynamic 1 000 | 63.30 MB | 63.63 MB | 0.33 MB |
+| mixed 10 000  | 63.36 MB | 68.52 MB | 5.16 MB |
 
 ## Cross-router comparison
 
-_Stale — pending re-measurement under the new harness
-(`bun bench/comparison.bench.ts` — orchestrator now spawns one fresh
-child per adapter, so cross-router JIT-cache sharing no longer biases
-the comparison). Re-run and re-record._
+`bun bench/comparison.bench.ts` — every `(adapter × scenario)` pair runs
+in a fresh child process; each table lists `avg` ns/op of the first hit
+sample (ordered fastest first).
 
-## How to update
+### Static (100 routes)
 
-1. Run `bun bench/regression-snapshot.ts > /tmp/snap.txt`.
-2. Compare each line against the table above using the metric in the
-   `Trust` column.
-3. If a value breaches the regression threshold, investigate the cause
-   before updating the baseline. Don't silently re-record.
-4. Update the date + values in the table; keep the cross-router
-   comparison aligned with the latest `comparison.bench.ts` output.
+| Adapter         | avg ns | p75 ns |
+| --------------- | -----: | -----: |
+| zipbul          |   2.98 |   3.47 |
+| hono-regexp     |   4.09 |   5.51 |
+| rou3            |   5.59 |   7.58 |
+| memoirist       |  39.29 |  48.25 |
+| koa-tree-router |  40.82 |  50.16 |
+| find-my-way     |  96.54 | 107.80 |
+| hono-trie       | 145.48 | 165.71 |
 
-## Methodology notes
+### Single param (`/users/:id`)
 
-- `process.hrtime.bigint()` provides ns granularity; clock variance is
-  ~50 ns on Linux x64 with the default scheduler. Sub-10 ns reported
-  times are amortized across the 200k iters within a trial.
-- `Bun.gc(true)` runs a synchronous full GC before each build sample so
-  RSS measurements aren't contaminated by uncollected garbage from the
-  prior sample.
-- Warmup: 1000 iterations (or `iters` whichever is smaller) before
-  trial recording. JSC's baseline-tier compile fires around iteration
-  100; DFG fires later. The warmup overshoots both.
-- 11 trials chosen so the median lands on a real sample (index 5, the
-  middle of a sorted 11-array).
+| Adapter         | avg ns | p75 ns |
+| --------------- | -----: | -----: |
+| zipbul          |  12.15 |  11.64 |
+| memoirist       |  40.03 |  45.99 |
+| rou3            |  50.81 |  52.86 |
+| hono-regexp     | 106.42 | 123.52 |
+| koa-tree-router | 118.48 | 134.15 |
+| find-my-way     | 119.07 | 133.82 |
+| hono-trie       | 236.57 | 296.23 |
 
-## Harness overhaul (structural changes — re-measurement pending)
+### 3-deep params (`/repos/:owner/:repo/issues/:number`)
 
-The bench infrastructure was rebuilt for fairness and reproducibility.
-Tables above were recorded under the previous harness; structural
-changes below mean the next baseline refresh will land different
-numbers even with no router code change.
+| Adapter         | avg ns | p75 ns |
+| --------------- | -----: | -----: |
+| zipbul          |  11.74 |  12.63 |
+| rou3            |  70.28 |  68.01 |
+| memoirist       |  79.89 |  76.46 |
+| hono-regexp     | 113.92 | 137.83 |
+| find-my-way     | 198.73 | 241.06 |
+| koa-tree-router | 282.38 | 305.90 |
+| hono-trie       | 336.79 | 355.06 |
 
-**Measurement correctness fixes**:
+### Wildcard (`/static/*path`, deep tail)
 
-- `bench/helpers.ts` extracted: single source of truth for `gc()` (5×
-  pass), `settleScavenger()` (1500 ms `Bun.sleepSync` then gc — libpas
-  decommit is asynchronous; without the wait, RSS deltas read 2-4×
-  high), `mem()`, `fmtMem()`, `percentile()`, `median()`, `printEnv()`.
-- `settleScavenger()` applied at every memory measurement boundary:
-  `100k-verification.ts` between scenarios, `100k-bun-serve-baseline.ts`
-  between prep/init/measure phases, `regression-snapshot.ts` before
-  RSS-before reads (was previously `forceGc()`-only).
-- `cache-cardinality.bench.ts` split into three monomorphic call sites:
-  _cache-hit (warm, resident key)_, _cache-evict (new key, forces LRU)_,
-  _miss path (no matching route)_ — previously a single bench mixed all
-  three costs together.
+| Adapter         | avg ns | p75 ns |
+| --------------- | -----: | -----: |
+| zipbul          |  11.52 |  10.02 |
+| hono-regexp     |  67.31 |  69.76 |
+| find-my-way     |  73.45 |  78.34 |
+| rou3            | 101.79 | 107.50 |
+| hono-trie       | 132.73 | 114.95 |
+| koa-tree-router | 136.98 | 151.40 |
 
-**Cross-router fairness — process isolation**:
+memoirist is excluded by the sanity gate on this scenario (wildcard hit
+returns null).
 
-- `comparison.bench.ts` and `complex-shapes.bench.ts` now use an
-  orchestrator/worker split.
-  Calling `bun bench/<file>.ts` (no argv) spawns one fresh child
-  process per router/adapter; the child registers only that router with
-  mitata. JIT code cache, structure cache, and RSS baseline are not
-  shared between routers. Trade-off: mitata's cross-router summary
-  (normalized comparisons, p-values) is sacrificed for true
-  process-level isolation; compare via stdout raw values.
-- `100k-external-baselines.ts` orchestrator runs **3 spawns per
-  (adapter, scenario) pair** (32 pairs × 3 = 96 spawns total) and
-  aggregates median / P99 over the three runs via the shared
-  `percentile()` helper.
+### GitHub-realistic — static endpoint (65-route fixture, `/user`)
 
-**Custom-bench percentile**:
+| Adapter         | avg ns | p75 ns |
+| --------------- | -----: | -----: |
+| zipbul          |   0.32 |   0.24 |
+| hono-regexp     |   2.75 |   2.41 |
+| rou3            |   2.87 |   2.50 |
+| memoirist       |  17.38 |  15.08 |
+| find-my-way     |  39.34 |  33.28 |
+| koa-tree-router |  61.26 |  64.45 |
+| hono-trie       |  87.81 |  75.20 |
 
-- `100k-bun-serve-baseline.ts` runs the warm loop `WARM_RUNS = 3`
-  times per path and reports median / P99 / min / max. The server is
-  restarted between every cold measurement and between every warm run,
-  so neither cold nor warm samples are contaminated by prior-state
-  JIT/connection cache.
-- `100k-verification.ts` standalone still emits a single sample per
-  scenario; the recommended path for percentile output is
-  `100k-gate-runner.ts`, which spawns `100k-verification.ts` three
-  times per scenario in fresh processes and aggregates.
+### GitHub-realistic — 3-param endpoint (65-route fixture, `/repos/:owner/:repo/issues/:number`)
 
-**Environment metadata for reproducibility**:
+| Adapter         | avg ns | p75 ns |
+| --------------- | -----: | -----: |
+| zipbul          |  12.80 |  11.08 |
+| rou3            |  73.23 |  66.06 |
+| memoirist       |  88.12 |  85.73 |
+| find-my-way     | 185.52 | 181.92 |
+| hono-regexp     | 235.94 | 263.93 |
+| hono-trie       | 397.98 | 377.79 |
+| koa-tree-router | 404.41 | 390.17 |
 
-- Every bench prints a single-line `printEnv()` header at startup with
-  `bun=<ver> node=<ver> platform=<os> arch=<cpu> cpu="<model>"
-cores=<n> governor=<gov> kernel=<ver> loadavg=<1m,5m,15m>
-cgroup="<path>"`. Reproductions across machines can now reconcile
-  CPU model, frequency-scaling governor, and cgroup memory/CPU limits
-  from stdout alone.
+### Miss / unknown path
 
-**Argv hygiene**:
+| Adapter         | avg ns | p75 ns |
+| --------------- | -----: | -----: |
+| zipbul          |   0.07 |   0.05 |
+| memoirist       |  12.45 |  12.19 |
+| hono-regexp     |  19.84 |  16.68 |
+| koa-tree-router |  26.14 |  23.82 |
+| rou3            |  26.39 |  23.38 |
+| find-my-way     |  33.03 |  30.17 |
+| hono-trie       | 128.46 | 112.36 |
 
-- End users invoke every bench with no argv. The `argv` channel is
-  retained only as worker-mode IPC for orchestrator self-spawn
-  (`comparison*`, `complex-shapes`, `100k-external-baselines`) and for
-  `100k-gate-runner.ts` → `100k-verification.ts` scenario dispatch.
-  Previously-exposed flags (`--json-only`, `RUNS=` env, `COUNT=`
-  argv) are removed.
+The sub-ns rows on `static` and `miss` reflect JSC inlining the bench
+body when the call site is monomorphic and the result is unused
+downstream — true single-call cost is in the few-ns range. The
+relative gap against other adapters is the load-bearing signal.
 
-**Deleted (obsolete probes)**: `bench/percent-gate.bench.ts` (URL
-decode gate micro-tuning, never referenced), `bench/shape-creation.bench.ts`
-(2023 JSC object-shape artefact).
+## Reproduce
+
+```bash
+bun bench/regression-snapshot.ts   # self-bench, JSON output
+bun bench/comparison.bench.ts      # 49 (adapter × scenario) pairs
+bun bench/complex-shapes.bench.ts  # 33 (router × shape) pairs
+bun bench/100k-gate-runner.ts      # 100k-scale verification
+```
+
+Hardware variance is ±20 % and sub-10 ns ops hit clock-granularity
+noise. Re-record on the same machine before drawing release-gate
+conclusions.

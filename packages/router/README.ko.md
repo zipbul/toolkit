@@ -61,7 +61,7 @@ const result = router.match('GET', '/users/42');
 
 if (result) {
   console.log(result.value); // 'get-user'
-  console.log(result.params.id); // '42'
+  console.log(result.params['id']); // '42'
   console.log(result.meta.source); // 'dynamic'
 }
 ```
@@ -410,15 +410,29 @@ Bun.serve({
 
 ## ⚡ 성능
 
-Hot-path 체크포인트 (Bun 1.3.13, Linux x64):
+`bun 1.3.13`, Linux x64, Intel i7-13700K 에서 측정. `regression-snapshot.ts` 는
+11회 trial 중앙값, cross-router 표는 (adapter × scenario) 쌍별 별도 프로세스
+실행. 전체 수치·σ·RSS·재현 절차는 [`bench-results.md`](./bench-results.md) 참조.
 
-| 워크로드                              |       범위 |
-| :------------------------------------ | ---------: |
-| `build()` — 100 라우트                |      수 ms |
-| `build()` — 10 000 라우트             |    수십 ms |
-| `match()` — hit / static              | 한 자리 ns |
-| `match()` — hit / dynamic (캐시 warm) |     ~10 ns |
-| `match()` — miss / wrong method       |      수 ns |
+| 워크로드                              |   중앙값 |
+| :------------------------------------ | -------: |
+| `build()` — 100 라우트                |  2.51 ms |
+| `build()` — 10 000 라우트             | 27.62 ms |
+| `match()` — hit / static              |  3.64 ns |
+| `match()` — hit / dynamic (캐시 warm) |  9.06 ns |
+| `match()` — miss / wrong method       |  2.64 ns |
+
+단일 파라미터 hit (`/users/:id`), 어댑터별 별도 프로세스 실행:
+
+| 어댑터          | avg ns/op |
+| :-------------- | --------: |
+| **zipbul**      | **12.15** |
+| memoirist       |     40.03 |
+| rou3            |     50.81 |
+| hono-regexp     |    106.42 |
+| koa-tree-router |    118.48 |
+| find-my-way     |    119.07 |
+| hono-trie       |    236.57 |
 
 하드웨어 변동 ±20%, sub-10 ns 연산은 clock 해상도 노이즈. 로컬 재현:
 
