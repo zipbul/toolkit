@@ -62,7 +62,7 @@ const result = router.match('GET', '/users/42');
 if (result) {
   console.log(result.value); // 'get-user'
   console.log(result.params['id']); // '42'
-  console.log(result.meta.source); // 'dynamic'
+  console.log(result.meta.source); // 'dynamic' (첫 호출; 동일 경로 후속 호출은 'cache')
 }
 ```
 
@@ -106,7 +106,7 @@ router.match('GET', '/users/한국'); // ✗ 매칭 안 됨 (아래 참고)
 ```
 
 > [!IMPORTANT]
-> `router.match()`는 입력 경로를 **normalize하지 않습니다**. URI-form pathname (percent-encoded UTF-8)을 넘기세요 — `Bun.serve`, Node `http`, `new URL(req.url).pathname`이 항상 만드는 형태입니다. 비대칭은 의도적: 모든 HTTP 서버 boundary가 URI form을 전달하므로, hot path에 normalize 비용을 매번 지불하는 것은 낭비입니다.
+> `router.match()`는 입력 경로를 **normalize하지 않습니다**. URI-form pathname (percent-encoded UTF-8)을 넘기세요 — `Bun.serve`가 `new URL(request.url).pathname`으로 만드는 형태입니다. 비대칭은 의도적: 서버 경계가 이미 URI form을 전달하므로, hot path에 normalize 비용을 매번 지불하는 것은 낭비입니다.
 
 직접 만든 IRI 입력은 boundary에서 normalize:
 
@@ -140,7 +140,7 @@ router.build();
 
 등록된 라우트와 URL을 매칭합니다. `MatchOutput<T> | null`을 반환합니다.
 
-- `path`는 origin-form pathname이어야 합니다 (RFC 7230 §5.3.1). 표준 HTTP 서버 경계 (`Bun.serve`, Node `http`, `Express`, `Fastify`, `Hono`)는 `new URL(req.url).pathname`으로 이미 이 형태를 만들어 줍니다.
+- `path`는 origin-form pathname이어야 합니다 (RFC 7230 §5.3.1). `Bun.serve`가 `new URL(request.url).pathname`으로 이미 이 형태를 만들어 줍니다.
 - `match()` 자체는 path를 디코딩하지 않습니다. `/`로 split한 후 캡처된 param 값만 `decodeURIComponent`로 디코드합니다. param 슬롯의 `%xx`가 잘못되면 표준 `URIError`가 caller로 전파됩니다 — `400 Bad Request`로 매핑하려면 `try / catch`로 감싸세요.
 - `build()` 전 호출은 `null` 반환.
 

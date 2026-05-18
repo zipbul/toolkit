@@ -62,7 +62,7 @@ const result = router.match('GET', '/users/42');
 if (result) {
   console.log(result.value); // 'get-user'
   console.log(result.params['id']); // '42'
-  console.log(result.meta.source); // 'dynamic'
+  console.log(result.meta.source); // 'dynamic' (first call; subsequent calls on the same path return 'cache')
 }
 ```
 
@@ -106,7 +106,7 @@ router.match('GET', '/users/한국'); // ✗ does NOT match (see below)
 ```
 
 > [!IMPORTANT]
-> `router.match()` **does not normalize input paths**. Pass a URI-form pathname (percent-encoded UTF-8) — the form `Bun.serve`, Node `http`, and `new URL(req.url).pathname` always produce. The asymmetry is intentional: every HTTP server boundary delivers URI form, so paying the normalization cost on every `match()` would be wasted work on the hot path.
+> `router.match()` **does not normalize input paths**. Pass a URI-form pathname (percent-encoded UTF-8) — the form `Bun.serve` produces via `new URL(request.url).pathname`. The asymmetry is intentional: the server boundary already delivers URI form, so paying the normalization cost on every `match()` would be wasted work on the hot path.
 
 For a hand-constructed IRI input, normalize at the boundary:
 
@@ -140,7 +140,7 @@ After `build()`, `add()` and `addAll()` throw `RouterError({ kind: 'router-seale
 
 Matches a URL against registered routes. Returns `MatchOutput<T> | null`.
 
-- `path` must be an origin-form pathname (RFC 7230 §5.3.1). Standard HTTP server boundaries (`Bun.serve`, Node `http`, `Express`, `Fastify`, `Hono`) already produce this form via `new URL(req.url).pathname`.
+- `path` must be an origin-form pathname (RFC 7230 §5.3.1). `Bun.serve` already produces this form via `new URL(request.url).pathname`.
 - `match()` does **not** decode the path itself; it splits on `/` and decodes each captured param value via `decodeURIComponent`. Malformed `%xx` in a param slot propagates the standard `URIError` to the caller — wrap in `try / catch` if you map this to a `400 Bad Request`.
 - Calling before `build()` returns `null`.
 
