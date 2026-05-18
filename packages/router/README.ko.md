@@ -410,7 +410,7 @@ Bun.serve({
 
 ## ⚡ 성능
 
-`bun 1.3.13`, Linux x64, Intel i7-13700K 에서 측정. `regression-snapshot.ts` 는
+`bun 1.3.13`, Linux x64, Intel i7-13700K에서 측정. `regression-snapshot.ts`는
 11회 trial 중앙값, cross-router 표는 (adapter × scenario) 쌍별 별도 프로세스
 실행. 전체 수치·σ·RSS·재현 절차는 [`bench-results.md`](./bench-results.md) 참조.
 
