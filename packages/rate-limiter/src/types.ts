@@ -1,5 +1,5 @@
-import type { RateLimitAllowResult, RateLimitDenyResult, RateLimitRule, RateLimiterHooks, RateLimiterStore } from './interfaces';
 import type { Algorithm } from './enums';
+import type { RateLimitAllowResult, RateLimitDenyResult, RateLimitRule, RateLimiterHooks, RateLimiterStore } from './interfaces';
 
 /**
  * Discriminated union returned by {@link RateLimiter.consume} and {@link RateLimiter.peek}.
@@ -42,9 +42,4 @@ export type AlgorithmFn = (
  * Signature for algorithm refund functions.
  * Used to undo a consume when compound rules encounter a TOCTOU race.
  */
-export type RefundFn = (
-  key: string,
-  rule: RateLimitRule,
-  cost: number,
-  store: RateLimiterStore,
-) => void | Promise<void>;
+export type RefundFn = (key: string, rule: RateLimitRule, cost: number, store: RateLimiterStore) => void | Promise<void>;

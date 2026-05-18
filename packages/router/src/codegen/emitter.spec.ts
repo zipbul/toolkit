@@ -5,10 +5,11 @@
  */
 import { describe, expect, it } from 'bun:test';
 
+import type { MatchFn, MatchOutput, RouteParams } from '../types';
+
 import { RouterCache } from '../cache';
 import { EMPTY_PARAMS, STATIC_META } from '../internal';
 import { createMatchState } from '../matcher/match-state';
-import type { MatchFn, MatchOutput, RouteParams } from '../types';
 import { compileMatchFn, type MatchCacheEntry, type MatchConfig } from './emitter';
 
 type Cfg<T> = MatchConfig<T>;
@@ -61,10 +62,13 @@ function baseConfig<T>(overrides: Partial<Cfg<T>> = {}): Cfg<T> {
     const byPath: Record<string, { mask: number; outputs: Array<MatchOutput<T> | undefined> }> = Object.create(null);
     for (let mc = 0; mc < merged.staticOutputsByMethod.length; mc++) {
       const bucket = merged.staticOutputsByMethod[mc];
-      if (bucket === undefined) continue;
+      if (bucket === undefined) {continue;}
       for (const path in bucket) {
         let e = byPath[path];
-        if (e === undefined) { e = { mask: 0, outputs: [] }; byPath[path] = e; }
+        if (e === undefined) {
+          e = { mask: 0, outputs: [] };
+          byPath[path] = e;
+        }
         e.mask |= 1 << mc;
         e.outputs[mc] = bucket[path];
       }
@@ -164,7 +168,7 @@ describe('compileMatchFn — mixed (dynamic walker + cache + slab unpack)', () =
     // shapes by writing one [start, end] pair into paramOffsets.
     const walker: MatchFn = (url, state) => {
       const prefix = '/x/';
-      if (!url.startsWith(prefix)) return false;
+      if (!url.startsWith(prefix)) {return false;}
       state.handlerIndex = 0;
       state.paramOffsets[0] = prefix.length;
       state.paramOffsets[1] = url.length;
@@ -256,7 +260,9 @@ describe('compileMatchFn — trailing-slash recheck on strict (trimSlash off) mo
       return true;
     };
     const slab = new Int32Array(3);
-    slab[0] = 0; slab[1] = 0; slab[2] = 0b1;
+    slab[0] = 0;
+    slab[1] = 0;
+    slab[2] = 0b1;
 
     const activeMethodMask = new Int32Array(32);
     activeMethodMask[code] = 1;
@@ -277,11 +283,13 @@ describe('compileMatchFn — trailing-slash recheck on strict (trimSlash off) mo
       hitCacheByMethod: [new RouterCache<MatchCacheEntry<string>>(8)],
       activeMethodCodes: [['GET', code] as const],
       terminalSlab: slab,
-      paramsFactories: [(_m, u, v) => {
-        const p: Record<string, string> = Object.create(null);
-        p['id'] = u.substring(v[0]!, v[1]!);
-        return p;
-      }],
+      paramsFactories: [
+        (_m, u, v) => {
+          const p: Record<string, string> = Object.create(null);
+          p['id'] = u.substring(v[0]!, v[1]!);
+          return p;
+        },
+      ],
     };
 
     const match = compileMatchFn(cfg);

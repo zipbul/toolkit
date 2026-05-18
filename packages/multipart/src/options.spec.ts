@@ -1,7 +1,6 @@
-import { describe, test, expect } from 'bun:test';
 import { isErr } from '@zipbul/result';
+import { describe, test, expect } from 'bun:test';
 
-import { resolveMultipartOptions, validateMultipartOptions } from './options';
 import {
   DEFAULT_MAX_FIELD_SIZE,
   DEFAULT_MAX_FIELDS,
@@ -12,6 +11,7 @@ import {
   DEFAULT_MAX_TOTAL_SIZE,
 } from './constants';
 import { MultipartErrorReason } from './enums';
+import { resolveMultipartOptions, validateMultipartOptions } from './options';
 
 // ── resolveMultipartOptions ─────────────────────────────────────────
 

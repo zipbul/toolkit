@@ -1,13 +1,15 @@
-import { HttpHeader } from '@zipbul/shared';
-import { isErr, safe } from '@zipbul/result';
 import type { ResultAsync } from '@zipbul/result';
+
+import { isErr, safe } from '@zipbul/result';
+import { HttpHeader } from '@zipbul/shared';
+
+import type { CorsErrorData, CorsOptions, CorsRejectResult } from './interfaces';
+import type { CorsResult, ResolvedCorsOptions } from './types';
+import type { OriginResult } from './types';
 
 import { CorsAction, CorsErrorReason, CorsRejectionReason } from './enums';
 import { CorsError } from './interfaces';
-import type { CorsErrorData, CorsOptions, CorsPreflightResult, CorsRejectResult } from './interfaces';
 import { resolveCorsOptions, validateCorsOptions } from './options';
-import type { CorsResult, ResolvedCorsOptions } from './types';
-import type { OriginResult } from './types';
 
 /**
  * Framework-agnostic CORS handler.

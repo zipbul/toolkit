@@ -67,7 +67,9 @@ describe('safe', () => {
   describe('sync error without mapErr', () => {
     it('should return Err when sync fn throws Error', () => {
       // Arrange
-      const fn = () => { throw new Error('boom'); };
+      const fn = () => {
+        throw new Error('boom');
+      };
       // Act
       const result = safe(fn);
       // Assert
@@ -80,7 +82,9 @@ describe('safe', () => {
 
     it('should return Err when sync fn throws string', () => {
       // Arrange
-      const fn = () => { throw 'string error'; };
+      const fn = () => {
+        throw 'string error';
+      };
       // Act
       const result = safe(fn);
       // Assert
@@ -92,7 +96,9 @@ describe('safe', () => {
 
     it('should return Err wrapping null when sync fn throws null', () => {
       // Arrange
-      const fn = () => { throw null; };
+      const fn = () => {
+        throw null;
+      };
       // Act
       const result = safe(fn);
       // Assert
@@ -105,7 +111,9 @@ describe('safe', () => {
     it('should return Err wrapping undefined when sync fn throws undefined', () => {
       // Arrange
       // eslint-disable-next-line no-throw-literal
-      const fn = () => { throw undefined; };
+      const fn = () => {
+        throw undefined;
+      };
       // Act
       const result = safe(fn);
       // Assert
@@ -119,7 +127,9 @@ describe('safe', () => {
   describe('sync error with mapErr', () => {
     it('should return mapped Err when sync fn throws with mapErr', () => {
       // Arrange
-      const fn = () => { throw new Error('fail'); };
+      const fn = () => {
+        throw new Error('fail');
+      };
       const mapErr = (e: unknown) => (e as Error).message;
       // Act
       const result = safe(fn, mapErr);
@@ -133,9 +143,14 @@ describe('safe', () => {
     it('should pass exact thrown reference to sync mapErr', () => {
       // Arrange
       const thrownObj = { code: 'X' };
-      const fn = () => { throw thrownObj; };
+      const fn = () => {
+        throw thrownObj;
+      };
       let received: unknown;
-      const mapErr = (e: unknown) => { received = e; return 'mapped'; };
+      const mapErr = (e: unknown) => {
+        received = e;
+        return 'mapped';
+      };
       // Act
       safe(fn, mapErr);
       // Assert
@@ -201,7 +216,10 @@ describe('safe', () => {
       const rejectedObj = { code: 'Y' };
       const promise = Promise.reject(rejectedObj);
       let received: unknown;
-      const mapErr = (e: unknown) => { received = e; return 'mapped'; };
+      const mapErr = (e: unknown) => {
+        received = e;
+        return 'mapped';
+      };
       // Act
       await safe(promise, mapErr);
       // Assert
@@ -253,8 +271,12 @@ describe('safe', () => {
   describe('corner cases', () => {
     it('should propagate when sync mapErr throws', () => {
       // Arrange
-      const fn = () => { throw new Error('original'); };
-      const mapErr = () => { throw new Error('mapErr panic'); };
+      const fn = () => {
+        throw new Error('original');
+      };
+      const mapErr = () => {
+        throw new Error('mapErr panic');
+      };
       // Act / Assert — mapErr throw is NOT caught by safe
       expect(() => safe(fn, mapErr)).toThrow('mapErr panic');
     });
@@ -262,14 +284,18 @@ describe('safe', () => {
     it('should reject when async mapErr throws', async () => {
       // Arrange
       const promise = Promise.reject(new Error('original'));
-      const mapErr = () => { throw new Error('async mapErr panic'); };
+      const mapErr = () => {
+        throw new Error('async mapErr panic');
+      };
       // Act / Assert — the returned promise rejects with mapErr's error
       await expect(safe(promise, mapErr)).rejects.toThrow('async mapErr panic');
     });
 
     it('should return Err with undefined data when mapErr returns undefined', () => {
       // Arrange
-      const fn = () => { throw new Error('fail'); };
+      const fn = () => {
+        throw new Error('fail');
+      };
       const mapErr = () => undefined;
       // Act
       const result = safe(fn, mapErr);

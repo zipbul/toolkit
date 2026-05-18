@@ -34,9 +34,7 @@ describe('sanitizeFilename', () => {
   });
 
   test('replaces : " | ? *', () => {
-    expect(sanitizeFilename('file:name"with|bad?chars*.txt')).toBe(
-      'file_name_with_bad_chars_.txt',
-    );
+    expect(sanitizeFilename('file:name"with|bad?chars*.txt')).toBe('file_name_with_bad_chars_.txt');
   });
 
   test('removes null bytes', () => {

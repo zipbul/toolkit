@@ -15,7 +15,7 @@ function buildRouter(): Router<string> {
 }
 
 function heap(): number {
-  if (typeof Bun !== 'undefined') Bun.gc(true);
+  if (typeof Bun !== 'undefined') {Bun.gc(true);}
   return process.memoryUsage().heapUsed;
 }
 
@@ -62,11 +62,11 @@ settleScavenger();
 
 const hitRouter = buildRouter();
 // Warm cache to exactly CACHE_SIZE keys, all dynamic hits.
-for (let i = 0; i < CACHE_SIZE; i++) hitRouter.match('GET', `/users/${i}`);
+for (let i = 0; i < CACHE_SIZE; i++) {hitRouter.match('GET', `/users/${i}`);}
 
 const evictRouter = buildRouter();
 // Warm cache full so every subsequent new key triggers eviction.
-for (let i = 0; i < CACHE_SIZE; i++) evictRouter.match('GET', `/users/${i}`);
+for (let i = 0; i < CACHE_SIZE; i++) {evictRouter.match('GET', `/users/${i}`);}
 
 const missRouter = buildRouter();
 

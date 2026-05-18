@@ -34,8 +34,7 @@ describe('Multipart.parseAll — integration', () => {
     const body = buildBody(boundary, [
       { headers: 'Content-Disposition: form-data; name="username"', body: 'alice' },
       {
-        headers:
-          'Content-Disposition: form-data; name="avatar"; filename="pic.png"\r\nContent-Type: image/png',
+        headers: 'Content-Disposition: form-data; name="avatar"; filename="pic.png"\r\nContent-Type: image/png',
         body: 'PNG_DATA',
       },
       { headers: 'Content-Disposition: form-data; name="bio"', body: 'Hello there' },
@@ -88,13 +87,11 @@ describe('Multipart.parseAll — integration', () => {
     const boundary = 'parseall-files-only';
     const body = buildBody(boundary, [
       {
-        headers:
-          'Content-Disposition: form-data; name="doc1"; filename="a.pdf"\r\nContent-Type: application/pdf',
+        headers: 'Content-Disposition: form-data; name="doc1"; filename="a.pdf"\r\nContent-Type: application/pdf',
         body: 'pdf content a',
       },
       {
-        headers:
-          'Content-Disposition: form-data; name="doc2"; filename="b.pdf"\r\nContent-Type: application/pdf',
+        headers: 'Content-Disposition: form-data; name="doc2"; filename="b.pdf"\r\nContent-Type: application/pdf',
         body: 'pdf content b',
       },
     ]);
@@ -133,18 +130,15 @@ describe('Multipart.parseAll — integration', () => {
     const boundary = 'parseall-dup-files';
     const body = buildBody(boundary, [
       {
-        headers:
-          'Content-Disposition: form-data; name="photos"; filename="img1.jpg"\r\nContent-Type: image/jpeg',
+        headers: 'Content-Disposition: form-data; name="photos"; filename="img1.jpg"\r\nContent-Type: image/jpeg',
         body: 'jpeg1',
       },
       {
-        headers:
-          'Content-Disposition: form-data; name="photos"; filename="img2.jpg"\r\nContent-Type: image/jpeg',
+        headers: 'Content-Disposition: form-data; name="photos"; filename="img2.jpg"\r\nContent-Type: image/jpeg',
         body: 'jpeg2',
       },
       {
-        headers:
-          'Content-Disposition: form-data; name="photos"; filename="img3.jpg"\r\nContent-Type: image/jpeg',
+        headers: 'Content-Disposition: form-data; name="photos"; filename="img3.jpg"\r\nContent-Type: image/jpeg',
         body: 'jpeg3',
       },
     ]);
@@ -172,18 +166,15 @@ describe('Multipart.parseAll — integration', () => {
       { headers: 'Content-Disposition: form-data; name="tag"', body: 'travel' },
       { headers: 'Content-Disposition: form-data; name="tag"', body: 'summer' },
       {
-        headers:
-          'Content-Disposition: form-data; name="cover"; filename="cover.jpg"\r\nContent-Type: image/jpeg',
+        headers: 'Content-Disposition: form-data; name="cover"; filename="cover.jpg"\r\nContent-Type: image/jpeg',
         body: 'cover data',
       },
       {
-        headers:
-          'Content-Disposition: form-data; name="photos"; filename="p1.jpg"\r\nContent-Type: image/jpeg',
+        headers: 'Content-Disposition: form-data; name="photos"; filename="p1.jpg"\r\nContent-Type: image/jpeg',
         body: 'photo 1',
       },
       {
-        headers:
-          'Content-Disposition: form-data; name="photos"; filename="p2.jpg"\r\nContent-Type: image/jpeg',
+        headers: 'Content-Disposition: form-data; name="photos"; filename="p2.jpg"\r\nContent-Type: image/jpeg',
         body: 'photo 2',
       },
     ]);

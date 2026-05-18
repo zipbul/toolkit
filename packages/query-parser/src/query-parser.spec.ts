@@ -2,11 +2,11 @@
 
 import { describe, expect, it } from 'bun:test';
 
-import { QueryParserErrorReason } from './enums';
-import { QueryParserError } from './interfaces';
 import type { QueryParserOptions } from './interfaces';
 import type { QueryArray, QueryValue, QueryValueRecord } from './types';
 
+import { QueryParserErrorReason } from './enums';
+import { QueryParserError } from './interfaces';
 import { QueryParser } from './query-parser';
 
 // ---------------------------------------------------------------------------
@@ -87,9 +87,7 @@ describe('QueryParser', () => {
 
     it('should throw QueryParserError when duplicates is invalid', () => {
       // Act
-      const error = catchError(() =>
-        QueryParser.create({ duplicates: 'invalid' } as unknown as QueryParserOptions),
-      );
+      const error = catchError(() => QueryParser.create({ duplicates: 'invalid' } as unknown as QueryParserOptions));
 
       // Assert
       expect(error).toBeInstanceOf(QueryParserError);

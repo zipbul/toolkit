@@ -1,8 +1,16 @@
 import { describe, it, expect } from 'bun:test';
 
 import type { PathPart } from '../tree';
+
 import { OptionalParamDefaults } from './optional-param-defaults';
-import { countOptionalSegments, expandOptional, MAX_OPTIONAL_SEGMENTS_PER_ROUTE } from './route-expand';
+import {
+  countOptionalSegments,
+  expandOptional,
+  filterDroppedSegments,
+  isDroppedAt,
+  MAX_OPTIONAL_SEGMENTS_PER_ROUTE,
+  trimTrailingSlashOnDrop,
+} from './route-expand';
 
 const param = (name: string, optional = false): PathPart => ({
   type: 'param',
@@ -55,7 +63,10 @@ describe('expandOptional', () => {
     it('should count optional segments by N, not by position', () => {
       const mid: PathPart[] = [staticPart('/'), param('lang', true), staticPart('/posts')];
       const last: PathPart[] = [staticPart('/posts/'), param('id', true)];
-      const overCap: PathPart[] = [staticPart('/'), ...Array.from({ length: MAX_OPTIONAL_SEGMENTS_PER_ROUTE + 1 }, (_, i) => param(`p${i}`, true))];
+      const overCap: PathPart[] = [
+        staticPart('/'),
+        ...Array.from({ length: MAX_OPTIONAL_SEGMENTS_PER_ROUTE + 1 }, (_, i) => param(`p${i}`, true)),
+      ];
 
       expect(countOptionalSegments(mid)).toBe(1);
       expect(countOptionalSegments(last)).toBe(1);
@@ -122,8 +133,6 @@ describe('expandOptional', () => {
     });
   });
 });
-
-import { filterDroppedSegments, isDroppedAt, trimTrailingSlashOnDrop } from './route-expand';
 
 describe('isDroppedAt', () => {
   it('returns true when partIndex is in optionalIndices and the matching bit is set', () => {

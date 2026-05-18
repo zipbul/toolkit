@@ -1,8 +1,9 @@
 import { describe, test, expect } from 'bun:test';
 
-import { Router } from '../router';
 import type { RouterErrorKind } from '../types';
+
 import { firstBuildIssue } from '../../test/test-utils';
+import { Router } from '../router';
 
 describe('registration path policy accepts well-formed routes', () => {
   test.each([
@@ -15,11 +16,11 @@ describe('registration path policy accepts well-formed routes', () => {
     ['/api/v1/_underscore/dot.token-and-tilde~'],
     ['/colon:literal'],
     ['/at@symbol'],
-    ['/sub:!$&\'()*+,;='],
+    ["/sub:!$&'()*+,;="],
     ['/literal%23'],
     ['/literal%3F'],
     ['/users/:id(\\d+)'],
-  ])('accepts %s', (path) => {
+  ])('accepts %s', path => {
     const r = new Router<string>();
     r.add('GET', path, 'h');
     r.build();
@@ -29,13 +30,13 @@ describe('registration path policy accepts well-formed routes', () => {
 
 describe('registration path policy rejects ill-formed routes', () => {
   const cases: Array<[string, string, RouterErrorKind]> = [
-    ['raw query',                 '/a?b',         'path-query'],
-    ['raw fragment',              '/a#b',         'path-fragment'],
-    ['C0 control char',           '/a\x01b',      'path-control-char'],
-    ['literal `..` segment',      '/a/../b',      'path-dot-segment'],
-    ['literal `.` segment',       '/a/./b',       'path-dot-segment'],
-    ['encoded `..` segment',      '/a/%2e%2e/b',  'path-dot-segment'],
-    ['malformed percent escape',  '/a/%ZZ',       'path-malformed-percent'],
+    ['raw query', '/a?b', 'path-query'],
+    ['raw fragment', '/a#b', 'path-fragment'],
+    ['C0 control char', '/a\x01b', 'path-control-char'],
+    ['literal `..` segment', '/a/../b', 'path-dot-segment'],
+    ['literal `.` segment', '/a/./b', 'path-dot-segment'],
+    ['encoded `..` segment', '/a/%2e%2e/b', 'path-dot-segment'],
+    ['malformed percent escape', '/a/%ZZ', 'path-malformed-percent'],
   ];
 
   test.each(cases)('rejects %s with %s issue kind', (_label, path, expectedKind) => {
@@ -100,19 +101,19 @@ describe('IRI registration (RFC 3987) — raw Unicode is normalized to URI form'
 
 describe('percent-decode UTF-8 validation (validateDecodedBytes)', () => {
   const utf8Cases: Array<[string, string, RouterErrorKind]> = [
-    ['encoded slash %2F',                '/a/%2F',           'path-encoded-slash'],
-    ['stray continuation byte 0x80',     '/a/%80',           'path-invalid-utf8'],
-    ['overlong 2-byte lead 0xC0',        '/a/%C0%80',        'path-invalid-utf8'],
-    ['overlong 2-byte lead 0xC1',        '/a/%C1%80',        'path-invalid-utf8'],
-    ['invalid 4-byte lead 0xF5',         '/a/%F5%80%80%80',  'path-invalid-utf8'],
-    ['invalid lead byte 0xFF',           '/a/%FF',           'path-invalid-utf8'],
-    ['truncated UTF-8 sequence',         '/a/%E4b',          'path-invalid-utf8'],
-    ['continuation without lead',        '/a/%C2/x',         'path-invalid-utf8'],
-    ['UTF-16 surrogate codepoint',       '/a/%ED%A0%80',     'path-invalid-utf8'],
-    ['codepoint above U+10FFFF',         '/a/%F4%90%80%80',  'path-invalid-utf8'],
-    ['overlong 3-byte sequence',         '/a/%E0%80%80',     'path-invalid-utf8'],
-    ['overlong 4-byte sequence',         '/a/%F0%80%80%80',  'path-invalid-utf8'],
-    ['trailing incomplete UTF-8',        '/a/%C2',           'path-invalid-utf8'],
+    ['encoded slash %2F', '/a/%2F', 'path-encoded-slash'],
+    ['stray continuation byte 0x80', '/a/%80', 'path-invalid-utf8'],
+    ['overlong 2-byte lead 0xC0', '/a/%C0%80', 'path-invalid-utf8'],
+    ['overlong 2-byte lead 0xC1', '/a/%C1%80', 'path-invalid-utf8'],
+    ['invalid 4-byte lead 0xF5', '/a/%F5%80%80%80', 'path-invalid-utf8'],
+    ['invalid lead byte 0xFF', '/a/%FF', 'path-invalid-utf8'],
+    ['truncated UTF-8 sequence', '/a/%E4b', 'path-invalid-utf8'],
+    ['continuation without lead', '/a/%C2/x', 'path-invalid-utf8'],
+    ['UTF-16 surrogate codepoint', '/a/%ED%A0%80', 'path-invalid-utf8'],
+    ['codepoint above U+10FFFF', '/a/%F4%90%80%80', 'path-invalid-utf8'],
+    ['overlong 3-byte sequence', '/a/%E0%80%80', 'path-invalid-utf8'],
+    ['overlong 4-byte sequence', '/a/%F0%80%80%80', 'path-invalid-utf8'],
+    ['trailing incomplete UTF-8', '/a/%C2', 'path-invalid-utf8'],
   ];
 
   test.each(utf8Cases)('rejects %s with %s issue kind', (_label, path, expectedKind) => {

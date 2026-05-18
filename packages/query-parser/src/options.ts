@@ -1,10 +1,12 @@
-import { err } from '@zipbul/result';
 import type { Result } from '@zipbul/result';
+
+import { err } from '@zipbul/result';
+
+import type { QueryParserErrorData, QueryParserOptions } from './interfaces';
+import type { ResolvedQueryParserOptions } from './types';
 
 import { DEFAULT_QUERY_PARSER_OPTIONS } from './constants';
 import { QueryParserErrorReason } from './enums';
-import type { QueryParserErrorData, QueryParserOptions } from './interfaces';
-import type { ResolvedQueryParserOptions } from './types';
 
 /**
  * Resolves partial {@link QueryParserOptions} into a fully populated

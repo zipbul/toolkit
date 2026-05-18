@@ -6,11 +6,7 @@
  */
 import { describe, expect, it } from 'bun:test';
 
-import {
-  buildPathNormalizer,
-  emitLowerCase,
-  emitTrailingSlashTrim,
-} from './path-normalize';
+import { buildPathNormalizer, emitLowerCase, emitTrailingSlashTrim } from './path-normalize';
 
 describe('emitTrailingSlashTrim', () => {
   it('returns empty string when trimSlash is off', () => {

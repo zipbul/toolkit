@@ -1,8 +1,8 @@
-import { describe, test, expect } from 'bun:test';
 import { isErr } from '@zipbul/result';
+import { describe, test, expect } from 'bun:test';
 
-import { parsePartHeaders } from './header-parser';
 import { MultipartErrorReason } from '../enums';
+import { parsePartHeaders } from './header-parser';
 
 describe('parsePartHeaders', () => {
   // ── 1. Basic field (name only, no filename) ─────────────────────────
@@ -20,10 +20,7 @@ describe('parsePartHeaders', () => {
   // ── 2. File headers (name + filename + Content-Type) ────────────────
 
   test('parses file headers with name, filename, and Content-Type', () => {
-    const headers = [
-      'Content-Disposition: form-data; name="file"; filename="photo.png"',
-      'Content-Type: image/png',
-    ].join('\r\n');
+    const headers = ['Content-Disposition: form-data; name="file"; filename="photo.png"', 'Content-Type: image/png'].join('\r\n');
 
     const result = parsePartHeaders(headers);
     expect(isErr(result)).toBe(false);
@@ -47,9 +44,7 @@ describe('parsePartHeaders', () => {
   // ── 4. Unquoted filename value ──────────────────────────────────────
 
   test('handles unquoted filename value', () => {
-    const result = parsePartHeaders(
-      'Content-Disposition: form-data; name="file"; filename=report.pdf',
-    );
+    const result = parsePartHeaders('Content-Disposition: form-data; name="file"; filename=report.pdf');
     expect(isErr(result)).toBe(false);
     if (!isErr(result)) {
       expect(result.filename).toBe('report.pdf');
@@ -59,9 +54,7 @@ describe('parsePartHeaders', () => {
   // ── 5. Empty filename ("") ──────────────────────────────────────────
 
   test('handles empty quoted filename as empty string', () => {
-    const result = parsePartHeaders(
-      'Content-Disposition: form-data; name="file"; filename=""',
-    );
+    const result = parsePartHeaders('Content-Disposition: form-data; name="file"; filename=""');
     expect(isErr(result)).toBe(false);
     if (!isErr(result)) {
       expect(result.filename).toBe('');
@@ -82,9 +75,7 @@ describe('parsePartHeaders', () => {
   // ── 7. Missing name parameter ──────────────────────────────────────
 
   test('returns MalformedHeader error when name parameter is missing', () => {
-    const result = parsePartHeaders(
-      'Content-Disposition: form-data; filename="file.txt"',
-    );
+    const result = parsePartHeaders('Content-Disposition: form-data; filename="file.txt"');
     expect(isErr(result)).toBe(true);
     if (isErr(result)) {
       expect(result.data.reason).toBe(MultipartErrorReason.MalformedHeader);
@@ -95,9 +86,7 @@ describe('parsePartHeaders', () => {
   // ── 8. Case-insensitive header names ────────────────────────────────
 
   test('handles uppercase CONTENT-DISPOSITION', () => {
-    const result = parsePartHeaders(
-      'CONTENT-DISPOSITION: form-data; name="test"',
-    );
+    const result = parsePartHeaders('CONTENT-DISPOSITION: form-data; name="test"');
     expect(isErr(result)).toBe(false);
     if (!isErr(result)) {
       expect(result.name).toBe('test');
@@ -105,9 +94,7 @@ describe('parsePartHeaders', () => {
   });
 
   test('handles lowercase content-disposition', () => {
-    const result = parsePartHeaders(
-      'content-disposition: form-data; name="test"',
-    );
+    const result = parsePartHeaders('content-disposition: form-data; name="test"');
     expect(isErr(result)).toBe(false);
     if (!isErr(result)) {
       expect(result.name).toBe('test');
@@ -115,10 +102,7 @@ describe('parsePartHeaders', () => {
   });
 
   test('handles mixed-case content-type', () => {
-    const headers = [
-      'Content-Disposition: form-data; name="f"; filename="a.txt"',
-      'CONTENT-TYPE: application/json',
-    ].join('\r\n');
+    const headers = ['Content-Disposition: form-data; name="f"; filename="a.txt"', 'CONTENT-TYPE: application/json'].join('\r\n');
 
     const result = parsePartHeaders(headers);
     expect(isErr(result)).toBe(false);
@@ -130,9 +114,7 @@ describe('parsePartHeaders', () => {
   // ── 9. Extra whitespace in header values ────────────────────────────
 
   test('handles extra whitespace around header values', () => {
-    const result = parsePartHeaders(
-      'Content-Disposition:   form-data;  name="spaced"  ',
-    );
+    const result = parsePartHeaders('Content-Disposition:   form-data;  name="spaced"  ');
     expect(isErr(result)).toBe(false);
     if (!isErr(result)) {
       expect(result.name).toBe('spaced');
@@ -140,10 +122,7 @@ describe('parsePartHeaders', () => {
   });
 
   test('handles extra whitespace around Content-Type value', () => {
-    const headers = [
-      'Content-Disposition: form-data; name="f"',
-      'Content-Type:   text/html  ',
-    ].join('\r\n');
+    const headers = ['Content-Disposition: form-data; name="f"', 'Content-Type:   text/html  '].join('\r\n');
 
     const result = parsePartHeaders(headers);
     expect(isErr(result)).toBe(false);
@@ -174,10 +153,9 @@ describe('parsePartHeaders', () => {
   // ── 11. Bare \n line endings (M4 fix) ───────────────────────────────
 
   test('parses headers with bare \\n line endings', () => {
-    const headers = [
-      'Content-Disposition: form-data; name="field"; filename="doc.pdf"',
-      'Content-Type: application/pdf',
-    ].join('\n');
+    const headers = ['Content-Disposition: form-data; name="field"; filename="doc.pdf"', 'Content-Type: application/pdf'].join(
+      '\n',
+    );
 
     const result = parsePartHeaders(headers);
     expect(isErr(result)).toBe(false);
@@ -192,9 +170,7 @@ describe('parsePartHeaders', () => {
 
   test('parses headers with mixed \\r\\n and \\n line endings', () => {
     const headers =
-      'Content-Disposition: form-data; name="mix"; filename="f.txt"\r\n' +
-      'Content-Type: text/csv\n' +
-      'X-Extra: ignored';
+      'Content-Disposition: form-data; name="mix"; filename="f.txt"\r\n' + 'Content-Type: text/csv\n' + 'X-Extra: ignored';
 
     const result = parsePartHeaders(headers);
     expect(isErr(result)).toBe(false);
@@ -208,9 +184,7 @@ describe('parsePartHeaders', () => {
   // ── 13. Escaped quotes in filename (M1 fix) ────────────────────────
 
   test('handles escaped quotes in filename', () => {
-    const result = parsePartHeaders(
-      'Content-Disposition: form-data; name="file"; filename="file\\"name.txt"',
-    );
+    const result = parsePartHeaders('Content-Disposition: form-data; name="file"; filename="file\\"name.txt"');
     expect(isErr(result)).toBe(false);
     if (!isErr(result)) {
       expect(result.filename).toBe('file"name.txt');
@@ -220,9 +194,7 @@ describe('parsePartHeaders', () => {
   // ── 14. Escaped quotes in name ──────────────────────────────────────
 
   test('handles escaped quotes in name', () => {
-    const result = parsePartHeaders(
-      'Content-Disposition: form-data; name="field\\"1"',
-    );
+    const result = parsePartHeaders('Content-Disposition: form-data; name="field\\"1"');
     expect(isErr(result)).toBe(false);
     if (!isErr(result)) {
       expect(result.name).toBe('field"1');
@@ -232,9 +204,7 @@ describe('parsePartHeaders', () => {
   // ── 15. Null bytes in filename (M3 fix) ─────────────────────────────
 
   test('strips null bytes from filename', () => {
-    const result = parsePartHeaders(
-      'Content-Disposition: form-data; name="file"; filename="evil.php\0.jpg"',
-    );
+    const result = parsePartHeaders('Content-Disposition: form-data; name="file"; filename="evil.php\0.jpg"');
     expect(isErr(result)).toBe(false);
     if (!isErr(result)) {
       expect(result.filename).toBe('evil.php.jpg');
@@ -244,9 +214,7 @@ describe('parsePartHeaders', () => {
   // ── 16. Null bytes in name ──────────────────────────────────────────
 
   test('strips null bytes from name', () => {
-    const result = parsePartHeaders(
-      'Content-Disposition: form-data; name="field\0name"',
-    );
+    const result = parsePartHeaders('Content-Disposition: form-data; name="field\0name"');
     expect(isErr(result)).toBe(false);
     if (!isErr(result)) {
       expect(result.name).toBe('fieldname');
@@ -256,9 +224,7 @@ describe('parsePartHeaders', () => {
   // ── 17. Empty name (M5 fix) ─────────────────────────────────────────
 
   test('returns MalformedHeader error when name is empty string', () => {
-    const result = parsePartHeaders(
-      'Content-Disposition: form-data; name=""',
-    );
+    const result = parsePartHeaders('Content-Disposition: form-data; name=""');
     expect(isErr(result)).toBe(true);
     if (isErr(result)) {
       expect(result.data.reason).toBe(MultipartErrorReason.MalformedHeader);
@@ -268,9 +234,7 @@ describe('parsePartHeaders', () => {
   // ── 18. Non form-data directive (L4 fix) ────────────────────────────
 
   test('returns MalformedHeader error for attachment disposition', () => {
-    const result = parsePartHeaders(
-      'Content-Disposition: attachment; name="x"',
-    );
+    const result = parsePartHeaders('Content-Disposition: attachment; name="x"');
     expect(isErr(result)).toBe(true);
     if (isErr(result)) {
       expect(result.data.reason).toBe(MultipartErrorReason.MalformedHeader);
@@ -278,9 +242,7 @@ describe('parsePartHeaders', () => {
   });
 
   test('returns MalformedHeader error for inline disposition', () => {
-    const result = parsePartHeaders(
-      'Content-Disposition: inline; name="x"',
-    );
+    const result = parsePartHeaders('Content-Disposition: inline; name="x"');
     expect(isErr(result)).toBe(true);
     if (isErr(result)) {
       expect(result.data.reason).toBe(MultipartErrorReason.MalformedHeader);
@@ -290,10 +252,7 @@ describe('parsePartHeaders', () => {
   // ── 19. Header line without colon → silently skipped ────────────────
 
   test('skips header lines without colon and still parses if Content-Disposition is present', () => {
-    const headers = [
-      'this-line-has-no-colon',
-      'Content-Disposition: form-data; name="valid"',
-    ].join('\r\n');
+    const headers = ['this-line-has-no-colon', 'Content-Disposition: form-data; name="valid"'].join('\r\n');
 
     const result = parsePartHeaders(headers);
     expect(isErr(result)).toBe(false);
@@ -303,10 +262,7 @@ describe('parsePartHeaders', () => {
   });
 
   test('returns error when only non-colon lines are present', () => {
-    const headers = [
-      'no-colon-line-one',
-      'no-colon-line-two',
-    ].join('\r\n');
+    const headers = ['no-colon-line-one', 'no-colon-line-two'].join('\r\n');
 
     const result = parsePartHeaders(headers);
     expect(isErr(result)).toBe(true);
@@ -337,10 +293,7 @@ describe('parsePartHeaders', () => {
   // ── 21. Content-Type with charset ───────────────────────────────────
 
   test('preserves full Content-Type value including charset', () => {
-    const headers = [
-      'Content-Disposition: form-data; name="text"',
-      'Content-Type: text/plain; charset=utf-8',
-    ].join('\r\n');
+    const headers = ['Content-Disposition: form-data; name="text"', 'Content-Type: text/plain; charset=utf-8'].join('\r\n');
 
     const result = parsePartHeaders(headers);
     expect(isErr(result)).toBe(false);
@@ -352,9 +305,7 @@ describe('parsePartHeaders', () => {
   // ── 22. Name with special characters ────────────────────────────────
 
   test('handles name containing special characters like brackets', () => {
-    const result = parsePartHeaders(
-      'Content-Disposition: form-data; name="field[0]"',
-    );
+    const result = parsePartHeaders('Content-Disposition: form-data; name="field[0]"');
     expect(isErr(result)).toBe(false);
     if (!isErr(result)) {
       expect(result.name).toBe('field[0]');
@@ -362,9 +313,7 @@ describe('parsePartHeaders', () => {
   });
 
   test('handles name containing dots and dashes', () => {
-    const result = parsePartHeaders(
-      'Content-Disposition: form-data; name="user.address.line-1"',
-    );
+    const result = parsePartHeaders('Content-Disposition: form-data; name="user.address.line-1"');
     expect(isErr(result)).toBe(false);
     if (!isErr(result)) {
       expect(result.name).toBe('user.address.line-1');
@@ -374,9 +323,7 @@ describe('parsePartHeaders', () => {
   // ── 23. Filename with path characters ───────────────────────────────
 
   test('preserves filename with path separators as-is', () => {
-    const result = parsePartHeaders(
-      'Content-Disposition: form-data; name="file"; filename="uploads/photo.jpg"',
-    );
+    const result = parsePartHeaders('Content-Disposition: form-data; name="file"; filename="uploads/photo.jpg"');
     expect(isErr(result)).toBe(false);
     if (!isErr(result)) {
       expect(result.filename).toBe('uploads/photo.jpg');
@@ -384,9 +331,7 @@ describe('parsePartHeaders', () => {
   });
 
   test('preserves filename with backslash path separators', () => {
-    const result = parsePartHeaders(
-      'Content-Disposition: form-data; name="file"; filename="C:\\\\Users\\\\photo.jpg"',
-    );
+    const result = parsePartHeaders('Content-Disposition: form-data; name="file"; filename="C:\\\\Users\\\\photo.jpg"');
     expect(isErr(result)).toBe(false);
     if (!isErr(result)) {
       // Backslashes after the escape-unescape pass: \\\\ → \\, so the value is C:\Users\photo.jpg
@@ -440,9 +385,7 @@ describe('parsePartHeaders', () => {
   // ── 27. Name consisting entirely of null bytes → empty after strip ──
 
   test('returns MalformedHeader error when name is only null bytes', () => {
-    const result = parsePartHeaders(
-      'Content-Disposition: form-data; name="\0\0\0"',
-    );
+    const result = parsePartHeaders('Content-Disposition: form-data; name="\0\0\0"');
     expect(isErr(result)).toBe(true);
     if (isErr(result)) {
       expect(result.data.reason).toBe(MultipartErrorReason.MalformedHeader);
@@ -452,10 +395,7 @@ describe('parsePartHeaders', () => {
   // ── 28. Tab character between colon and value (RFC 7230 OWS) ────────
 
   test('handles tab character as OWS between colon and value', () => {
-    const headers = [
-      'Content-Disposition:\tform-data; name="tabbed"',
-      'Content-Type:\t\ttext/html',
-    ].join('\r\n');
+    const headers = ['Content-Disposition:\tform-data; name="tabbed"', 'Content-Type:\t\ttext/html'].join('\r\n');
 
     const result = parsePartHeaders(headers);
     expect(isErr(result)).toBe(false);
@@ -468,9 +408,7 @@ describe('parsePartHeaders', () => {
   // ── 29. Uppercase parameter names (case-insensitive) ────────────────
 
   test('handles uppercase Name= parameter', () => {
-    const result = parsePartHeaders(
-      'Content-Disposition: form-data; Name="field1"',
-    );
+    const result = parsePartHeaders('Content-Disposition: form-data; Name="field1"');
     expect(isErr(result)).toBe(false);
     if (!isErr(result)) {
       expect(result.name).toBe('field1');
@@ -478,9 +416,7 @@ describe('parsePartHeaders', () => {
   });
 
   test('handles uppercase Filename= parameter', () => {
-    const result = parsePartHeaders(
-      'Content-Disposition: form-data; name="f"; Filename="UPPER.txt"',
-    );
+    const result = parsePartHeaders('Content-Disposition: form-data; name="f"; Filename="UPPER.txt"');
     expect(isErr(result)).toBe(false);
     if (!isErr(result)) {
       expect(result.filename).toBe('UPPER.txt');
@@ -490,9 +426,7 @@ describe('parsePartHeaders', () => {
   // ── 30. Semicolons inside quoted filename ───────────────────────────
 
   test('preserves semicolons inside quoted filename', () => {
-    const result = parsePartHeaders(
-      'Content-Disposition: form-data; name="file"; filename="report;2024;final.csv"',
-    );
+    const result = parsePartHeaders('Content-Disposition: form-data; name="file"; filename="report;2024;final.csv"');
     expect(isErr(result)).toBe(false);
     if (!isErr(result)) {
       expect(result.filename).toBe('report;2024;final.csv');
@@ -502,9 +436,7 @@ describe('parsePartHeaders', () => {
   // ── 31. Non-ASCII UTF-8 characters in filename ─────────────────────
 
   test('preserves non-ASCII UTF-8 characters in filename', () => {
-    const result = parsePartHeaders(
-      'Content-Disposition: form-data; name="file"; filename="resume_\uD55C\uAD6D\uC5B4.pdf"',
-    );
+    const result = parsePartHeaders('Content-Disposition: form-data; name="file"; filename="resume_\uD55C\uAD6D\uC5B4.pdf"');
     expect(isErr(result)).toBe(false);
     if (!isErr(result)) {
       expect(result.filename).toBe('resume_\uD55C\uAD6D\uC5B4.pdf');
@@ -515,7 +447,7 @@ describe('parsePartHeaders', () => {
 
   test('ignores filename*= and uses filename= value', () => {
     const result = parsePartHeaders(
-      "Content-Disposition: form-data; name=\"file\"; filename=\"safe.png\"; filename*=UTF-8''backdoor.php",
+      'Content-Disposition: form-data; name="file"; filename="safe.png"; filename*=UTF-8\'\'backdoor.php',
     );
     expect(isErr(result)).toBe(false);
     if (!isErr(result)) {
@@ -526,9 +458,7 @@ describe('parsePartHeaders', () => {
   // ── 33. Duplicate name= parameters: first-wins via regex ───────────
 
   test('uses first name= parameter when duplicates are present', () => {
-    const result = parsePartHeaders(
-      'Content-Disposition: form-data; name="first"; name="second"',
-    );
+    const result = parsePartHeaders('Content-Disposition: form-data; name="first"; name="second"');
     expect(isErr(result)).toBe(false);
     if (!isErr(result)) {
       expect(result.name).toBe('first');

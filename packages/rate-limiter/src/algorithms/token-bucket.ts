@@ -1,6 +1,7 @@
-import { RateLimitAction } from '../enums';
 import type { RateLimitRule, RateLimiterStore, StoreEntry } from '../interfaces';
 import type { RateLimitResult } from '../types';
+
+import { RateLimitAction } from '../enums';
 
 /**
  * Token Bucket algorithm.
@@ -26,7 +27,7 @@ export function tokenBucket(
 
   let result!: RateLimitResult;
 
-  const entry = store.update(key, (current) => {
+  const entry = store.update(key, current => {
     let available: number;
     let lastRefill: number;
 
@@ -58,9 +59,7 @@ export function tokenBucket(
     }
 
     const remaining = available - cost;
-    const resetAt = remaining >= rule.limit
-      ? now
-      : now + Math.ceil((rule.limit - remaining) / refillRate);
+    const resetAt = remaining >= rule.limit ? now : now + Math.ceil((rule.limit - remaining) / refillRate);
 
     result = {
       action: RateLimitAction.Allow,
@@ -110,9 +109,7 @@ async function peekTokenBucket(
   }
 
   const remaining = available - cost;
-  const resetAt = remaining >= rule.limit
-    ? now
-    : now + Math.ceil((rule.limit - remaining) / refillRate);
+  const resetAt = remaining >= rule.limit ? now : now + Math.ceil((rule.limit - remaining) / refillRate);
 
   return {
     action: RateLimitAction.Allow,
@@ -125,15 +122,10 @@ async function peekTokenBucket(
 /**
  * Refunds a previously consumed token bucket request by adding tokens back.
  */
-export function refundTokenBucket(
-  key: string,
-  rule: RateLimitRule,
-  cost: number,
-  store: RateLimiterStore,
-): void | Promise<void> {
+export function refundTokenBucket(key: string, rule: RateLimitRule, cost: number, store: RateLimiterStore): void | Promise<void> {
   const result = store.update(key, (current: StoreEntry | null) => {
-    if (current === null) return { value: rule.limit, prev: 0, windowStart: 0 };
+    if (current === null) {return { value: rule.limit, prev: 0, windowStart: 0 };}
     return { value: Math.min(rule.limit, current.value + cost), prev: 0, windowStart: current.windowStart };
   });
-  if (result instanceof Promise) return result.then(() => {});
+  if (result instanceof Promise) {return result.then(() => {});}
 }

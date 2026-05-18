@@ -1,8 +1,9 @@
 import { describe, test, expect } from 'bun:test';
 
-import { RateLimiter } from '../../src/rate-limiter';
-import { RateLimitAction, Algorithm } from '../../src/enums';
 import type { RateLimitDenyResult } from '../../src/interfaces';
+
+import { RateLimitAction, Algorithm } from '../../src/enums';
+import { RateLimiter } from '../../src/rate-limiter';
 import { createClock } from '../helpers';
 
 const algorithms = [Algorithm.GCRA, Algorithm.SlidingWindow, Algorithm.TokenBucket] as const;
@@ -41,7 +42,7 @@ describe('burst → deny → cooldown → recovery', () => {
           clock: clock.now,
         });
 
-        for (let i = 0; i < 10; i++) await limiter.consume('api-key');
+        for (let i = 0; i < 10; i++) {await limiter.consume('api-key');}
 
         const denied = await limiter.consume('api-key');
         const retryAfter = (denied as RateLimitDenyResult).retryAfter;
@@ -65,7 +66,7 @@ describe('burst → deny → cooldown → recovery', () => {
           clock: clock.now,
         });
 
-        for (let i = 0; i < 10; i++) await limiter.consume('api-key');
+        for (let i = 0; i < 10; i++) {await limiter.consume('api-key');}
 
         // SlidingWindow needs 2x window for prev to fully expire
         // GCRA/TokenBucket recover fully within 1x window

@@ -1,14 +1,16 @@
 /* oxlint-disable typescript-eslint/no-unsafe-type-assertion */
 
-import { describe, expect, it } from 'bun:test';
-import { isErr } from '@zipbul/result';
 import type { Err } from '@zipbul/result';
+
+import { isErr } from '@zipbul/result';
+import { describe, expect, it } from 'bun:test';
+
+import type { QueryParserErrorData } from './interfaces';
+import type { ResolvedQueryParserOptions } from './types';
 
 import { DEFAULT_QUERY_PARSER_OPTIONS } from './constants';
 import { QueryParserErrorReason } from './enums';
-import type { QueryParserErrorData } from './interfaces';
 import { resolveQueryParserOptions, validateQueryParserOptions } from './options';
-import type { ResolvedQueryParserOptions } from './types';
 
 const assertErr = (result: unknown): Err<QueryParserErrorData> => {
   expect(isErr(result)).toBe(true);

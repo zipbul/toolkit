@@ -1,8 +1,10 @@
-import { err } from '@zipbul/result';
 import type { Result } from '@zipbul/result';
 
-import { MultipartErrorReason } from '../enums';
+import { err } from '@zipbul/result';
+
 import type { MultipartErrorData } from '../interfaces';
+
+import { MultipartErrorReason } from '../enums';
 
 /**
  * Maximum boundary length per RFC 2046 Section 5.1.1.

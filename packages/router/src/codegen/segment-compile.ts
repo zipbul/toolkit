@@ -1,4 +1,5 @@
 import type { MatchFn, DecoderFn } from '../types';
+
 import {
   forEachStaticChild,
   hasAmbiguousNode,
@@ -22,18 +23,17 @@ interface CodegenEstimate {
   oversized: boolean;
 }
 
-function estimateSegmentTreeCodegen(
-  root: SegmentNode,
-  nodeCap: number,
-): CodegenEstimate {
+function estimateSegmentTreeCodegen(root: SegmentNode, nodeCap: number): CodegenEstimate {
   let nodes = 0;
   const stack: SegmentNode[] = [root];
 
   while (stack.length > 0) {
-    if (nodes > nodeCap) return { nodes, oversized: true };
+    if (nodes > nodeCap) {return { nodes, oversized: true };}
     const node = stack.pop()!;
     nodes++;
-    forEachStaticChild(node, (_, child) => { stack.push(child); });
+    forEachStaticChild(node, (_, child) => {
+      stack.push(child);
+    });
     let p = node.paramChild;
     while (p !== null) {
       stack.push(p.next);
@@ -50,7 +50,7 @@ function estimateSegmentTreeCodegen(
  * across every major code path instead of a single one. The per-path
  * depth bound (`16`) is a malformed-tree safety net only.
  */
-export function collectWarmupPaths(root: SegmentNode): string[] {
+function collectWarmupPaths(root: SegmentNode): string[] {
   const out: string[] = [];
 
   const firstStaticChild = (n: SegmentNode): { key: string; child: SegmentNode } | null => {
@@ -58,7 +58,7 @@ export function collectWarmupPaths(root: SegmentNode): string[] {
       return { key: n.singleChildKey, child: n.singleChildNext };
     }
     if (n.staticChildren !== null) {
-      for (const seg in n.staticChildren) return { key: seg, child: n.staticChildren[seg]! };
+      for (const seg in n.staticChildren) {return { key: seg, child: n.staticChildren[seg]! };}
     }
     return null;
   };
@@ -99,32 +99,28 @@ export function collectWarmupPaths(root: SegmentNode): string[] {
     out.push('/__warm__/__warm__');
   }
 
-  if (out.length === 0) out.push('/__zipbul_warmup__');
+  if (out.length === 0) {out.push('/__zipbul_warmup__');}
   return out;
 }
 
-export interface CompiledPackage {
-  factory: (
-    testers: PatternTesterFn[],
-    pass: typeof TESTER_PASS,
-    decoder: DecoderFn,
-  ) => MatchFn;
+interface CompiledPackage {
+  factory: (testers: PatternTesterFn[], pass: typeof TESTER_PASS, decoder: DecoderFn) => MatchFn;
   testers: PatternTesterFn[];
 }
 
 /**
  * Compile a segment tree into a flat match function via `new Function()`.
  */
-export function compileSegmentTree(root: SegmentNode): CompiledPackage | null {
+function compileSegmentTree(root: SegmentNode): CompiledPackage | null {
   // Bail on ambiguous trees: codegen only handles unique-winner trees.
   // Ambiguous trees (static+param collision) fallback to recursive walker.
-  if (hasAmbiguousNode(root)) return null;
+  if (hasAmbiguousNode(root)) {return null;}
 
-  if (estimateSegmentTreeCodegen(root, MAX_NODES_DEFAULT).oversized) return null;
+  if (estimateSegmentTreeCodegen(root, MAX_NODES_DEFAULT).oversized) {return null;}
 
   const ctx: EmitContext = { bail: false, testers: [], pendingParams: [] };
   const body = emitNode(ctx, root, 'pos0');
-  if (ctx.bail) return null;
+  if (ctx.bail) {return null;}
 
   const source = `
 'use strict';
@@ -142,7 +138,7 @@ ${body}
   return false;
 };`;
 
-  if (source.length > MAX_SOURCE_BYTES_HARD) return null;
+  if (source.length > MAX_SOURCE_BYTES_HARD) {return null;}
 
   try {
     const factory = new Function('testers', 'TESTER_PASS', 'decoder', source) as CompiledPackage['factory'];
@@ -190,7 +186,7 @@ function emitFlushPendingWrites(
   return s;
 }
 
-export function emitRootSlashTerminal(root: SegmentNode): string {
+function emitRootSlashTerminal(root: SegmentNode): string {
   if (root.store !== null) {
     return `      state.handlerIndex = ${root.store};\n      return true;`;
   }
@@ -202,11 +198,7 @@ export function emitRootSlashTerminal(root: SegmentNode): string {
   return '      return false;';
 }
 
-function emitNode(
-  ctx: EmitContext,
-  node: SegmentNode,
-  posVar: string,
-): string {
+function emitNode(ctx: EmitContext, node: SegmentNode, posVar: string): string {
   // posVar is always 'pos0' at the entry point or `pos${N}` / `pos${N}_s…`
   // from the recursive emitNode calls below, so slice(3).split('_')[0] is
   // always a non-empty digit string. The `?? '0'` fallback the earlier
@@ -216,11 +208,11 @@ function emitNode(
   const innerPos = `pos${parseInt(posDigits) + 1}`;
 
   let code = emitStaticChildren(ctx, node, posVar, innerPos);
-  if (ctx.bail) return '';
+  if (ctx.bail) {return '';}
 
   if (node.paramChild !== null) {
     code += emitParamBranch(ctx, node.paramChild, posVar, slashVar, innerPos);
-    if (ctx.bail) return '';
+    if (ctx.bail) {return '';}
   }
 
   if (node.wildcardStore !== null) {
@@ -244,15 +236,12 @@ const STATIC_CHILD_DISPATCH_THRESHOLD = 4;
  *  prelude so a miss returns after a single charCodeAt instead of N
  *  failed startsWith probes. Each block recursively emits the child's
  *  subtree. */
-export function emitStaticChildren(
-  ctx: EmitContext,
-  node: SegmentNode,
-  posVar: string,
-  innerPos: string,
-): string {
+function emitStaticChildren(ctx: EmitContext, node: SegmentNode, posVar: string, innerPos: string): string {
   const siblings: Array<{ seg: string; child: SegmentNode }> = [];
-  forEachStaticChild(node, (seg, child) => { siblings.push({ seg, child }); });
-  if (siblings.length === 0) return '';
+  forEachStaticChild(node, (seg, child) => {
+    siblings.push({ seg, child });
+  });
+  if (siblings.length === 0) {return '';}
 
   if (siblings.length >= STATIC_CHILD_DISPATCH_THRESHOLD) {
     return emitStaticChildrenSwitch(ctx, siblings, posVar, innerPos);
@@ -260,9 +249,9 @@ export function emitStaticChildren(
 
   let code = '';
   for (const { seg, child } of siblings) {
-    if (ctx.bail) return '';
+    if (ctx.bail) {return '';}
     code += emitStaticChildBlock(ctx, seg, child, posVar, innerPos);
-    if (ctx.bail) return '';
+    if (ctx.bail) {return '';}
   }
   return code;
 }
@@ -281,7 +270,10 @@ function emitStaticChildrenSwitch(
   for (const s of siblings) {
     const code = s.seg.charCodeAt(0);
     let bucket = byFirstChar.get(code);
-    if (bucket === undefined) { bucket = []; byFirstChar.set(code, bucket); }
+    if (bucket === undefined) {
+      bucket = [];
+      byFirstChar.set(code, bucket);
+    }
     bucket.push(s);
   }
 
@@ -290,7 +282,7 @@ function emitStaticChildrenSwitch(
     let inner = '';
     for (const { seg, child } of bucket) {
       inner += emitStaticChildBlock(ctx, seg, child, posVar, innerPos);
-      if (ctx.bail) return '';
+      if (ctx.bail) {return '';}
     }
     body += `
       case ${charCode}: {${inner}
@@ -305,17 +297,11 @@ function emitStaticChildrenSwitch(
 
 /** Emit the per-sibling `if (startsWith) { … }` block shared by both
  *  the chain and the switch paths. */
-function emitStaticChildBlock(
-  ctx: EmitContext,
-  seg: string,
-  child: SegmentNode,
-  posVar: string,
-  innerPos: string,
-): string {
+function emitStaticChildBlock(ctx: EmitContext, seg: string, child: SegmentNode, posVar: string, innerPos: string): string {
   const segLen = seg.length;
   const nextPos = `${innerPos}_s${seg.replace(/[^a-z0-9]/gi, '_')}`;
   const childInner = emitNode(ctx, child, nextPos);
-  if (ctx.bail) return '';
+  if (ctx.bail) {return '';}
   return `
     if (url.startsWith(${JSON.stringify(seg)}, ${posVar})) {
       var c = url.charCodeAt(${posVar} + ${segLen});
@@ -333,7 +319,7 @@ ${emitTerminalAt(ctx, child)}
  *  general descent into `param.next`. Bails if param has siblings
  *  (codegen only handles single-param positions; ambiguous fall through
  *  to the recursive walker). */
-export function emitParamBranch(
+function emitParamBranch(
   ctx: EmitContext,
   param: NonNullable<SegmentNode['paramChild']>,
   posVar: string,
@@ -380,7 +366,7 @@ export function emitParamBranch(
   ctx.pendingParams.push([posVar, slashVar] as const);
   const inner = emitNode(ctx, next, innerPos);
   ctx.pendingParams.pop();
-  if (ctx.bail) return '';
+  if (ctx.bail) {return '';}
 
   code += `
     if (${slashVar} !== -1 && ${slashVar} > ${posVar}) {
@@ -395,13 +381,13 @@ ${inner}
   return code;
 }
 
-export function emitTesterCheck(testerIdx: number, posVar: string, slashVar: string): string {
-  if (testerIdx === -1) return '';
+function emitTesterCheck(testerIdx: number, posVar: string, slashVar: string): string {
+  if (testerIdx === -1) {return '';}
   return `
       if (testers[${testerIdx}](decoder(url.substring(${posVar}, ${slashVar} === -1 ? len : ${slashVar}))) !== TESTER_PASS) return false;`;
 }
 
-export function emitStrictTerminal(
+function emitStrictTerminal(
   ctx: EmitContext,
   posVar: string,
   slashVar: string,
@@ -417,7 +403,7 @@ export function emitStrictTerminal(
     }`;
 }
 
-export function emitMultiWildcardTerminal(
+function emitMultiWildcardTerminal(
   ctx: EmitContext,
   posVar: string,
   slashVar: string,
@@ -436,7 +422,7 @@ export function emitMultiWildcardTerminal(
     }`;
 }
 
-export function emitWildcardStore(ctx: EmitContext, node: SegmentNode, posVar: string): string {
+function emitWildcardStore(ctx: EmitContext, node: SegmentNode, posVar: string): string {
   const guard = node.wildcardOrigin === 'star' ? `${posVar} <= len` : `${posVar} < len`;
   const flush = emitFlushPendingWrites(ctx.pendingParams, [[posVar, 'len']]);
   return `
@@ -459,3 +445,16 @@ function emitTerminalAt(ctx: EmitContext, node: SegmentNode): string {
 
   return '';
 }
+
+export {
+  collectWarmupPaths,
+  compileSegmentTree,
+  emitMultiWildcardTerminal,
+  emitParamBranch,
+  emitRootSlashTerminal,
+  emitStaticChildren,
+  emitStrictTerminal,
+  emitTesterCheck,
+  emitWildcardStore,
+};
+export type { CompiledPackage };

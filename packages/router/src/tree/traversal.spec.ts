@@ -5,16 +5,8 @@
  */
 import { describe, expect, it } from 'bun:test';
 
-import {
-  createSegmentNode,
-  type SegmentNode,
-} from './segment-tree';
-import {
-  extendStaticPrefix,
-  foldStaticChain,
-  peekSingleStaticChild,
-  rewireStaticChild,
-} from './traversal';
+import { createSegmentNode, type SegmentNode } from './segment-tree';
+import { extendStaticPrefix, foldStaticChain, peekSingleStaticChild, rewireStaticChild } from './traversal';
 
 function inlineChain(...keys: string[]): SegmentNode {
   // Build a singleChildKey chain `keys[0]` → `keys[1]` → ... → store=0.

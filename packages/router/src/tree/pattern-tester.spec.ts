@@ -1,10 +1,6 @@
 import { describe, it, expect } from 'bun:test';
 
-import {
-  buildPatternTester,
-  TESTER_FAIL,
-  TESTER_PASS,
-} from './pattern-tester';
+import { buildPatternTester, TESTER_FAIL, TESTER_PASS } from './pattern-tester';
 
 describe('buildPatternTester', () => {
   // ── Shortcut patterns (digit) ──

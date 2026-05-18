@@ -10,19 +10,19 @@ describe('normalizeParamPatternSource', () => {
   it('rejects leading ^ anchor', () => {
     const result = normalizeParamPatternSource('^\\d+');
     expect(typeof result).toBe('object');
-    if (typeof result !== 'string') expect(result.reason).toBe('anchor');
+    if (typeof result !== 'string') {expect(result.reason).toBe('anchor');}
   });
 
   it('rejects trailing $ anchor', () => {
     const result = normalizeParamPatternSource('\\d+$');
     expect(typeof result).toBe('object');
-    if (typeof result !== 'string') expect(result.reason).toBe('anchor');
+    if (typeof result !== 'string') {expect(result.reason).toBe('anchor');}
   });
 
   it('rejects both anchors', () => {
     const result = normalizeParamPatternSource('^\\d+$');
     expect(typeof result).toBe('object');
-    if (typeof result !== 'string') expect(result.reason).toBe('anchor');
+    if (typeof result !== 'string') {expect(result.reason).toBe('anchor');}
   });
 
   it('rejects pattern with only anchors', () => {

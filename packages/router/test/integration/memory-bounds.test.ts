@@ -32,15 +32,15 @@ function rssMB(): number {
 }
 
 function settleSamples(samples: number, intervalMs = 5): Promise<number> {
-  return new Promise<number>((resolve) => {
+  return new Promise<number>(resolve => {
     let i = 0;
     let last = 0;
     const tick = () => {
       forceGc();
       last = rssMB();
       i++;
-      if (i >= samples) resolve(last);
-      else setTimeout(tick, intervalMs);
+      if (i >= samples) {resolve(last);}
+      else {setTimeout(tick, intervalMs);}
     };
     tick();
   });
@@ -105,7 +105,11 @@ describe('memory bounds — repeated builds do not leak', () => {
       const r = new Router<string>();
       r.add('GET', '/x', 'a');
       r.add('GET', '/x', 'b');
-      try { r.build(); } catch { /* expected */ }
+      try {
+        r.build();
+      } catch {
+        /* expected */
+      }
     }
 
     const before = await settleSamples(8);
@@ -116,7 +120,11 @@ describe('memory bounds — repeated builds do not leak', () => {
         r.add('GET', `/route-${i}`, `h-${i}`);
       }
       r.add('GET', '/route-0', 'dup');
-      try { r.build(); } catch { /* expected route-duplicate */ }
+      try {
+        r.build();
+      } catch {
+        /* expected route-duplicate */
+      }
     }
 
     const after = await settleSamples(8);

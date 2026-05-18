@@ -25,7 +25,7 @@ bun add @zipbul/rate-limiter
 import { RateLimiter, Algorithm, RateLimitAction } from '@zipbul/rate-limiter';
 
 const limiter = RateLimiter.create({
-  rules: { limit: 100, window: 60_000 },   // 분당 100회
+  rules: { limit: 100, window: 60_000 }, // 분당 100회
   algorithm: Algorithm.SlidingWindow,
 });
 
@@ -46,11 +46,11 @@ if (result.action === RateLimitAction.Allow) {
 
 세 가지 내장 알고리즘을 제공합니다. 동일한 API를 공유하며, `algorithm`만 변경하면 됩니다.
 
-| 알고리즘 | 적합한 용도 | 동작 |
-|:---------|:-----------|:-----|
-| `SlidingWindow` _(기본)_ | 일반 API 속도 제한 | 현재/이전 윈도우 간 가중 보간 |
-| `TokenBucket` | 버스트 트래픽 + 안정적 충전 | 고정 속도로 연속 토큰 충전 |
-| `GCRA` | 엄격한 스케줄링 / 셀 레이트 제어 | 요청별 이론적 도착 시간(TAT) 추적 |
+| 알고리즘                 | 적합한 용도                      | 동작                              |
+| :----------------------- | :------------------------------- | :-------------------------------- |
+| `SlidingWindow` _(기본)_ | 일반 API 속도 제한               | 현재/이전 윈도우 간 가중 보간     |
+| `TokenBucket`            | 버스트 트래픽 + 안정적 충전      | 고정 속도로 연속 토큰 충전        |
+| `GCRA`                   | 엄격한 스케줄링 / 셀 레이트 제어 | 요청별 이론적 도착 시간(TAT) 추적 |
 
 ```typescript
 // Token Bucket
@@ -72,11 +72,11 @@ RateLimiter.create({
 
 ```typescript
 interface RateLimiterOptions {
-  rules: RateLimitRule | RateLimitRule[];  // 필수
-  algorithm?: Algorithm;       // 기본값: SlidingWindow
-  store?: RateLimiterStore;    // 기본값: MemoryStore
-  clock?: () => number;        // 기본값: Date.now
-  cost?: number;               // 기본값: 1
+  rules: RateLimitRule | RateLimitRule[]; // 필수
+  algorithm?: Algorithm; // 기본값: SlidingWindow
+  store?: RateLimiterStore; // 기본값: MemoryStore
+  clock?: () => number; // 기본값: Date.now
+  cost?: number; // 기본값: 1
   hooks?: RateLimiterHooks;
 }
 ```
@@ -157,13 +157,13 @@ RateLimiter.create({
 type RateLimitResult = RateLimitAllowResult | RateLimitDenyResult;
 ```
 
-| 필드 | Allow | Deny |
-|:-----|:------|:-----|
-| `action` | `'allow'` | `'deny'` |
-| `remaining` | 남은 토큰 | `0` |
-| `limit` | 윈도우당 최대 토큰 | 윈도우당 최대 토큰 |
-| `resetAt` | 윈도우 리셋 시각 (ms) | 윈도우 리셋 시각 (ms) |
-| `retryAfter` | — | 다음 허용까지 ms |
+| 필드         | Allow                 | Deny                  |
+| :----------- | :-------------------- | :-------------------- |
+| `action`     | `'allow'`             | `'deny'`              |
+| `remaining`  | 남은 토큰             | `0`                   |
+| `limit`      | 윈도우당 최대 토큰    | 윈도우당 최대 토큰    |
+| `resetAt`    | 윈도우 리셋 시각 (ms) | 윈도우 리셋 시각 (ms) |
+| `retryAfter` | —                     | 다음 허용까지 ms      |
 
 ### `limiter.peek(key, options?)`
 
@@ -185,8 +185,8 @@ type RateLimitResult = RateLimitAllowResult | RateLimitDenyResult;
 import { MemoryStore } from '@zipbul/rate-limiter';
 
 new MemoryStore({
-  maxSize: 10_000,   // FIFO 퇴출 (기본: 무제한)
-  ttl: 120_000,      // 지연 TTL (ms) (기본: 만료 없음)
+  maxSize: 10_000, // FIFO 퇴출 (기본: 무제한)
+  ttl: 120_000, // 지연 TTL (ms) (기본: 만료 없음)
 });
 ```
 
@@ -201,12 +201,11 @@ import Redis from 'ioredis';
 const redis = new Redis();
 const store = new RedisStore({
   client: {
-    eval: (script, keys, args) =>
-      redis.eval(script, keys.length, ...keys, ...args),
+    eval: (script, keys, args) => redis.eval(script, keys.length, ...keys, ...args),
   },
-  prefix: 'rl:',      // 키 접두사 (기본: 'rl:')
-  ttl: 120_000,        // PEXPIRE (ms) (기본: 만료 없음)
-  maxRetries: 5,       // CAS 재시도 제한 (기본: 5)
+  prefix: 'rl:', // 키 접두사 (기본: 'rl:')
+  ttl: 120_000, // PEXPIRE (ms) (기본: 만료 없음)
+  maxRetries: 5, // CAS 재시도 제한 (기본: 5)
 });
 
 RateLimiter.create({
@@ -244,23 +243,23 @@ try {
   await limiter.consume('user:123');
 } catch (e) {
   if (e instanceof RateLimiterError) {
-    e.reason;  // RateLimiterErrorReason.StoreError
+    e.reason; // RateLimiterErrorReason.StoreError
     e.message; // "Store operation failed"
-    e.cause;   // 원본 에러
+    e.cause; // 원본 에러
   }
 }
 ```
 
 ### `RateLimiterErrorReason`
 
-| Reason | 발생 위치 | 설명 |
-|:-------|:---------|:-----|
-| `InvalidLimit` | `create()` | `limit`가 양의 정수가 아님 |
-| `InvalidWindow` | `create()` | `window`가 양의 정수(ms)가 아님 |
-| `InvalidCost` | `create()` / `consume()` | `cost`가 0 이상의 정수가 아님 |
-| `InvalidAlgorithm` | `create()` | 지원하지 않는 알고리즘 |
-| `EmptyRules` | `create()` | `rules`가 비어있음 |
-| `StoreError` | `consume()` / `peek()` | 런타임 스토어 작업 실패 |
+| Reason             | 발생 위치                | 설명                            |
+| :----------------- | :----------------------- | :------------------------------ |
+| `InvalidLimit`     | `create()`               | `limit`가 양의 정수가 아님      |
+| `InvalidWindow`    | `create()`               | `window`가 양의 정수(ms)가 아님 |
+| `InvalidCost`      | `create()` / `consume()` | `cost`가 0 이상의 정수가 아님   |
+| `InvalidAlgorithm` | `create()`               | 지원하지 않는 알고리즘          |
+| `EmptyRules`       | `create()`               | `rules`가 비어있음              |
+| `StoreError`       | `consume()` / `peek()`   | 런타임 스토어 작업 실패         |
 
 <br>
 
@@ -272,10 +271,18 @@ try {
 import type { RateLimiterStore, StoreEntry } from '@zipbul/rate-limiter';
 
 class MyStore implements RateLimiterStore {
-  update(key: string, updater: (current: StoreEntry | null) => StoreEntry): StoreEntry | Promise<StoreEntry> { /* ... */ }
-  get(key: string): StoreEntry | null | Promise<StoreEntry | null> { /* ... */ }
-  delete(key: string): void | Promise<void> { /* ... */ }
-  clear(): void | Promise<void> { /* ... */ }
+  update(key: string, updater: (current: StoreEntry | null) => StoreEntry): StoreEntry | Promise<StoreEntry> {
+    /* ... */
+  }
+  get(key: string): StoreEntry | null | Promise<StoreEntry | null> {
+    /* ... */
+  }
+  delete(key: string): void | Promise<void> {
+    /* ... */
+  }
+  clear(): void | Promise<void> {
+    /* ... */
+  }
 }
 ```
 

@@ -1,5 +1,9 @@
-import { err } from '@zipbul/result';
 import type { Result } from '@zipbul/result';
+
+import { err } from '@zipbul/result';
+
+import type { MultipartErrorData, MultipartOptions } from './interfaces';
+import type { ResolvedMultipartOptions } from './types';
 
 import {
   DEFAULT_MAX_FIELD_SIZE,
@@ -11,8 +15,6 @@ import {
   DEFAULT_MAX_TOTAL_SIZE,
 } from './constants';
 import { MultipartErrorReason } from './enums';
-import type { MultipartErrorData, MultipartOptions } from './interfaces';
-import type { ResolvedMultipartOptions } from './types';
 
 /**
  * Takes partial {@link MultipartOptions} and fills in every missing field

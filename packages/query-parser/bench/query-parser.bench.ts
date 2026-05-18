@@ -1,6 +1,5 @@
 import { run, bench, boxplot, summary, do_not_optimize } from 'mitata';
 import querystring from 'node:querystring';
-
 import qs from 'qs';
 
 import { QueryParser } from '../src/query-parser';
@@ -40,8 +39,7 @@ const ENCODED_KEYS = '%EC%9D%B4%EB%A6%84=hello%20world&%EB%8F%84%EC%8B%9C=%EC%84
 
 const SEARCH_FORM = 'q=typescript&page=1&limit=20&sort=relevance&lang=ko';
 const FILTER_API = 'filter[status]=active&filter[role]=admin&page=1&per_page=50';
-const ECOMMERCE =
-  'category=shoes&brand[]=nike&brand[]=adidas&price_min=50&price_max=200&size[]=9&size[]=10&sort=price_asc';
+const ECOMMERCE = 'category=shoes&brand[]=nike&brand[]=adidas&price_min=50&price_max=200&size[]=9&size[]=10&sort=price_asc';
 
 const ENCODED_5 = 'key%201=val%201&key%202=val%202&key%203=val%203&key%204=val%204&key%205=val%205';
 

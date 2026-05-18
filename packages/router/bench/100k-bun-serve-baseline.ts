@@ -60,7 +60,9 @@ if (after.rss / 1024 / 1024 > SERVE_MEM_CAP_MB) {
   process.exit(1);
 }
 
-console.log(`Bun.serve routes=${COUNT} init=${buildMs.toFixed(2)}ms initMem=${fmtMem(afterPrep, after)} totalMem=${fmtMem(before, after)} port=${server.port}`);
+console.log(
+  `Bun.serve routes=${COUNT} init=${buildMs.toFixed(2)}ms initMem=${fmtMem(afterPrep, after)} totalMem=${fmtMem(before, after)} port=${server.port}`,
+);
 
 async function firstRequest(path: string): Promise<{ usFirst: number; statusFirst: number }> {
   // Cold first request: no warmup loop. Measures connection setup +
@@ -125,9 +127,9 @@ async function benchPhases(path: string): Promise<void> {
   // WARM_RUNS=3 → p99 collapses to max; report only median/min/max.
   console.log(
     `${path.padEnd(28)} firstRequest=${cold.usFirst.toFixed(2)}us status=${cold.statusFirst}` +
-    ` warmedRuns=${WARM_RUNS} warmedMedian=${median(warmMeans).toFixed(2)}us` +
-    ` warmedMin=${Math.min(...warmMeans).toFixed(2)}us` +
-    ` warmedMax=${Math.max(...warmMeans).toFixed(2)}us checksum=${warmChecksum}`,
+      ` warmedRuns=${WARM_RUNS} warmedMedian=${median(warmMeans).toFixed(2)}us` +
+      ` warmedMin=${Math.min(...warmMeans).toFixed(2)}us` +
+      ` warmedMax=${Math.max(...warmMeans).toFixed(2)}us checksum=${warmChecksum}`,
   );
 }
 
@@ -141,6 +143,5 @@ try {
 }
 const restartMean = restartCount > 0 ? restartTotalMs / restartCount : 0;
 console.log(
-  `serverRestarts=${restartCount} restartTotalMs=${restartTotalMs.toFixed(2)} ` +
-  `restartMeanMs=${restartMean.toFixed(2)}`,
+  `serverRestarts=${restartCount} restartTotalMs=${restartTotalMs.toFixed(2)} ` + `restartMeanMs=${restartMean.toFixed(2)}`,
 );

@@ -1,4 +1,5 @@
 import type { SegmentNode } from './segment-tree';
+
 import { forEachStaticChild, hasAnyStaticChild } from './segment-tree';
 
 /**
@@ -15,7 +16,7 @@ export function compactSegmentTree(root: SegmentNode): void {
   const internPrefix = (parts: string[]): string[] => {
     const key = parts.join('\x00');
     const existing = prefixIntern.get(key);
-    if (existing !== undefined) return existing;
+    if (existing !== undefined) {return existing;}
     prefixIntern.set(key, parts);
     return parts;
   };
@@ -24,7 +25,7 @@ export function compactSegmentTree(root: SegmentNode): void {
   const visited = new Set<SegmentNode>();
   while (stack.length > 0) {
     const node = stack.pop()!;
-    if (visited.has(node)) continue;
+    if (visited.has(node)) {continue;}
     visited.add(node);
 
     forEachStaticChild(node, (key, child) => {
@@ -60,9 +61,7 @@ export function compactSegmentTree(root: SegmentNode): void {
  * also runs only on nodes where `hasAnyStaticChild` is true, so the
  * "no static at all" outcome cannot reach this function.
  */
-export function peekSingleStaticChild(
-  target: SegmentNode,
-): { key: string; child: SegmentNode; many: boolean } {
+export function peekSingleStaticChild(target: SegmentNode): { key: string; child: SegmentNode; many: boolean } {
   if (target.singleChildKey !== null && target.singleChildNext !== null) {
     return { key: target.singleChildKey, child: target.singleChildNext, many: false };
   }
@@ -72,8 +71,13 @@ export function peekSingleStaticChild(
   let onlyChild: SegmentNode | null = null;
   let many = false;
   for (const k in target.staticChildren!) {
-    if (only === null) { only = k; onlyChild = target.staticChildren![k]!; }
-    else { many = true; break; }
+    if (only === null) {
+      only = k;
+      onlyChild = target.staticChildren![k]!;
+    } else {
+      many = true;
+      break;
+    }
   }
   return { key: only!, child: onlyChild!, many };
 }
@@ -91,7 +95,7 @@ export function foldStaticChain(start: SegmentNode): { target: SegmentNode; fold
     target.staticPrefix === null
   ) {
     const peek = peekSingleStaticChild(target);
-    if (peek.many || peek.key === null || peek.child === null) break;
+    if (peek.many || peek.key === null || peek.child === null) {break;}
     folded.push(peek.key);
     target = peek.child;
   }
@@ -137,7 +141,9 @@ export function hasAmbiguousNode(root: SegmentNode): boolean {
       return true;
     }
 
-    forEachStaticChild(node, (_, child) => { stack.push(child); });
+    forEachStaticChild(node, (_, child) => {
+      stack.push(child);
+    });
 
     let p = node.paramChild;
 

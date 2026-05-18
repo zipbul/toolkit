@@ -4,12 +4,15 @@
  */
 import { describe, it, expect } from 'bun:test';
 
-import { Router } from '../../src/router';
-import { RouterError } from '../../src/error';
 import type { RouterErrorData, RouterErrorKind } from '../../src/types';
 
+import { RouterError } from '../../src/error';
+import { Router } from '../../src/router';
+
 function expectKindOnAdd(fn: () => void, kind: RouterErrorKind): void {
-  try { fn(); } catch (e) {
+  try {
+    fn();
+  } catch (e) {
     expect(e).toBeInstanceOf(RouterError);
     expect((e as RouterError).data.kind).toBe(kind);
     return;
@@ -20,7 +23,9 @@ function expectKindOnAdd(fn: () => void, kind: RouterErrorKind): void {
 function expectKindOnBuild(register: (r: Router<string>) => void, kind: RouterErrorKind): RouterErrorData {
   const r = new Router<string>();
   register(r);
-  try { r.build(); } catch (e) {
+  try {
+    r.build();
+  } catch (e) {
     expect(e).toBeInstanceOf(RouterError);
     const err = e as RouterError;
     if (err.data.kind === 'route-validation') {
@@ -51,7 +56,7 @@ describe('RouterErrorKind reproducers (full coverage of 22 kinds)', () => {
 
   it('method-limit', () => {
     expectKindOnBuild(r => {
-      for (let i = 0; i < 40; i++) r.add(`M${i.toString().padStart(2, '0')}`, '/x', `v-${i}`);
+      for (let i = 0; i < 40; i++) {r.add(`M${i.toString().padStart(2, '0')}`, '/x', `v-${i}`);}
     }, 'method-limit');
   });
 

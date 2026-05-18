@@ -1,6 +1,6 @@
 import type { MethodRegistry } from '../method-registry';
 
-export const WILDCARD_METHOD = '*' as const;
+const WILDCARD_METHOD = '*' as const;
 
 interface MethodPending {
   method: string;
@@ -21,10 +21,7 @@ interface MethodPending {
  * (pendingRoutes × sealMethods); 1.19-2.20× win across 10k/100k routes
  * with 0/25 custom methods (2.7 ms saved at the 100k+25 worst case).
  */
-export function expandWildcardMethodRoutes<T extends MethodPending>(
-  pendingRoutes: T[],
-  methodRegistry: MethodRegistry,
-): void {
+function expandWildcardMethodRoutes<T extends MethodPending>(pendingRoutes: T[], methodRegistry: MethodRegistry): void {
   let hasWildcardMethod = false;
   for (let i = 0; i < pendingRoutes.length; i++) {
     if (pendingRoutes[i]!.method === WILDCARD_METHOD) {
@@ -32,7 +29,7 @@ export function expandWildcardMethodRoutes<T extends MethodPending>(
       break;
     }
   }
-  if (!hasWildcardMethod) return;
+  if (!hasWildcardMethod) {return;}
 
   const sealMethods: string[] = [];
   const seen = new Set<string>();
@@ -50,7 +47,7 @@ export function expandWildcardMethodRoutes<T extends MethodPending>(
   const expanded: T[] = [];
   for (const r of pendingRoutes) {
     if (r.method === WILDCARD_METHOD) {
-      for (const m of sealMethods) expanded.push({ ...r, method: m });
+      for (const m of sealMethods) {expanded.push({ ...r, method: m });}
     } else {
       expanded.push(r);
     }
@@ -62,5 +59,7 @@ export function expandWildcardMethodRoutes<T extends MethodPending>(
   // but JSC traditionally throws RangeError around ~500k args). A simple
   // length swap + index assignment side-steps the cap entirely.
   pendingRoutes.length = expanded.length;
-  for (let i = 0; i < expanded.length; i++) pendingRoutes[i] = expanded[i]!;
+  for (let i = 0; i < expanded.length; i++) {pendingRoutes[i] = expanded[i]!;}
 }
+
+export { expandWildcardMethodRoutes, WILDCARD_METHOD };

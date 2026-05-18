@@ -1,5 +1,6 @@
-import { afterAll, describe, expect, test } from 'bun:test';
 import type { Server } from 'bun';
+
+import { afterAll, describe, expect, test } from 'bun:test';
 
 import { MultipartError } from '../../src/interfaces';
 import { Multipart } from '../../src/multipart';
@@ -136,12 +137,8 @@ describe('multipart e2e streaming', () => {
 
     expect(json.count).toBe(3);
 
-    const fieldParts = json.parts.filter(
-      (p: { filename?: string }) => p.filename === undefined || p.filename === null,
-    );
-    const fileParts = json.parts.filter(
-      (p: { filename?: string }) => p.filename !== undefined && p.filename !== null,
-    );
+    const fieldParts = json.parts.filter((p: { filename?: string }) => p.filename === undefined || p.filename === null);
+    const fileParts = json.parts.filter((p: { filename?: string }) => p.filename !== undefined && p.filename !== null);
 
     expect(fieldParts.length).toBe(2);
     expect(fileParts.length).toBe(1);
@@ -154,11 +151,7 @@ describe('multipart e2e streaming', () => {
   test('handles aborted request gracefully', async () => {
     const controller = new AbortController();
     const form = new FormData();
-    form.append(
-      'file',
-      new Blob(['x'.repeat(1024 * 100)], { type: 'text/plain' }),
-      'big.txt',
-    );
+    form.append('file', new Blob(['x'.repeat(1024 * 100)], { type: 'text/plain' }), 'big.txt');
 
     try {
       const promise = fetch(url('/'), {
@@ -192,11 +185,7 @@ describe('multipart e2e streaming', () => {
     }
 
     const form = new FormData();
-    form.append(
-      'chunked',
-      new Blob([data], { type: 'application/octet-stream' }),
-      'halfMB.bin',
-    );
+    form.append('chunked', new Blob([data], { type: 'application/octet-stream' }), 'halfMB.bin');
 
     const res = await fetch(url('/'), { method: 'POST', body: form });
 

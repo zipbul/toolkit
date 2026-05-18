@@ -60,8 +60,8 @@ router.build();
 const result = router.match('GET', '/users/42');
 
 if (result) {
-  console.log(result.value);       // 'get-user'
-  console.log(result.params.id);   // '42'
+  console.log(result.value); // 'get-user'
+  console.log(result.params.id); // '42'
   console.log(result.meta.source); // 'dynamic'
 }
 ```
@@ -87,8 +87,8 @@ const router = new Router<() => Response>({ pathCaseSensitive: false });
 
 ```typescript
 router.add('GET', '/users/:id', handler);
-router.add(['GET', 'POST'], '/data', handler);  // 복수 메서드
-router.add('*', '/health', handler);             // 모든 표준 메서드
+router.add(['GET', 'POST'], '/data', handler); // 복수 메서드
+router.add('*', '/health', handler); // 모든 표준 메서드
 ```
 
 `'*'`는 `GET / POST / PUT / PATCH / DELETE / OPTIONS / HEAD` 로 확장됩니다.
@@ -101,7 +101,7 @@ raw Unicode (IRI) 와 percent-encoded UTF-8 (URI) 두 형태 모두 **등록 시
 router.add('GET', '/users/한국', handler);
 // 내부 저장: `/users/%ED%95%9C%EA%B5%AD`.
 router.match('GET', '/users/%ED%95%9C%EA%B5%AD'); // ✓ 매칭
-router.match('GET', '/users/한국');                // ✗ 매칭 안 됨 (아래 참고)
+router.match('GET', '/users/한국'); // ✗ 매칭 안 됨 (아래 참고)
 ```
 
 > [!IMPORTANT]
@@ -147,19 +147,19 @@ router.build();
 const result = router.match('GET', '/users/42');
 
 if (result) {
-  result.value;       // T — 등록된 값
-  result.params;      // Record<string, string | undefined> (null-prototype)
+  result.value; // T — 등록된 값
+  result.params; // Record<string, string | undefined> (null-prototype)
   result.meta.source; // 'static' | 'cache' | 'dynamic'
 }
 ```
 
 `meta.source` 는 caller 에게 어떻게 매칭됐는지 알려줍니다:
 
-| 값 | caller 에게 의미 |
-|:---|:-----|
-| `'static'` | 리터럴 경로 (param 없음) 라우트. 반환된 `MatchOutput` 은 호출 간 공유되고 frozen 됨 — 변경 금지. 동일 hit 간 `===` 식별자 보존. |
-| `'cache'` | 이전에 dynamic 으로 해소된 매치가 캐시에서 반환됨. 캐시된 `params` 객체는 frozen + 재사용 — 변경 금지, 호출별 identity 의존 금지. |
-| `'dynamic'` | dynamic 라우트의 최초 해소. 매 호출마다 새 `MatchOutput` + 자체 `params` 객체. |
+| 값          | caller 에게 의미                                                                                                                  |
+| :---------- | :-------------------------------------------------------------------------------------------------------------------------------- |
+| `'static'`  | 리터럴 경로 (param 없음) 라우트. 반환된 `MatchOutput` 은 호출 간 공유되고 frozen 됨 — 변경 금지. 동일 hit 간 `===` 식별자 보존.   |
+| `'cache'`   | 이전에 dynamic 으로 해소된 매치가 캐시에서 반환됨. 캐시된 `params` 객체는 frozen + 재사용 — 변경 금지, 호출별 identity 의존 금지. |
+| `'dynamic'` | dynamic 라우트의 최초 해소. 매 호출마다 새 `MatchOutput` + 자체 `params` 객체.                                                    |
 
 ### `router.allowedMethods(path)`
 
@@ -220,19 +220,19 @@ router.add('GET', '/users/:id(\\d+)', handler);
 router.add('GET', '/:lang?/docs', handler);
 ```
 
-| `optionalParamBehavior` | `/en/docs` | `/docs` |
-|:------------------------|:-----------|:--------|
-| `'omit'` (기본값) | `{ lang: 'en' }` | `{}` (키 부재) |
-| `'set-undefined'` | `{ lang: 'en' }` | `{ lang: undefined }` (키 존재) |
+| `optionalParamBehavior` | `/en/docs`       | `/docs`                         |
+| :---------------------- | :--------------- | :------------------------------ |
+| `'omit'` (기본값)       | `{ lang: 'en' }` | `{}` (키 부재)                  |
+| `'set-undefined'`       | `{ lang: 'en' }` | `{ lang: undefined }` (키 존재) |
 
 ### 와일드카드
 
 URL 의 나머지 부분 (슬래시 포함) 을 캡처합니다. 와일드카드 값은 **퍼센트 디코딩되지 않습니다**. 의미 두 가지 + 표기 두 가지 — colon-form sugar (`:name+` / `:name*`) 는 parse 시 거부됩니다:
 
-| 패턴 | 의미 | 빈 매칭 |
-|:-----|:-----|:--------|
+| 패턴     | 의미                        | 빈 매칭                                               |
+| :------- | :-------------------------- | :---------------------------------------------------- |
 | `*name`  | star — 0 segment 이상 매칭  | `'/files'` 가 `/files/*path` 와 매칭 → `{ path: '' }` |
-| `*name+` | multi — 1 segment 이상 필수 | `'/assets'` 가 `/assets/*file+` 와 매칭 안 됨 |
+| `*name+` | multi — 1 segment 이상 필수 | `'/assets'` 가 `/assets/*file+` 와 매칭 안 됨         |
 
 ```typescript
 router.add('GET', '/files/*path', handler);
@@ -257,12 +257,12 @@ interface RouterOptions {
 }
 ```
 
-| 옵션 | 기본값 | 설명 |
-|:-----|:-------|:-----|
-| `trailingSlash` | `'ignore'` | `'strict'` 면 `/a` 와 `/a/` 가 다름; `'ignore'` 면 등록/매치 시점에 trailing slash 1개 collapse |
-| `pathCaseSensitive` | `true` | `/Users` 와 `/users` 가 다른 라우트 |
-| `cacheSize` | `1000` | 메서드당 hit 캐시 용량 (다음 2의 거듭제곱으로 올림; bounded approximate-LRU 축출). `[1, 2³⁰]` 범위의 양의 정수 |
-| `optionalParamBehavior` | `'omit'` | 누락된 선택적 파라미터의 `params` 형태 — `'omit'` 은 키 자체 생략, `'set-undefined'` 는 `undefined` 기록 |
+| 옵션                    | 기본값     | 설명                                                                                                           |
+| :---------------------- | :--------- | :------------------------------------------------------------------------------------------------------------- |
+| `trailingSlash`         | `'ignore'` | `'strict'` 면 `/a` 와 `/a/` 가 다름; `'ignore'` 면 등록/매치 시점에 trailing slash 1개 collapse                |
+| `pathCaseSensitive`     | `true`     | `/Users` 와 `/users` 가 다른 라우트                                                                            |
+| `cacheSize`             | `1000`     | 메서드당 hit 캐시 용량 (다음 2의 거듭제곱으로 올림; bounded approximate-LRU 축출). `[1, 2³⁰]` 범위의 양의 정수 |
+| `optionalParamBehavior` | `'omit'`   | 누락된 선택적 파라미터의 `params` 형태 — `'omit'` 은 키 자체 생략, `'set-undefined'` 는 `undefined` 기록       |
 
 참고:
 
@@ -299,12 +299,12 @@ interface RouterOptions {
 
 ## 🚨 에러 처리
 
-| 메서드 | Throws | 반환 |
-|:---|:---|:---|
-| `add()` / `addAll()` | 잘못된 경로 / 충돌 / sealed router 시 `RouterError` | `void` |
-| `build()` | 라우트별 실패 전체를 담은 `RouterError({ kind: 'route-validation' })` | `this` |
-| `match()` | 캡처된 param 의 `%xx` 가 잘못된 경우 `URIError` — `400 Bad Request` 로 매핑하려면 `try / catch` 로 감싸세요 | `MatchOutput<T> \| null` |
-| `allowedMethods()` | 절대 throw 안 함 | `readonly string[]` |
+| 메서드               | Throws                                                                                                      | 반환                     |
+| :------------------- | :---------------------------------------------------------------------------------------------------------- | :----------------------- |
+| `add()` / `addAll()` | 잘못된 경로 / 충돌 / sealed router 시 `RouterError`                                                         | `void`                   |
+| `build()`            | 라우트별 실패 전체를 담은 `RouterError({ kind: 'route-validation' })`                                       | `this`                   |
+| `match()`            | 캡처된 param 의 `%xx` 가 잘못된 경우 `URIError` — `400 Bad Request` 로 매핑하려면 `try / catch` 로 감싸세요 | `MatchOutput<T> \| null` |
+| `allowedMethods()`   | 절대 throw 안 함                                                                                            | `readonly string[]`      |
 
 모든 `RouterError` 는 구조화된 `data` 객체를 들고 옵니다 — `data.kind` (discriminated union) 로 narrow 한 후 kind 별 필드 (`segment`, `conflictsWith`, `suggestion`, `path`, `method`) 에 접근하세요.
 
@@ -315,44 +315,44 @@ try {
   router.add('GET', '/bad/(unmatched', handler);
 } catch (e) {
   if (e instanceof RouterError) {
-    e.data.kind;       // RouterErrorKind — 식별자
-    e.data.message;    // 사람이 읽을 수 있는 설명
-    e.data.path;       // 문제가 된 경로 (해당 시)
-    e.data.method;     // HTTP 메서드 (해당 시)
+    e.data.kind; // RouterErrorKind — 식별자
+    e.data.message; // 사람이 읽을 수 있는 설명
+    e.data.path; // 문제가 된 경로 (해당 시)
+    e.data.method; // HTTP 메서드 (해당 시)
   }
 }
 ```
 
 ### 에러 종류
 
-| 종류 | 발생 시점 |
-|:-----|:----------|
-| `'router-sealed'` | `build()` 이후 `add()` / `addAll()` 호출 |
-| `'route-duplicate'` | 동일 `(method, path)` 가 이미 등록됨 |
-| `'route-conflict'` | 구조적 충돌 — 같은 메서드의 `/files/*a` 후 `/files/*b`, 또는 `/files/*path` 후 `/files/x` 등 |
-| `'route-unreachable'` | 같은 prefix 의 기존 wildcard / terminal 에 의해 새 라우트가 도달 불가 — 예: 같은 메서드에서 `/files/*path` 후 `/files/list` 등록 |
-| `'route-parse'` | 잘못된 경로 문법 (선행 슬래시 없음, 미닫힌 정규식 그룹, 파라미터 이름의 금지 문자 등) |
-| `'param-duplicate'` | 한 경로에 동일 파라미터 이름 두 번 (`/x/:id/y/:id`) |
-| `'method-limit'` | 32 개를 초과하는 고유 HTTP 메서드 |
-| `'method-empty'` / `'method-invalid-token'` | method 토큰이 HTTP token grammar 위반 (RFC 9110 §5.6.2) |
-| `'path-missing-leading-slash'` / `'path-query'` / `'path-fragment'` / `'path-control-char'` / `'path-invalid-pchar'` / `'path-malformed-percent'` / `'path-invalid-utf8'` / `'path-encoded-slash'` / `'path-dot-segment'` / `'path-empty-segment'` | 등록된 path 가 router-grammar / RFC 부합 검사 실패 |
-| `'router-options-invalid'` | `RouterOptions` 필드 검증 실패 (예: `cacheSize` 가 `[1, 2³⁰]` 범위 밖) |
-| `'route-validation'` | `build()` 중 한 개 이상의 라우트 검증 실패 — `data.errors` 가 라우트별 실패 목록을 담음 |
+| 종류                                                                                                                                                                                                                                               | 발생 시점                                                                                                                        |
+| :------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | :------------------------------------------------------------------------------------------------------------------------------- |
+| `'router-sealed'`                                                                                                                                                                                                                                  | `build()` 이후 `add()` / `addAll()` 호출                                                                                         |
+| `'route-duplicate'`                                                                                                                                                                                                                                | 동일 `(method, path)` 가 이미 등록됨                                                                                             |
+| `'route-conflict'`                                                                                                                                                                                                                                 | 구조적 충돌 — 같은 메서드의 `/files/*a` 후 `/files/*b`, 또는 `/files/*path` 후 `/files/x` 등                                     |
+| `'route-unreachable'`                                                                                                                                                                                                                              | 같은 prefix 의 기존 wildcard / terminal 에 의해 새 라우트가 도달 불가 — 예: 같은 메서드에서 `/files/*path` 후 `/files/list` 등록 |
+| `'route-parse'`                                                                                                                                                                                                                                    | 잘못된 경로 문법 (선행 슬래시 없음, 미닫힌 정규식 그룹, 파라미터 이름의 금지 문자 등)                                            |
+| `'param-duplicate'`                                                                                                                                                                                                                                | 한 경로에 동일 파라미터 이름 두 번 (`/x/:id/y/:id`)                                                                              |
+| `'method-limit'`                                                                                                                                                                                                                                   | 32 개를 초과하는 고유 HTTP 메서드                                                                                                |
+| `'method-empty'` / `'method-invalid-token'`                                                                                                                                                                                                        | method 토큰이 HTTP token grammar 위반 (RFC 9110 §5.6.2)                                                                          |
+| `'path-missing-leading-slash'` / `'path-query'` / `'path-fragment'` / `'path-control-char'` / `'path-invalid-pchar'` / `'path-malformed-percent'` / `'path-invalid-utf8'` / `'path-encoded-slash'` / `'path-dot-segment'` / `'path-empty-segment'` | 등록된 path 가 router-grammar / RFC 부합 검사 실패                                                                               |
+| `'router-options-invalid'`                                                                                                                                                                                                                         | `RouterOptions` 필드 검증 실패 (예: `cacheSize` 가 `[1, 2³⁰]` 범위 밖)                                                           |
+| `'route-validation'`                                                                                                                                                                                                                               | `build()` 중 한 개 이상의 라우트 검증 실패 — `data.errors` 가 라우트별 실패 목록을 담음                                          |
 
 ### 충돌 예시
 
 ```typescript
 // 다른 메서드끼리는 공존 가능
-router.add('GET',  '/files/*path', getHandler);
-router.add('POST', '/files/*upload', postHandler);  // ok
+router.add('GET', '/files/*path', getHandler);
+router.add('POST', '/files/*upload', postHandler); // ok
 
 // 같은 메서드의 와일드카드 이름 변경: route-conflict
-router.add('GET',  '/files/*path', getHandler);
-router.add('GET',  '/files/*upload', anotherHandler); // throw
+router.add('GET', '/files/*path', getHandler);
+router.add('GET', '/files/*upload', anotherHandler); // throw
 
 // 와일드카드 prefix 하위 정적 라우트: route-conflict
-router.add('GET',  '/files/*path', getHandler);
-router.add('GET',  '/files/list', listHandler);       // throw
+router.add('GET', '/files/*path', getHandler);
+router.add('GET', '/files/list', listHandler); // throw
 ```
 
 ---
@@ -368,9 +368,9 @@ import { Router } from '@zipbul/router';
 type Handler = (params: Record<string, string | undefined>) => Response;
 
 const router = new Router<Handler>();
-router.add('GET',  '/users',     () => Response.json({ users: [] }));
-router.add('GET',  '/users/:id', (p) => Response.json({ id: p.id }));
-router.add('POST', '/users',     () => new Response('Created', { status: 201 }));
+router.add('GET', '/users', () => Response.json({ users: [] }));
+router.add('GET', '/users/:id', p => Response.json({ id: p.id }));
+router.add('POST', '/users', () => new Response('Created', { status: 201 }));
 router.build();
 
 Bun.serve({
@@ -405,13 +405,13 @@ Bun.serve({
 
 대표 hot-path 수치 (Bun 1.3.13, Linux x64):
 
-| 워크로드 | 범위 |
-|:---|---:|
-| `build()` — 100 라우트 | ~2 ms |
-| `build()` — 10 000 라우트 | ~25 ms |
-| `match()` — hit / static | 단일 자릿 ns |
-| `match()` — hit / dynamic (캐시 warm) | ~10 ns |
-| `match()` — miss / wrong method | ~3 ns |
+| 워크로드                              |         범위 |
+| :------------------------------------ | -----------: |
+| `build()` — 100 라우트                |        ~2 ms |
+| `build()` — 10 000 라우트             |       ~25 ms |
+| `match()` — hit / static              | 단일 자릿 ns |
+| `match()` — hit / dynamic (캐시 warm) |       ~10 ns |
+| `match()` — miss / wrong method       |        ~3 ns |
 
 `memoirist`, `find-my-way`, `rou3`, `hono` (RegExp + Trie), `koa-tree-router` 와 head-to-head 에서 `@zipbul/router` 는 모든 "성공 매치" 시나리오 1위, 대부분 miss / wrong-method 시나리오에서 1위 또는 동률.
 

@@ -3,14 +3,7 @@ import { describe, test, expect } from 'bun:test';
 import { Router } from '../router';
 
 describe('method token grammar accepts valid custom tokens', () => {
-  test.each([
-    ['PROPFIND'],
-    ['PATCH+X'],
-    ['foo'],
-    ['get'],
-    ['CUSTOM-METHOD_X.0'],
-    ['M!#$%&\'*+-.^_`|~0'],
-  ])('accepts %s', (method) => {
+  test.each([['PROPFIND'], ['PATCH+X'], ['foo'], ['get'], ['CUSTOM-METHOD_X.0'], ["M!#$%&'*+-.^_`|~0"]])('accepts %s', method => {
     const r = new Router<string>();
     expect(() => {
       r.add(method, '/x', 'h');
@@ -53,7 +46,9 @@ describe('32-method limit boundary', () => {
       r.add(`CUSTOM${i}`, '/x', `h${i}`);
     }
     let kind: string | undefined;
-    try { r.build(); } catch (e: any) {
+    try {
+      r.build();
+    } catch (e: any) {
       kind = e.data?.errors?.find((it: any) => it.error.kind === 'method-limit')?.error.kind;
     }
     expect(kind).toBe('method-limit');

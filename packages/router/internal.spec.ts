@@ -5,8 +5,8 @@
  */
 import { describe, expect, it } from 'bun:test';
 
-import { Router } from './src/router';
 import { getRouterInternals } from './internal';
+import { Router } from './src/router';
 
 describe('getRouterInternals — happy path', () => {
   it('returns the live internals wrapper for a freshly constructed Router', () => {
@@ -40,17 +40,13 @@ describe('getRouterInternals — happy path', () => {
 describe('getRouterInternals — non-Router probe rejection', () => {
   it('throws when called on a plain object missing the internals symbol slot', () => {
     const fake = {} as unknown as Router<string>;
-    expect(() => getRouterInternals(fake)).toThrow(
-      /Router internals slot missing/,
-    );
+    expect(() => getRouterInternals(fake)).toThrow(/Router internals slot missing/);
   });
 
   it('throws when called on an instance of a non-Router class', () => {
     class Imposter {}
     const fake = new Imposter() as unknown as Router<string>;
-    expect(() => getRouterInternals(fake)).toThrow(
-      /Router internals slot missing/,
-    );
+    expect(() => getRouterInternals(fake)).toThrow(/Router internals slot missing/);
   });
 
   it('error message identifies the package boundary so callers can route the fix', () => {

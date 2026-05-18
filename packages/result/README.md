@@ -27,8 +27,8 @@ Traditional error handling with `throw` breaks control flow, loses type informat
 ```typescript
 // ❌ Throw — caller has no idea what to expect
 function parseConfig(raw: string): Config {
-  if (!raw) throw new Error('empty input');      // What type? Unknown.
-  if (!valid(raw)) throw new ValidationError();  // Silently propagates up.
+  if (!raw) throw new Error('empty input'); // What type? Unknown.
+  if (!valid(raw)) throw new ValidationError(); // Silently propagates up.
   return JSON.parse(raw);
 }
 
@@ -55,7 +55,7 @@ const result = parseConfig(input);
 if (isErr(result)) {
   console.error(result.data); // string — TypeScript knows the type
 } else {
-  console.log(result.host);   // Config — fully narrowed
+  console.log(result.host); // Config — fully narrowed
 }
 ```
 
@@ -103,10 +103,10 @@ Creates an immutable `Err` value. Never throws.
 import { err } from '@zipbul/result';
 ```
 
-| Overload | Return | Description |
-|:---------|:-------|:------------|
-| `err()` | `Err<never>` | Error with no data |
-| `err<E>(data: E)` | `Err<E>` | Error with attached data |
+| Overload          | Return       | Description              |
+| :---------------- | :----------- | :----------------------- |
+| `err()`           | `Err<never>` | Error with no data       |
+| `err<E>(data: E)` | `Err<E>`     | Error with attached data |
 
 ```typescript
 // No data — simple signal
@@ -124,9 +124,9 @@ const e3 = err({ code: 'TIMEOUT', retryAfter: 3000 });
 
 Properties of the returned `Err`:
 
-| Property | Type | Description |
-|:---------|:-----|:------------|
-| `data` | `E` | The attached error data |
+| Property | Type | Description             |
+| :------- | :--- | :---------------------- |
+| `data`   | `E`  | The attached error data |
 
 > **Immutability** — every `Err` is `Object.freeze()`d. Attempting to modify properties in strict mode throws a `TypeError`.
 
@@ -141,7 +141,7 @@ import { isErr } from '@zipbul/result';
 ```
 
 ```typescript
-function isErr<E = unknown>(value: unknown): value is Err<E>
+function isErr<E = unknown>(value: unknown): value is Err<E>;
 ```
 
 - Returns `true` if `value` is a non-null object with the marker property set to `true`.
@@ -171,10 +171,10 @@ A plain union type — not a wrapper class.
 type Result<T, E = never> = T | Err<E>;
 ```
 
-| Parameter | Default | Description |
-|:----------|:--------|:------------|
-| `T` | — | Success value type |
-| `E` | `never` | Error data type |
+| Parameter | Default | Description        |
+| :-------- | :------ | :----------------- |
+| `T`       | —       | Success value type |
+| `E`       | `never` | Error data type    |
 
 ```typescript
 // Simple — no error data
@@ -211,12 +211,12 @@ Wraps a sync function or Promise into a `Result` / `ResultAsync`. Catches throws
 import { safe } from '@zipbul/result';
 ```
 
-| Overload | Return | Description |
-|:---------|:-------|:------------|
-| `safe(fn)` | `Result<T, unknown>` | Sync — calls `fn()`, catches throws |
-| `safe(fn, mapErr)` | `Result<T, E>` | Sync — catches throws, maps via `mapErr` |
-| `safe(promise)` | `ResultAsync<T, unknown>` | Async — wraps rejection |
-| `safe(promise, mapErr)` | `ResultAsync<T, E>` | Async — wraps rejection, maps via `mapErr` |
+| Overload                | Return                    | Description                                |
+| :---------------------- | :------------------------ | :----------------------------------------- |
+| `safe(fn)`              | `Result<T, unknown>`      | Sync — calls `fn()`, catches throws        |
+| `safe(fn, mapErr)`      | `Result<T, E>`            | Sync — catches throws, maps via `mapErr`   |
+| `safe(promise)`         | `ResultAsync<T, unknown>` | Async — wraps rejection                    |
+| `safe(promise, mapErr)` | `ResultAsync<T, E>`       | Async — wraps rejection, maps via `mapErr` |
 
 ```typescript
 // Sync — wrap a function that might throw
@@ -230,17 +230,14 @@ if (isErr(result)) {
 // Sync with mapErr — convert unknown throw to typed error
 const typed = safe(
   () => JSON.parse(rawJson),
-  (e) => ({ code: 'PARSE_ERROR', message: String(e) }),
+  e => ({ code: 'PARSE_ERROR', message: String(e) }),
 );
 
 // Async — wrap a Promise that might reject
 const asyncResult = await safe(fetch('/api/data'));
 
 // Async with mapErr
-const apiResult = await safe(
-  fetch('/api/users/1'),
-  (e) => ({ code: 'NETWORK', message: String(e) }),
-);
+const apiResult = await safe(fetch('/api/users/1'), e => ({ code: 'NETWORK', message: String(e) }));
 ```
 
 > **Sync path** — `safe(fn)` detects a function via `!(fn instanceof Promise)`. A function that _returns_ a Promise is treated as sync — the Promise object becomes the success value `T`.
@@ -257,10 +254,10 @@ A type alias for async results — not a wrapper class.
 type ResultAsync<T, E = never> = Promise<Result<T, E>>;
 ```
 
-| Parameter | Default | Description |
-|:----------|:--------|:------------|
-| `T` | — | Success value type |
-| `E` | `never` | Error data type |
+| Parameter | Default | Description        |
+| :-------- | :------ | :----------------- |
+| `T`       | —       | Success value type |
+| `E`       | `never` | Error data type    |
 
 ```typescript
 // Use as return type for async Result-returning functions
@@ -271,10 +268,7 @@ async function fetchUser(id: number): ResultAsync<User, string> {
 }
 
 // Or wrap an existing Promise with safe()
-const result: ResultAsync<Response, string> = safe(
-  fetch('/api/data'),
-  (e) => String(e),
-);
+const result: ResultAsync<Response, string> = safe(fetch('/api/data'), e => String(e));
 ```
 
 <br>
@@ -287,11 +281,11 @@ The marker key is a unique hidden property used to identify `Err` objects. It de
 import { DEFAULT_MARKER_KEY, getMarkerKey, setMarkerKey } from '@zipbul/result';
 ```
 
-| Export | Type | Description |
-|:-------|:-----|:------------|
-| `DEFAULT_MARKER_KEY` | `string` | `'__$$e_9f4a1c7b__'` — the default key |
-| `getMarkerKey()` | `() => string` | Returns the current marker key |
-| `setMarkerKey(key)` | `(key: string) => void` | Changes the marker key |
+| Export               | Type                    | Description                            |
+| :------------------- | :---------------------- | :------------------------------------- |
+| `DEFAULT_MARKER_KEY` | `string`                | `'__$$e_9f4a1c7b__'` — the default key |
+| `getMarkerKey()`     | `() => string`          | Returns the current marker key         |
+| `setMarkerKey(key)`  | `(key: string) => void` | Changes the marker key                 |
 
 ```typescript
 // Reset detection across independent modules
@@ -392,10 +386,7 @@ Bun.serve({
     const body = await parseBody(request);
 
     if (isErr(body)) {
-      return Response.json(
-        { error: body.data.code, message: body.data.message },
-        { status: 400 },
-      );
+      return Response.json({ error: body.data.code, message: body.data.message }, { status: 400 });
     }
 
     // body is Payload

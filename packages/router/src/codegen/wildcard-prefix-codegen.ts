@@ -1,5 +1,5 @@
-import type { MatchFn } from '../types';
 import type { SegmentNode } from '../tree';
+import type { MatchFn } from '../types';
 
 import { detectWildCodegenSpec } from './walker-strategy';
 
@@ -13,7 +13,7 @@ import { detectWildCodegenSpec } from './walker-strategy';
 export function tryCodegenStaticPrefixWildcard(root: SegmentNode): MatchFn | null {
   const entries = detectWildCodegenSpec(root);
 
-  if (entries === null || entries.length > 8) return null;
+  if (entries === null || entries.length > 8) {return null;}
 
   let body = `
     'use strict';

@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'bun:test';
 
-import { Router } from '../../src/router';
 import { RouterError } from '../../src/error';
+import { Router } from '../../src/router';
 import { catchRouterError } from '../test-utils';
 
 describe('Router<T>', () => {
@@ -30,7 +30,7 @@ describe('Router<T>', () => {
       expect(post).not.toBeNull();
     });
 
-    it('should register all 7 standard methods when add called with \'*\'', () => {
+    it("should register all 7 standard methods when add called with '*'", () => {
       const router = new Router<string>();
       router.add('*', '/all', 'all');
       router.build();
@@ -65,7 +65,7 @@ describe('Router<T>', () => {
       router.addAll([]);
     });
 
-    it('should return source=\'static\' for static route match', () => {
+    it("should return source='static' for static route match", () => {
       const router = new Router<string>();
       router.add('GET', '/static', 'val');
       router.build();
@@ -140,7 +140,7 @@ describe('Router<T>', () => {
       expect(result).toBe(router);
     });
 
-    it('should return source=\'dynamic\' for dynamic route match', () => {
+    it("should return source='dynamic' for dynamic route match", () => {
       const router = new Router<string>();
       router.add('GET', '/users/:id', 'user');
       router.build();
@@ -232,7 +232,7 @@ describe('Router<T>', () => {
   // ── ED: Edge Cases (10 tests) ──
 
   describe('edge cases', () => {
-    it('should match root path \'/\'', () => {
+    it("should match root path '/'", () => {
       const router = new Router<string>();
       router.add('GET', '/', 'root');
       router.build();
@@ -250,7 +250,7 @@ describe('Router<T>', () => {
       expect(result).toBeNull();
     });
 
-    it('should store and return falsy values (0, \'\', false)', () => {
+    it("should store and return falsy values (0, '', false)", () => {
       const router = new Router<any>();
       router.add('GET', '/zero', 0);
       router.add('GET', '/empty', '');
@@ -287,7 +287,7 @@ describe('Router<T>', () => {
       expect(result).not.toBeUndefined();
     });
 
-    it('should handle single-character static path \'/a\'', () => {
+    it("should handle single-character static path '/a'", () => {
       const router = new Router<string>();
       router.add('GET', '/a', 'a-val');
       router.build();
@@ -580,7 +580,7 @@ describe('Router<T>', () => {
       }
     });
 
-    it('should match identically via \'*\' and individual method add', () => {
+    it("should match identically via '*' and individual method add", () => {
       // Router 1: via '*'
       const r1 = new Router<string>();
       r1.add('*', '/path', 'val');
@@ -774,7 +774,7 @@ describe('Router<T>', () => {
     });
 
     it('should not strip trailing slash on root path / when ignoreTrailingSlash=true', () => {
-      const router = new Router<string>({ trailingSlash: "ignore" });
+      const router = new Router<string>({ trailingSlash: 'ignore' });
       router.add('GET', '/', 'root');
       router.build();
 

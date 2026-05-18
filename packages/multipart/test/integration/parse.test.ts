@@ -1,7 +1,8 @@
 import { describe, test, expect } from 'bun:test';
 
-import { Multipart } from '../../src/multipart';
 import type { MultipartPart } from '../../src/interfaces';
+
+import { Multipart } from '../../src/multipart';
 import { BufferedMultipartFile } from '../../src/parser/streaming-part';
 
 // ── Helpers ─────────────────────────────────────────────────────────
@@ -27,12 +28,12 @@ function buildBody(boundary: string, parts: Array<{ headers: string; body: strin
 }
 
 async function partText(part: MultipartPart): Promise<string> {
-  if (part.isFile) return part.text();
+  if (part.isFile) {return part.text();}
   return part.text();
 }
 
 async function partBytes(part: MultipartPart): Promise<Uint8Array> {
-  if (part.isFile) return part.bytes();
+  if (part.isFile) {return part.bytes();}
   return part.bytes();
 }
 
@@ -62,9 +63,7 @@ describe('Multipart.parse — integration', () => {
 
   test('parses a single text field from a Request', async () => {
     const boundary = 'xyzzy';
-    const body = buildBody(boundary, [
-      { headers: 'Content-Disposition: form-data; name="greeting"', body: 'hello world' },
-    ]);
+    const body = buildBody(boundary, [{ headers: 'Content-Disposition: form-data; name="greeting"', body: 'hello world' }]);
 
     const parts = await collectParts(mp.parse(createRequest(boundary, body)));
 
@@ -80,8 +79,7 @@ describe('Multipart.parse — integration', () => {
     const fileContent = 'console.log("hello");';
     const body = buildBody(boundary, [
       {
-        headers:
-          'Content-Disposition: form-data; name="script"; filename="app.js"\r\nContent-Type: application/javascript',
+        headers: 'Content-Disposition: form-data; name="script"; filename="app.js"\r\nContent-Type: application/javascript',
         body: fileContent,
       },
     ]);
@@ -102,14 +100,12 @@ describe('Multipart.parse — integration', () => {
       { headers: 'Content-Disposition: form-data; name="username"', body: 'alice' },
       { headers: 'Content-Disposition: form-data; name="email"', body: 'alice@example.com' },
       {
-        headers:
-          'Content-Disposition: form-data; name="photo"; filename="avatar.jpg"\r\nContent-Type: image/jpeg',
+        headers: 'Content-Disposition: form-data; name="photo"; filename="avatar.jpg"\r\nContent-Type: image/jpeg',
         body: 'JFIF_DATA_HERE',
       },
       { headers: 'Content-Disposition: form-data; name="bio"', body: 'Hello, I am Alice.' },
       {
-        headers:
-          'Content-Disposition: form-data; name="resume"; filename="cv.pdf"\r\nContent-Type: application/pdf',
+        headers: 'Content-Disposition: form-data; name="resume"; filename="cv.pdf"\r\nContent-Type: application/pdf',
         body: '%PDF-1.4 fake content',
       },
     ]);
@@ -178,8 +174,7 @@ describe('Multipart.parse — integration', () => {
     const boundary = 'empty-fn';
     const body = buildBody(boundary, [
       {
-        headers:
-          'Content-Disposition: form-data; name="file"; filename=""\r\nContent-Type: application/octet-stream',
+        headers: 'Content-Disposition: form-data; name="file"; filename=""\r\nContent-Type: application/octet-stream',
         body: '',
       },
     ]);
@@ -196,18 +191,15 @@ describe('Multipart.parse — integration', () => {
     const boundary = 'multi-file';
     const body = buildBody(boundary, [
       {
-        headers:
-          'Content-Disposition: form-data; name="files"; filename="a.txt"\r\nContent-Type: text/plain',
+        headers: 'Content-Disposition: form-data; name="files"; filename="a.txt"\r\nContent-Type: text/plain',
         body: 'file a content',
       },
       {
-        headers:
-          'Content-Disposition: form-data; name="files"; filename="b.txt"\r\nContent-Type: text/plain',
+        headers: 'Content-Disposition: form-data; name="files"; filename="b.txt"\r\nContent-Type: text/plain',
         body: 'file b content',
       },
       {
-        headers:
-          'Content-Disposition: form-data; name="files"; filename="c.txt"\r\nContent-Type: text/plain',
+        headers: 'Content-Disposition: form-data; name="files"; filename="c.txt"\r\nContent-Type: text/plain',
         body: 'file c content',
       },
     ]);
@@ -235,9 +227,7 @@ describe('Multipart.parse — integration', () => {
   test('preamble text before first boundary is ignored', async () => {
     const boundary = 'preamble-test';
     const preamble = 'This is the preamble. It should be ignored.\r\nMore preamble lines.\r\n';
-    const partsRaw = buildBody(boundary, [
-      { headers: 'Content-Disposition: form-data; name="field"', body: 'value' },
-    ]);
+    const partsRaw = buildBody(boundary, [{ headers: 'Content-Disposition: form-data; name="field"', body: 'value' }]);
     const body = preamble + partsRaw;
 
     const parts = await collectParts(mp.parse(createRequest(boundary, body)));
@@ -249,9 +239,7 @@ describe('Multipart.parse — integration', () => {
 
   test('instance reuse: parse two different requests sequentially', async () => {
     const boundary1 = 'first-req';
-    const body1 = buildBody(boundary1, [
-      { headers: 'Content-Disposition: form-data; name="a"', body: 'first' },
-    ]);
+    const body1 = buildBody(boundary1, [{ headers: 'Content-Disposition: form-data; name="a"', body: 'first' }]);
 
     const boundary2 = 'second-req';
     const body2 = buildBody(boundary2, [
@@ -328,9 +316,7 @@ describe('Multipart.parse — integration', () => {
   test('very long field name (200 chars)', async () => {
     const boundary = 'long-name';
     const longName = 'x'.repeat(200);
-    const body = buildBody(boundary, [
-      { headers: `Content-Disposition: form-data; name="${longName}"`, body: 'val' },
-    ]);
+    const body = buildBody(boundary, [{ headers: `Content-Disposition: form-data; name="${longName}"`, body: 'val' }]);
 
     const parts = await collectParts(mp.parse(createRequest(boundary, body)));
 
@@ -362,8 +348,7 @@ describe('Multipart.parse — integration', () => {
     const boundary = 'auto-drain';
     const body = buildBody(boundary, [
       {
-        headers:
-          'Content-Disposition: form-data; name="skipped"; filename="skip.bin"\r\nContent-Type: application/octet-stream',
+        headers: 'Content-Disposition: form-data; name="skipped"; filename="skip.bin"\r\nContent-Type: application/octet-stream',
         body: 'x'.repeat(1024),
       },
       {
@@ -388,18 +373,15 @@ describe('Multipart.parse — integration', () => {
     const boundary = 'multi-drain';
     const body = buildBody(boundary, [
       {
-        headers:
-          'Content-Disposition: form-data; name="f1"; filename="a.bin"\r\nContent-Type: application/octet-stream',
+        headers: 'Content-Disposition: form-data; name="f1"; filename="a.bin"\r\nContent-Type: application/octet-stream',
         body: 'aaa',
       },
       {
-        headers:
-          'Content-Disposition: form-data; name="f2"; filename="b.bin"\r\nContent-Type: application/octet-stream',
+        headers: 'Content-Disposition: form-data; name="f2"; filename="b.bin"\r\nContent-Type: application/octet-stream',
         body: 'bbb',
       },
       {
-        headers:
-          'Content-Disposition: form-data; name="f3"; filename="c.bin"\r\nContent-Type: application/octet-stream',
+        headers: 'Content-Disposition: form-data; name="f3"; filename="c.bin"\r\nContent-Type: application/octet-stream',
         body: 'ccc',
       },
       {
@@ -422,13 +404,11 @@ describe('Multipart.parse — integration', () => {
     const boundary = 'mixed-consume';
     const body = buildBody(boundary, [
       {
-        headers:
-          'Content-Disposition: form-data; name="consumed"; filename="yes.txt"\r\nContent-Type: text/plain',
+        headers: 'Content-Disposition: form-data; name="consumed"; filename="yes.txt"\r\nContent-Type: text/plain',
         body: 'consumed data',
       },
       {
-        headers:
-          'Content-Disposition: form-data; name="skipped"; filename="no.txt"\r\nContent-Type: text/plain',
+        headers: 'Content-Disposition: form-data; name="skipped"; filename="no.txt"\r\nContent-Type: text/plain',
         body: 'skipped data',
       },
       {
@@ -455,13 +435,11 @@ describe('Multipart.parse — integration', () => {
     const boundary = 'abandon-test';
     const body = buildBody(boundary, [
       {
-        headers:
-          'Content-Disposition: form-data; name="f1"; filename="a.txt"\r\nContent-Type: text/plain',
+        headers: 'Content-Disposition: form-data; name="f1"; filename="a.txt"\r\nContent-Type: text/plain',
         body: 'file-data-1',
       },
       {
-        headers:
-          'Content-Disposition: form-data; name="f2"; filename="b.txt"\r\nContent-Type: text/plain',
+        headers: 'Content-Disposition: form-data; name="f2"; filename="b.txt"\r\nContent-Type: text/plain',
         body: 'file-data-2',
       },
       {
@@ -490,8 +468,7 @@ describe('Multipart.parse — integration', () => {
     const boundary = 'abandon-mid-file';
     const body = buildBody(boundary, [
       {
-        headers:
-          'Content-Disposition: form-data; name="big"; filename="big.bin"\r\nContent-Type: application/octet-stream',
+        headers: 'Content-Disposition: form-data; name="big"; filename="big.bin"\r\nContent-Type: application/octet-stream',
         body: 'x'.repeat(1000),
       },
       {
@@ -502,7 +479,7 @@ describe('Multipart.parse — integration', () => {
 
     let count = 0;
 
-    for await (const part of mp.parse(createRequest(boundary, body))) {
+    for await (const _part of mp.parse(createRequest(boundary, body))) {
       count++;
       // Don't consume the file, just break
       break;

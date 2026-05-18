@@ -15,8 +15,9 @@
  */
 import { describe, expect, it } from 'bun:test';
 
-import { Router, RouterError } from '../../index';
 import type { RouterErrorData, RouterErrorKind } from '../../src/types';
+
+import { Router, RouterError } from '../../index';
 import { catchRouterError, firstBuildIssue } from '../test-utils';
 
 function assertActionable(data: RouterErrorData, expectedKind: RouterErrorKind): void {
@@ -33,8 +34,11 @@ function assertActionable(data: RouterErrorData, expectedKind: RouterErrorKind):
 describe('every RouterError carries actionable kind + message + suggestion', () => {
   it('router-options-invalid (cacheSize)', () => {
     expect(() => new Router({ cacheSize: -1 })).toThrow(RouterError);
-    try { new Router({ cacheSize: -1 }); }
-    catch (e) { assertActionable((e as RouterError).data, 'router-options-invalid'); }
+    try {
+      new Router({ cacheSize: -1 });
+    } catch (e) {
+      assertActionable((e as RouterError).data, 'router-options-invalid');
+    }
   });
 
   it('router-sealed', () => {
@@ -59,7 +63,7 @@ describe('every RouterError carries actionable kind + message + suggestion', () 
 
   it('method-limit', () => {
     const r = new Router<string>();
-    for (let i = 0; i < 26; i++) r.add(`CUSTOM${i}`, `/x${i}`, `h${i}`);
+    for (let i = 0; i < 26; i++) {r.add(`CUSTOM${i}`, `/x${i}`, `h${i}`);}
     assertActionable(firstBuildIssue(r), 'method-limit');
   });
 

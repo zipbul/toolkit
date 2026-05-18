@@ -1,12 +1,13 @@
 import { isErr } from '@zipbul/result';
 import { HttpHeader } from '@zipbul/shared';
 
+import type { MultipartFile, MultipartOptions, MultipartPart } from './interfaces';
+import type { ParseAllResult, ResolvedMultipartOptions } from './types';
+
 import { MultipartErrorReason } from './enums';
 import { MultipartError } from './interfaces';
-import type { MultipartFile, MultipartOptions, MultipartPart } from './interfaces';
 import { resolveMultipartOptions, validateMultipartOptions } from './options';
 import { extractBoundary, parseMultipart, PartQueue, BufferingCallbacks, StreamingCallbacks, MultipartFileImpl } from './parser';
-import type { ParseAllResult, ResolvedMultipartOptions } from './types';
 
 /**
  * Streaming multipart/form-data parser built on Bun-native APIs.
@@ -65,7 +66,9 @@ export class Multipart {
     // Errors are propagated via queue.fail() → iterator throws.
     parseMultipart(body, boundary, this.options, callbacks)
       .then(() => queue.finish())
-      .catch((error) => { if (!queue.abandoned) queue.fail(error); });
+      .catch(error => {
+        if (!queue.abandoned) {queue.fail(error);}
+      });
 
     // Manual iteration instead of `yield* queue` to auto-drain unconsumed
     // file streams between yields. Without this, skipping a file part's
@@ -85,7 +88,7 @@ export class Multipart {
 
         const { value, done } = await iter.next();
 
-        if (done) break;
+        if (done) {break;}
 
         previousFile = value.isFile ? (value as MultipartFileImpl) : undefined;
         yield value;

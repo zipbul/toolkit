@@ -1,20 +1,13 @@
 import { optimizeNextInvocation } from 'bun:jsc';
 
 import type { MatchOutput, RouterOptions, RouterPublicApi } from './types';
+
+import { OptionalParamDefaults, PathParser } from './builder';
 import { RouterCache } from './cache';
+import { compileMatchFn, type MatchCacheEntry, type MatchConfig } from './codegen';
 import { RouterError } from './error';
 import { MethodRegistry } from './method-registry';
-import { OptionalParamDefaults, PathParser } from './builder';
-import {
-  compileMatchFn,
-  type MatchCacheEntry,
-  type MatchConfig,
-} from './codegen';
-import {
-  buildFromRegistration,
-  MatchLayer,
-  Registration,
-} from './pipeline';
+import { buildFromRegistration, MatchLayer, Registration } from './pipeline';
 import { forEachStaticChild, type SegmentNode } from './tree';
 
 /**
@@ -23,7 +16,7 @@ import { forEachStaticChild, type SegmentNode } from './tree';
  * non-enumerable. The `@zipbul/router/internal` subpath re-exports this
  * symbol along with `getRouterInternals()` for regression-test access.
  */
-export const ROUTER_INTERNALS_KEY: unique symbol = Symbol.for('@zipbul/router/internals');
+const ROUTER_INTERNALS_KEY: unique symbol = Symbol.for('@zipbul/router/internals');
 
 /** Frozen empty-string array returned by `allowedMethods()` before build().
  *  Single shared instance — avoids per-call allocation on the pre-build
@@ -37,12 +30,12 @@ const EMPTY_METHODS: readonly string[] = Object.freeze([]);
  *  starts with that byte — the emitter reads this to skip walker
  *  dispatch on a guaranteed root miss. */
 function buildRootFirstCharMask(root: SegmentNode): Int32Array | null {
-  if (root.paramChild !== null) return null;
-  if (root.wildcardStore !== null) return null;
-  if (root.staticPrefix !== null) return null;
+  if (root.paramChild !== null) {return null;}
+  if (root.wildcardStore !== null) {return null;}
+  if (root.staticPrefix !== null) {return null;}
   const mask = new Int32Array(256);
   let hasAny = false;
-  forEachStaticChild(root, (key) => {
+  forEachStaticChild(root, key => {
     if (key.length > 0) {
       mask[key.charCodeAt(0)] = 1;
       hasAny = true;
@@ -51,7 +44,7 @@ function buildRootFirstCharMask(root: SegmentNode): Int32Array | null {
   return hasAny ? mask : null;
 }
 
-export interface RouterInternals<T> {
+interface RouterInternals<T> {
   matchImpl: ((method: string, path: string) => MatchOutput<T> | null) | undefined;
   matchLayer: MatchLayer | undefined;
   registration: Registration<T>;
@@ -76,12 +69,8 @@ interface CacheContainers<T> {
  * the constructor; the caches and other build-time state live in the
  * closure scope where external code cannot reach them.
  */
-export class Router<T = unknown> implements RouterPublicApi<T> {
-  readonly add: (
-    method: string | readonly string[],
-    path: string,
-    value: T,
-  ) => void;
+class Router<T = unknown> implements RouterPublicApi<T> {
+  readonly add: (method: string | readonly string[], path: string, value: T) => void;
   readonly addAll: (entries: ReadonlyArray<readonly [string, string, T]>) => void;
   readonly build: () => RouterPublicApi<T>;
   match: (method: string, path: string) => MatchOutput<T> | null;
@@ -119,7 +108,7 @@ export class Router<T = unknown> implements RouterPublicApi<T> {
       // exposes matchImpl as a monomorphic call site to JSC. The layer
       // facade keeps allowedMethods cold-path correct.
       this.match = built.matchImpl;
-      this.allowedMethods = (path) => built.matchLayer.allowedMethods(path);
+      this.allowedMethods = path => built.matchLayer.allowedMethods(path);
       // Re-freeze after rebind so the post-build surface stays immutable.
       Object.freeze(this);
     };
@@ -127,11 +116,11 @@ export class Router<T = unknown> implements RouterPublicApi<T> {
     this.add = (method, path, value) => {
       registration.add(method, path, value);
     };
-    this.addAll = (entries) => {
+    this.addAll = entries => {
       registration.addAll(entries);
     };
     this.build = () => {
-      if (!registration.isSealed()) performBuild();
+      if (!registration.isSealed()) {performBuild();}
       // No post-build compactMemory call. The single `Bun.gc(true)` inside
       // performBuild collects the orphan heap synchronously; libpas's
       // scavenger runs every ~300ms on its own and decommits the freed
@@ -165,13 +154,9 @@ export class Router<T = unknown> implements RouterPublicApi<T> {
  *
  * @internal exported for unit tests.
  */
-export function validateCacheSize(rawCacheSize: number | undefined): number {
+function validateCacheSize(rawCacheSize: number | undefined): number {
   const requested = rawCacheSize ?? 1000;
-  if (
-    !Number.isInteger(requested) ||
-    requested < 1 ||
-    requested > 0x4000_0000
-  ) {
+  if (!Number.isInteger(requested) || requested < 1 || requested > 0x4000_0000) {
     throw new RouterError({
       kind: 'router-options-invalid',
       message: `cacheSize must be a positive integer (received: ${String(requested)})`,
@@ -222,7 +207,10 @@ function runBuildPipeline<T>(
 
   let hasAnyStatic = false;
   for (const bucket of r.staticOutputsByMethod) {
-    if (bucket !== undefined) { hasAnyStatic = true; break; }
+    if (bucket !== undefined) {
+      hasAnyStatic = true;
+      break;
+    }
   }
 
   // Pre-allocate per-method hit caches so the hot path can drop its
@@ -291,7 +279,7 @@ function buildMatchConfig<T>(
   // prelude reads this mask to skip walker dispatch entirely when the
   // first path byte is unknown.
   const rootFirstCharMaskByMethod: Array<Int32Array | null> = [];
-  for (let i = 0; i < 32; i++) rootFirstCharMaskByMethod[i] = null;
+  for (let i = 0; i < 32; i++) {rootFirstCharMaskByMethod[i] = null;}
   for (let i = 0; i < r.activeMethodCodes.length; i++) {
     const code = r.activeMethodCodes[i]![1];
     const root = snapshot.segmentTrees[code];
@@ -319,3 +307,6 @@ function buildMatchConfig<T>(
     paramsFactories: r.paramsFactories,
   };
 }
+
+export { ROUTER_INTERNALS_KEY, Router, validateCacheSize };
+export type { RouterInternals };

@@ -1,7 +1,7 @@
 import { describe, test, expect } from 'bun:test';
 
-import { RateLimiter } from '../../src/rate-limiter';
 import { RateLimitAction, Algorithm } from '../../src/enums';
+import { RateLimiter } from '../../src/rate-limiter';
 import { createClock } from '../helpers';
 
 describe('algorithm consistency', () => {
@@ -33,7 +33,7 @@ describe('algorithm consistency', () => {
         clock: clock.now,
       });
 
-      for (let i = 0; i < 8; i++) await limiter.consume('user1');
+      for (let i = 0; i < 8; i++) {await limiter.consume('user1');}
 
       clock.advance(3000);
 
@@ -78,7 +78,7 @@ describe('algorithm consistency', () => {
         clock: clock.now,
       });
 
-      for (let i = 0; i < 5; i++) await limiter.consume('user1');
+      for (let i = 0; i < 5; i++) {await limiter.consume('user1');}
       expect((await limiter.consume('user1')).action).toBe(RateLimitAction.Deny);
 
       // 2x window ensures even SlidingWindow's prev weight fully expires

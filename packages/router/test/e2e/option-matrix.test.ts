@@ -18,7 +18,7 @@ import { Router } from '../../src/router';
 
 describe('trailingSlash: "ignore" × route type', () => {
   it('static: trailing slash variant matches the no-slash route', () => {
-    const r = new Router<string>({ trailingSlash: "ignore" });
+    const r = new Router<string>({ trailingSlash: 'ignore' });
     r.add('GET', '/health', 'h');
     r.build();
 
@@ -27,7 +27,7 @@ describe('trailingSlash: "ignore" × route type', () => {
   });
 
   it('single param: trailing slash trims before match', () => {
-    const r = new Router<string>({ trailingSlash: "ignore" });
+    const r = new Router<string>({ trailingSlash: 'ignore' });
     r.add('GET', '/users/:id', 'u');
     r.build();
 
@@ -36,7 +36,7 @@ describe('trailingSlash: "ignore" × route type', () => {
   });
 
   it('param chain: trailing slash trims', () => {
-    const r = new Router<string>({ trailingSlash: "ignore" });
+    const r = new Router<string>({ trailingSlash: 'ignore' });
     r.add('GET', '/users/:id/posts/:postId', 'p');
     r.build();
 
@@ -71,7 +71,7 @@ describe('trailingSlash: "ignore" × route type', () => {
   });
 
   it('star wildcard at terminal: trailing slash trim leaves empty capture intact', () => {
-    const r = new Router<string>({ trailingSlash: "ignore" });
+    const r = new Router<string>({ trailingSlash: 'ignore' });
     r.add('GET', '/files/*', 'val');
     r.build();
     expect(r.match('GET', '/files/')!.params['*']).toBe('');
@@ -80,7 +80,7 @@ describe('trailingSlash: "ignore" × route type', () => {
 
 describe('trailingSlash: "strict" × route type', () => {
   it('static: trailing slash variant DOES NOT match', () => {
-    const r = new Router<string>({ trailingSlash: "strict" });
+    const r = new Router<string>({ trailingSlash: 'strict' });
     r.add('GET', '/health', 'h');
     r.build();
 
@@ -89,7 +89,7 @@ describe('trailingSlash: "strict" × route type', () => {
   });
 
   it('single param (codegen path): trailing slash on terminal param fails', () => {
-    const r = new Router<string>({ trailingSlash: "strict" });
+    const r = new Router<string>({ trailingSlash: 'strict' });
     r.add('GET', '/users/:id', 'u');
     r.build();
 
@@ -98,7 +98,7 @@ describe('trailingSlash: "strict" × route type', () => {
   });
 
   it('param chain: trailing slash on inner segment fails', () => {
-    const r = new Router<string>({ trailingSlash: "strict" });
+    const r = new Router<string>({ trailingSlash: 'strict' });
     r.add('GET', '/users/:id/posts/:postId', 'p');
     r.build();
 
@@ -107,7 +107,7 @@ describe('trailingSlash: "strict" × route type', () => {
   });
 
   it('star wildcard: empty trailing-slash position captures empty', () => {
-    const r = new Router<string>({ trailingSlash: "strict" });
+    const r = new Router<string>({ trailingSlash: 'strict' });
     r.add('GET', '/files/*p', 'f');
     r.build();
 
@@ -116,7 +116,7 @@ describe('trailingSlash: "strict" × route type', () => {
   });
 
   it('multi wildcard: trailing slash with no content fails', () => {
-    const r = new Router<string>({ trailingSlash: "strict" });
+    const r = new Router<string>({ trailingSlash: 'strict' });
     r.add('GET', '/files/*p+', 'f');
     r.build();
 

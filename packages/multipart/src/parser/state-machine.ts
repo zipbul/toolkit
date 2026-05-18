@@ -1,15 +1,14 @@
 import { isErr } from '@zipbul/result';
 
+import type { AllowedMimeTypes } from '../interfaces';
+import type { ResolvedMultipartOptions } from '../types';
+import type { FileWriter, ParserCallbacks } from './callbacks';
+import type { PartHeaders } from './header-parser';
+
 import { CRLF, CRLFCRLF, EMPTY_BUF, noop } from '../constants';
 import { MultipartErrorReason } from '../enums';
 import { MultipartError } from '../interfaces';
-import type { AllowedMimeTypes } from '../interfaces';
-import type { ResolvedMultipartOptions } from '../types';
-
-import type { FileWriter, ParserCallbacks } from './callbacks';
-import type { PartHeaders } from './header-parser';
 import { parsePartHeaders } from './header-parser';
-
 
 /**
  * FSM states for the multipart parser.
@@ -242,11 +241,7 @@ export async function parseMultipart(
               );
             }
 
-            fileWriter = callbacks.onFileStart(
-              currentHeaders.name,
-              currentHeaders.filename!,
-              currentHeaders.contentType,
-            );
+            fileWriter = callbacks.onFileStart(currentHeaders.name, currentHeaders.filename!, currentHeaders.contentType);
           }
 
           continue;
@@ -375,7 +370,11 @@ export async function parseMultipart(
     }
 
     // Ensure the stream reader is released on any error
-    try { body.cancel().catch(noop); } catch { /* already released */ }
+    try {
+      body.cancel().catch(noop);
+    } catch {
+      /* already released */
+    }
 
     // If consumer has abandoned, swallow the error
     if (callbacks.abandoned) {
@@ -405,7 +404,11 @@ export async function parseMultipart(
       fileWriter = undefined;
     }
 
-    try { body.cancel().catch(noop); } catch { /* ignore */ }
+    try {
+      body.cancel().catch(noop);
+    } catch {
+      /* ignore */
+    }
 
     return;
   }
@@ -445,11 +448,7 @@ function keepTail(buf: Buffer, maxLen: number): Buffer {
 /**
  * Checks projected body size BEFORE allocation to prevent memory spikes.
  */
-function checkBodyLimitProjected(
-  projectedSize: number,
-  headers: PartHeaders,
-  options: ResolvedMultipartOptions,
-): void {
+function checkBodyLimitProjected(projectedSize: number, headers: PartHeaders, options: ResolvedMultipartOptions): void {
   const isFile = headers.filename !== undefined;
 
   if (isFile && projectedSize > options.maxFileSize) {
@@ -486,7 +485,7 @@ function checkAllowedMimeType(
 
   const lower = contentType.split(';', 1)[0]!.trim().toLowerCase();
 
-  if (!allowedTypes.some((t) => lower === t.split(';', 1)[0]!.trim().toLowerCase())) {
+  if (!allowedTypes.some(t => lower === t.split(';', 1)[0]!.trim().toLowerCase())) {
     throw new MultipartError(
       {
         reason: MultipartErrorReason.MimeTypeNotAllowed,

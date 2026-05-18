@@ -5,8 +5,8 @@
  */
 import { describe, expect, it } from 'bun:test';
 
-import { walkSharedSubtree } from './factored';
 import { createMatchState } from '../match-state';
+import { walkSharedSubtree } from './factored';
 import { STORE_NODE } from './test-fixtures';
 
 const STORE = STORE_NODE;

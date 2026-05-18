@@ -6,12 +6,10 @@
  */
 import { describe, expect, it } from 'bun:test';
 
-import {
-  checkDynamicRouteCaps,
-  collectRouteShape,
-} from './registration';
-import { MAX_OPTIONAL_SEGMENTS_PER_ROUTE } from '../builder';
 import type { PathPart } from '../tree';
+
+import { MAX_OPTIONAL_SEGMENTS_PER_ROUTE } from '../builder';
+import { checkDynamicRouteCaps, collectRouteShape } from './registration';
 
 const STATIC_USERS: PathPart = { type: 'static', value: '/users', segments: ['users'] };
 const PARAM_ID: PathPart = { type: 'param', name: 'id', pattern: null, optional: false };

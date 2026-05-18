@@ -14,8 +14,8 @@
  */
 import { describe, it, expect } from 'bun:test';
 
-import { Router } from '../../src/router';
 import { RouterError } from '../../src/error';
+import { Router } from '../../src/router';
 
 describe('optional param at root matches /', () => {
   it('/:id? matches / with id absent', () => {

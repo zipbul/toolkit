@@ -3,10 +3,7 @@ onlyFailures = true
 coverage = true
 coverageReporter = ["text", "lcov"]
 coverageThreshold = 0.95
-coveragePathIgnorePatterns = [
-  "node_modules/**",
-  "dist/**"
-]
+coveragePathIgnorePatterns = ["node_modules/**", "dist/**"]
 
 [test.reporter]
 dots = true

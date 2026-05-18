@@ -60,8 +60,8 @@ router.build();
 const result = router.match('GET', '/users/42');
 
 if (result) {
-  console.log(result.value);       // 'get-user'
-  console.log(result.params.id);   // '42'
+  console.log(result.value); // 'get-user'
+  console.log(result.params.id); // '42'
   console.log(result.meta.source); // 'dynamic'
 }
 ```
@@ -87,8 +87,8 @@ Registers a route. Throws `RouterError` on invalid path, duplicate route, or if 
 
 ```typescript
 router.add('GET', '/users/:id', handler);
-router.add(['GET', 'POST'], '/data', handler);  // multiple methods
-router.add('*', '/health', handler);             // all standard methods
+router.add(['GET', 'POST'], '/data', handler); // multiple methods
+router.add('*', '/health', handler); // all standard methods
 ```
 
 `'*'` expands to `GET / POST / PUT / PATCH / DELETE / OPTIONS / HEAD`.
@@ -101,7 +101,7 @@ Both IRI (raw Unicode) and URI (percent-encoded UTF-8) forms are accepted **at r
 router.add('GET', '/users/한국', handler);
 // Stored internally as `/users/%ED%95%9C%EA%B5%AD`.
 router.match('GET', '/users/%ED%95%9C%EA%B5%AD'); // ✓ matches
-router.match('GET', '/users/한국');                // ✗ does NOT match (see below)
+router.match('GET', '/users/한국'); // ✗ does NOT match (see below)
 ```
 
 > [!IMPORTANT]
@@ -147,19 +147,19 @@ Matches a URL against registered routes. Returns `MatchOutput<T> | null`.
 const result = router.match('GET', '/users/42');
 
 if (result) {
-  result.value;       // T — the registered value
-  result.params;      // Record<string, string | undefined> (null-prototype)
+  result.value; // T — the registered value
+  result.params; // Record<string, string | undefined> (null-prototype)
   result.meta.source; // 'static' | 'cache' | 'dynamic'
 }
 ```
 
 `meta.source` tells the caller how the match was resolved:
 
-| Value | What it means for the caller |
-|:------|:-----|
-| `'static'` | A literal-path route (no params). The returned `MatchOutput` is shared across calls and frozen — do not mutate. `===` identity is preserved across identical hits. |
-| `'cache'` | A previously-resolved dynamic match served from cache. The cached `params` object is frozen and reused across hits — do not mutate, and do not rely on per-call identity. |
-| `'dynamic'` | First-time resolution for a dynamic route. Each call returns a fresh `MatchOutput` with its own `params` object. |
+| Value       | What it means for the caller                                                                                                                                              |
+| :---------- | :------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `'static'`  | A literal-path route (no params). The returned `MatchOutput` is shared across calls and frozen — do not mutate. `===` identity is preserved across identical hits.        |
+| `'cache'`   | A previously-resolved dynamic match served from cache. The cached `params` object is frozen and reused across hits — do not mutate, and do not rely on per-call identity. |
+| `'dynamic'` | First-time resolution for a dynamic route. Each call returns a fresh `MatchOutput` with its own `params` object.                                                          |
 
 ### `router.allowedMethods(path)`
 
@@ -220,19 +220,19 @@ A trailing `?` makes a param optional. Both with-param and without-param URLs ma
 router.add('GET', '/:lang?/docs', handler);
 ```
 
-| `optionalParamBehavior` | `/en/docs` | `/docs` |
-|:------------------------|:-----------|:--------|
-| `'omit'` (default) | `{ lang: 'en' }` | `{}` (key absent) |
-| `'set-undefined'` | `{ lang: 'en' }` | `{ lang: undefined }` (key present) |
+| `optionalParamBehavior` | `/en/docs`       | `/docs`                             |
+| :---------------------- | :--------------- | :---------------------------------- |
+| `'omit'` (default)      | `{ lang: 'en' }` | `{}` (key absent)                   |
+| `'set-undefined'`       | `{ lang: 'en' }` | `{ lang: undefined }` (key present) |
 
 ### Wildcards
 
 Capture the rest of the URL, including slashes. Wildcard values are **not** percent-decoded. Two semantics, two distinct spellings — colon-form sugar (`:name+` / `:name*`) is rejected at parse time:
 
-| Pattern | Semantics | Empty match |
-|:--------|:----------|:------------|
-| `*name`  | Star — match zero or more segments  | `'/files'` against `/files/*path` → `{ path: '' }` |
-| `*name+` | Multi — match one or more segments  | `'/assets'` against `/assets/*file+` → no match |
+| Pattern  | Semantics                          | Empty match                                        |
+| :------- | :--------------------------------- | :------------------------------------------------- |
+| `*name`  | Star — match zero or more segments | `'/files'` against `/files/*path` → `{ path: '' }` |
+| `*name+` | Multi — match one or more segments | `'/assets'` against `/assets/*file+` → no match    |
 
 ```typescript
 router.add('GET', '/files/*path', handler);
@@ -257,12 +257,12 @@ interface RouterOptions {
 }
 ```
 
-| Option | Default | Description |
-|:-------|:--------|:------------|
-| `trailingSlash` | `'ignore'` | `'strict'` keeps `/a` and `/a/` distinct; `'ignore'` collapses one trailing slash on registration and at match time |
-| `pathCaseSensitive` | `true` | `/Users` and `/users` are different routes |
-| `cacheSize` | `1000` | Per-method hit-cache capacity (rounded up to next power of two; bounded approximate-LRU eviction). Positive integer in `[1, 2³⁰]` |
-| `optionalParamBehavior` | `'omit'` | Shape of `params` when an optional param is missing — `'omit'` drops the key, `'set-undefined'` writes `undefined` |
+| Option                  | Default    | Description                                                                                                                       |
+| :---------------------- | :--------- | :-------------------------------------------------------------------------------------------------------------------------------- |
+| `trailingSlash`         | `'ignore'` | `'strict'` keeps `/a` and `/a/` distinct; `'ignore'` collapses one trailing slash on registration and at match time               |
+| `pathCaseSensitive`     | `true`     | `/Users` and `/users` are different routes                                                                                        |
+| `cacheSize`             | `1000`     | Per-method hit-cache capacity (rounded up to next power of two; bounded approximate-LRU eviction). Positive integer in `[1, 2³⁰]` |
+| `optionalParamBehavior` | `'omit'`   | Shape of `params` when an optional param is missing — `'omit'` drops the key, `'set-undefined'` writes `undefined`                |
 
 Notes:
 
@@ -299,12 +299,12 @@ Validation options:
 
 ## 🚨 Error Handling
 
-| Method | Throws | Returns |
-|:---|:---|:---|
-| `add()` / `addAll()` | `RouterError` on invalid path, conflict, or sealed router | `void` |
-| `build()` | `RouterError({ kind: 'route-validation' })` listing every per-route failure | `this` |
-| `match()` | `URIError` if a captured param's `%xx` is malformed — wrap in `try / catch` to map to `400 Bad Request` | `MatchOutput<T> \| null` |
-| `allowedMethods()` | Never throws | `readonly string[]` |
+| Method               | Throws                                                                                                  | Returns                  |
+| :------------------- | :------------------------------------------------------------------------------------------------------ | :----------------------- |
+| `add()` / `addAll()` | `RouterError` on invalid path, conflict, or sealed router                                               | `void`                   |
+| `build()`            | `RouterError({ kind: 'route-validation' })` listing every per-route failure                             | `this`                   |
+| `match()`            | `URIError` if a captured param's `%xx` is malformed — wrap in `try / catch` to map to `400 Bad Request` | `MatchOutput<T> \| null` |
+| `allowedMethods()`   | Never throws                                                                                            | `readonly string[]`      |
 
 Every `RouterError` carries a structured `data` object — narrow on `data.kind` (discriminated union) to access kind-specific fields like `segment`, `conflictsWith`, `suggestion`, `path`, `method`.
 
@@ -315,44 +315,44 @@ try {
   router.add('GET', '/bad/(unmatched', handler);
 } catch (e) {
   if (e instanceof RouterError) {
-    e.data.kind;       // RouterErrorKind — discriminant
-    e.data.message;    // Human-readable description
-    e.data.path;       // The problematic path (when applicable)
-    e.data.method;     // The HTTP method (when applicable)
+    e.data.kind; // RouterErrorKind — discriminant
+    e.data.message; // Human-readable description
+    e.data.path; // The problematic path (when applicable)
+    e.data.method; // The HTTP method (when applicable)
   }
 }
 ```
 
 ### Error Kinds
 
-| Kind | When |
-|:-----|:-----|
-| `'router-sealed'` | `add()` / `addAll()` called after `build()` |
-| `'route-duplicate'` | Same `(method, path)` already registered |
-| `'route-conflict'` | Structural conflict — e.g. registering `/files/*a` then `/files/*b` for the same method, or registering `/files/x` after `/files/*path` |
-| `'route-unreachable'` | A new route would be shadowed by an existing wildcard / terminal at the same prefix — e.g. registering `/files/list` after `/files/*path` for the same method |
-| `'route-parse'` | Invalid path syntax (no leading slash, unclosed regex group, illegal char in param name, etc.) |
-| `'param-duplicate'` | Same param name appears twice in one path (`/x/:id/y/:id`) |
-| `'method-limit'` | More than 32 distinct HTTP methods registered |
-| `'method-empty'` / `'method-invalid-token'` | Method token violates the HTTP token grammar (RFC 9110 §5.6.2) |
-| `'path-missing-leading-slash'` / `'path-query'` / `'path-fragment'` / `'path-control-char'` / `'path-invalid-pchar'` / `'path-malformed-percent'` / `'path-invalid-utf8'` / `'path-encoded-slash'` / `'path-dot-segment'` / `'path-empty-segment'` | The registered path violates the router-grammar / RFC-conformance gate at registration time |
-| `'router-options-invalid'` | A `RouterOptions` field failed validation (e.g. `cacheSize` outside `[1, 2³⁰]`) |
-| `'route-validation'` | One or more routes failed validation during `build()` — `data.errors` lists each per-route failure |
+| Kind                                                                                                                                                                                                                                               | When                                                                                                                                                          |
+| :------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | :------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `'router-sealed'`                                                                                                                                                                                                                                  | `add()` / `addAll()` called after `build()`                                                                                                                   |
+| `'route-duplicate'`                                                                                                                                                                                                                                | Same `(method, path)` already registered                                                                                                                      |
+| `'route-conflict'`                                                                                                                                                                                                                                 | Structural conflict — e.g. registering `/files/*a` then `/files/*b` for the same method, or registering `/files/x` after `/files/*path`                       |
+| `'route-unreachable'`                                                                                                                                                                                                                              | A new route would be shadowed by an existing wildcard / terminal at the same prefix — e.g. registering `/files/list` after `/files/*path` for the same method |
+| `'route-parse'`                                                                                                                                                                                                                                    | Invalid path syntax (no leading slash, unclosed regex group, illegal char in param name, etc.)                                                                |
+| `'param-duplicate'`                                                                                                                                                                                                                                | Same param name appears twice in one path (`/x/:id/y/:id`)                                                                                                    |
+| `'method-limit'`                                                                                                                                                                                                                                   | More than 32 distinct HTTP methods registered                                                                                                                 |
+| `'method-empty'` / `'method-invalid-token'`                                                                                                                                                                                                        | Method token violates the HTTP token grammar (RFC 9110 §5.6.2)                                                                                                |
+| `'path-missing-leading-slash'` / `'path-query'` / `'path-fragment'` / `'path-control-char'` / `'path-invalid-pchar'` / `'path-malformed-percent'` / `'path-invalid-utf8'` / `'path-encoded-slash'` / `'path-dot-segment'` / `'path-empty-segment'` | The registered path violates the router-grammar / RFC-conformance gate at registration time                                                                   |
+| `'router-options-invalid'`                                                                                                                                                                                                                         | A `RouterOptions` field failed validation (e.g. `cacheSize` outside `[1, 2³⁰]`)                                                                               |
+| `'route-validation'`                                                                                                                                                                                                                               | One or more routes failed validation during `build()` — `data.errors` lists each per-route failure                                                            |
 
 ### Conflict examples
 
 ```typescript
 // Cross-method coexistence is allowed
-router.add('GET',  '/files/*path', getHandler);
-router.add('POST', '/files/*upload', postHandler);  // ok
+router.add('GET', '/files/*path', getHandler);
+router.add('POST', '/files/*upload', postHandler); // ok
 
 // Same-method wildcard rename: route-conflict
-router.add('GET',  '/files/*path', getHandler);
-router.add('GET',  '/files/*upload', anotherHandler); // throws
+router.add('GET', '/files/*path', getHandler);
+router.add('GET', '/files/*upload', anotherHandler); // throws
 
 // Static under wildcard prefix: route-conflict
-router.add('GET',  '/files/*path', getHandler);
-router.add('GET',  '/files/list', listHandler);       // throws
+router.add('GET', '/files/*path', getHandler);
+router.add('GET', '/files/list', listHandler); // throws
 ```
 
 ---
@@ -368,9 +368,9 @@ import { Router } from '@zipbul/router';
 type Handler = (params: Record<string, string | undefined>) => Response;
 
 const router = new Router<Handler>();
-router.add('GET',  '/users',     () => Response.json({ users: [] }));
-router.add('GET',  '/users/:id', (p) => Response.json({ id: p.id }));
-router.add('POST', '/users',     () => new Response('Created', { status: 201 }));
+router.add('GET', '/users', () => Response.json({ users: [] }));
+router.add('GET', '/users/:id', p => Response.json({ id: p.id }));
+router.add('POST', '/users', () => new Response('Created', { status: 201 }));
 router.build();
 
 Bun.serve({
@@ -405,13 +405,13 @@ Bun.serve({
 
 Indicative hot-path numbers (Bun 1.3.13, Linux x64):
 
-| Workload | Range |
-|:---|---:|
-| `build()` — 100 routes | ~2 ms |
-| `build()` — 10 000 routes | ~25 ms |
-| `match()` — hit / static | single-digit ns |
-| `match()` — hit / dynamic (warm cache) | ~10 ns |
-| `match()` — miss / wrong method | ~3 ns |
+| Workload                               |           Range |
+| :------------------------------------- | --------------: |
+| `build()` — 100 routes                 |           ~2 ms |
+| `build()` — 10 000 routes              |          ~25 ms |
+| `match()` — hit / static               | single-digit ns |
+| `match()` — hit / dynamic (warm cache) |          ~10 ns |
+| `match()` — miss / wrong method        |           ~3 ns |
 
 Head-to-head against `memoirist`, `find-my-way`, `rou3`, `hono` (RegExp + Trie), and `koa-tree-router`, `@zipbul/router` leads on every successful-match scenario and ties or wins most miss / wrong-method cases.
 

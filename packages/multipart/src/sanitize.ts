@@ -42,10 +42,7 @@ const WINDOWS_RESERVED_RE = /^(con|prn|aux|nul|com\d|lpt\d)$/i;
  * sanitizeFilename('...')                  // undefined
  * ```
  */
-export function sanitizeFilename(
-  filename: string,
-  options?: SanitizeFilenameOptions,
-): string | undefined {
+export function sanitizeFilename(filename: string, options?: SanitizeFilenameOptions): string | undefined {
   const maxLength = options?.maxLength ?? 255;
   const replacement = options?.replacement ?? '_';
 

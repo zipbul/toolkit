@@ -72,27 +72,27 @@ const { fields, files } = await mp.parseAll(request);
 
 ```typescript
 interface MultipartOptions {
-  maxFileSize?: number;              // 기본값: 10 MiB
-  maxFiles?: number;                 // 기본값: 10
-  maxFieldSize?: number;             // 기본값: 1 MiB
-  maxFields?: number;                // 기본값: 100
-  maxHeaderSize?: number;            // 기본값: 8 KiB
-  maxTotalSize?: number | null;      // 기본값: 50 MiB (null = 무제한)
-  maxParts?: number;                 // 기본값: Infinity
+  maxFileSize?: number; // 기본값: 10 MiB
+  maxFiles?: number; // 기본값: 10
+  maxFieldSize?: number; // 기본값: 1 MiB
+  maxFields?: number; // 기본값: 100
+  maxHeaderSize?: number; // 기본값: 8 KiB
+  maxTotalSize?: number | null; // 기본값: 50 MiB (null = 무제한)
+  maxParts?: number; // 기본값: Infinity
   allowedMimeTypes?: AllowedMimeTypes; // 기본값: undefined (제한 없음)
 }
 ```
 
-| 옵션 | 기본값 | 설명 |
-|:-----|:-------|:-----|
-| `maxFileSize` | `10 * 1024 * 1024` | 단일 파일 파트의 최대 크기 (바이트) |
-| `maxFiles` | `10` | 최대 파일 파트 수 |
-| `maxFieldSize` | `1 * 1024 * 1024` | 단일 필드 파트의 최대 크기 (바이트) |
-| `maxFields` | `100` | 최대 필드 파트 수 |
-| `maxHeaderSize` | `8 * 1024` | 파트 헤더의 최대 크기 (바이트) |
-| `maxTotalSize` | `50 * 1024 * 1024` | 전체 본문의 최대 크기. `null`이면 무제한 |
-| `maxParts` | `Infinity` | 전체 파트 수 최대값 (필드 + 파일) |
-| `allowedMimeTypes` | `undefined` | 필드별 파일 MIME 타입 허용 목록 |
+| 옵션               | 기본값             | 설명                                     |
+| :----------------- | :----------------- | :--------------------------------------- |
+| `maxFileSize`      | `10 * 1024 * 1024` | 단일 파일 파트의 최대 크기 (바이트)      |
+| `maxFiles`         | `10`               | 최대 파일 파트 수                        |
+| `maxFieldSize`     | `1 * 1024 * 1024`  | 단일 필드 파트의 최대 크기 (바이트)      |
+| `maxFields`        | `100`              | 최대 필드 파트 수                        |
+| `maxHeaderSize`    | `8 * 1024`         | 파트 헤더의 최대 크기 (바이트)           |
+| `maxTotalSize`     | `50 * 1024 * 1024` | 전체 본문의 최대 크기. `null`이면 무제한 |
+| `maxParts`         | `Infinity`         | 전체 파트 수 최대값 (필드 + 파일)        |
+| `allowedMimeTypes` | `undefined`        | 필드별 파일 MIME 타입 허용 목록          |
 
 ### `allowedMimeTypes`
 
@@ -162,29 +162,29 @@ const avatars = files.get('avatar') ?? [];
 
 #### 공통 속성
 
-| 속성 | 타입 | 설명 |
-|:----|:-----|:-----|
-| `name` | `string` | `Content-Disposition`의 필드 이름 |
-| `filename` | `string \| undefined` | 원본 파일명 (파일 파트에만 존재) |
-| `contentType` | `string` | 파트의 Content-Type |
-| `isFile` | `boolean` | 파일 파트이면 `true`, 필드 파트이면 `false` |
+| 속성          | 타입                  | 설명                                        |
+| :------------ | :-------------------- | :------------------------------------------ |
+| `name`        | `string`              | `Content-Disposition`의 필드 이름           |
+| `filename`    | `string \| undefined` | 원본 파일명 (파일 파트에만 존재)            |
+| `contentType` | `string`              | 파트의 Content-Type                         |
+| `isFile`      | `boolean`             | 파일 파트이면 `true`, 필드 파트이면 `false` |
 
 #### `MultipartField` (isFile: false)
 
-| 메서드 | 반환 타입 | 설명 |
-|:------|:---------|:-----|
-| `text()` | `string` | UTF-8로 디코딩한 본문 (동기) |
-| `bytes()` | `Uint8Array` | 원본 바이트 (동기) |
+| 메서드    | 반환 타입    | 설명                         |
+| :-------- | :----------- | :--------------------------- |
+| `text()`  | `string`     | UTF-8로 디코딩한 본문 (동기) |
+| `bytes()` | `Uint8Array` | 원본 바이트 (동기)           |
 
 #### `MultipartFile` (isFile: true)
 
-| 메서드 | 반환 타입 | 설명 |
-|:------|:---------|:-----|
-| `stream()` | `ReadableStream<Uint8Array>` | 배압을 지원하는 읽기 스트림 |
-| `bytes()` | `Promise<Uint8Array>` | 전체 스트림을 바이트로 읽기 |
-| `text()` | `Promise<string>` | 전체 스트림을 UTF-8 문자열로 읽기 |
-| `arrayBuffer()` | `Promise<ArrayBuffer>` | 전체 스트림을 ArrayBuffer로 읽기 |
-| `saveTo(path)` | `Promise<number>` | `Bun.write`로 디스크에 저장. 기록한 바이트 수 반환 |
+| 메서드          | 반환 타입                    | 설명                                               |
+| :-------------- | :--------------------------- | :------------------------------------------------- |
+| `stream()`      | `ReadableStream<Uint8Array>` | 배압을 지원하는 읽기 스트림                        |
+| `bytes()`       | `Promise<Uint8Array>`        | 전체 스트림을 바이트로 읽기                        |
+| `text()`        | `Promise<string>`            | 전체 스트림을 UTF-8 문자열로 읽기                  |
+| `arrayBuffer()` | `Promise<ArrayBuffer>`       | 전체 스트림을 ArrayBuffer로 읽기                   |
+| `saveTo(path)`  | `Promise<number>`            | `Bun.write`로 디스크에 저장. 기록한 바이트 수 반환 |
 
 > `stream()`은 파일 파트당 한 번만 호출할 수 있습니다. 두 번째 호출이나 `stream()` 이후 `bytes()`/`text()` 호출은 에러를 throw합니다.
 
@@ -193,15 +193,16 @@ const avatars = files.get('avatar') ?? [];
 사용자가 제공한 파일명을 안전한 파일 시스템용으로 변환합니다. 빈 문자열이나 유효하지 않은 파일명은 `undefined`를 반환합니다.
 
 ```typescript
-sanitizeFilename('../../etc/passwd')     // 'passwd'
-sanitizeFilename('C:\\Users\\file.txt')  // 'file.txt'
-sanitizeFilename('photo<1>.jpg')         // 'photo_1_.jpg'
-sanitizeFilename('.hidden')              // 'hidden'
-sanitizeFilename('')                     // undefined
-sanitizeFilename('CON.txt')             // undefined (Windows 예약 이름)
+sanitizeFilename('../../etc/passwd'); // 'passwd'
+sanitizeFilename('C:\\Users\\file.txt'); // 'file.txt'
+sanitizeFilename('photo<1>.jpg'); // 'photo_1_.jpg'
+sanitizeFilename('.hidden'); // 'hidden'
+sanitizeFilename(''); // undefined
+sanitizeFilename('CON.txt'); // undefined (Windows 예약 이름)
 ```
 
 수행하는 작업:
+
 - 디렉터리 구성 요소 제거 (경로 탐색 방지)
 - 널 바이트 및 제어 문자 제거
 - 안전하지 않은 특수 문자 치환 (`<>:"/\|?*`)
@@ -209,10 +210,10 @@ sanitizeFilename('CON.txt')             // undefined (Windows 예약 이름)
 - Windows 예약 이름 거부 (CON, PRN, AUX, NUL, COM1-9, LPT1-9)
 - 최대 파일명 길이 적용 (확장자 보존)
 
-| 옵션 | 기본값 | 설명 |
-|:----|:-------|:-----|
-| `maxLength` | `255` | 변환 후 파일명의 최대 길이 |
-| `replacement` | `'_'` | 안전하지 않은 문자를 대체할 문자 |
+| 옵션          | 기본값 | 설명                             |
+| :------------ | :----- | :------------------------------- |
+| `maxLength`   | `255`  | 변환 후 파일명의 최대 길이       |
+| `replacement` | `'_'`  | 안전하지 않은 문자를 대체할 문자 |
 
 > **`filename` 보안 주의:** 파일 파트의 `filename` 속성은 `Content-Disposition` 헤더의 값을 그대로 반환합니다. `../../etc/passwd`와 같은 경로 탐색 시퀀스나 `C:\Users\file.txt`과 같은 Windows 경로를 포함할 수 있습니다. 파일 시스템 작업에 사용하기 전에 반드시 `sanitizeFilename()`으로 변환하세요. `filename*=` 파라미터(RFC 5987)는 RFC 7578 Section 4.2에 따라 의도적으로 무시됩니다.
 
@@ -226,44 +227,46 @@ sanitizeFilename('CON.txt')             // undefined (Windows 예약 이름)
 import { MultipartError, MultipartErrorReason } from '@zipbul/multipart';
 
 try {
-  for await (const part of mp.parse(request)) { /* ... */ }
+  for await (const part of mp.parse(request)) {
+    /* ... */
+  }
 } catch (e) {
   if (e instanceof MultipartError) {
-    e.reason;   // MultipartErrorReason 열거형 값
-    e.message;  // 사람이 읽을 수 있는 설명
-    e.context;  // { partIndex?, fieldName?, bytesRead? }
-    e.cause;    // 원본 에러 (스트림 실패 시)
+    e.reason; // MultipartErrorReason 열거형 값
+    e.message; // 사람이 읽을 수 있는 설명
+    e.context; // { partIndex?, fieldName?, bytesRead? }
+    e.cause; // 원본 에러 (스트림 실패 시)
   }
 }
 ```
 
 ### `MultipartErrorReason`
 
-| 사유 | 발생 위치 | 설명 |
-|:----|:---------|:-----|
-| `InvalidOptions` | `create()` | 잘못된 옵션 |
-| `MissingBody` | `parse()` / `parseAll()` | 요청 본문이 없거나 null |
-| `InvalidContentType` | `parse()` / `parseAll()` | Content-Type이 없거나 `multipart/form-data`가 아님 |
-| `MissingBoundary` | `parse()` / `parseAll()` | 바운더리 파라미터가 없거나 너무 긴 경우 (최대 70자) |
-| `MalformedHeader` | `parse()` / `parseAll()` | 잘못된 파트 헤더 (Content-Disposition 누락 등) |
-| `HeaderTooLarge` | `parse()` / `parseAll()` | 파트 헤더가 `maxHeaderSize` 초과 |
-| `FileTooLarge` | `parse()` / `parseAll()` | 파일 파트가 `maxFileSize` 초과 |
-| `FieldTooLarge` | `parse()` / `parseAll()` | 필드 파트가 `maxFieldSize` 초과 |
-| `TooManyFiles` | `parse()` / `parseAll()` | 파일 수가 `maxFiles` 초과 |
-| `TooManyFields` | `parse()` / `parseAll()` | 필드 수가 `maxFields` 초과 |
-| `TooManyParts` | `parse()` / `parseAll()` | 전체 파트 수 (필드 + 파일)가 `maxParts` 초과 |
-| `TotalSizeLimitExceeded` | `parse()` / `parseAll()` | 전체 본문 크기가 `maxTotalSize` 초과 |
-| `MimeTypeNotAllowed` | `parse()` / `parseAll()` | 파일 MIME 타입이 해당 필드의 `allowedMimeTypes`에 없음 |
-| `UnexpectedEnd` | `parse()` / `parseAll()` | 최종 바운더리 전에 스트림 종료 |
+| 사유                     | 발생 위치                | 설명                                                   |
+| :----------------------- | :----------------------- | :----------------------------------------------------- |
+| `InvalidOptions`         | `create()`               | 잘못된 옵션                                            |
+| `MissingBody`            | `parse()` / `parseAll()` | 요청 본문이 없거나 null                                |
+| `InvalidContentType`     | `parse()` / `parseAll()` | Content-Type이 없거나 `multipart/form-data`가 아님     |
+| `MissingBoundary`        | `parse()` / `parseAll()` | 바운더리 파라미터가 없거나 너무 긴 경우 (최대 70자)    |
+| `MalformedHeader`        | `parse()` / `parseAll()` | 잘못된 파트 헤더 (Content-Disposition 누락 등)         |
+| `HeaderTooLarge`         | `parse()` / `parseAll()` | 파트 헤더가 `maxHeaderSize` 초과                       |
+| `FileTooLarge`           | `parse()` / `parseAll()` | 파일 파트가 `maxFileSize` 초과                         |
+| `FieldTooLarge`          | `parse()` / `parseAll()` | 필드 파트가 `maxFieldSize` 초과                        |
+| `TooManyFiles`           | `parse()` / `parseAll()` | 파일 수가 `maxFiles` 초과                              |
+| `TooManyFields`          | `parse()` / `parseAll()` | 필드 수가 `maxFields` 초과                             |
+| `TooManyParts`           | `parse()` / `parseAll()` | 전체 파트 수 (필드 + 파일)가 `maxParts` 초과           |
+| `TotalSizeLimitExceeded` | `parse()` / `parseAll()` | 전체 본문 크기가 `maxTotalSize` 초과                   |
+| `MimeTypeNotAllowed`     | `parse()` / `parseAll()` | 파일 MIME 타입이 해당 필드의 `allowedMimeTypes`에 없음 |
+| `UnexpectedEnd`          | `parse()` / `parseAll()` | 최종 바운더리 전에 스트림 종료                         |
 
 ### `MultipartErrorContext`
 
 에러에는 추가 정보를 담은 선택적 `context` 객체가 포함됩니다:
 
-| 속성 | 타입 | 설명 |
-|:----|:-----|:-----|
-| `partIndex` | `number?` | 에러가 발생한 파트의 0-기반 인덱스 |
-| `fieldName` | `string?` | 해당 파트의 필드 이름 (알 수 있는 경우) |
+| 속성        | 타입      | 설명                                       |
+| :---------- | :-------- | :----------------------------------------- |
+| `partIndex` | `number?` | 에러가 발생한 파트의 0-기반 인덱스         |
+| `fieldName` | `string?` | 해당 파트의 필드 이름 (알 수 있는 경우)    |
 | `bytesRead` | `number?` | 에러 시점까지 스트림에서 읽은 총 바이트 수 |
 
 <br>
@@ -319,7 +322,7 @@ import { Multipart, sanitizeFilename } from '@zipbul/multipart';
 
 const mp = Multipart.create({
   maxFileSize: 100 * 1024 * 1024, // 파일당 100 MiB
-  maxTotalSize: null,             // 전체 제한 없음
+  maxTotalSize: null, // 전체 제한 없음
 });
 
 Bun.serve({

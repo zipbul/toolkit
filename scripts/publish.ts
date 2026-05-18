@@ -40,17 +40,17 @@ for (const entry of entries) {
     continue;
   }
 
-  if (!raw.includes('workspace:')) continue;
+  if (!raw.includes('workspace:')) {continue;}
 
   const pkg = JSON.parse(raw);
   let changed = false;
 
   for (const depField of ['dependencies', 'devDependencies', 'peerDependencies'] as const) {
     const deps = pkg[depField];
-    if (!deps) continue;
+    if (!deps) {continue;}
 
     for (const [name, range] of Object.entries(deps)) {
-      if (typeof range !== 'string' || !range.startsWith('workspace:')) continue;
+      if (typeof range !== 'string' || !range.startsWith('workspace:')) {continue;}
 
       const realVersion = versionMap.get(name);
       if (!realVersion) {
@@ -77,7 +77,7 @@ for (const entry of entries) {
   const pkgJsonPath = join(packagesDir, entry, 'package.json');
   try {
     const pkg = JSON.parse(await readFile(pkgJsonPath, 'utf8'));
-    if (pkg.private) continue;
+    if (pkg.private) {continue;}
     await writeFile(join(packagesDir, entry, 'LICENSE'), license);
     console.log(`Copied LICENSE to ${pkg.name}`);
   } catch {

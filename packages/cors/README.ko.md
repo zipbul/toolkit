@@ -80,28 +80,28 @@ async function handleRequest(request: Request): Promise<Response> {
 
 ```typescript
 interface CorsOptions {
-  origin?: OriginOptions;              // 기본값: '*'
-  methods?: HttpMethod[];              // 기본값: GET, HEAD, PUT, PATCH, POST, DELETE
-  allowedHeaders?: string[];           // 기본값: 요청의 ACRH 반영
-  exposedHeaders?: string[];           // 기본값: 없음
-  credentials?: boolean;               // 기본값: false
-  maxAge?: number;                     // 기본값: 없음 (헤더 미포함)
-  preflightContinue?: boolean;         // 기본값: false
-  optionsSuccessStatus?: number;       // 기본값: 204
+  origin?: OriginOptions; // 기본값: '*'
+  methods?: HttpMethod[]; // 기본값: GET, HEAD, PUT, PATCH, POST, DELETE
+  allowedHeaders?: string[]; // 기본값: 요청의 ACRH 반영
+  exposedHeaders?: string[]; // 기본값: 없음
+  credentials?: boolean; // 기본값: false
+  maxAge?: number; // 기본값: 없음 (헤더 미포함)
+  preflightContinue?: boolean; // 기본값: false
+  optionsSuccessStatus?: number; // 기본값: 204
 }
 ```
 
 ### `origin`
 
-| 값 | 동작 |
-|:---|:---|
-| `'*'` _(기본)_ | 모든 출처 허용 |
-| `false` | 모든 출처 거부 |
-| `true` | 요청 출처를 그대로 반영 |
-| `'https://example.com'` | 정확히 일치하는 출처만 허용 |
-| `/^https:\/\/(.+\.)?example\.com$/` | 정규식 매칭 |
-| `['https://a.com', /^https:\/\/b\./]` | 배열 (문자열·정규식 혼합) |
-| `(origin, request) => boolean \| string` | 함수 (동기·비동기) |
+| 값                                       | 동작                        |
+| :--------------------------------------- | :-------------------------- |
+| `'*'` _(기본)_                           | 모든 출처 허용              |
+| `false`                                  | 모든 출처 거부              |
+| `true`                                   | 요청 출처를 그대로 반영     |
+| `'https://example.com'`                  | 정확히 일치하는 출처만 허용 |
+| `/^https:\/\/(.+\.)?example\.com$/`      | 정규식 매칭                 |
+| `['https://a.com', /^https:\/\/b\./]`    | 배열 (문자열·정규식 혼합)   |
+| `(origin, request) => boolean \| string` | 함수 (동기·비동기)          |
 
 > `credentials: true`일 때 `origin: '*'`는 **검증 오류**를 발생시킵니다. 요청 출처를 반영하려면 `origin: true`를 사용하세요.
 >
@@ -175,7 +175,10 @@ Cors.create({ maxAge: 86400 }); // 24시간
 #### `CorsContinueResult`
 
 ```typescript
-{ action: CorsAction.Continue; headers: Headers }
+{
+  action: CorsAction.Continue;
+  headers: Headers;
+}
 ```
 
 일반 요청(비-OPTIONS) 또는 `preflightContinue: true`인 프리플라이트에서 반환됩니다. `headers`를 응답에 직접 병합하세요.
@@ -183,7 +186,11 @@ Cors.create({ maxAge: 86400 }); // 24시간
 #### `CorsPreflightResult`
 
 ```typescript
-{ action: CorsAction.RespondPreflight; headers: Headers; statusCode: number }
+{
+  action: CorsAction.RespondPreflight;
+  headers: Headers;
+  statusCode: number;
+}
 ```
 
 `OPTIONS` + `Access-Control-Request-Method`가 포함된 프리플라이트에서 반환됩니다. `headers`와 `statusCode`를 사용하여 응답을 직접 구성합니다.
@@ -191,31 +198,34 @@ Cors.create({ maxAge: 86400 }); // 24시간
 #### `CorsRejectResult`
 
 ```typescript
-{ action: CorsAction.Reject; reason: CorsRejectionReason }
+{
+  action: CorsAction.Reject;
+  reason: CorsRejectionReason;
+}
 ```
 
 CORS 검증 실패 시 반환됩니다. `reason`으로 상세한 에러 응답을 구성할 수 있습니다.
 
-| `CorsRejectionReason` | 의미 |
-|:---|:---|
-| `NoOrigin` | `Origin` 헤더 없음 또는 빈 문자열 |
-| `OriginNotAllowed` | 출처가 허용 목록에 없음 |
-| `MethodNotAllowed` | 요청 메서드가 허용 목록에 없음 |
-| `HeaderNotAllowed` | 요청 헤더가 허용 목록에 없음 |
+| `CorsRejectionReason` | 의미                              |
+| :-------------------- | :-------------------------------- |
+| `NoOrigin`            | `Origin` 헤더 없음 또는 빈 문자열 |
+| `OriginNotAllowed`    | 출처가 허용 목록에 없음           |
+| `MethodNotAllowed`    | 요청 메서드가 허용 목록에 없음    |
+| `HeaderNotAllowed`    | 요청 헤더가 허용 목록에 없음      |
 
 `Cors.create()`는 옵션 검증 실패 시 `CorsError`를 throw합니다:
 
-| `CorsErrorReason` | 의미 |
-|:------------------|:--------|
-| `CredentialsWithWildcardOrigin` | `credentials:true` + `origin:'*'` 조합 불가 (Fetch Standard §3.3.5) |
-| `InvalidMaxAge` | `maxAge`가 음수가 아닌 정수가 아님 (RFC 9111 §1.2.1) |
-| `InvalidStatusCode` | `optionsSuccessStatus`가 2xx 정수가 아님 |
-| `InvalidOrigin` | `origin`이 빈/공백 문자열, 빈 배열, 또는 배열 내 빈/공백 요소 (RFC 6454) |
-| `InvalidMethods` | `methods`가 빈 배열이거나 빈/공백 요소 포함 (RFC 9110 §5.6.2) |
-| `InvalidAllowedHeaders` | `allowedHeaders`에 빈/공백 요소 포함 (RFC 9110 §5.6.2) |
-| `InvalidExposedHeaders` | `exposedHeaders`에 빈/공백 요소 포함 (RFC 9110 §5.6.2) |
-| `OriginFunctionError` | 런타임에 origin 함수가 예외를 오발 |
-| `UnsafeRegExp` | origin RegExp이 지수적 역추적 위험(ReDoS)을 가짐 |
+| `CorsErrorReason`               | 의미                                                                     |
+| :------------------------------ | :----------------------------------------------------------------------- |
+| `CredentialsWithWildcardOrigin` | `credentials:true` + `origin:'*'` 조합 불가 (Fetch Standard §3.3.5)      |
+| `InvalidMaxAge`                 | `maxAge`가 음수가 아닌 정수가 아님 (RFC 9111 §1.2.1)                     |
+| `InvalidStatusCode`             | `optionsSuccessStatus`가 2xx 정수가 아님                                 |
+| `InvalidOrigin`                 | `origin`이 빈/공백 문자열, 빈 배열, 또는 배열 내 빈/공백 요소 (RFC 6454) |
+| `InvalidMethods`                | `methods`가 빈 배열이거나 빈/공백 요소 포함 (RFC 9110 §5.6.2)            |
+| `InvalidAllowedHeaders`         | `allowedHeaders`에 빈/공백 요소 포함 (RFC 9110 §5.6.2)                   |
+| `InvalidExposedHeaders`         | `exposedHeaders`에 빈/공백 요소 포함 (RFC 9110 §5.6.2)                   |
+| `OriginFunctionError`           | 런타임에 origin 함수가 예외를 오발                                       |
+| `UnsafeRegExp`                  | origin RegExp이 지수적 역추적 위험(ReDoS)을 가짐                         |
 
 <br>
 
@@ -229,11 +239,7 @@ Cors.create({ origin: 'https://app.example.com' });
 
 // 여러 출처 (문자열 + 정규식 혼합)
 Cors.create({
-  origin: [
-    'https://app.example.com',
-    'https://admin.example.com',
-    /^https:\/\/preview-\d+\.example\.com$/,
-  ],
+  origin: ['https://app.example.com', 'https://admin.example.com', /^https:\/\/preview-\d+\.example\.com$/],
 });
 
 // 정규식으로 서브도메인 전체 허용
@@ -265,12 +271,12 @@ Cors.create({
 Fetch Standard에 따라 인증 요청(쿠키·`Authorization`)에는 와일드카드(`*`)를 사용할 수 없습니다.
 `credentials: true`일 때 라이브러리가 자동으로 처리하는 항목은 다음과 같습니다.
 
-| 옵션 | 와일드카드 시 동작 |
-|:---|:---|
-| `origin: '*'` | **검증 오류** — `origin: true`를 사용하여 요청 출처를 반영하세요 |
-| `methods: ['*']` | 요청 메서드를 그대로 반영 |
-| `allowedHeaders: ['*']` | 요청 헤더를 그대로 반영 |
-| `exposedHeaders: ['*']` | `Access-Control-Expose-Headers` 미설정 |
+| 옵션                    | 와일드카드 시 동작                                               |
+| :---------------------- | :--------------------------------------------------------------- |
+| `origin: '*'`           | **검증 오류** — `origin: true`를 사용하여 요청 출처를 반영하세요 |
+| `methods: ['*']`        | 요청 메서드를 그대로 반영                                        |
+| `allowedHeaders: ['*']` | 요청 헤더를 그대로 반영                                          |
+| `exposedHeaders: ['*']` | `Access-Control-Expose-Headers` 미설정                           |
 
 ```typescript
 // ✅ origin: true + credentials: true → 요청 origin 자동 반영
@@ -329,10 +335,10 @@ Bun.serve({
     const result = await cors.handle(request);
 
     if (result.action === CorsAction.Reject) {
-      return new Response(
-        JSON.stringify({ error: 'CORS policy violation', reason: result.reason }),
-        { status: 403, headers: { 'Content-Type': 'application/json' } },
-      );
+      return new Response(JSON.stringify({ error: 'CORS policy violation', reason: result.reason }), {
+        status: 403,
+        headers: { 'Content-Type': 'application/json' },
+      });
     }
 
     if (result.action === CorsAction.RespondPreflight) {

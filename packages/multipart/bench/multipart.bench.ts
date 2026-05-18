@@ -1,16 +1,14 @@
 import { bench, group, run } from 'mitata';
 
-import { Multipart } from '../src/multipart';
-import { parseMultipart, BufferingCallbacks, StreamingCallbacks, PartQueue } from '../src/parser';
-import { resolveMultipartOptions } from '../src/options';
 import type { MultipartFile } from '../src/interfaces';
+
+import { Multipart } from '../src/multipart';
+import { resolveMultipartOptions } from '../src/options';
+import { parseMultipart, BufferingCallbacks, StreamingCallbacks, PartQueue } from '../src/parser';
 
 // ── Helpers ─────────────────────────────────────────────────────────
 
-function buildBody(
-  boundary: string,
-  parts: Array<{ headers: string; body: string }>,
-): string {
+function buildBody(boundary: string, parts: Array<{ headers: string; body: string }>): string {
   let raw = '';
 
   for (const part of parts) {
@@ -101,19 +99,19 @@ group('parseAll', () => {
 group('parse (streaming)', () => {
   bench('small (3 fields)', async () => {
     for await (const part of mp.parse(createRequest(boundary, smallBody))) {
-      if (part.isFile) await part.bytes();
+      if (part.isFile) {await part.bytes();}
     }
   });
 
   bench('medium (10 fields + 2 files)', async () => {
     for await (const part of mp.parse(createRequest(boundary, mediumBody))) {
-      if (part.isFile) await part.bytes();
+      if (part.isFile) {await part.bytes();}
     }
   });
 
   bench('large (1 MiB file)', async () => {
     for await (const part of mp.parse(createRequest(boundary, largeBody))) {
-      if (part.isFile) await part.bytes();
+      if (part.isFile) {await part.bytes();}
     }
   });
 });
@@ -149,10 +147,12 @@ group('FSM + StreamingCallbacks (direct)', () => {
 
     parseMultipart(toStream(smallBody), boundary, opts, callbacks)
       .then(() => queue.finish())
-      .catch((error) => { if (!queue.abandoned) queue.fail(error); });
+      .catch(error => {
+        if (!queue.abandoned) {queue.fail(error);}
+      });
 
     for await (const part of queue) {
-      if (part.isFile) await part.bytes();
+      if (part.isFile) {await part.bytes();}
     }
   });
 
@@ -162,10 +162,12 @@ group('FSM + StreamingCallbacks (direct)', () => {
 
     parseMultipart(toStream(mediumBody), boundary, opts, callbacks)
       .then(() => queue.finish())
-      .catch((error) => { if (!queue.abandoned) queue.fail(error); });
+      .catch(error => {
+        if (!queue.abandoned) {queue.fail(error);}
+      });
 
     for await (const part of queue) {
-      if (part.isFile) await part.bytes();
+      if (part.isFile) {await part.bytes();}
     }
   });
 
@@ -175,10 +177,12 @@ group('FSM + StreamingCallbacks (direct)', () => {
 
     parseMultipart(toStream(largeBody), boundary, opts, callbacks)
       .then(() => queue.finish())
-      .catch((error) => { if (!queue.abandoned) queue.fail(error); });
+      .catch(error => {
+        if (!queue.abandoned) {queue.fail(error);}
+      });
 
     for await (const part of queue) {
-      if (part.isFile) await part.bytes();
+      if (part.isFile) {await part.bytes();}
     }
   });
 });

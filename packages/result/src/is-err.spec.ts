@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it } from 'bun:test';
 
-import { DEFAULT_MARKER_KEY, getMarkerKey, setMarkerKey } from './constants';
+import { DEFAULT_MARKER_KEY, setMarkerKey } from './constants';
 import { err } from './err';
 import { isErr } from './is-err';
 
@@ -142,10 +142,17 @@ describe('isErr', () => {
   describe('corner cases', () => {
     it('should return false for Proxy that throws on property access', () => {
       // Arrange
-      const hostileProxy = new Proxy({}, {
-        get() { throw new Error('proxy trap'); },
-        has() { throw new Error('proxy trap'); },
-      });
+      const hostileProxy = new Proxy(
+        {},
+        {
+          get() {
+            throw new Error('proxy trap');
+          },
+          has() {
+            throw new Error('proxy trap');
+          },
+        },
+      );
       // Act / Assert
       expect(() => isErr(hostileProxy)).not.toThrow();
       expect(isErr(hostileProxy)).toBe(false);

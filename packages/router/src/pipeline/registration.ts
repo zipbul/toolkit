@@ -1,22 +1,14 @@
 import type { Result } from '@zipbul/result';
+
 import { err, isErr } from '@zipbul/result';
 
 import type { RouterErrorData, RouteParams, RouteValidationIssue } from '../types';
+
+import { OptionalParamDefaults, PathParser, expandOptional, MAX_OPTIONAL_SEGMENTS_PER_ROUTE } from '../builder';
+import { computePresentBitmask, createFactoryCache, getOrCreateSuperFactory, type FactoryCache } from '../codegen';
 import { RouterError } from '../error';
-import { MethodRegistry } from '../method-registry';
-import {
-  OptionalParamDefaults,
-  PathParser,
-  expandOptional,
-  MAX_OPTIONAL_SEGMENTS_PER_ROUTE,
-} from '../builder';
-import {
-  computePresentBitmask,
-  createFactoryCache,
-  getOrCreateSuperFactory,
-  type FactoryCache,
-} from '../codegen';
 import { decoder } from '../matcher';
+import { MethodRegistry } from '../method-registry';
 import {
   applyUndo,
   createSegmentNode,
@@ -31,11 +23,10 @@ import {
   type SegmentNode,
   type SegmentTreeUndoLog,
 } from '../tree';
-import { WildcardPrefixIndex, rollbackPlan, type RouteMeta, type CommitPlan } from './wildcard-prefix-index';
 import { IdentityRegistry } from './identity-registry';
 import { packTerminalSlab } from './terminal-slab';
 import { WILDCARD_METHOD, expandWildcardMethodRoutes } from './wildcard-method-expand';
-
+import { WildcardPrefixIndex, rollbackPlan, type RouteMeta, type CommitPlan } from './wildcard-prefix-index';
 
 /**
  * How many routes to process between full GC + libpas scavenge cycles
@@ -55,7 +46,6 @@ interface PendingRoute<T> {
   path: string;
   value: T;
 }
-
 
 /**
  * Snapshot of build-time products.
@@ -84,7 +74,7 @@ interface PendingRoute<T> {
  *     undefined, eliminating the need for a per-variant factory function
  *     (factoryCache size goes from O(2^N) variants to O(1) per route shape).
  */
-export interface RegistrationSnapshot<T> {
+interface RegistrationSnapshot<T> {
   staticByMethod: Array<Record<string, T> | undefined>;
   staticPathMethodMask: Record<string, number>;
   segmentTrees: Array<SegmentNode | null>;
@@ -125,7 +115,7 @@ interface BuildState<T> {
  * `add()` records user intent only. `seal()` performs the authoritative
  * validation pass.
  */
-export class Registration<T> {
+class Registration<T> {
   private readonly methodRegistry: MethodRegistry;
   private readonly pathParser: PathParser;
   private readonly optionalParamDefaults: OptionalParamDefaults;
@@ -137,11 +127,7 @@ export class Registration<T> {
   private identityRegistry: IdentityRegistry | null = null;
   private routeIdCounter = 0;
 
-  constructor(
-    methodRegistry: MethodRegistry,
-    pathParser: PathParser,
-    optionalParamDefaults: OptionalParamDefaults,
-  ) {
+  constructor(methodRegistry: MethodRegistry, pathParser: PathParser, optionalParamDefaults: OptionalParamDefaults) {
     this.methodRegistry = methodRegistry;
     this.pathParser = pathParser;
     this.optionalParamDefaults = optionalParamDefaults;
@@ -155,7 +141,7 @@ export class Registration<T> {
     this.assertNotSealed({ path, method: Array.isArray(method) ? method[0] : (method as string) });
 
     if (Array.isArray(method)) {
-      for (const m of method) this.pendingRoutes.push({ method: m, path, value });
+      for (const m of method) {this.pendingRoutes.push({ method: m, path, value });}
       return;
     }
 
@@ -177,10 +163,12 @@ export class Registration<T> {
     }
   }
 
-  seal(options: {
-    optionalParamBehavior?: 'omit' | 'set-undefined';
-  } = {}): RegistrationSnapshot<T> {
-    if (this.snapshot !== null) return this.snapshot;
+  seal(
+    options: {
+      optionalParamBehavior?: 'omit' | 'set-undefined';
+    } = {},
+  ): RegistrationSnapshot<T> {
+    if (this.snapshot !== null) {return this.snapshot;}
 
     const methodRegistrySnapshot = this.methodRegistry.snapshot();
     const optionalDefaultsSnapshot = this.optionalParamDefaults.snapshot();
@@ -220,11 +208,7 @@ export class Registration<T> {
    * accumulated validation issues; an empty array means every pending
    * route compiled cleanly.
    */
-  private compileAllRoutes(
-    state: BuildState<T>,
-    undo: SegmentTreeUndoLog,
-    omitBehavior: boolean,
-  ): RouteValidationIssue[] {
+  private compileAllRoutes(state: BuildState<T>, undo: SegmentTreeUndoLog, omitBehavior: boolean): RouteValidationIssue[] {
     const issues: RouteValidationIssue[] = [];
     const factoryCache: FactoryCache = createFactoryCache();
 
@@ -242,10 +226,7 @@ export class Registration<T> {
       const optionalMark = this.optionalParamDefaults.snapshot();
       const routeID = state.routeCounter++;
 
-      const result = this.compileRoute(
-        route, state, undo, routeID,
-        factoryCache, omitBehavior, decoder,
-      );
+      const result = this.compileRoute(route, state, undo, routeID, factoryCache, omitBehavior, decoder);
 
       if (isErr(result)) {
         rollback(undo, mark);
@@ -275,7 +256,7 @@ export class Registration<T> {
         // next build() call constructs a fresh prefix index). Drop it
         // before the GC so the closure-captured PrefixIndex CommitPlan
         // entries become eligible for collection.
-        if (issues.length === 0) undo.length = 0;
+        if (issues.length === 0) {undo.length = 0;}
         // Bun.gc(true) runs JSC's full collect AND mimalloc's fragmented-
         // memory cleanup in one call. Bun.shrink() saved an extra ~8 MB
         // historically but is `@deprecated` in bun-types 1.3.13 and may
@@ -322,11 +303,7 @@ export class Registration<T> {
    * slab so the matcher reads contiguous memory.
    */
   private packSnapshot(state: BuildState<T>): RegistrationSnapshot<T> {
-    const terminalSlab = packTerminalSlab(
-      state.terminalHandlers,
-      state.isWildcardByTerminal,
-      state.presentBitmaskByTerminal,
-    );
+    const terminalSlab = packTerminalSlab(state.terminalHandlers, state.isWildcardByTerminal, state.presentBitmaskByTerminal);
 
     return {
       staticByMethod: state.staticByMethod,
@@ -339,10 +316,8 @@ export class Registration<T> {
     };
   }
 
-  private assertNotSealed(
-    ctx: { path?: string; method?: string; registeredCount?: number },
-  ): void {
-    if (!this.sealed) return;
+  private assertNotSealed(ctx: { path?: string; method?: string; registeredCount?: number }): void {
+    if (!this.sealed) {return;}
 
     throw new RouterError({
       kind: 'router-sealed',
@@ -387,10 +362,7 @@ export class Registration<T> {
       return this.compileStaticRoute(route, parts, normalized, methodCode, state, undo);
     }
 
-    return this.compileDynamicRoute(
-      route, parts, methodCode, state, undo, routeID, 
-      factoryCache, omitBehavior, decoder
-    );
+    return this.compileDynamicRoute(route, parts, methodCode, state, undo, routeID, factoryCache, omitBehavior, decoder);
   }
 
   private compileStaticRoute(
@@ -403,7 +375,7 @@ export class Registration<T> {
   ): Result<void, RouterErrorData> {
     const conflict = this.runPrefixIndexPlan(parts, methodCode, route, undo);
 
-    if (isErr(conflict)) return conflict;
+    if (isErr(conflict)) {return conflict;}
 
     let bucket = state.staticByMethod[methodCode];
     if (bucket === undefined) {
@@ -451,31 +423,19 @@ export class Registration<T> {
   ): Result<void, RouterErrorData> {
     const shape = collectRouteShape(parts);
     const capCheck = checkDynamicRouteCaps(route, shape);
-    if (capCheck !== undefined) return err(capCheck);
+    if (capCheck !== undefined) {return err(capCheck);}
 
     const root = ensureSegmentTreeRoot(state, methodCode, undo);
     const hIdx = pushHandler(state, route.value, undo);
     const expansion = expandOptional(parts, -1, this.optionalParamDefaults);
 
     for (const expanded of expansion) {
-      const prefixCheck = this.runPrefixIndexPlan(
-        expanded.parts,
-        methodCode,
-        route,
-        undo,
-        hIdx,
-        expanded.isOptionalExpansion,
-      );
-      if (isErr(prefixCheck)) return prefixCheck;
+      const prefixCheck = this.runPrefixIndexPlan(expanded.parts, methodCode, route, undo, hIdx, expanded.isOptionalExpansion);
+      if (isErr(prefixCheck)) {return prefixCheck;}
 
-      const tIdx = recordExpansionTerminal(
-        state, expanded.parts, shape, hIdx,
-        factoryCache, omitBehavior, decoder, undo,
-      );
+      const tIdx = recordExpansionTerminal(state, expanded.parts, shape, hIdx, factoryCache, omitBehavior, decoder, undo);
 
-      const insertResult = insertIntoSegmentTree(
-        root, expanded.parts, tIdx, state.testerCache, routeID, undo,
-      );
+      const insertResult = insertIntoSegmentTree(root, expanded.parts, tIdx, state.testerCache, routeID, undo);
       if (isErr(insertResult)) {
         const data = insertResult.data;
         if (data.kind === 'route-duplicate') {
@@ -517,7 +477,7 @@ export class Registration<T> {
     if (isErr(planResult)) {
       return err<RouterErrorData>({ ...planResult.data, path: route.path, method: route.method });
     }
-    if (planResult === 'alias') return undefined;
+    if (planResult === 'alias') {return undefined;}
     undo.push({
       k: UndoKind.PrefixIndexPlan,
       rollback: rollbackPlan as (plan: unknown) => void,
@@ -554,9 +514,9 @@ function createBuildState<T>(): BuildState<T> {
 function applyTenantFactors(segmentTrees: ReadonlyArray<SegmentNode | null>): void {
   let factorApplied = false;
   for (const root of segmentTrees) {
-    if (root === undefined || root === null) continue;
+    if (root === undefined || root === null) {continue;}
     const factor = detectTenantFactor(root);
-    if (factor === null) continue;
+    if (factor === null) {continue;}
     setTenantFactor(root, factor);
     // Drop the original high-fanout staticChildren now that the factor
     // map owns the dispatch — they're no longer reachable from the walker.
@@ -565,7 +525,7 @@ function applyTenantFactors(segmentTrees: ReadonlyArray<SegmentNode | null>): vo
     root.singleChildNext = null;
     factorApplied = true;
   }
-  if (factorApplied) Bun.gc(true);
+  if (factorApplied) {Bun.gc(true);}
 }
 
 function rollback(undo: SegmentTreeUndoLog, mark: number): void {
@@ -587,7 +547,7 @@ interface RouteShape {
 
 /** Walk parts once, collecting both the capture metadata and the
  *  optional count needed for cap validation. */
-export function collectRouteShape(parts: ReadonlyArray<PathPart>): RouteShape {
+function collectRouteShape(parts: ReadonlyArray<PathPart>): RouteShape {
   const originalNames: string[] = [];
   const originalTypes: Array<'param' | 'wildcard'> = [];
   let optionalCount = 0;
@@ -595,7 +555,7 @@ export function collectRouteShape(parts: ReadonlyArray<PathPart>): RouteShape {
     if (p.type === 'param') {
       originalNames.push(p.name);
       originalTypes.push('param');
-      if (p.optional) optionalCount++;
+      if (p.optional) {optionalCount++;}
     } else if (p.type === 'wildcard') {
       originalNames.push(p.name);
       originalTypes.push('wildcard');
@@ -607,10 +567,7 @@ export function collectRouteShape(parts: ReadonlyArray<PathPart>): RouteShape {
 /** Reject routes that exceed the optional-fanout cap or the 31-bit
  *  presentBitmask ceiling. Returns the error data on rejection,
  *  `undefined` otherwise. */
-export function checkDynamicRouteCaps(
-  route: { path: string },
-  shape: RouteShape,
-): RouterErrorData | undefined {
+function checkDynamicRouteCaps(route: { path: string }, shape: RouteShape): RouterErrorData | undefined {
   if (shape.optionalCount > MAX_OPTIONAL_SEGMENTS_PER_ROUTE) {
     return {
       kind: 'route-parse',
@@ -636,13 +593,9 @@ export function checkDynamicRouteCaps(
 
 /** Resolve `state.segmentTrees[methodCode]` or create a fresh root and
  *  push the rollback marker. Returns the root node either way. */
-export function ensureSegmentTreeRoot<T>(
-  state: BuildState<T>,
-  methodCode: number,
-  undo: SegmentTreeUndoLog,
-): SegmentNode {
+function ensureSegmentTreeRoot<T>(state: BuildState<T>, methodCode: number, undo: SegmentTreeUndoLog): SegmentNode {
   const existing = state.segmentTrees[methodCode];
-  if (existing !== undefined && existing !== null) return existing;
+  if (existing !== undefined && existing !== null) {return existing;}
   const fresh = createSegmentNode();
   state.segmentTrees[methodCode] = fresh;
   undo.push({ k: UndoKind.SegmentTreeReset, trees: state.segmentTrees, mc: methodCode });
@@ -650,11 +603,7 @@ export function ensureSegmentTreeRoot<T>(
 }
 
 /** Append `value` to `state.handlers` and record the rollback marker. */
-export function pushHandler<T>(
-  state: BuildState<T>,
-  value: T,
-  undo: SegmentTreeUndoLog,
-): number {
+function pushHandler<T>(state: BuildState<T>, value: T, undo: SegmentTreeUndoLog): number {
   const hIdx = state.handlers.length;
   state.handlers.push(value);
   undo.push({ k: UndoKind.HandlersTruncate, arr: state.handlers, len: hIdx });
@@ -664,7 +613,7 @@ export function pushHandler<T>(
 /** Append per-expansion terminal slab data (handler, isWildcard,
  *  presentBitmask, factory) and record the rollback marker. Returns the
  *  newly assigned terminal index `tIdx`. */
-export function recordExpansionTerminal<T>(
+function recordExpansionTerminal<T>(
   state: BuildState<T>,
   expParts: ReadonlyArray<PathPart>,
   shape: RouteShape,
@@ -687,9 +636,10 @@ export function recordExpansionTerminal<T>(
   const tIdx = state.terminalHandlers.length;
   const isWildcard = expParts.length > 0 && expParts[expParts.length - 1]!.type === 'wildcard';
   const presentBitmask = computePresentBitmask(shape.originalNames, present);
-  const factory = (present.length > 0 || (!omitBehavior && shape.originalNames.length > 0))
-    ? getOrCreateSuperFactory(factoryCache, shape.originalNames, shape.originalTypes, omitBehavior, decoder)
-    : null;
+  const factory =
+    present.length > 0 || (!omitBehavior && shape.originalNames.length > 0)
+      ? getOrCreateSuperFactory(factoryCache, shape.originalNames, shape.originalTypes, omitBehavior, decoder)
+      : null;
 
   state.terminalHandlers[tIdx] = hIdx;
   state.isWildcardByTerminal[tIdx] = isWildcard;
@@ -705,3 +655,13 @@ export function recordExpansionTerminal<T>(
   });
   return tIdx;
 }
+
+export {
+  checkDynamicRouteCaps,
+  collectRouteShape,
+  ensureSegmentTreeRoot,
+  pushHandler,
+  Registration,
+  recordExpansionTerminal,
+};
+export type { RegistrationSnapshot };

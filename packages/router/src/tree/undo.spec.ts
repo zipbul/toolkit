@@ -5,15 +5,10 @@
  */
 import { describe, expect, it } from 'bun:test';
 
-import { createSegmentNode, type ParamSegment } from './segment-tree';
 import type { PatternTesterFn } from './pattern-tester';
-import {
-  UndoKind,
-  applyUndo,
-  pushStaticBucketResetUndo,
-  pushStaticMapDeleteUndo,
-  type SegmentTreeUndoLog,
-} from './undo';
+
+import { createSegmentNode, type ParamSegment } from './segment-tree';
+import { UndoKind, applyUndo, pushStaticBucketResetUndo, pushStaticMapDeleteUndo, type SegmentTreeUndoLog } from './undo';
 
 describe('applyUndo — segment-tree mutations', () => {
   it('StaticChildrenInit clears the staticChildren slot', () => {
@@ -33,14 +28,35 @@ describe('applyUndo — segment-tree mutations', () => {
 
   it('ParamChildSet clears the paramChild slot', () => {
     const n = createSegmentNode();
-    n.paramChild = { name: 'id', tester: null, patternSource: null, ownerRouteID: 0, next: createSegmentNode(), nextSibling: null };
+    n.paramChild = {
+      name: 'id',
+      tester: null,
+      patternSource: null,
+      ownerRouteID: 0,
+      next: createSegmentNode(),
+      nextSibling: null,
+    };
     applyUndo({ k: UndoKind.ParamChildSet, n });
     expect(n.paramChild).toBeNull();
   });
 
   it('ParamSiblingAdd clears the nextSibling pointer on the prev sibling', () => {
-    const prev: ParamSegment = { name: 'a', tester: null, patternSource: null, ownerRouteID: 0, next: createSegmentNode(), nextSibling: null };
-    prev.nextSibling = { name: 'b', tester: null, patternSource: null, ownerRouteID: 0, next: createSegmentNode(), nextSibling: null };
+    const prev: ParamSegment = {
+      name: 'a',
+      tester: null,
+      patternSource: null,
+      ownerRouteID: 0,
+      next: createSegmentNode(),
+      nextSibling: null,
+    };
+    prev.nextSibling = {
+      name: 'b',
+      tester: null,
+      patternSource: null,
+      ownerRouteID: 0,
+      next: createSegmentNode(),
+      nextSibling: null,
+    };
     applyUndo({ k: UndoKind.ParamSiblingAdd, prev });
     expect(prev.nextSibling).toBeNull();
   });
@@ -147,7 +163,9 @@ describe('applyUndo — StaticPathMaskRestore', () => {
 describe('applyUndo — PrefixIndexPlan', () => {
   it('invokes the rollback dispatcher with the recorded plan', () => {
     let called: unknown = null;
-    const rollback = (plan: unknown) => { called = plan; };
+    const rollback = (plan: unknown) => {
+      called = plan;
+    };
     const plan = { ops: ['x'] };
     applyUndo({ k: UndoKind.PrefixIndexPlan, rollback, plan });
     expect(called).toBe(plan);

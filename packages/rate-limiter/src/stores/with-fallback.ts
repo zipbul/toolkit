@@ -75,10 +75,10 @@ export class WithFallbackStore implements RateLimiterStore {
   }
 
   private async tryRestore(): Promise<void> {
-    if (this.usePrimary) return;
+    if (this.usePrimary) {return;}
     try {
       const healthy = await this.options.healthCheck();
-      if (healthy) this.usePrimary = true;
+      if (healthy) {this.usePrimary = true;}
     } catch {
       // health check failed, stay on fallback
     }

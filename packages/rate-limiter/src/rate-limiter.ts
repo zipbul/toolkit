@@ -1,13 +1,14 @@
 import { isErr } from '@zipbul/result';
 
-import { Algorithm, RateLimitAction, RateLimiterErrorReason } from './enums';
-import { RateLimiterError } from './interfaces';
 import type { ConsumeOptions, RateLimiterOptions } from './interfaces';
-import { resolveRateLimiterOptions, validateRateLimiterOptions } from './options';
 import type { AlgorithmFn, RateLimitResult, RefundFn, ResolvedRateLimiterOptions } from './types';
+
 import { gcra, refundGcra } from './algorithms/gcra';
 import { slidingWindow, refundSlidingWindow } from './algorithms/sliding-window';
 import { tokenBucket, refundTokenBucket } from './algorithms/token-bucket';
+import { Algorithm, RateLimitAction, RateLimiterErrorReason } from './enums';
+import { RateLimiterError } from './interfaces';
+import { resolveRateLimiterOptions, validateRateLimiterOptions } from './options';
 
 const ALGORITHM_MAP: Record<Algorithm, AlgorithmFn> = {
   [Algorithm.GCRA]: gcra,
@@ -82,7 +83,7 @@ export class RateLimiter {
         result = await this.consumeCompound(key, cost, now);
       }
     } catch (error) {
-      if (error instanceof RateLimiterError) throw error;
+      if (error instanceof RateLimiterError) {throw error;}
       throw new RateLimiterError(
         { reason: RateLimiterErrorReason.StoreError, message: error instanceof Error ? error.message : 'Store operation failed' },
         { cause: error },
@@ -124,7 +125,7 @@ export class RateLimiter {
 
       return await this.peekCompound(key, cost, now);
     } catch (error) {
-      if (error instanceof RateLimiterError) throw error;
+      if (error instanceof RateLimiterError) {throw error;}
       throw new RateLimiterError(
         { reason: RateLimiterErrorReason.StoreError, message: error instanceof Error ? error.message : 'Store operation failed' },
         { cause: error },
@@ -150,7 +151,7 @@ export class RateLimiter {
         }
       }
     } catch (error) {
-      if (error instanceof RateLimiterError) throw error;
+      if (error instanceof RateLimiterError) {throw error;}
       throw new RateLimiterError(
         { reason: RateLimiterErrorReason.StoreError, message: error instanceof Error ? error.message : 'Store operation failed' },
         { cause: error },
@@ -176,7 +177,7 @@ export class RateLimiter {
 
     // Check for any deny — return the most restrictive (longest retryAfter)
     const mostRestrictiveDeny = this.findMostRestrictiveDeny(peekResults);
-    if (mostRestrictiveDeny !== null) return mostRestrictiveDeny;
+    if (mostRestrictiveDeny !== null) {return mostRestrictiveDeny;}
 
     // Phase 2: All passed — consume all rules, with rollback on race deny
     const consumeResults: RateLimitResult[] = [];
@@ -216,7 +217,7 @@ export class RateLimiter {
     }
 
     const mostRestrictiveDeny = this.findMostRestrictiveDeny(results);
-    if (mostRestrictiveDeny !== null) return mostRestrictiveDeny;
+    if (mostRestrictiveDeny !== null) {return mostRestrictiveDeny;}
 
     return this.findMostRestrictiveAllow(results);
   }
@@ -236,7 +237,7 @@ export class RateLimiter {
   private findMostRestrictiveAllow(results: RateLimitResult[]): RateLimitResult {
     // Defensive: if any consume returned deny (TOCTOU race), return it
     const raceDeny = this.findMostRestrictiveDeny(results);
-    if (raceDeny !== null) return raceDeny;
+    if (raceDeny !== null) {return raceDeny;}
 
     let best = results[0]!;
     for (let i = 1; i < results.length; i++) {

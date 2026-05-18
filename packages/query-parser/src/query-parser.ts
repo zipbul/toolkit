@@ -1,12 +1,14 @@
-import { err, isErr } from '@zipbul/result';
 import type { Err, Result } from '@zipbul/result';
+
+import { err, isErr } from '@zipbul/result';
+
+import type { QueryParserErrorData, QueryParserOptions } from './interfaces';
+import type { QueryArray, QueryContainer, QueryValue, QueryValueRecord, ResolvedQueryParserOptions } from './types';
 
 import { POISONED_KEYS } from './constants';
 import { QueryParserErrorReason } from './enums';
 import { QueryParserError } from './interfaces';
-import type { QueryParserErrorData, QueryParserOptions } from './interfaces';
 import { resolveQueryParserOptions, validateQueryParserOptions } from './options';
-import type { QueryArray, QueryContainer, QueryValue, QueryValueRecord, ResolvedQueryParserOptions } from './types';
 
 /**
  * High-performance, strict query string parser.

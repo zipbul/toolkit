@@ -72,7 +72,9 @@ describe('constants', () => {
       // Arrange
       setMarkerKey('__custom__');
       // Act
-      try { setMarkerKey(''); } catch {}
+      try {
+        setMarkerKey('');
+      } catch {}
       // Assert
       expect(getMarkerKey()).toBe('__custom__');
     });

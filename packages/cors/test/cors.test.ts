@@ -1,13 +1,9 @@
+import { HttpHeader } from '@zipbul/shared';
 import { describe, expect, it } from 'bun:test';
 
-import { HttpHeader } from '@zipbul/shared';
+import type { CorsContinueResult, CorsPreflightResult, CorsRejectResult } from '../index';
 
 import { Cors, CorsAction, CorsError, CorsErrorReason, CorsRejectionReason } from '../index';
-import type {
-  CorsContinueResult,
-  CorsPreflightResult,
-  CorsRejectResult,
-} from '../index';
 
 describe('Cors integration', () => {
   it('should handle full GET flow: create → handle → inspect headers', async () => {
@@ -18,7 +14,7 @@ describe('Cors integration', () => {
       headers: { [HttpHeader.Origin]: 'https://a.com' },
     });
     // Act
-    const result = await cors.handle(req) as CorsContinueResult;
+    const result = (await cors.handle(req)) as CorsContinueResult;
     // Assert
     expect(result.action).toBe(CorsAction.Continue);
     expect(result.headers.get(HttpHeader.AccessControlAllowOrigin)).toBe('*');
@@ -40,7 +36,7 @@ describe('Cors integration', () => {
       },
     });
     // Act
-    const result = await cors.handle(req) as CorsPreflightResult;
+    const result = (await cors.handle(req)) as CorsPreflightResult;
     // Assert
     expect(result.action).toBe(CorsAction.RespondPreflight);
     expect(result.statusCode).toBe(204);
@@ -63,7 +59,9 @@ describe('Cors integration', () => {
   it('should throw CorsError when OriginFn throws at runtime', async () => {
     // Arrange
     const cors = Cors.create({
-      origin: () => { throw new Error('runtime failure'); },
+      origin: () => {
+        throw new Error('runtime failure');
+      },
     });
     const req = new Request('http://localhost', {
       method: 'GET',
@@ -88,7 +86,7 @@ describe('Cors integration', () => {
       headers: { [HttpHeader.Origin]: 'https://a.com' },
     });
     // Act
-    const result = await cors.handle(req) as CorsRejectResult;
+    const result = (await cors.handle(req)) as CorsRejectResult;
     // Assert
     expect(result.action).toBe(CorsAction.Reject);
     expect(result.reason).toBe(CorsRejectionReason.OriginNotAllowed);
@@ -105,7 +103,7 @@ describe('Cors integration', () => {
       },
     });
     // Act
-    const result = await cors.handle(req) as CorsContinueResult;
+    const result = (await cors.handle(req)) as CorsContinueResult;
     // Assert
     expect(result.action).toBe(CorsAction.Continue);
     expect(result.headers.has(HttpHeader.AccessControlAllowMethods)).toBe(true);
@@ -119,7 +117,7 @@ describe('Cors integration', () => {
       headers: { [HttpHeader.Origin]: 'https://a.com' },
     });
     // Act
-    const result = await cors.handle(req) as CorsContinueResult;
+    const result = (await cors.handle(req)) as CorsContinueResult;
     // Assert
     expect(result.action).toBe(CorsAction.Continue);
     expect(result.headers.get(HttpHeader.AccessControlExposeHeaders)).toBe('X-Request-Id');

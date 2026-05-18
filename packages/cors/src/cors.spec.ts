@@ -1,37 +1,22 @@
+import { HttpHeader } from '@zipbul/shared';
 import { describe, expect, it, mock } from 'bun:test';
 
-import { HttpHeader, HttpStatus } from '@zipbul/shared';
-
-import { CorsAction, CorsErrorReason, CorsRejectionReason } from './enums';
-import {
-  CorsError,
-} from './interfaces';
-import type {
-  CorsContinueResult,
-  CorsOptions,
-  CorsPreflightResult,
-  CorsRejectResult,
-} from './interfaces';
+import type { CorsContinueResult, CorsPreflightResult, CorsRejectResult } from './interfaces';
 import type { CorsResult } from './types';
+
 import { Cors } from './cors';
+import { CorsAction, CorsErrorReason, CorsRejectionReason } from './enums';
+import { CorsError } from './interfaces';
 
 // ── helpers ──
 
-function makeRequest(
-  method: string,
-  origin?: string,
-  headers?: Record<string, string>,
-): Request {
+function makeRequest(method: string, origin?: string, headers?: Record<string, string>): Request {
   const h: Record<string, string> = { ...headers };
-  if (origin !== undefined) h[HttpHeader.Origin] = origin;
+  if (origin !== undefined) {h[HttpHeader.Origin] = origin;}
   return new Request('http://localhost', { method, headers: h });
 }
 
-function makePreflight(
-  origin: string,
-  requestMethod: string,
-  requestHeaders?: string,
-): Request {
+function makePreflight(origin: string, requestMethod: string, requestHeaders?: string): Request {
   const h: Record<string, string> = {
     [HttpHeader.Origin]: origin,
     [HttpHeader.AccessControlRequestMethod]: requestMethod,
@@ -289,7 +274,11 @@ describe('Cors', () => {
 
     it('should throw CorsError when OriginFn throws', async () => {
       // Arrange
-      const cors = Cors.create({ origin: () => { throw new Error('boom'); } });
+      const cors = Cors.create({
+        origin: () => {
+          throw new Error('boom');
+        },
+      });
       const req = makeRequest('GET', 'https://a.com');
       // Act / Assert
       let caught: unknown;

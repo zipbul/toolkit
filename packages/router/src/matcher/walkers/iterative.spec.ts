@@ -4,9 +4,10 @@
  */
 import { describe, expect, it } from 'bun:test';
 
-import { consumeStaticPrefix, matchTerminalAtNode } from './iterative';
 import type { SegmentNode } from '../../tree';
+
 import { createMatchState } from '../match-state';
+import { consumeStaticPrefix, matchTerminalAtNode } from './iterative';
 import { MULTI_WILDCARD_NODE, STAR_WILDCARD_NODE, STORE_NODE } from './test-fixtures';
 
 const STORE = STORE_NODE;

@@ -23,12 +23,12 @@ The **σ% column (relative stddev)** is the trust signal:
 
 ## Regression policy
 
-| Bucket | Trust metric | Regression threshold |
-|---|---|---|
-| build/* (σ < 15% typical) | median | +20% from baseline |
-| match cold (σ < 15% typical) | median | +20% from baseline |
-| match hot (σ > 25% typical) | min | +30% from baseline |
-| RSS delta | absolute value | +30 MB from baseline |
+| Bucket                       | Trust metric   | Regression threshold |
+| ---------------------------- | -------------- | -------------------- |
+| build/\* (σ < 15% typical)   | median         | +20% from baseline   |
+| match cold (σ < 15% typical) | median         | +20% from baseline   |
+| match hot (σ > 25% typical)  | min            | +30% from baseline   |
+| RSS delta                    | absolute value | +30 MB from baseline |
 
 A breach should pause merge and either justify the new baseline (with a
 commit message linking the change) or revert.
@@ -41,12 +41,12 @@ commit message linking the change) or revert.
 > "Harness overhaul" section at the bottom) and re-record before quoting
 > any number. The methodology / how-to-update sections remain accurate.
 
-| Field | Value |
-|---|---|
-| Date | _stale — pending re-measurement_ |
-| Bun | _stale_ |
-| Platform | _stale_ |
-| Trials per sample | _stale_ |
+| Field             | Value                            |
+| ----------------- | -------------------------------- |
+| Date              | _stale — pending re-measurement_ |
+| Bun               | _stale_                          |
+| Platform          | _stale_                          |
+| Trials per sample | _stale_                          |
 
 ### Build time (router construction + seal + codegen + warmup)
 
@@ -111,6 +111,7 @@ changes below mean the next baseline refresh will land different
 numbers even with no router code change.
 
 **Measurement correctness fixes**:
+
 - `bench/helpers.ts` extracted: single source of truth for `gc()` (5×
   pass), `settleScavenger()` (1500 ms `Bun.sleepSync` then gc — libpas
   decommit is asynchronous; without the wait, RSS deltas read 2-4×
@@ -120,11 +121,12 @@ numbers even with no router code change.
   between prep/init/measure phases, `regression-snapshot.ts` before
   RSS-before reads (was previously `forceGc()`-only).
 - `cache-cardinality.bench.ts` split into three monomorphic call sites:
-  *cache-hit (warm, resident key)*, *cache-evict (new key, forces LRU)*,
-  *miss path (no matching route)* — previously a single bench mixed all
+  _cache-hit (warm, resident key)_, _cache-evict (new key, forces LRU)_,
+  _miss path (no matching route)_ — previously a single bench mixed all
   three costs together.
 
 **Cross-router fairness — process isolation**:
+
 - `comparison.bench.ts` and `complex-shapes.bench.ts` now use an
   orchestrator/worker split.
   Calling `bun bench/<file>.ts` (no argv) spawns one fresh child
@@ -139,6 +141,7 @@ numbers even with no router code change.
   `percentile()` helper.
 
 **Custom-bench percentile**:
+
 - `100k-bun-serve-baseline.ts` runs the warm loop `WARM_RUNS = 3`
   times per path and reports median / P99 / min / max. The server is
   restarted between every cold measurement and between every warm run,
@@ -150,14 +153,16 @@ numbers even with no router code change.
   times per scenario in fresh processes and aggregates.
 
 **Environment metadata for reproducibility**:
+
 - Every bench prints a single-line `printEnv()` header at startup with
   `bun=<ver> node=<ver> platform=<os> arch=<cpu> cpu="<model>"
-  cores=<n> governor=<gov> kernel=<ver> loadavg=<1m,5m,15m>
-  cgroup="<path>"`. Reproductions across machines can now reconcile
+cores=<n> governor=<gov> kernel=<ver> loadavg=<1m,5m,15m>
+cgroup="<path>"`. Reproductions across machines can now reconcile
   CPU model, frequency-scaling governor, and cgroup memory/CPU limits
   from stdout alone.
 
 **Argv hygiene**:
+
 - End users invoke every bench with no argv. The `argv` channel is
   retained only as worker-mode IPC for orchestrator self-spawn
   (`comparison*`, `complex-shapes`, `100k-external-baselines`) and for

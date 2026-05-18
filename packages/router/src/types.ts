@@ -29,28 +29,28 @@ export type RouteParams = Record<string, string | undefined>;
  */
 export type RouterErrorKind =
   // 상태 전이
-  | 'router-sealed'      // build() 후 add() 시도
+  | 'router-sealed' // build() 후 add() 시도
   // 빌드타임 — 등록
-  | 'route-duplicate'    // 동일 method+path 이미 존재
-  | 'route-conflict'     // wildcard/param/static 구조적 충돌
-  | 'route-unreachable'  // 선행 wildcard/terminal 때문에 도달 불가능한 등록
-  | 'route-parse'        // 패턴 문법 오류
-  | 'param-duplicate'    // 같은 경로 내 동일 이름 파라미터
-  | 'method-limit'       // 32개 메서드 초과 (MethodRegistry)
-  | 'method-empty'       // 빈 method 토큰
+  | 'route-duplicate' // 동일 method+path 이미 존재
+  | 'route-conflict' // wildcard/param/static 구조적 충돌
+  | 'route-unreachable' // 선행 wildcard/terminal 때문에 도달 불가능한 등록
+  | 'route-parse' // 패턴 문법 오류
+  | 'param-duplicate' // 같은 경로 내 동일 이름 파라미터
+  | 'method-limit' // 32개 메서드 초과 (MethodRegistry)
+  | 'method-empty' // 빈 method 토큰
   | 'method-invalid-token' // method 가 HTTP token 문법을 위반
   | 'path-missing-leading-slash'
-  | 'path-query'         // 등록 path에 raw `?`
-  | 'path-fragment'      // 등록 path에 raw `#`
-  | 'path-control-char'  // 등록 path에 C0/DEL
+  | 'path-query' // 등록 path에 raw `?`
+  | 'path-fragment' // 등록 path에 raw `#`
+  | 'path-control-char' // 등록 path에 C0/DEL
   | 'path-invalid-pchar' // 라우터 grammar token 외 pchar 위반
   | 'path-malformed-percent' // `%` 뒤 hex 2자리 미충족
-  | 'path-invalid-utf8'  // 디코딩 후 UTF-8 invalid (overlong 등)
+  | 'path-invalid-utf8' // 디코딩 후 UTF-8 invalid (overlong 등)
   | 'path-encoded-slash' // `%2F` — 라우터 grammar (segment separator)
-  | 'path-dot-segment'   // 디코드 시 `.` 또는 `..` — 라우터 grammar
+  | 'path-dot-segment' // 디코드 시 `.` 또는 `..` — 라우터 grammar
   | 'path-empty-segment' // interior empty `/a//b`
   | 'router-options-invalid' // RouterOptions 입력값 검증 실패 (cacheSize 등)
-  | 'route-validation';  // build()/seal() 일괄 검증 실패
+  | 'route-validation'; // build()/seal() 일괄 검증 실패
 
 export interface RouteValidationIssue {
   index: number;
@@ -77,33 +77,34 @@ export type RouterErrorData = {
   method?: string;
   /** addAll() fail-fast 시 에러 전까지 성공한 등록 수 */
   registeredCount?: number;
-} & (
+} &
+  (
   // ── State / options ─────────────────────────────────────────────────
   | { kind: 'router-sealed'; message: string; suggestion: string }
-  | { kind: 'router-options-invalid'; message: string; suggestion: string }
-  // ── Routes interaction (build) ──────────────────────────────────────
-  | { kind: 'route-validation'; message: string; errors: RouteValidationIssue[] }
-  | { kind: 'route-duplicate'; message: string; suggestion: string }
-  | { kind: 'route-conflict'; message: string; segment: string; conflictsWith: string; suggestion: string }
-  | { kind: 'route-unreachable'; message: string; segment: string; conflictsWith: string; suggestion: string }
-  | { kind: 'route-parse'; message: string; segment?: string; suggestion: string }
-  // ── add() — param / path grammar (G) ────────────────────────────────
-  | { kind: 'param-duplicate'; message: string; segment: string; suggestion: string }
-  | { kind: 'path-query'; message: string; suggestion: string }
-  | { kind: 'path-fragment'; message: string; suggestion: string }
-  | { kind: 'path-encoded-slash'; message: string; suggestion: string }
-  | { kind: 'path-dot-segment'; message: string; suggestion: string }
-  | { kind: 'path-empty-segment'; message: string; suggestion: string }
-  // ── add() — method / path RFC conformance (R) ───────────────────────
-  | { kind: 'method-limit'; message: string; method: string; suggestion: string }
-  | { kind: 'method-empty'; message: string; suggestion: string }
-  | { kind: 'method-invalid-token'; message: string; method: string; suggestion: string }
-  | { kind: 'path-missing-leading-slash'; message: string; suggestion: string }
-  | { kind: 'path-malformed-percent'; message: string; suggestion: string }
-  | { kind: 'path-invalid-pchar'; message: string; segment: string; suggestion: string }
-  | { kind: 'path-control-char'; message: string; suggestion: string }
-  | { kind: 'path-invalid-utf8'; message: string; suggestion: string }
-);
+    | { kind: 'router-options-invalid'; message: string; suggestion: string }
+    // ── Routes interaction (build) ──────────────────────────────────────
+    | { kind: 'route-validation'; message: string; errors: RouteValidationIssue[] }
+    | { kind: 'route-duplicate'; message: string; suggestion: string }
+    | { kind: 'route-conflict'; message: string; segment: string; conflictsWith: string; suggestion: string }
+    | { kind: 'route-unreachable'; message: string; segment: string; conflictsWith: string; suggestion: string }
+    | { kind: 'route-parse'; message: string; segment?: string; suggestion: string }
+    // ── add() — param / path grammar (G) ────────────────────────────────
+    | { kind: 'param-duplicate'; message: string; segment: string; suggestion: string }
+    | { kind: 'path-query'; message: string; suggestion: string }
+    | { kind: 'path-fragment'; message: string; suggestion: string }
+    | { kind: 'path-encoded-slash'; message: string; suggestion: string }
+    | { kind: 'path-dot-segment'; message: string; suggestion: string }
+    | { kind: 'path-empty-segment'; message: string; suggestion: string }
+    // ── add() — method / path RFC conformance (R) ───────────────────────
+    | { kind: 'method-limit'; message: string; method: string; suggestion: string }
+    | { kind: 'method-empty'; message: string; suggestion: string }
+    | { kind: 'method-invalid-token'; message: string; method: string; suggestion: string }
+    | { kind: 'path-missing-leading-slash'; message: string; suggestion: string }
+    | { kind: 'path-malformed-percent'; message: string; suggestion: string }
+    | { kind: 'path-invalid-pchar'; message: string; segment: string; suggestion: string }
+    | { kind: 'path-control-char'; message: string; suggestion: string }
+    | { kind: 'path-invalid-utf8'; message: string; suggestion: string }
+  );
 
 // ── Match output types ──
 

@@ -80,28 +80,28 @@ async function handleRequest(request: Request): Promise<Response> {
 
 ```typescript
 interface CorsOptions {
-  origin?: OriginOptions;              // Default: '*'
-  methods?: HttpMethod[];              // Default: GET, HEAD, PUT, PATCH, POST, DELETE
-  allowedHeaders?: string[];           // Default: reflects request's ACRH
-  exposedHeaders?: string[];           // Default: none
-  credentials?: boolean;               // Default: false
-  maxAge?: number;                     // Default: none (header not included)
-  preflightContinue?: boolean;         // Default: false
-  optionsSuccessStatus?: number;       // Default: 204
+  origin?: OriginOptions; // Default: '*'
+  methods?: HttpMethod[]; // Default: GET, HEAD, PUT, PATCH, POST, DELETE
+  allowedHeaders?: string[]; // Default: reflects request's ACRH
+  exposedHeaders?: string[]; // Default: none
+  credentials?: boolean; // Default: false
+  maxAge?: number; // Default: none (header not included)
+  preflightContinue?: boolean; // Default: false
+  optionsSuccessStatus?: number; // Default: 204
 }
 ```
 
 ### `origin`
 
-| Value | Behavior |
-|:------|:---------|
-| `'*'` _(default)_ | Allow all origins |
-| `false` | Reject all origins |
-| `true` | Reflect the request origin |
-| `'https://example.com'` | Allow only the exact match |
-| `/^https:\/\/(.+\.)?example\.com$/` | Regex matching |
-| `['https://a.com', /^https:\/\/b\./]` | Array (mix of strings and regexes) |
-| `(origin, request) => boolean \| string` | Function (sync or async) |
+| Value                                    | Behavior                           |
+| :--------------------------------------- | :--------------------------------- |
+| `'*'` _(default)_                        | Allow all origins                  |
+| `false`                                  | Reject all origins                 |
+| `true`                                   | Reflect the request origin         |
+| `'https://example.com'`                  | Allow only the exact match         |
+| `/^https:\/\/(.+\.)?example\.com$/`      | Regex matching                     |
+| `['https://a.com', /^https:\/\/b\./]`    | Array (mix of strings and regexes) |
+| `(origin, request) => boolean \| string` | Function (sync or async)           |
 
 > When `credentials: true`, `origin: '*'` causes a **validation error**. Use `origin: true` to reflect the request origin.
 >
@@ -175,7 +175,10 @@ HTTP status code for the preflight response. Defaults to `204`. Set to `200` if 
 #### `CorsContinueResult`
 
 ```typescript
-{ action: CorsAction.Continue; headers: Headers }
+{
+  action: CorsAction.Continue;
+  headers: Headers;
+}
 ```
 
 Returned for normal (non-OPTIONS) requests, or preflight when `preflightContinue: true`. Merge `headers` into your response directly.
@@ -183,7 +186,11 @@ Returned for normal (non-OPTIONS) requests, or preflight when `preflightContinue
 #### `CorsPreflightResult`
 
 ```typescript
-{ action: CorsAction.RespondPreflight; headers: Headers; statusCode: number }
+{
+  action: CorsAction.RespondPreflight;
+  headers: Headers;
+  statusCode: number;
+}
 ```
 
 Returned for `OPTIONS` requests that include `Access-Control-Request-Method`. Use `headers` and `statusCode` to build a response.
@@ -191,31 +198,34 @@ Returned for `OPTIONS` requests that include `Access-Control-Request-Method`. Us
 #### `CorsRejectResult`
 
 ```typescript
-{ action: CorsAction.Reject; reason: CorsRejectionReason }
+{
+  action: CorsAction.Reject;
+  reason: CorsRejectionReason;
+}
 ```
 
 Returned when CORS validation fails. Use `reason` to build a detailed error response.
 
-| `CorsRejectionReason` | Meaning |
-|:-----------------------|:--------|
-| `NoOrigin` | `Origin` header missing or empty |
-| `OriginNotAllowed` | Origin not in the allowed list |
-| `MethodNotAllowed` | Request method not in the allowed list |
-| `HeaderNotAllowed` | Request header not in the allowed list |
+| `CorsRejectionReason` | Meaning                                |
+| :-------------------- | :------------------------------------- |
+| `NoOrigin`            | `Origin` header missing or empty       |
+| `OriginNotAllowed`    | Origin not in the allowed list         |
+| `MethodNotAllowed`    | Request method not in the allowed list |
+| `HeaderNotAllowed`    | Request header not in the allowed list |
 
 `Cors.create()` throws `CorsError` when options fail validation:
 
-| `CorsErrorReason` | Meaning |
-|:------------------|:--------|
-| `CredentialsWithWildcardOrigin` | `credentials:true` with `origin:'*'` (Fetch Standard §3.3.5) |
-| `InvalidMaxAge` | `maxAge` is not a non-negative integer (RFC 9111 §1.2.1) |
-| `InvalidStatusCode` | `optionsSuccessStatus` is not a 2xx integer |
-| `InvalidOrigin` | `origin` is an empty/blank string, empty array, or array with empty/blank entries (RFC 6454) |
-| `InvalidMethods` | `methods` is empty, or contains empty/blank entries (RFC 9110 §5.6.2) |
-| `InvalidAllowedHeaders` | `allowedHeaders` contains empty/blank entries (RFC 9110 §5.6.2) |
-| `InvalidExposedHeaders` | `exposedHeaders` contains empty/blank entries (RFC 9110 §5.6.2) |
-| `OriginFunctionError` | Origin function threw at runtime |
-| `UnsafeRegExp` | origin RegExp has exponential backtracking risk (ReDoS) |
+| `CorsErrorReason`               | Meaning                                                                                      |
+| :------------------------------ | :------------------------------------------------------------------------------------------- |
+| `CredentialsWithWildcardOrigin` | `credentials:true` with `origin:'*'` (Fetch Standard §3.3.5)                                 |
+| `InvalidMaxAge`                 | `maxAge` is not a non-negative integer (RFC 9111 §1.2.1)                                     |
+| `InvalidStatusCode`             | `optionsSuccessStatus` is not a 2xx integer                                                  |
+| `InvalidOrigin`                 | `origin` is an empty/blank string, empty array, or array with empty/blank entries (RFC 6454) |
+| `InvalidMethods`                | `methods` is empty, or contains empty/blank entries (RFC 9110 §5.6.2)                        |
+| `InvalidAllowedHeaders`         | `allowedHeaders` contains empty/blank entries (RFC 9110 §5.6.2)                              |
+| `InvalidExposedHeaders`         | `exposedHeaders` contains empty/blank entries (RFC 9110 §5.6.2)                              |
+| `OriginFunctionError`           | Origin function threw at runtime                                                             |
+| `UnsafeRegExp`                  | origin RegExp has exponential backtracking risk (ReDoS)                                      |
 
 <br>
 
@@ -229,11 +239,7 @@ Cors.create({ origin: 'https://app.example.com' });
 
 // Multiple origins (mix of strings and regexes)
 Cors.create({
-  origin: [
-    'https://app.example.com',
-    'https://admin.example.com',
-    /^https:\/\/preview-\d+\.example\.com$/,
-  ],
+  origin: ['https://app.example.com', 'https://admin.example.com', /^https:\/\/preview-\d+\.example\.com$/],
 });
 
 // Regex to allow all subdomains
@@ -265,12 +271,12 @@ Cors.create({
 Per the Fetch Standard, wildcards (`*`) cannot be used with credentialed requests (cookies, `Authorization`).
 When `credentials: true`, the library automatically handles the following:
 
-| Option | Behavior with wildcard |
-|:-------|:-----------------------|
-| `origin: '*'` | **Validation error** — use `origin: true` to reflect the request origin |
-| `methods: ['*']` | Echoes the request method |
-| `allowedHeaders: ['*']` | Echoes the request headers |
-| `exposedHeaders: ['*']` | `Access-Control-Expose-Headers` is not set |
+| Option                  | Behavior with wildcard                                                  |
+| :---------------------- | :---------------------------------------------------------------------- |
+| `origin: '*'`           | **Validation error** — use `origin: true` to reflect the request origin |
+| `methods: ['*']`        | Echoes the request method                                               |
+| `allowedHeaders: ['*']` | Echoes the request headers                                              |
+| `exposedHeaders: ['*']` | `Access-Control-Expose-Headers` is not set                              |
 
 ```typescript
 // ✅ origin: true + credentials: true → request origin is reflected
@@ -329,10 +335,10 @@ Bun.serve({
     const result = await cors.handle(request);
 
     if (result.action === CorsAction.Reject) {
-      return new Response(
-        JSON.stringify({ error: 'CORS policy violation', reason: result.reason }),
-        { status: 403, headers: { 'Content-Type': 'application/json' } },
-      );
+      return new Response(JSON.stringify({ error: 'CORS policy violation', reason: result.reason }), {
+        status: 403,
+        headers: { 'Content-Type': 'application/json' },
+      });
     }
 
     if (result.action === CorsAction.RespondPreflight) {

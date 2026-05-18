@@ -2,6 +2,20 @@
   "name": "@zipbul/query-parser",
   "version": "0.2.4",
   "description": "High-performance, RFC 3986 compliant query string parser with strict security controls",
+  "keywords": [
+    "bun",
+    "http",
+    "query-parser",
+    "query-string",
+    "querystring",
+    "rfc3986",
+    "security",
+    "typescript",
+    "url",
+    "zipbul"
+  ],
+  "homepage": "https://github.com/zipbul/toolkit/tree/main/packages/query-parser#readme",
+  "bugs": "https://github.com/zipbul/toolkit/issues",
   "license": "MIT",
   "author": "Junhyung Park (https://github.com/parkrevil)",
   "repository": {
@@ -9,24 +23,11 @@
     "url": "https://github.com/zipbul/toolkit",
     "directory": "packages/query-parser"
   },
-  "bugs": "https://github.com/zipbul/toolkit/issues",
-  "homepage": "https://github.com/zipbul/toolkit/tree/main/packages/query-parser#readme",
-  "keywords": [
-    "query-string",
-    "query-parser",
-    "querystring",
-    "url",
-    "http",
-    "rfc3986",
-    "security",
-    "bun",
-    "typescript",
-    "zipbul"
+  "files": [
+    "dist"
   ],
-  "engines": {
-    "bun": ">=1.0.0"
-  },
   "type": "module",
+  "sideEffects": false,
   "module": "dist/index.js",
   "types": "dist/index.d.ts",
   "exports": {
@@ -35,25 +36,24 @@
       "import": "./dist/index.js"
     }
   },
-  "files": [
-    "dist"
-  ],
-  "sideEffects": false,
   "publishConfig": {
     "provenance": true
   },
   "scripts": {
+    "bench": "bun run bench/query-parser.bench.ts",
     "build": "bun build index.ts --outdir dist --target bun --format esm --packages external --production && tsc -p tsconfig.build.json",
-    "test": "bun test",
     "coverage": "bun test --coverage",
-    "bench": "bun run bench/query-parser.bench.ts"
+    "test": "bun test"
   },
   "dependencies": {
     "@zipbul/result": "workspace:*"
   },
   "devDependencies": {
+    "@types/qs": "^6.9.18",
     "mitata": "^1.0.34",
-    "qs": "^6.14.0",
-    "@types/qs": "^6.9.18"
+    "qs": "^6.14.0"
+  },
+  "engines": {
+    "bun": ">=1.0.0"
   }
 }

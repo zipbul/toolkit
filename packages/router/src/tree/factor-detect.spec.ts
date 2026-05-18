@@ -5,12 +5,8 @@
  */
 import { describe, expect, it } from 'bun:test';
 
+import { detectTenantFactor, getTenantFactor, setTenantFactor } from './factor-detect';
 import { createSegmentNode, type SegmentNode } from './segment-tree';
-import {
-  detectTenantFactor,
-  getTenantFactor,
-  setTenantFactor,
-} from './factor-detect';
 
 function leafWithStore(store: number): SegmentNode {
   const node = createSegmentNode();
@@ -88,7 +84,7 @@ describe('detectTenantFactor — disqualifiers', () => {
   it('returns null when one sibling has no unique terminal store', () => {
     const root = rootWithSiblings(1000, leafWithStore);
     // Mutate one sibling to remove the leaf store
-    (root.staticChildren!['tenant-5']!).store = null;
+    root.staticChildren!['tenant-5']!.store = null;
     expect(detectTenantFactor(root)).toBeNull();
   });
 
@@ -110,7 +106,7 @@ describe('detectTenantFactor — disqualifiers', () => {
 
 describe('detectTenantFactor — happy path', () => {
   it('returns a factor mapping every key to its leaf store', () => {
-    const root = rootWithSiblings(1500, (i) => leafWithStore(i + 100));
+    const root = rootWithSiblings(1500, i => leafWithStore(i + 100));
     const factor = detectTenantFactor(root);
     expect(factor).not.toBeNull();
     expect(factor!.keyToTerminal.size).toBe(1500);
@@ -133,7 +129,7 @@ describe('detectTenantFactor — happy path', () => {
 
 describe('detectTenantFactor — leafStoreOf descent shapes', () => {
   it('walks through a single paramChild chain to the unique terminal store', () => {
-    const root = rootWithSiblings(1500, (i) => {
+    const root = rootWithSiblings(1500, i => {
       const top = createSegmentNode();
       top.paramChild = {
         name: 'id',
@@ -149,7 +145,7 @@ describe('detectTenantFactor — leafStoreOf descent shapes', () => {
   });
 
   it('walks through a singleChildKey static chain to the unique terminal store', () => {
-    const root = rootWithSiblings(1500, (i) => {
+    const root = rootWithSiblings(1500, i => {
       const top = createSegmentNode();
       top.singleChildKey = 'users';
       top.singleChildNext = leafWithStore(i);
@@ -159,7 +155,7 @@ describe('detectTenantFactor — leafStoreOf descent shapes', () => {
   });
 
   it('rejects subtrees whose intermediate node carries both a store and descendants', () => {
-    const root = rootWithSiblings(1500, (i) => {
+    const root = rootWithSiblings(1500, i => {
       const intermediate = createSegmentNode();
       intermediate.store = i;
       intermediate.singleChildKey = 'users';

@@ -1,7 +1,7 @@
 import { describe, test, expect } from 'bun:test';
 
-import { RateLimiter } from '../../src/rate-limiter';
 import { RateLimitAction, Algorithm } from '../../src/enums';
+import { RateLimiter } from '../../src/rate-limiter';
 import { createClock } from '../helpers';
 
 describe('variable cost patterns', () => {

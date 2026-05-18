@@ -5,9 +5,10 @@
  */
 import { describe, expect, it } from 'bun:test';
 
-import { MethodRegistry } from '../method-registry';
 import type { RouterOptions } from '../types';
 import type { RegistrationSnapshot } from './registration';
+
+import { MethodRegistry } from '../method-registry';
 import { buildFromRegistration } from './build';
 
 function emptySnapshot<T>(overrides: Partial<RegistrationSnapshot<T>> = {}): RegistrationSnapshot<T> {
@@ -32,11 +33,7 @@ describe('buildFromRegistration — staticOutputsByMethod', () => {
     const staticByMethod: Array<Record<string, string> | undefined> = [];
     staticByMethod[getCode] = bucket;
 
-    const result = buildFromRegistration(
-      emptySnapshot<string>({ staticByMethod }),
-      {},
-      registry,
-    );
+    const result = buildFromRegistration(emptySnapshot<string>({ staticByMethod }), {}, registry);
 
     const outBucket = result.staticOutputsByMethod[getCode]!;
     const out = outBucket['/health']!;
@@ -63,11 +60,7 @@ describe('buildFromRegistration — activeMethodCodes filter', () => {
     const staticByMethod: Array<Record<string, string> | undefined> = [];
     staticByMethod[getCode] = bucket;
 
-    const result = buildFromRegistration(
-      emptySnapshot<string>({ staticByMethod }),
-      {},
-      registry,
-    );
+    const result = buildFromRegistration(emptySnapshot<string>({ staticByMethod }), {}, registry);
 
     const activeNames = result.activeMethodCodes.map(([n]) => n);
     expect(activeNames).toContain('GET');
@@ -140,11 +133,7 @@ describe('buildFromRegistration — passthrough fields', () => {
     const registry = new MethodRegistry();
     const mask: Record<string, number> = Object.create(null);
     mask['/x'] = 0b101;
-    const result = buildFromRegistration(
-      emptySnapshot<string>({ staticPathMethodMask: mask }),
-      {},
-      registry,
-    );
+    const result = buildFromRegistration(emptySnapshot<string>({ staticPathMethodMask: mask }), {}, registry);
     expect(result.staticPathMethodMask).toBe(mask);
   });
 
@@ -152,32 +141,20 @@ describe('buildFromRegistration — passthrough fields', () => {
     const registry = new MethodRegistry();
     const slab = new Int32Array(6);
     slab[0] = 7;
-    const result = buildFromRegistration(
-      emptySnapshot<string>({ terminalSlab: slab }),
-      {},
-      registry,
-    );
+    const result = buildFromRegistration(emptySnapshot<string>({ terminalSlab: slab }), {}, registry);
     expect(result.terminalSlab).toBe(slab);
   });
 
   it('forwards paramsFactories from the snapshot unchanged', () => {
     const registry = new MethodRegistry();
     const factories = [() => Object.create(null) as Record<string, string>];
-    const result = buildFromRegistration(
-      emptySnapshot<string>({ paramsFactories: factories }),
-      {},
-      registry,
-    );
+    const result = buildFromRegistration(emptySnapshot<string>({ paramsFactories: factories }), {}, registry);
     expect(result.paramsFactories).toBe(factories);
   });
 
   it('pre-allocates matchState sized to maxParamsObserved', () => {
     const registry = new MethodRegistry();
-    const result = buildFromRegistration(
-      emptySnapshot<string>({ maxParamsObserved: 5 }),
-      {},
-      registry,
-    );
+    const result = buildFromRegistration(emptySnapshot<string>({ maxParamsObserved: 5 }), {}, registry);
     expect(result.matchState).toBeDefined();
     expect(result.matchState.paramOffsets).toBeInstanceOf(Int32Array);
     expect(result.matchState.paramOffsets.length).toBeGreaterThanOrEqual(10);

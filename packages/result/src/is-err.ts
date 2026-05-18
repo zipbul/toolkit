@@ -1,4 +1,5 @@
 import type { Err } from './types';
+
 import { getMarkerKey } from './constants';
 
 /**
@@ -27,9 +28,7 @@ import { getMarkerKey } from './constants';
  * }
  * ```
  */
-export function isErr<E = unknown>(
-  value: unknown,
-): value is Err<E> {
+export function isErr<E = unknown>(value: unknown): value is Err<E> {
   try {
     return (
       value !== null &&

@@ -30,9 +30,7 @@ describe('tryCodegenStaticPrefixWildcard', () => {
   });
 
   it('returns null when more than 8 prefixes qualify (linear probe budget)', () => {
-    const root = rootWithPrefixes(
-      Array.from({ length: 9 }, (_, i) => ({ prefix: `p${i}`, origin: 'star' as const, store: i })),
-    );
+    const root = rootWithPrefixes(Array.from({ length: 9 }, (_, i) => ({ prefix: `p${i}`, origin: 'star' as const, store: i })));
     expect(tryCodegenStaticPrefixWildcard(root)).toBeNull();
   });
 

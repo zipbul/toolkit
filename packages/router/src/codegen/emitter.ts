@@ -1,23 +1,14 @@
-import type {
-  MatchFn,
-  MatchOutput,
-  MatchState,
-  RouteParams,
-} from '../types';
 import type { RouterCache } from '../cache';
+import type { MatchFn, MatchOutput, MatchState, RouteParams } from '../types';
 
 import { CACHE_META, DYNAMIC_META, EMPTY_PARAMS } from '../internal';
-import {
-  emitLowerCase,
-  emitTrailingSlashTrim,
-  type NormalizeCfg,
-} from './path-normalize';
+import { emitLowerCase, emitTrailingSlashTrim, type NormalizeCfg } from './path-normalize';
 import { WARMUP_ITERATIONS } from './warmup';
 
 /**
  * Cache entry shape. Attached at lookup time inside emitted matchImpl.
  */
-export interface MatchCacheEntry<T> {
+interface MatchCacheEntry<T> {
   value: T;
   params: RouteParams;
 }
@@ -25,7 +16,7 @@ export interface MatchCacheEntry<T> {
 /**
  * Configuration for compiled match implementation.
  */
-export interface MatchConfig<T> {
+interface MatchConfig<T> {
   readonly trimSlash: boolean;
   readonly lowerCase: boolean;
   readonly hasAnyTree: boolean;
@@ -90,7 +81,7 @@ type CompiledMatch<T> = (method: string, path: string) => MatchOutput<T> | null;
  * layer above. The router trusts that match() inputs are already
  * RFC-compliant pathnames.
  */
-export function compileMatchFn<T>(cfg: MatchConfig<T>): CompiledMatch<T> {
+function compileMatchFn<T>(cfg: MatchConfig<T>): CompiledMatch<T> {
   const singleMethod = cfg.activeMethodCodes.length === 1 ? cfg.activeMethodCodes[0]! : null;
 
   // Three router shapes get three distinct emitters. Each emits a
@@ -150,7 +141,10 @@ function emitMethodCharSwitch(
     for (const entry of activeMethodCodes) {
       const c = entry[0].charCodeAt(0);
       let bucket = byFirst.get(c);
-      if (bucket === undefined) { bucket = []; byFirst.set(c, bucket); }
+      if (bucket === undefined) {
+        bucket = [];
+        byFirst.set(c, bucket);
+      }
       bucket.push(entry);
       lengthMask |= 1 << entry[0].length;
     }
@@ -163,9 +157,7 @@ function emitMethodCharSwitch(
     }
     arms += `case ${c}: {\n${inner}${onMiss}\n}`;
   }
-  const lenGate = lengthMask !== 0
-    ? `if ((${lengthMask} & (1 << method.length)) === 0) { ${onMiss} }\n`
-    : '';
+  const lenGate = lengthMask !== 0 ? `if ((${lengthMask} & (1 << method.length)) === 0) { ${onMiss} }\n` : '';
   return `${lenGate}switch (method.charCodeAt(0)) {\n${arms}default: ${onMiss}\n}`;
 }
 
@@ -173,9 +165,9 @@ function emitMethodCharSwitch(
 function emitNormalize(cfg: NormalizeCfg, outVar: string): string {
   const lines = [`var ${outVar} = path;`];
   const trim = emitTrailingSlashTrim(cfg, outVar);
-  if (trim !== '') lines.push(trim);
+  if (trim !== '') {lines.push(trim);}
   const lower = emitLowerCase(cfg, outVar);
-  if (lower !== '') lines.push(lower);
+  if (lower !== '') {lines.push(lower);}
   return lines.join('\n');
 }
 
@@ -183,11 +175,7 @@ function emitNormalize(cfg: NormalizeCfg, outVar: string): string {
  *  wraps the probe in `if (sp !== path)` — callers that already ran the
  *  pre-normalize probe should set this so the lookup is skipped when
  *  normalization was a no-op (default config: trim=false, lower=false). */
-function emitStaticBucketProbe(
-  singleMethod: SingleMethodSpec | null,
-  key: string,
-  gateOnNormalize: boolean,
-): string {
+function emitStaticBucketProbe(singleMethod: SingleMethodSpec | null, key: string, gateOnNormalize: boolean): string {
   const open = gateOnNormalize ? `if (${key} !== path) {\n` : '';
   const close = gateOnNormalize ? `\n}` : '';
   if (singleMethod !== null) {
@@ -258,9 +246,10 @@ function emitRootMaskGate(singleMethod: SingleMethodSpec | null): string {
  * and the walker call.
  */
 function emitWalkerAndPack(cfg: MatchConfig<unknown>, singleMethod: SingleMethodSpec | null): string {
-  const dispatch = singleMethod !== null
-    ? `var ok = tr0(sp, matchState);`
-    : `var tr = trees[mc];
+  const dispatch =
+    singleMethod !== null
+      ? `var ok = tr0(sp, matchState);`
+      : `var tr = trees[mc];
        if (!tr) return null;
        var ok = tr(sp, matchState);`;
 
@@ -302,10 +291,7 @@ function emitWalkerAndPack(cfg: MatchConfig<unknown>, singleMethod: SingleMethod
  * Static-only, single-method. Pre-probes the closure-captured bucket
  * with the raw path; only normalizes on miss.
  */
-function compileStaticOnlySingleMethod<T>(
-  cfg: MatchConfig<T>,
-  singleMethod: SingleMethodSpec,
-): CompiledMatch<T> {
+function compileStaticOnlySingleMethod<T>(cfg: MatchConfig<T>, singleMethod: SingleMethodSpec): CompiledMatch<T> {
   const body = [
     emitMethodDispatch(singleMethod, null),
     `
@@ -324,14 +310,9 @@ function compileStaticOnlySingleMethod<T>(
   // methodCodes or staticOutputsByMethod — only the closure-captured
   // activeBucket. Dropping the unused captures keeps the matchImpl
   // closure small, which JSC's IC partition prefers.
-  const factory = new Function(
-    'activeBucket',
-    `return function match(method, path) {\n${body}\n};`,
-  );
+  const factory = new Function('activeBucket', `return function match(method, path) {\n${body}\n};`);
 
-  const compiled = factory(
-    cfg.staticOutputsByMethod[singleMethod[1]] ?? Object.create(null),
-  ) as CompiledMatch<T>;
+  const compiled = factory(cfg.staticOutputsByMethod[singleMethod[1]] ?? Object.create(null)) as CompiledMatch<T>;
 
   runWarmup(compiled, cfg);
   return compiled;
@@ -354,10 +335,7 @@ function compileStaticOnlyMultiMethod<T>(cfg: MatchConfig<T>): CompiledMatch<T> 
   ].join('\n');
 
   // Multi-method static-only uses path-first staticByPath probe.
-  const factory = new Function(
-    'staticByPath',
-    `return function match(method, path) {\n${body}\n};`,
-  );
+  const factory = new Function('staticByPath', `return function match(method, path) {\n${body}\n};`);
 
   const compiled = factory(cfg.staticByPath) as CompiledMatch<T>;
   runWarmup(compiled, cfg);
@@ -398,13 +376,10 @@ function compileMixed<T>(cfg: MatchConfig<T>, singleMethod: SingleMethodSpec | n
     return out;
   }
 
-  const activeBucket = singleMethod !== null
-    ? cfg.staticOutputsByMethod[singleMethod[1]] ?? Object.create(null)
-    : Object.create(null);
+  const activeBucket =
+    singleMethod !== null ? (cfg.staticOutputsByMethod[singleMethod[1]] ?? Object.create(null)) : Object.create(null);
   const tr0 = singleMethod !== null ? (cfg.trees[singleMethod[1]] ?? null) : null;
-  const rootMaskSingle = singleMethod !== null
-    ? (cfg.rootFirstCharMaskByMethod[singleMethod[1]] ?? null)
-    : null;
+  const rootMaskSingle = singleMethod !== null ? (cfg.rootFirstCharMaskByMethod[singleMethod[1]] ?? null) : null;
 
   let source: string;
   if (singleMethod !== null) {
@@ -421,9 +396,7 @@ function compileMixed<T>(cfg: MatchConfig<T>, singleMethod: SingleMethodSpec | n
     // directly with `(mc, path)` — no bound-fn intermediate, no extra
     // closure allocation per method.
     const activeBody = emitBodyLines(null).join('\n');
-    const tableInit = cfg.activeMethodCodes
-      .map(([name, code]) => `mcByMethod[${JSON.stringify(name)}] = ${code};`)
-      .join('\n');
+    const tableInit = cfg.activeMethodCodes.map(([name, code]) => `mcByMethod[${JSON.stringify(name)}] = ${code};`).join('\n');
     source = `
       function matchActive(mc, path) {
         ${activeBody}
@@ -438,18 +411,38 @@ function compileMixed<T>(cfg: MatchConfig<T>, singleMethod: SingleMethodSpec | n
   }
 
   const factory = new Function(
-    'activeBucket', 'tr0', 'rootMaskSingle', 'staticByPath',
-    'rootFirstCharMaskByMethod', 'trees', 'matchState', 'handlers',
+    'activeBucket',
+    'tr0',
+    'rootMaskSingle',
+    'staticByPath',
+    'rootFirstCharMaskByMethod',
+    'trees',
+    'matchState',
+    'handlers',
     'hitCacheByMethod',
-    'EMPTY_PARAMS', 'CACHE_META', 'DYNAMIC_META', 'terminalSlab', 'paramsFactories',
+    'EMPTY_PARAMS',
+    'CACHE_META',
+    'DYNAMIC_META',
+    'terminalSlab',
+    'paramsFactories',
     source,
   );
 
   const compiled = factory(
-    activeBucket, tr0, rootMaskSingle, cfg.staticByPath,
-    cfg.rootFirstCharMaskByMethod, cfg.trees, cfg.matchState, cfg.handlers,
+    activeBucket,
+    tr0,
+    rootMaskSingle,
+    cfg.staticByPath,
+    cfg.rootFirstCharMaskByMethod,
+    cfg.trees,
+    cfg.matchState,
+    cfg.handlers,
     cfg.hitCacheByMethod,
-    EMPTY_PARAMS, CACHE_META, DYNAMIC_META, cfg.terminalSlab, cfg.paramsFactories,
+    EMPTY_PARAMS,
+    CACHE_META,
+    DYNAMIC_META,
+    cfg.terminalSlab,
+    cfg.paramsFactories,
   ) as CompiledMatch<T>;
 
   runWarmup(compiled, cfg);
@@ -469,7 +462,10 @@ function runWarmup<T>(compiled: CompiledMatch<T>, cfg: MatchConfig<T>): void {
   const warmPaths = ['/__zipbul_warmup__', '/__zipbul_warmup__/sub'];
   for (let it = 0; it < WARMUP_ITERATIONS; it++) {
     for (const [methodName] of cfg.activeMethodCodes) {
-      for (const p of warmPaths) compiled(methodName, p);
+      for (const p of warmPaths) {compiled(methodName, p);}
     }
   }
 }
+
+export { compileMatchFn };
+export type { MatchCacheEntry, MatchConfig };

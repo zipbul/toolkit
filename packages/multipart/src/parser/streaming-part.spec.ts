@@ -4,7 +4,7 @@ import { BufferedMultipartFile, MultipartFileImpl } from './streaming-part';
 
 const encoder = new TextEncoder();
 
-function makeStream(data: Uint8Array): {
+function makeStream(_data: Uint8Array): {
   readable: ReadableStream<Uint8Array>;
   writer: WritableStreamDefaultWriter<Uint8Array>;
 } {
@@ -133,7 +133,11 @@ describe('MultipartFileImpl', () => {
       expect(written).toBe(data.length);
       expect(await Bun.file(tmpPath).text()).toBe('save-to-test');
     } finally {
-      try { await Bun.file(tmpPath).unlink?.(); } catch { /* ignore */ }
+      try {
+        await Bun.file(tmpPath).unlink?.();
+      } catch {
+        /* ignore */
+      }
     }
   });
 
@@ -231,11 +235,11 @@ describe('BufferedMultipartFile', () => {
     // Both should be readable
     const chunks1: Uint8Array[] = [];
 
-    for await (const c of stream1) chunks1.push(c);
+    for await (const c of stream1) {chunks1.push(c);}
 
     const chunks2: Uint8Array[] = [];
 
-    for await (const c of stream2) chunks2.push(c);
+    for await (const c of stream2) {chunks2.push(c);}
 
     expect(new TextDecoder().decode(chunks1[0]!)).toBe('repeat');
     expect(new TextDecoder().decode(chunks2[0]!)).toBe('repeat');
@@ -260,7 +264,11 @@ describe('BufferedMultipartFile', () => {
       expect(written).toBe(data.length);
       expect(await Bun.file(tmpPath).text()).toBe('buffered-save');
     } finally {
-      try { await Bun.file(tmpPath).unlink?.(); } catch { /* ignore */ }
+      try {
+        await Bun.file(tmpPath).unlink?.();
+      } catch {
+        /* ignore */
+      }
     }
   });
 

@@ -1,5 +1,5 @@
-import { describe, it, expect } from 'bun:test';
 import { isErr } from '@zipbul/result';
+import { describe, it, expect } from 'bun:test';
 
 import { MethodRegistry } from './method-registry';
 
@@ -10,8 +10,13 @@ describe('MethodRegistry', () => {
     it('should return correct offsets for all 7 default methods', () => {
       const reg = new MethodRegistry();
       const defaults: Array<[string, number]> = [
-        ['GET', 0], ['POST', 1], ['PUT', 2], ['PATCH', 3],
-        ['DELETE', 4], ['OPTIONS', 5], ['HEAD', 6],
+        ['GET', 0],
+        ['POST', 1],
+        ['PUT', 2],
+        ['PATCH', 3],
+        ['DELETE', 4],
+        ['OPTIONS', 5],
+        ['HEAD', 6],
       ];
 
       for (const [method, expected] of defaults) {
@@ -117,7 +122,7 @@ describe('MethodRegistry', () => {
       expect(result).toBe(31);
     });
 
-    it('should treat methods as case-sensitive (\'get\' ≠ \'GET\')', () => {
+    it("should treat methods as case-sensitive ('get' ≠ 'GET')", () => {
       const reg = new MethodRegistry();
 
       expect(reg.get('GET')).toBe(0);
@@ -137,7 +142,7 @@ describe('MethodRegistry', () => {
       }
     }
 
-    it('should return err with kind=\'method-limit\' when exceeding 32 methods', () => {
+    it("should return err with kind='method-limit' when exceeding 32 methods", () => {
       const reg = new MethodRegistry();
       fillToMax(reg);
 

@@ -6,11 +6,7 @@
  */
 import { describe, expect, it } from 'bun:test';
 
-import {
-  computePresentBitmask,
-  createFactoryCache,
-  getOrCreateSuperFactory,
-} from './super-factory';
+import { computePresentBitmask, createFactoryCache, getOrCreateSuperFactory } from './super-factory';
 
 const identityDecoder = (s: string) => s;
 
@@ -33,15 +29,12 @@ describe('createFactoryCache', () => {
 describe('getOrCreateSuperFactory', () => {
   it('produces a factory that assigns each present name to the decoded slice', () => {
     const cache = createFactoryCache();
-    const fn = getOrCreateSuperFactory(
-      cache,
-      ['id', 'kind'],
-      ['param', 'param'],
-      true,
-      identityDecoder,
-    );
+    const fn = getOrCreateSuperFactory(cache, ['id', 'kind'], ['param', 'param'], true, identityDecoder);
     const url = '/users/42/admin';
-    const v = offsetsFromCaptures([[7, 9], [10, 15]]);
+    const v = offsetsFromCaptures([
+      [7, 9],
+      [10, 15],
+    ]);
     const params = fn(0b11, url, v);
     expect(params.id).toBe('42');
     expect(params.kind).toBe('admin');
@@ -49,13 +42,7 @@ describe('getOrCreateSuperFactory', () => {
 
   it('skips absent names entirely when omitBehavior=true', () => {
     const cache = createFactoryCache();
-    const fn = getOrCreateSuperFactory(
-      cache,
-      ['id', 'tail'],
-      ['param', 'param'],
-      true,
-      identityDecoder,
-    );
+    const fn = getOrCreateSuperFactory(cache, ['id', 'tail'], ['param', 'param'], true, identityDecoder);
     const url = '/users/42';
     const v = offsetsFromCaptures([[7, 9]]);
     const params = fn(0b01, url, v);
@@ -65,13 +52,7 @@ describe('getOrCreateSuperFactory', () => {
 
   it('writes undefined for absent names when omitBehavior=false', () => {
     const cache = createFactoryCache();
-    const fn = getOrCreateSuperFactory(
-      cache,
-      ['id', 'tail'],
-      ['param', 'param'],
-      false,
-      identityDecoder,
-    );
+    const fn = getOrCreateSuperFactory(cache, ['id', 'tail'], ['param', 'param'], false, identityDecoder);
     const url = '/users/42';
     const v = offsetsFromCaptures([[7, 9]]);
     const params = fn(0b01, url, v);
@@ -82,13 +63,7 @@ describe('getOrCreateSuperFactory', () => {
 
   it('does NOT decode wildcard slices (origin: wildcard skips decoder)', () => {
     const cache = createFactoryCache();
-    const fn = getOrCreateSuperFactory(
-      cache,
-      ['rest'],
-      ['wildcard'],
-      true,
-      () => 'should-not-be-called',
-    );
+    const fn = getOrCreateSuperFactory(cache, ['rest'], ['wildcard'], true, () => 'should-not-be-called');
     const url = '/files/raw%20tail';
     const v = offsetsFromCaptures([[7, 17]]);
     const params = fn(0b1, url, v);

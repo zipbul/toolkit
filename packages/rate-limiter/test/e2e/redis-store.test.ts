@@ -1,17 +1,17 @@
 import { describe, test, expect, beforeAll, afterAll, beforeEach } from 'bun:test';
 import Redis from 'ioredis';
 
-import { RateLimiter } from '../../src/rate-limiter';
-import { RateLimitAction, Algorithm } from '../../src/enums';
-import { RedisStore } from '../../src/stores/redis';
 import type { RedisClient } from '../../src/stores/redis';
+
+import { RateLimitAction, Algorithm } from '../../src/enums';
+import { RateLimiter } from '../../src/rate-limiter';
+import { RedisStore } from '../../src/stores/redis';
 
 // ── ioredis adapter ────────────────────────────────────────────────
 
 function createRedisClient(redis: Redis): RedisClient {
   return {
-    eval: (script: string, keys: string[], args: string[]) =>
-      redis.eval(script, keys.length, ...keys, ...args),
+    eval: (script: string, keys: string[], args: string[]) => redis.eval(script, keys.length, ...keys, ...args),
   };
 }
 
@@ -33,9 +33,9 @@ afterAll(async () => {
 beforeEach(async () => {
   // Clean all test keys
   const keys = await redis.keys('rl:*');
-  if (keys.length > 0) await redis.del(...keys);
+  if (keys.length > 0) {await redis.del(...keys);}
   const testKeys = await redis.keys('test:*');
-  if (testKeys.length > 0) await redis.del(...testKeys);
+  if (testKeys.length > 0) {await redis.del(...testKeys);}
 });
 
 // ── RedisStore direct tests ────────────────────────────────────────
@@ -44,7 +44,7 @@ describe('RedisStore with real Redis', () => {
   test('update creates and retrieves entry', async () => {
     const store = new RedisStore({ client });
 
-    const entry = await store.update('key1', (current) => {
+    const entry = await store.update('key1', current => {
       expect(current).toBeNull();
       return { value: 42, prev: 0, windowStart: 1000 };
     });
@@ -60,7 +60,7 @@ describe('RedisStore with real Redis', () => {
 
     await store.update('key1', () => ({ value: 10, prev: 5, windowStart: 2000 }));
 
-    const entry = await store.update('key1', (current) => {
+    const entry = await store.update('key1', current => {
       expect(current).toEqual({ value: 10, prev: 5, windowStart: 2000 });
       return { value: 20, prev: 10, windowStart: 3000 };
     });

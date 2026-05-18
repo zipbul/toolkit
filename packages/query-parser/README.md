@@ -39,12 +39,12 @@ parser.parse('q=hello%20world&lang=ko');
 
 ```typescript
 interface QueryParserOptions {
-  depth?: number;           // Default: 5
-  maxParams?: number;       // Default: 1000
-  nesting?: boolean;        // Default: false
-  arrayLimit?: number;      // Default: 20
-  duplicates?: 'first' | 'last' | 'array';  // Default: 'first'
-  strict?: boolean;         // Default: false
+  depth?: number; // Default: 5
+  maxParams?: number; // Default: 1000
+  nesting?: boolean; // Default: false
+  arrayLimit?: number; // Default: 20
+  duplicates?: 'first' | 'last' | 'array'; // Default: 'first'
+  strict?: boolean; // Default: false
 }
 ```
 
@@ -55,7 +55,7 @@ Maximum depth of nested object parsing. Keys nested beyond this limit are silent
 ```typescript
 const parser = QueryParser.create({ depth: 2 });
 
-parser.parse('a[b][c]=1');    // { a: { b: { c: '1' } } }
+parser.parse('a[b][c]=1'); // { a: { b: { c: '1' } } }
 parser.parse('a[b][c][d]=1'); // depth exceeded — ignored
 ```
 
@@ -95,7 +95,7 @@ Maximum array index allowed when `nesting` is enabled. Indices exceeding this li
 ```typescript
 const parser = QueryParser.create({ nesting: true, arrayLimit: 5 });
 
-parser.parse('a[3]=ok');   // { a: [undefined, undefined, undefined, 'ok'] }
+parser.parse('a[3]=ok'); // { a: [undefined, undefined, undefined, 'ok'] }
 parser.parse('a[100]=no'); // index exceeds limit — ignored
 ```
 
@@ -103,11 +103,11 @@ parser.parse('a[100]=no'); // index exceeds limit — ignored
 
 Strategy for handling duplicate keys (HTTP Parameter Pollution).
 
-| Value | Behavior |
-|:------|:---------|
+| Value                 | Behavior                                          |
+| :-------------------- | :------------------------------------------------ |
 | `'first'` _(default)_ | Keep the first value — safest against HPP attacks |
-| `'last'` | Keep the last value |
-| `'array'` | Collect all values into an array |
+| `'last'`              | Keep the last value                               |
+| `'array'`             | Collect all values into an array                  |
 
 ```typescript
 // Input: 'role=admin&role=user'
@@ -133,9 +133,9 @@ When enabled, `parse()` throws `QueryParserError` instead of silently ignoring e
 ```typescript
 const parser = QueryParser.create({ strict: true });
 
-parser.parse('valid=ok');           // { valid: 'ok' }
-parser.parse('bad=%zz');            // throws QueryParserError
-parser.parse('a=1&a[b]=2');        // throws QueryParserError (conflicting structure)
+parser.parse('valid=ok'); // { valid: 'ok' }
+parser.parse('bad=%zz'); // throws QueryParserError
+parser.parse('a=1&a[b]=2'); // throws QueryParserError (conflicting structure)
 ```
 
 <br>
@@ -151,7 +151,7 @@ try {
   const parser = QueryParser.create({ depth: -1 });
 } catch (e) {
   if (e instanceof QueryParserError) {
-    e.reason;  // QueryParserErrorReason.InvalidDepth
+    e.reason; // QueryParserErrorReason.InvalidDepth
     e.message; // "depth must be a non-negative integer."
   }
 }
@@ -159,14 +159,14 @@ try {
 
 ### `QueryParserErrorReason`
 
-| Reason | Thrown by | Description |
-|:-------|:---------|:------------|
-| `InvalidDepth` | `create()` | `depth` must be a non-negative integer |
-| `InvalidParameterLimit` | `create()` | `maxParams` must be a positive integer |
-| `InvalidArrayLimit` | `create()` | `arrayLimit` must be a non-negative integer |
-| `InvalidHppMode` | `create()` | `duplicates` must be `'first'`, `'last'`, or `'array'` |
-| `MalformedQueryString` | `parse()` | Malformed syntax (strict mode only) |
-| `ConflictingStructure` | `parse()` | Key used as both scalar and nested (strict mode only) |
+| Reason                  | Thrown by  | Description                                            |
+| :---------------------- | :--------- | :----------------------------------------------------- |
+| `InvalidDepth`          | `create()` | `depth` must be a non-negative integer                 |
+| `InvalidParameterLimit` | `create()` | `maxParams` must be a positive integer                 |
+| `InvalidArrayLimit`     | `create()` | `arrayLimit` must be a non-negative integer            |
+| `InvalidHppMode`        | `create()` | `duplicates` must be `'first'`, `'last'`, or `'array'` |
+| `MalformedQueryString`  | `parse()`  | Malformed syntax (strict mode only)                    |
+| `ConflictingStructure`  | `parse()`  | Key used as both scalar and nested (strict mode only)  |
 
 <br>
 
@@ -206,19 +206,19 @@ Benchmarked with [mitata](https://github.com/evanwashere/mitata) on Bun.
 
 ### vs competitors (flat key-value)
 
-| Input | @zipbul/query-parser | node:querystring | URLSearchParams | qs |
-|:------|---------------------:|-----------------:|----------------:|---:|
-| flat 10 params | 423 ns | 368 ns | 2.62 us | 4.65 us |
-| flat 50 params | 4.81 us | 4.36 us | 12.58 us | 19.40 us |
-| encoded 5 params | **955 ns** | 1.24 us | 1.60 us | 2.24 us |
+| Input            | @zipbul/query-parser | node:querystring | URLSearchParams |       qs |
+| :--------------- | -------------------: | ---------------: | --------------: | -------: |
+| flat 10 params   |               423 ns |           368 ns |         2.62 us |  4.65 us |
+| flat 50 params   |              4.81 us |          4.36 us |        12.58 us | 19.40 us |
+| encoded 5 params |           **955 ns** |          1.24 us |         1.60 us |  2.24 us |
 
 ### vs qs (nested/array)
 
-| Input | @zipbul/query-parser | qs | Speedup |
-|:------|---------------------:|---:|--------:|
-| nested depth 3 | 162 ns | 1.01 us | **6.3x** |
-| array x10 | 1.39 us | 7.16 us | **5.2x** |
-| e-commerce payload | 1.12 us | 4.50 us | **4.0x** |
+| Input              | @zipbul/query-parser |      qs |  Speedup |
+| :----------------- | -------------------: | ------: | -------: |
+| nested depth 3     |               162 ns | 1.01 us | **6.3x** |
+| array x10          |              1.39 us | 7.16 us | **5.2x** |
+| e-commerce payload |              1.12 us | 4.50 us | **4.0x** |
 
 Run benchmarks locally:
 

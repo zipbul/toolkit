@@ -1,5 +1,5 @@
-export const TESTER_FAIL = 0 as const;
-export const TESTER_PASS = 1 as const;
+const TESTER_FAIL = 0 as const;
+const TESTER_PASS = 1 as const;
 
 type TesterResult = typeof TESTER_FAIL | typeof TESTER_PASS;
 
@@ -11,7 +11,7 @@ type TesterResult = typeof TESTER_FAIL | typeof TESTER_PASS;
  * the type from the tree barrel without an upward edge to a dedicated
  * types module.
  */
-export type PatternTesterFn = (value: string) => TesterResult;
+type PatternTesterFn = (value: string) => TesterResult;
 
 const DIGIT_PATTERNS = new Set(['\\d+', '\\d{1,}', '[0-9]+', '[0-9]{1,}']);
 const ALPHA_PATTERNS = new Set(['[a-zA-Z]+', '[A-Za-z]+']);
@@ -19,16 +19,9 @@ const ALPHA_PATTERNS = new Set(['[a-zA-Z]+', '[A-Za-z]+']);
 // set — keep both source forms here so the user's chosen syntax doesn't
 // fall through to the slow `compiled.test` path. Same for the escaped
 // variants the path-parser may emit after normalization.
-const ALPHANUM_PATTERNS = new Set([
-  '[A-Za-z0-9_\\-]+', '[A-Za-z0-9_-]+',
-  '\\w+', '\\w{1,}',
-  '[\\w-]+', '[\\w\\-]+',
-]);
+const ALPHANUM_PATTERNS = new Set(['[A-Za-z0-9_\\-]+', '[A-Za-z0-9_-]+', '\\w+', '\\w{1,}', '[\\w-]+', '[\\w\\-]+']);
 
-export function buildPatternTester(
-  source: string,
-  compiled: RegExp,
-): PatternTesterFn {
+function buildPatternTester(source: string, compiled: RegExp): PatternTesterFn {
   if (source.length > 0) {
     if (DIGIT_PATTERNS.has(source)) {
       return value => (isAllDigits(value) ? TESTER_PASS : TESTER_FAIL);
@@ -102,3 +95,6 @@ function isAlphaNumericDash(value: string): boolean {
 
   return true;
 }
+
+export { buildPatternTester, TESTER_FAIL, TESTER_PASS };
+export type { PatternTesterFn };

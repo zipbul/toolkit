@@ -1,8 +1,8 @@
 import type { MultipartFile } from '../interfaces';
-
-import { MultipartFieldImpl } from './part';
 import type { PartQueue } from './part-queue';
+
 import { noop } from '../constants';
+import { MultipartFieldImpl } from './part';
 import { MultipartFileImpl, BufferedMultipartFile } from './streaming-part';
 
 // ── Interfaces ─────────────────────────────────────────────────────
@@ -46,12 +46,7 @@ class BufferingFileWriter implements FileWriter {
   private readonly contentType: string;
   private readonly files: Map<string, MultipartFile[]>;
 
-  constructor(
-    fieldName: string,
-    filename: string,
-    contentType: string,
-    files: Map<string, MultipartFile[]>,
-  ) {
+  constructor(fieldName: string, filename: string, contentType: string, files: Map<string, MultipartFile[]>) {
     this.fieldName = fieldName;
     this.filename = filename;
     this.contentType = contentType;
@@ -73,12 +68,7 @@ class BufferingFileWriter implements FileWriter {
       data = Buffer.concat(this.chunks);
     }
 
-    const file = new BufferedMultipartFile(
-      this.fieldName,
-      this.filename,
-      this.contentType,
-      data,
-    );
+    const file = new BufferedMultipartFile(this.fieldName, this.filename, this.contentType, data);
 
     const existing = this.files.get(this.fieldName);
 
@@ -144,7 +134,11 @@ class StreamingFileWriter implements FileWriter {
   }
 
   abort(reason?: unknown): void {
-    try { this.writer.abort(reason).catch(noop); } catch { /* already released */ }
+    try {
+      this.writer.abort(reason).catch(noop);
+    } catch {
+      /* already released */
+    }
   }
 }
 
@@ -167,12 +161,7 @@ export class StreamingCallbacks implements ParserCallbacks {
     const transform = new TransformStream<Uint8Array, Uint8Array>();
     const writer = transform.writable.getWriter();
 
-    const filePart = new MultipartFileImpl(
-      name,
-      filename,
-      contentType,
-      transform.readable,
-    );
+    const filePart = new MultipartFileImpl(name, filename, contentType, transform.readable);
 
     this.queue.push(filePart);
 

@@ -59,53 +59,53 @@ bun packages/router/bench/bun-technique-matrix.ts
 
 주요 결과:
 
-| 항목 | 결과 |
-| --- | ---: |
-| method null-proto object lookup | 1.12 ns/op |
-| method switch dispatch | 2.10 ns/op |
-| method Map.get | 7.80 ns/op |
-| method bitmask availability | 2.18 ns/op |
-| bitmap+popcount rank | 4.95 ns/op |
-| method bool array availability | 2.69 ns/op |
-| method Set<number> availability | 3.43 ns/op |
-| method Set<string> availability | 9.66 ns/op |
-| terminal direct handler index | 2.07 ns/op |
-| terminal array method lookup | 2.41 ns/op |
-| terminal tagged fast path | 2.39 ns/op |
-| terminal tagged poly path | 2.18 ns/op |
-| direct object static hit (small key set, JSC IC fast path) | 3.44 ns/op |
-| direct object static hit (100k key set, post-IC) | **27.71 ns/iter** (§5.3 B) |
-| `Map<string, number>` static hit (100k key set) | **13.87 ns/iter** (§5.3 B — 1.99× faster) |
-| length bucket static hit | 5.49 ns/op |
-| packed key lookup hit | 25.50 ns/op |
-| open-address hash lookup hit | 18.59 ns/op |
-| fanout4 object lookup | 4.02 ns/op |
-| fanout16 object lookup | 3.08 ns/op |
-| fanout64 object lookup | 3.27 ns/op |
-| fanout64 array scan | 54.82 ns/op |
-| Uint32Array indexed read | 3.02 ns/op |
-| DataView getUint32 | 3.59 ns/op |
-| TextEncoder.encode per match | 47.04 ns/op |
-| Bun.hash string | 71.58 ns/op |
-| String#indexOf slash | 4.46 ns/op |
-| manual slash scan | 1.36 ns/op |
-| string length read | 2.35 ns/op |
-| toLowerCase unchanged ascii | 2.70 ns/op |
-| manual lowercase unchanged ascii | 17.54 ns/op |
-| build-time specialized equality | 1.57 ns/op |
-| cache key concat lookup | 11.37 ns/op |
-| per-method cache path lookup | 4.19 ns/op |
-| throw/catch validation | 55.94 ns/op |
-| issue-array validation | 3.33 ns/op |
-| substring param allocation | 38.47 ns/op |
-| offset-only param accounting | 2.66 ns/op |
-| object nodes 500k approx delta | rss +33.80 MB, heap +37.72 MB |
-| Int32Array 500k*8 approx delta | rss +18.38 MB, heap +0 MB |
+| 항목                                                       |                                      결과 |
+| ---------------------------------------------------------- | ----------------------------------------: |
+| method null-proto object lookup                            |                                1.12 ns/op |
+| method switch dispatch                                     |                                2.10 ns/op |
+| method Map.get                                             |                                7.80 ns/op |
+| method bitmask availability                                |                                2.18 ns/op |
+| bitmap+popcount rank                                       |                                4.95 ns/op |
+| method bool array availability                             |                                2.69 ns/op |
+| method Set<number> availability                            |                                3.43 ns/op |
+| method Set<string> availability                            |                                9.66 ns/op |
+| terminal direct handler index                              |                                2.07 ns/op |
+| terminal array method lookup                               |                                2.41 ns/op |
+| terminal tagged fast path                                  |                                2.39 ns/op |
+| terminal tagged poly path                                  |                                2.18 ns/op |
+| direct object static hit (small key set, JSC IC fast path) |                                3.44 ns/op |
+| direct object static hit (100k key set, post-IC)           |                **27.71 ns/iter** (§5.3 B) |
+| `Map<string, number>` static hit (100k key set)            | **13.87 ns/iter** (§5.3 B — 1.99× faster) |
+| length bucket static hit                                   |                                5.49 ns/op |
+| packed key lookup hit                                      |                               25.50 ns/op |
+| open-address hash lookup hit                               |                               18.59 ns/op |
+| fanout4 object lookup                                      |                                4.02 ns/op |
+| fanout16 object lookup                                     |                                3.08 ns/op |
+| fanout64 object lookup                                     |                                3.27 ns/op |
+| fanout64 array scan                                        |                               54.82 ns/op |
+| Uint32Array indexed read                                   |                                3.02 ns/op |
+| DataView getUint32                                         |                                3.59 ns/op |
+| TextEncoder.encode per match                               |                               47.04 ns/op |
+| Bun.hash string                                            |                               71.58 ns/op |
+| String#indexOf slash                                       |                                4.46 ns/op |
+| manual slash scan                                          |                                1.36 ns/op |
+| string length read                                         |                                2.35 ns/op |
+| toLowerCase unchanged ascii                                |                                2.70 ns/op |
+| manual lowercase unchanged ascii                           |                               17.54 ns/op |
+| build-time specialized equality                            |                                1.57 ns/op |
+| cache key concat lookup                                    |                               11.37 ns/op |
+| per-method cache path lookup                               |                                4.19 ns/op |
+| throw/catch validation                                     |                               55.94 ns/op |
+| issue-array validation                                     |                                3.33 ns/op |
+| substring param allocation                                 |                               38.47 ns/op |
+| offset-only param accounting                               |                                2.66 ns/op |
+| object nodes 500k approx delta                             |             rss +33.80 MB, heap +37.72 MB |
+| Int32Array 500k\*8 approx delta                            |                 rss +18.38 MB, heap +0 MB |
 
 Measurement footnotes:
 
 - `substring param allocation` returns a string, while `TextEncoder.encode` returns a `Uint8Array`; those two rows reflect separate hot-path allocation costs and must not be treated as a direct same-output comparison.
-- The object/Int32Array memory rows include allocator/page behavior, not just raw payload. `Int32Array 500k*8` means 500,000 rows with 8 `Int32` slots each: 4,000,000 elements * 4 bytes = 15.26 MiB raw element payload. The measured RSS delta is larger because of runtime allocation overhead and page accounting.
+- The object/Int32Array memory rows include allocator/page behavior, not just raw payload. `Int32Array 500k*8` means 500,000 rows with 8 `Int32` slots each: 4,000,000 elements \* 4 bytes = 15.26 MiB raw element payload. The measured RSS delta is larger because of runtime allocation overhead and page accounting.
 - The object allocation probe can show heap delta larger than RSS delta because GC timing, allocator arenas, and OS page accounting are not synchronized in the single-process measurement.
 
 해석:
@@ -140,17 +140,17 @@ Pinned local runtime for measurements:
 - All ns/op and memory numbers in this document are local results from this environment unless otherwise stated.
 - Release-note inputs are design hints only. Local benchmark/profile gates override release-note inference.
 
-| Source | Relevant fact | Router decision |
-| --- | --- | --- |
-| Bun 1.3.13 | JavaScriptCore upgrade: string length folding, `String#indexOf` single-character fast path, SIMD case-insensitive comparison, GC bulk-copy improvements | string primitive와 JSC object fast path를 유지한다. 문자열을 byte buffer로 강제 변환하지 않는다. |
-| Bun 1.3.13 | Source maps moved to compact bit-packed binary format with in-place reads; lookup cost increased slightly while memory dropped | dense metadata는 packed/TypedArray로 옮기되, lookup 전체를 packed buffer로 대체하지 않는다. |
-| Bun 1.3.13 | Runtime memory allocator/libpas improvements reduce baseline memory | memory bench는 Bun version pinned 상태로만 비교한다. |
-| Bun 1.3.12 | Faster tier-up, `Array.isArray` intrinsic, faster single-character `String#includes`, register allocation improvements | small stable hot functions and monomorphic runtime tables are preferred. |
-| Bun 1.3.12 | URLPattern became up to 2.3x faster by removing temporary JS allocations | allocation-free matching is a proven Bun/JSC direction. Compare against URLPattern, but do not replace the router with URLPattern. |
-| Bun 1.3.7 | ARM64 compound boolean expressions compile better, reducing branch misprediction/code size | generated boolean chains are valid candidates when code size is bounded. |
-| Bun 1.3 | `Bun.serve()` has native routes with params/catch-all | benchmark against Bun native routes as an external baseline. |
-| Bun 1.3 | `request.cookies` parses lazily when accessed | params avoid eager object/string materialization where API compatibility permits it. |
-| Bun 1.3.2 / 1.3.7 / 1.3.9 | CPU and heap profiling flags/APIs exist | final optimization must be checked with `--cpu-prof`, `--cpu-prof-interval`, and `--heap-prof`, not only mitata. |
+| Source                    | Relevant fact                                                                                                                                           | Router decision                                                                                                                    |
+| ------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------- |
+| Bun 1.3.13                | JavaScriptCore upgrade: string length folding, `String#indexOf` single-character fast path, SIMD case-insensitive comparison, GC bulk-copy improvements | string primitive와 JSC object fast path를 유지한다. 문자열을 byte buffer로 강제 변환하지 않는다.                                   |
+| Bun 1.3.13                | Source maps moved to compact bit-packed binary format with in-place reads; lookup cost increased slightly while memory dropped                          | dense metadata는 packed/TypedArray로 옮기되, lookup 전체를 packed buffer로 대체하지 않는다.                                        |
+| Bun 1.3.13                | Runtime memory allocator/libpas improvements reduce baseline memory                                                                                     | memory bench는 Bun version pinned 상태로만 비교한다.                                                                               |
+| Bun 1.3.12                | Faster tier-up, `Array.isArray` intrinsic, faster single-character `String#includes`, register allocation improvements                                  | small stable hot functions and monomorphic runtime tables are preferred.                                                           |
+| Bun 1.3.12                | URLPattern became up to 2.3x faster by removing temporary JS allocations                                                                                | allocation-free matching is a proven Bun/JSC direction. Compare against URLPattern, but do not replace the router with URLPattern. |
+| Bun 1.3.7                 | ARM64 compound boolean expressions compile better, reducing branch misprediction/code size                                                              | generated boolean chains are valid candidates when code size is bounded.                                                           |
+| Bun 1.3                   | `Bun.serve()` has native routes with params/catch-all                                                                                                   | benchmark against Bun native routes as an external baseline.                                                                       |
+| Bun 1.3                   | `request.cookies` parses lazily when accessed                                                                                                           | params avoid eager object/string materialization where API compatibility permits it.                                               |
+| Bun 1.3.2 / 1.3.7 / 1.3.9 | CPU and heap profiling flags/APIs exist                                                                                                                 | final optimization must be checked with `--cpu-prof`, `--cpu-prof-interval`, and `--heap-prof`, not only mitata.                   |
 
 External baselines required before claiming final superiority:
 
@@ -214,27 +214,27 @@ Current defects that must be fixed before performance work:
 
 Decision state:
 
-| Area | State | Reason | Next gate |
-| --- | --- | --- | --- |
-| method dispatch via null-proto object | Confirmed | microbench에서 `Map`/`switch`보다 빠름 | 100k method mix regression |
-| method availability via bitmask | Confirmed within <=32 methods | `Set`/bool array보다 빠르고 32-method limit과 일치 | allowed-method/wrong-method tests and explicit >32 failure |
-| static full-path object table | **Confirmed workload-aware** (task 15 POC) | object hit 7.59 ns < Map hit 9.43 ns at production-realistic 8 method × 12,500 routes/bucket; §5.3 1.99× Map advantage applies only to unsharded single-table microbench. Map opt-in for miss/wrong-method/build/RSS-dominant workload | 30-run gate on `100k static` for hybrid threshold |
-| dynamic segment trie | Confirmed as baseline | current implementation and semantics fit route grammar | 100k param/wildcard profile |
-| full TypedArray/SoA router | Rejected | lookup workload에서 object lookup을 이기지 못함 | reopen only with end-to-end proof |
-| `Bun.hash` hot path | Rejected | measured string hash cost too high | none |
-| TextEncoder byte routing | Rejected | per-match encode allocation/cost too high | none |
-| DataView node table | Rejected | no speed advantage over TypedArray/object path | none |
-| open-address child hash | Rejected | object lookup faster in measured fanout | none |
-| static-first static lookup | Required default | current code path is being moved to static-first; candidate microbench only selects the candidate, and final adoption still requires fresh-process end-to-end p75/p99 proof | static-heavy + churn benchmark |
-| path-first static layout | Candidate | microbench promising, memory shape unproven | end-to-end memory and method semantics |
-| terminal tag fast/poly | Candidate | microbench delta small in per-method tree | end-to-end terminal/handler table proof |
-| manual slash scan | Candidate | microbench varies by run/path distribution | segment walker end-to-end proof |
-| lazy read-only params | Candidate | chosen direction for future allocation reduction; current immediate fix preserves immutable/cache-safe params semantics | correctness + mutation + perf test |
-| wildcard conflict index | Required | phase diagnostics and 50k stress identify prefix conflict scanning as the build-time blocker; implementation still must pass 100k gates | Phase 4 RED/GREEN and 100k mixed Guard |
-| wildcard/static/wildcard issue-kind symmetry | Required | same collision class must emit the same issue kind regardless of registration order | bidirectional route-unreachable fixtures |
-| regex sibling cap | Required | bounded conservative regex disjointness comparisons need `regex-sibling-limit` | 33+ same-segment regex siblings fixture |
-| total expansion cap | Required | per-route optional cap alone allows pathological total expanded route count | `expansion-total-limit` fixture |
-| compressed dynamic chains | Candidate | memory candidate, not speed baseline | 100k param heap object breakdown |
+| Area                                         | State                                      | Reason                                                                                                                                                                                                                                 | Next gate                                                  |
+| -------------------------------------------- | ------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------- |
+| method dispatch via null-proto object        | Confirmed                                  | microbench에서 `Map`/`switch`보다 빠름                                                                                                                                                                                                 | 100k method mix regression                                 |
+| method availability via bitmask              | Confirmed within <=32 methods              | `Set`/bool array보다 빠르고 32-method limit과 일치                                                                                                                                                                                     | allowed-method/wrong-method tests and explicit >32 failure |
+| static full-path object table                | **Confirmed workload-aware** (task 15 POC) | object hit 7.59 ns < Map hit 9.43 ns at production-realistic 8 method × 12,500 routes/bucket; §5.3 1.99× Map advantage applies only to unsharded single-table microbench. Map opt-in for miss/wrong-method/build/RSS-dominant workload | 30-run gate on `100k static` for hybrid threshold          |
+| dynamic segment trie                         | Confirmed as baseline                      | current implementation and semantics fit route grammar                                                                                                                                                                                 | 100k param/wildcard profile                                |
+| full TypedArray/SoA router                   | Rejected                                   | lookup workload에서 object lookup을 이기지 못함                                                                                                                                                                                        | reopen only with end-to-end proof                          |
+| `Bun.hash` hot path                          | Rejected                                   | measured string hash cost too high                                                                                                                                                                                                     | none                                                       |
+| TextEncoder byte routing                     | Rejected                                   | per-match encode allocation/cost too high                                                                                                                                                                                              | none                                                       |
+| DataView node table                          | Rejected                                   | no speed advantage over TypedArray/object path                                                                                                                                                                                         | none                                                       |
+| open-address child hash                      | Rejected                                   | object lookup faster in measured fanout                                                                                                                                                                                                | none                                                       |
+| static-first static lookup                   | Required default                           | current code path is being moved to static-first; candidate microbench only selects the candidate, and final adoption still requires fresh-process end-to-end p75/p99 proof                                                            | static-heavy + churn benchmark                             |
+| path-first static layout                     | Candidate                                  | microbench promising, memory shape unproven                                                                                                                                                                                            | end-to-end memory and method semantics                     |
+| terminal tag fast/poly                       | Candidate                                  | microbench delta small in per-method tree                                                                                                                                                                                              | end-to-end terminal/handler table proof                    |
+| manual slash scan                            | Candidate                                  | microbench varies by run/path distribution                                                                                                                                                                                             | segment walker end-to-end proof                            |
+| lazy read-only params                        | Candidate                                  | chosen direction for future allocation reduction; current immediate fix preserves immutable/cache-safe params semantics                                                                                                                | correctness + mutation + perf test                         |
+| wildcard conflict index                      | Required                                   | phase diagnostics and 50k stress identify prefix conflict scanning as the build-time blocker; implementation still must pass 100k gates                                                                                                | Phase 4 RED/GREEN and 100k mixed Guard                     |
+| wildcard/static/wildcard issue-kind symmetry | Required                                   | same collision class must emit the same issue kind regardless of registration order                                                                                                                                                    | bidirectional route-unreachable fixtures                   |
+| regex sibling cap                            | Required                                   | bounded conservative regex disjointness comparisons need `regex-sibling-limit`                                                                                                                                                         | 33+ same-segment regex siblings fixture                    |
+| total expansion cap                          | Required                                   | per-route optional cap alone allows pathological total expanded route count                                                                                                                                                            | `expansion-total-limit` fixture                            |
+| compressed dynamic chains                    | Candidate                                  | memory candidate, not speed baseline                                                                                                                                                                                                   | 100k param heap object breakdown                           |
 
 ---
 
@@ -269,28 +269,28 @@ Scope and trust level:
 
 Current router 100k results:
 
-| Shape | Add+build | Memory delta (MiB-style harness MB) | Single-run warmed hit probe min-max | Single-run warmed miss probe min-max | Verdict |
-| --- | ---: | ---: | ---: | ---: | --- |
-| 100k static | 307.61 ms | rss +184.45 MB, heap +75.69 MB | 17.66-26.59 ns/op | 15.81-16.64 ns/op | cache-hot match fast; last-route static hit is slower than best static probes; memory acceptable only provisionally |
-| 100k param | 795.21 ms | rss +692.66 MB, heap +373.01 MB | 17.07-17.39 ns/op | 15.19-15.94 ns/op | cache-hot match fast, memory too high |
-| 100k mixed | 21903.80 ms | rss +390.13 MB, heap +132.75 MB | 17.84-23.41 ns/op | 14.75-15.40 ns/op | cache-hot match fast, build unacceptable |
-| 100k high-fanout | 298.12 ms | rss +181.04 MB, heap +79.60 MB | 16.52-23.89 ns/op | 12.10-15.86 ns/op | cache-hot match fast, object lookup directionally holds |
+| Shape            |   Add+build | Memory delta (MiB-style harness MB) | Single-run warmed hit probe min-max | Single-run warmed miss probe min-max | Verdict                                                                                                             |
+| ---------------- | ----------: | ----------------------------------: | ----------------------------------: | -----------------------------------: | ------------------------------------------------------------------------------------------------------------------- |
+| 100k static      |   307.61 ms |      rss +184.45 MB, heap +75.69 MB |                   17.66-26.59 ns/op |                    15.81-16.64 ns/op | cache-hot match fast; last-route static hit is slower than best static probes; memory acceptable only provisionally |
+| 100k param       |   795.21 ms |     rss +692.66 MB, heap +373.01 MB |                   17.07-17.39 ns/op |                    15.19-15.94 ns/op | cache-hot match fast, memory too high                                                                               |
+| 100k mixed       | 21903.80 ms |     rss +390.13 MB, heap +132.75 MB |                   17.84-23.41 ns/op |                    14.75-15.40 ns/op | cache-hot match fast, build unacceptable                                                                            |
+| 100k high-fanout |   298.12 ms |      rss +181.04 MB, heap +79.60 MB |                   16.52-23.89 ns/op |                    12.10-15.86 ns/op | cache-hot match fast, object lookup directionally holds                                                             |
 
 Memory unit note: historical `MB` labels in this table are MiB-style harness output, `bytes / 1024 / 1024`.
 
 External 100k static baselines: static-only, single-run, warmed-loop probe min-max:
 
-| Router | Add+build | Memory delta (MiB-style harness MB) | Single-run warmed hit probe min-max | Single-run warmed miss | Verdict |
-| --- | ---: | ---: | ---: | ---: | --- |
-| zipbul | 313.63 ms | rss +176.60 MB, heap +40.46 MB | 16.90-21.29 ns/op | 18.60 ns/op | balanced, not fastest static hit |
-| rou3 | 181.63 ms | rss +85.62 MB, heap +26.15 MB | 7.12-8.27 ns/op | 62.54 ns/op | static hit faster, miss slower |
-| hono-regexp | 94.69 ms | rss +51.41 MB, heap +27.66 MB | 5.38-6.45 ns/op | 33.66 ns/op | static hit faster, but lazy first-match compile and semantic parity must be measured |
-| hono-trie | 158.98 ms | rss +90.80 MB, heap +35.27 MB | 116.88-359.15 ns/op | 122.50 ns/op | slower match |
-| koa-tree-router | 69.73 ms | rss +55.45 MB, heap +28.04 MB | 73.30-275.75 ns/op | 39.44 ns/op | slower match |
-| memoirist | 33460.09 ms | rss +43.35 MB, heap +26.45 MB | 55.29-107.99 ns/op | 33.82 ns/op | build too slow |
-| find-my-way | 56856.08 ms | rss +334.93 MB, heap +135.21 MB | 162.98-329.09 ns/op | 104.07 ns/op | build and match too slow |
-| URLPattern linear | 831.38 ms | rss +452.08 MB | last-match 103.11 ms/op | not measured | not viable as N-pattern router; unit is ms/op, unlike ns/op rows above |
-| Bun.serve routes | build-timeout >180s | route object prep later measured separately | not available | not available | phase split below shows prep completes and `Bun.serve()` init does not complete within the 100k gate |
+| Router            |           Add+build |         Memory delta (MiB-style harness MB) | Single-run warmed hit probe min-max | Single-run warmed miss | Verdict                                                                                              |
+| ----------------- | ------------------: | ------------------------------------------: | ----------------------------------: | ---------------------: | ---------------------------------------------------------------------------------------------------- |
+| zipbul            |           313.63 ms |              rss +176.60 MB, heap +40.46 MB |                   16.90-21.29 ns/op |            18.60 ns/op | balanced, not fastest static hit                                                                     |
+| rou3              |           181.63 ms |               rss +85.62 MB, heap +26.15 MB |                     7.12-8.27 ns/op |            62.54 ns/op | static hit faster, miss slower                                                                       |
+| hono-regexp       |            94.69 ms |               rss +51.41 MB, heap +27.66 MB |                     5.38-6.45 ns/op |            33.66 ns/op | static hit faster, but lazy first-match compile and semantic parity must be measured                 |
+| hono-trie         |           158.98 ms |               rss +90.80 MB, heap +35.27 MB |                 116.88-359.15 ns/op |           122.50 ns/op | slower match                                                                                         |
+| koa-tree-router   |            69.73 ms |               rss +55.45 MB, heap +28.04 MB |                  73.30-275.75 ns/op |            39.44 ns/op | slower match                                                                                         |
+| memoirist         |         33460.09 ms |               rss +43.35 MB, heap +26.45 MB |                  55.29-107.99 ns/op |            33.82 ns/op | build too slow                                                                                       |
+| find-my-way       |         56856.08 ms |             rss +334.93 MB, heap +135.21 MB |                 162.98-329.09 ns/op |           104.07 ns/op | build and match too slow                                                                             |
+| URLPattern linear |           831.38 ms |                              rss +452.08 MB |             last-match 103.11 ms/op |           not measured | not viable as N-pattern router; unit is ms/op, unlike ns/op rows above                               |
+| Bun.serve routes  | build-timeout >180s | route object prep later measured separately |                       not available |          not available | phase split below shows prep completes and `Bun.serve()` init does not complete within the 100k gate |
 
 External baseline caveats:
 
@@ -302,15 +302,15 @@ External baseline caveats:
 
 Candidate reproduction:
 
-| Candidate | Result | Decision |
-| --- | ---: | --- |
-| method-first static table | 2.63 ns/op | current shape remains viable |
-| path-first method array | 1.70 ns/op | must test end-to-end; promising for static table |
-| static-first then cache | 3.43 ns/op | likely better than cache-first for static-heavy |
-| cache-first then static | 3.80 ns/op | current order may be suboptimal for static-heavy |
-| miss-cache check then static | 3.91 ns/op | miss cache before static can hurt static-heavy |
-| `indexOf` segment scan | 29.11 ns/op | baseline |
-| manual segment scan | 22.97 ns/op | promising but must validate in walker end-to-end |
+| Candidate                    |      Result | Decision                                         |
+| ---------------------------- | ----------: | ------------------------------------------------ |
+| method-first static table    |  2.63 ns/op | current shape remains viable                     |
+| path-first method array      |  1.70 ns/op | must test end-to-end; promising for static table |
+| static-first then cache      |  3.43 ns/op | likely better than cache-first for static-heavy  |
+| cache-first then static      |  3.80 ns/op | current order may be suboptimal for static-heavy |
+| miss-cache check then static |  3.91 ns/op | miss cache before static can hurt static-heavy   |
+| `indexOf` segment scan       | 29.11 ns/op | baseline                                         |
+| manual segment scan          | 22.97 ns/op | promising but must validate in walker end-to-end |
 
 Facts before implementation:
 
@@ -339,19 +339,19 @@ bun -e "<params-cache-mutation-check>"
 
 100k added scenario results:
 
-| Shape | Add+build | Memory delta (MiB-style harness MB) | First hit range | Warmed hit probe min-max | Warmed miss probe min-max | Verdict |
-| --- | ---: | ---: | ---: | ---: | ---: | --- |
-| 100k versioned-api | 1066.19 ms | rss +532.89 MB, heap +125.22 MB, arrayBuffers +0.00 MB | 56.51-348.28 us | 18.48-24.39 ns/op | 15.58-18.29 ns/op | feasible, build above Aggressive target, first-hit must be profiled |
-| 100k wildcard-heavy | 546.06 ms | rss +424.37 MB, heap +196.13 MB, arrayBuffers +0.00 MB | 37.34-346.27 us | 17.71-18.49 ns/op | 15.81-16.50 ns/op | feasible, memory high, first-hit must be profiled |
+| Shape               |  Add+build |                    Memory delta (MiB-style harness MB) | First hit range | Warmed hit probe min-max | Warmed miss probe min-max | Verdict                                                             |
+| ------------------- | ---------: | -----------------------------------------------------: | --------------: | -----------------------: | ------------------------: | ------------------------------------------------------------------- |
+| 100k versioned-api  | 1066.19 ms | rss +532.89 MB, heap +125.22 MB, arrayBuffers +0.00 MB | 56.51-348.28 us |        18.48-24.39 ns/op |         15.58-18.29 ns/op | feasible, build above Aggressive target, first-hit must be profiled |
+| 100k wildcard-heavy |  546.06 ms | rss +424.37 MB, heap +196.13 MB, arrayBuffers +0.00 MB | 37.34-346.27 us |        17.71-18.49 ns/op |         15.81-16.50 ns/op | feasible, memory high, first-hit must be profiled                   |
 
 Wildcard/static conflict scaling:
 
-| Wildcards | Statics | Routes | Add+build | Verdict |
-| ---: | ---: | ---: | ---: | --- |
-| 1,000 | 1,000 | 2,000 | 84.12 ms | acceptable |
-| 5,000 | 5,000 | 10,000 | 1062.14 ms | already high |
-| 10,000 | 10,000 | 20,000 | 4096.85 ms | superlinear bottleneck reproduced |
-| 25,000 | 25,000 | 50,000 | 26280.32 ms | unacceptable |
+| Wildcards | Statics | Routes |   Add+build | Verdict                           |
+| --------: | ------: | -----: | ----------: | --------------------------------- |
+|     1,000 |   1,000 |  2,000 |    84.12 ms | acceptable                        |
+|     5,000 |   5,000 | 10,000 |  1062.14 ms | already high                      |
+|    10,000 |  10,000 | 20,000 |  4096.85 ms | superlinear bottleneck reproduced |
+|    25,000 |  25,000 | 50,000 | 26280.32 ms | unacceptable                      |
 
 Interpretation:
 
@@ -362,14 +362,14 @@ Interpretation:
 
 Fresh-process 30-run gate (RUNS=30, sample of 30 fresh `bun` processes per scenario, true median/p75/p99 from sorted distribution):
 
-| Shape | Build median / p75 / p99 | RSS median | Heap median | First median / p75 / p99 | Warmed hit median / p75 / p99 | Warmed miss median / p75 / p99 | Target interpretation |
-| --- | ---: | ---: | ---: | ---: | ---: | ---: | --- |
-| 100k static | 247.87 / 254.74 / 265.65 ms | 223.56 MiB | 90.30 MiB | 25,050 / 174,851 / 222,012 ns | 19.17 / 24.24 / 37.11 ns | 16.25 / 16.84 / 18.74 ns | build passes Aggressive (250 ms p75) but p99 fails; warmed hit p99 passes Aggressive; first-match p99 fails Guard 10us by 22x |
-| 100k param | 586.56 / 598.10 / 636.15 ms | 698.45 MiB | 126.20 MiB | 51,523 / 338,554 / 488,041 ns | 18.65 / 19.12 / 21.69 ns | 16.44 / 16.97 / 22.65 ns | build passes Aggressive; RSS fails Guard 390.63 MiB by 1.79x; warmed hit p99 passes Stretch; first-match p99 fails Guard by 49x |
-| 100k mixed | 20,993.67 / 21,186.12 / 23,715.17 ms | 486.32 MiB | 163.84 MiB | 193,929 / 215,303 / 286,707 ns | 18.92 / 20.71 / 22.63 ns | 15.08 / 15.69 / 17.73 ns | build fails Guard 3000 ms by 7.9x at p99; RSS fails Guard by 1.24x; warmed hit p99 passes Stretch; first-match p99 fails Guard by 29x |
-| 100k high-fanout | 263.30 / 267.49 / 285.74 ms | 209.68 MiB | 90.09 MiB | 31,779 / 172,213 / 302,059 ns | 18.80 / 30.25 / 50.31 ns | 16.28 / 17.11 / 24.04 ns | build passes Aggressive at median, p99 just fails; RSS passes Aggressive; warmed hit p99 passes Aggressive only; first-match p99 fails Guard by 30x |
-| 100k versioned-api | 741.51 / 761.11 / 787.60 ms | 475.50 MiB | 172.33 MiB | 97,013 / 333,336 / 432,776 ns | 20.42 / 23.12 / 26.63 ns | 16.97 / 18.28 / 19.64 ns | build passes Aggressive 750 ms median, p99 fails; RSS fails Guard; warmed hit p99 passes Aggressive; first-match p99 fails Guard by 43x |
-| 100k wildcard-heavy | 464.76 / 473.63 / 490.35 ms | 428.79 MiB | 193.90 MiB | 88,093 / 329,905 / 480,246 ns | 18.12 / 18.52 / 19.99 ns | 16.49 / 16.98 / 19.30 ns | build passes Aggressive; RSS fails Guard; warmed hit p99 passes Stretch; first-match p99 fails Guard by 48x |
+| Shape               |             Build median / p75 / p99 | RSS median | Heap median |       First median / p75 / p99 | Warmed hit median / p75 / p99 | Warmed miss median / p75 / p99 | Target interpretation                                                                                                                               |
+| ------------------- | -----------------------------------: | ---------: | ----------: | -----------------------------: | ----------------------------: | -----------------------------: | --------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 100k static         |          247.87 / 254.74 / 265.65 ms | 223.56 MiB |   90.30 MiB |  25,050 / 174,851 / 222,012 ns |      19.17 / 24.24 / 37.11 ns |       16.25 / 16.84 / 18.74 ns | build passes Aggressive (250 ms p75) but p99 fails; warmed hit p99 passes Aggressive; first-match p99 fails Guard 10us by 22x                       |
+| 100k param          |          586.56 / 598.10 / 636.15 ms | 698.45 MiB |  126.20 MiB |  51,523 / 338,554 / 488,041 ns |      18.65 / 19.12 / 21.69 ns |       16.44 / 16.97 / 22.65 ns | build passes Aggressive; RSS fails Guard 390.63 MiB by 1.79x; warmed hit p99 passes Stretch; first-match p99 fails Guard by 49x                     |
+| 100k mixed          | 20,993.67 / 21,186.12 / 23,715.17 ms | 486.32 MiB |  163.84 MiB | 193,929 / 215,303 / 286,707 ns |      18.92 / 20.71 / 22.63 ns |       15.08 / 15.69 / 17.73 ns | build fails Guard 3000 ms by 7.9x at p99; RSS fails Guard by 1.24x; warmed hit p99 passes Stretch; first-match p99 fails Guard by 29x               |
+| 100k high-fanout    |          263.30 / 267.49 / 285.74 ms | 209.68 MiB |   90.09 MiB |  31,779 / 172,213 / 302,059 ns |      18.80 / 30.25 / 50.31 ns |       16.28 / 17.11 / 24.04 ns | build passes Aggressive at median, p99 just fails; RSS passes Aggressive; warmed hit p99 passes Aggressive only; first-match p99 fails Guard by 30x |
+| 100k versioned-api  |          741.51 / 761.11 / 787.60 ms | 475.50 MiB |  172.33 MiB |  97,013 / 333,336 / 432,776 ns |      20.42 / 23.12 / 26.63 ns |       16.97 / 18.28 / 19.64 ns | build passes Aggressive 750 ms median, p99 fails; RSS fails Guard; warmed hit p99 passes Aggressive; first-match p99 fails Guard by 43x             |
+| 100k wildcard-heavy |          464.76 / 473.63 / 490.35 ms | 428.79 MiB |  193.90 MiB |  88,093 / 329,905 / 480,246 ns |      18.12 / 18.52 / 19.99 ns |       16.49 / 16.98 / 19.30 ns | build passes Aggressive; RSS fails Guard; warmed hit p99 passes Stretch; first-match p99 fails Guard by 48x                                         |
 
 Interpretation:
 
@@ -382,29 +382,29 @@ Interpretation:
 
 Earlier 3-run partial gate (preserved for traceability):
 
-| Shape | Build median / p75 / p99 (3-run, p99=max) | RSS median | Heap median | First p99 | Warmed hit p99 | Warmed miss p99 |
-| --- | ---: | ---: | ---: | ---: | ---: | ---: |
-| 100k static | 271.80 / 291.89 / 291.89 ms | 220.06 MiB | 92.98 MiB | 206.11 us | 33.75 ns | 18.26 ns |
-| 100k param | 589.34 / 674.47 / 674.47 ms | 688.91 MiB | 128.82 MiB | 370.93 us | 19.39 ns | 17.31 ns |
-| 100k high-fanout | 246.64 / 255.55 / 255.55 ms | 210.07 MiB | 87.92 MiB | 203.65 us | 29.77 ns | 16.83 ns |
-| 100k versioned-api | 790.79 / 867.14 / 867.14 ms | 473.83 MiB | 171.57 MiB | 364.68 us | 27.54 ns | 19.61 ns |
-| 100k wildcard-heavy | 466.68 / 537.27 / 537.27 ms | 426.41 MiB | 200.28 MiB | 376.63 us | 18.51 ns | 17.47 ns |
+| Shape               | Build median / p75 / p99 (3-run, p99=max) | RSS median | Heap median | First p99 | Warmed hit p99 | Warmed miss p99 |
+| ------------------- | ----------------------------------------: | ---------: | ----------: | --------: | -------------: | --------------: |
+| 100k static         |               271.80 / 291.89 / 291.89 ms | 220.06 MiB |   92.98 MiB | 206.11 us |       33.75 ns |        18.26 ns |
+| 100k param          |               589.34 / 674.47 / 674.47 ms | 688.91 MiB |  128.82 MiB | 370.93 us |       19.39 ns |        17.31 ns |
+| 100k high-fanout    |               246.64 / 255.55 / 255.55 ms | 210.07 MiB |   87.92 MiB | 203.65 us |       29.77 ns |        16.83 ns |
+| 100k versioned-api  |               790.79 / 867.14 / 867.14 ms | 473.83 MiB |  171.57 MiB | 364.68 us |       27.54 ns |        19.61 ns |
+| 100k wildcard-heavy |               466.68 / 537.27 / 537.27 ms | 426.41 MiB |  200.28 MiB | 376.63 us |       18.51 ns |        17.47 ns |
 
 The 3-run row values agree with 30-run medians within 1–4% drift, confirming sample stability across run counts. `100k mixed` is now also covered by the 30-run gate (was missing from the 3-run table).
 
 Correctness RED checks:
 
-| Check | Current result | Verdict |
-| --- | --- | --- |
-| empty method | accepted | defect reproduced |
-| space method `GET POST` | accepted | defect reproduced |
-| registration query `/a?b` | accepted | defect reproduced |
-| registration fragment `/a#b` | accepted | defect reproduced |
-| registration control char | accepted | defect reproduced |
-| registration dot segment `/a/../b` | accepted | defect reproduced |
-| malformed percent `/a/%ZZ` | accepted | defect reproduced |
-| `optionalParamBehavior: 'omit'` missing key | returns `id: undefined` | **superseded by task 7** |
-| params mutation then same-path match | second match returns original param and `sameParams=false` | current cache-safe semantics confirmed |
+| Check                                       | Current result                                             | Verdict                                |
+| ------------------------------------------- | ---------------------------------------------------------- | -------------------------------------- |
+| empty method                                | accepted                                                   | defect reproduced                      |
+| space method `GET POST`                     | accepted                                                   | defect reproduced                      |
+| registration query `/a?b`                   | accepted                                                   | defect reproduced                      |
+| registration fragment `/a#b`                | accepted                                                   | defect reproduced                      |
+| registration control char                   | accepted                                                   | defect reproduced                      |
+| registration dot segment `/a/../b`          | accepted                                                   | defect reproduced                      |
+| malformed percent `/a/%ZZ`                  | accepted                                                   | defect reproduced                      |
+| `optionalParamBehavior: 'omit'` missing key | returns `id: undefined`                                    | **superseded by task 7**               |
+| params mutation then same-path match        | second match returns original param and `sameParams=false` | current cache-safe semantics confirmed |
 
 **Task 7 RED test re-verification (`test/red-defects.test.ts`, 22 fixtures)**: the `optionalParamBehavior: 'omit'` row above is **outdated**. Current code (`builder/optional-param-defaults.ts` lines 16/24/41 + `pipeline/registration.ts` line 191 + `codegen/emitter.ts` factory body lines 458–467) correctly omits the missing optional key; `'in' params` returns `false` in omit mode and `true` (with `undefined` value) in `set-undefined` mode. Both semantics pass `bun test test/red-defects.test.ts -t "optionalParamBehavior"`. The remaining 18 of 22 fixtures (method validation 5 + path registration validation 8 + runtime secure scanner 5) still RED — those are the actual implementation targets for §13 Phase 1 + Phase 2. Params cache mutation safety is locked GREEN by the same RED suite.
 
@@ -421,13 +421,13 @@ Additional pre-implementation measurements:
 
 Mixed phase proxy:
 
-| Proxy shape | Routes | Add+build | Interpretation |
-| --- | ---: | ---: | --- |
-| mixed static-only | 25,000 | 65.55 ms | cheap alone |
-| mixed GET param-only | 25,000 | 121.38 ms | cheap alone |
-| mixed POST param-only | 25,000 | 84.26 ms | cheap alone |
-| mixed wildcard-only | 25,000 | 82.14 ms | cheap alone |
-| full 100k mixed | 100,000 | 38697.61 ms | blow-up appears only when shapes interact |
+| Proxy shape           |  Routes |   Add+build | Interpretation                            |
+| --------------------- | ------: | ----------: | ----------------------------------------- |
+| mixed static-only     |  25,000 |    65.55 ms | cheap alone                               |
+| mixed GET param-only  |  25,000 |   121.38 ms | cheap alone                               |
+| mixed POST param-only |  25,000 |    84.26 ms | cheap alone                               |
+| mixed wildcard-only   |  25,000 |    82.14 ms | cheap alone                               |
+| full 100k mixed       | 100,000 | 38697.61 ms | blow-up appears only when shapes interact |
 
 Interpretation:
 
@@ -439,11 +439,11 @@ Interpretation:
 
 100k mixed same-harness 3-run closure:
 
-| Run | Add+build | RSS delta | Heap delta | First-hit max | Warmed hit max | Miss max |
-| ---: | ---: | ---: | ---: | ---: | ---: | ---: |
-| 1 | 21263.44 ms | +480.14 MiB | +176.20 MiB | 259.40 us | 18.85 ns/op | 13.83 ns/op |
-| 2 | 20934.73 ms | +478.77 MiB | +166.17 MiB | 207.49 us | 18.91 ns/op | 13.39 ns/op |
-| 3 | 21330.79 ms | +476.19 MiB | +166.90 MiB | 274.15 us | 19.18 ns/op | 15.13 ns/op |
+| Run |   Add+build |   RSS delta |  Heap delta | First-hit max | Warmed hit max |    Miss max |
+| --: | ----------: | ----------: | ----------: | ------------: | -------------: | ----------: |
+|   1 | 21263.44 ms | +480.14 MiB | +176.20 MiB |     259.40 us |    18.85 ns/op | 13.83 ns/op |
+|   2 | 20934.73 ms | +478.77 MiB | +166.17 MiB |     207.49 us |    18.91 ns/op | 13.39 ns/op |
+|   3 | 21330.79 ms | +476.19 MiB | +166.90 MiB |     274.15 us |    19.18 ns/op | 15.13 ns/op |
 
 Interpretation:
 
@@ -453,40 +453,40 @@ Interpretation:
 
 Internal mixed diagnostics:
 
-| Metric | 100k mixed |
-| --- | ---: |
-| total add+build | 40263.41 ms |
-| parse | 331.10 ms |
-| wildcard name conflict | 53.19 ms |
+| Metric                   |  100k mixed |
+| ------------------------ | ----------: |
+| total add+build          | 40263.41 ms |
+| parse                    |   331.10 ms |
+| wildcard name conflict   |    53.19 ms |
 | static/wildcard conflict | 39191.62 ms |
-| static insert | 77.73 ms |
-| optional expansion | 11.22 ms |
-| dynamic insert | 167.62 ms |
-| factory generation | 48.06 ms |
-| snapshot | 11.24 ms |
-| wildcard conflict checks | 24,999 |
-| wildcard prefix scans | 312,487,500 |
+| static insert            |    77.73 ms |
+| optional expansion       |    11.22 ms |
+| dynamic insert           |   167.62 ms |
+| factory generation       |    48.06 ms |
+| snapshot                 |    11.24 ms |
+| wildcard conflict checks |      24,999 |
+| wildcard prefix scans    | 312,487,500 |
 
 Diagnostics residual note: listed phase timers account for the dominant measured phases, but their sum does not equal total add+build. The residual includes loop overhead, diagnostics accounting overhead, codegen/snapshot-adjacent work not separately listed, and general runtime/GC noise.
 
 Cache and traversal feasibility:
 
-| Probe | Result | Interpretation |
-| --- | ---: | --- |
-| cache-hot dynamic same path | 18.15 ns/op | cache retrieval is excellent |
-| cache-churn dynamic unique-ish | 1090.62 ns/op | uncached/churn dynamic traversal is much slower than hot-loop values |
-| wrong-method dynamic unique-ish | 396.23 ns/op | wrong-method path needs separate gate |
-| 404 dynamic unique-ish | 551.66 ns/op | 404 path needs separate gate |
+| Probe                           |        Result | Interpretation                                                       |
+| ------------------------------- | ------------: | -------------------------------------------------------------------- |
+| cache-hot dynamic same path     |   18.15 ns/op | cache retrieval is excellent                                         |
+| cache-churn dynamic unique-ish  | 1090.62 ns/op | uncached/churn dynamic traversal is much slower than hot-loop values |
+| wrong-method dynamic unique-ish |  396.23 ns/op | wrong-method path needs separate gate                                |
+| 404 dynamic unique-ish          |  551.66 ns/op | 404 path needs separate gate                                         |
 
 Heap profile attempt:
 
-| Probe | Result |
-| --- | --- |
-| `bun --heap-prof 100k param` | heap snapshot generated |
-| scenario memory | rss +687.48 MB, heap +125.20 MB |
-| heap snapshot size | 368 KB |
-| heap snapshot total self size | 1.19 MB |
-| top self-size type | `code` 824,860 bytes |
+| Probe                         | Result                          |
+| ----------------------------- | ------------------------------- |
+| `bun --heap-prof 100k param`  | heap snapshot generated         |
+| scenario memory               | rss +687.48 MB, heap +125.20 MB |
+| heap snapshot size            | 368 KB                          |
+| heap snapshot total self size | 1.19 MB                         |
+| top self-size type            | `code` 824,860 bytes            |
 
 Interpretation:
 
@@ -498,30 +498,30 @@ Interpretation:
 
 100k param internal diagnostics:
 
-| Metric | Value |
-| --- | ---: |
-| routes | 100,000 |
-| segment nodes | 500,001 |
-| static child maps | 200,001 |
-| param nodes | 200,000 |
-| terminals | 100,000 |
-| params factory slots | 100,000 |
-| unique params factory functions | 1 |
-| parse | 174.38 ms |
-| dynamic insert | 128.47 ms |
-| factory generation | 35.56 ms |
+| Metric                          |     Value |
+| ------------------------------- | --------: |
+| routes                          |   100,000 |
+| segment nodes                   |   500,001 |
+| static child maps               |   200,001 |
+| param nodes                     |   200,000 |
+| terminals                       |   100,000 |
+| params factory slots            |   100,000 |
+| unique params factory functions |         1 |
+| parse                           | 174.38 ms |
+| dynamic insert                  | 128.47 ms |
+| factory generation              |  35.56 ms |
 
 Dynamic external baselines:
 
-| Router | Scenario | Build | RSS delta | Hit latency | Miss latency | Verdict |
-| --- | --- | ---: | ---: | ---: | ---: | --- |
-| zipbul current | 100k param | 863.79 ms | +679.93 MB | 18.16-19.34 ns/op | 17.68 ns/op | fastest warmed match in this dynamic external table; high RSS and first-match/profile gates still block approval |
-| rou3 | 100k param | 121.24 ms | +115.88 MB | 126.21-145.12 ns/op | 68.15 ns/op | much lower build/RSS, slower match |
-| hono-trie | 100k param | 207.73 ms | +215.83 MB | 422.88-683.47 ns/op | 106.58 ns/op | lower build/RSS, much slower match |
-| memoirist | 100k param | 64648.37 ms | +87.52 MB | 72.05-118.63 ns/op | 29.12 ns/op | low RSS, build too slow |
-| koa-tree-router | 100k param | 128.49 ms | +175.33 MB | 266.78-456.98 ns/op | 70.33 ns/op | lower build/RSS, slower match |
-| hono-regexp | 100k param | failed | +51.47 MB before first match | n/a | n/a | first match throws `SyntaxError: Invalid regular expression: regular expression too large` |
-| find-my-way | 100k param | >120s timeout | n/a | n/a | n/a | build did not complete within the stricter per-run timeout; external baseline policy allows up to 180s |
+| Router          | Scenario   |         Build |                    RSS delta |         Hit latency | Miss latency | Verdict                                                                                                          |
+| --------------- | ---------- | ------------: | ---------------------------: | ------------------: | -----------: | ---------------------------------------------------------------------------------------------------------------- |
+| zipbul current  | 100k param |     863.79 ms |                   +679.93 MB |   18.16-19.34 ns/op |  17.68 ns/op | fastest warmed match in this dynamic external table; high RSS and first-match/profile gates still block approval |
+| rou3            | 100k param |     121.24 ms |                   +115.88 MB | 126.21-145.12 ns/op |  68.15 ns/op | much lower build/RSS, slower match                                                                               |
+| hono-trie       | 100k param |     207.73 ms |                   +215.83 MB | 422.88-683.47 ns/op | 106.58 ns/op | lower build/RSS, much slower match                                                                               |
+| memoirist       | 100k param |   64648.37 ms |                    +87.52 MB |  72.05-118.63 ns/op |  29.12 ns/op | low RSS, build too slow                                                                                          |
+| koa-tree-router | 100k param |     128.49 ms |                   +175.33 MB | 266.78-456.98 ns/op |  70.33 ns/op | lower build/RSS, slower match                                                                                    |
+| hono-regexp     | 100k param |        failed | +51.47 MB before first match |                 n/a |          n/a | first match throws `SyntaxError: Invalid regular expression: regular expression too large`                       |
+| find-my-way     | 100k param | >120s timeout |                          n/a |                 n/a |          n/a | build did not complete within the stricter per-run timeout; external baseline policy allows up to 180s           |
 
 Interpretation:
 
@@ -531,11 +531,11 @@ Interpretation:
 
 Codegen diagnostics:
 
-| Shape | Event | Source generated before bail | Emit time | Interpretation |
-| --- | --- | ---: | ---: | --- |
-| 100k param | source-budget bail | 124,733,430 chars | 271.48 ms | preflight is mandatory |
-| 100k wildcard-heavy | source-budget bail | 72,436,417 chars | 116.14 ms | preflight is mandatory |
-| 100k versioned-api | source-budget bail x4 | ~19,486,210 chars per method | 57.84-82.54 ms per method | preflight is mandatory |
+| Shape               | Event                 | Source generated before bail |                 Emit time | Interpretation         |
+| ------------------- | --------------------- | ---------------------------: | ------------------------: | ---------------------- |
+| 100k param          | source-budget bail    |            124,733,430 chars |                 271.48 ms | preflight is mandatory |
+| 100k wildcard-heavy | source-budget bail    |             72,436,417 chars |                 116.14 ms | preflight is mandatory |
+| 100k versioned-api  | source-budget bail x4 | ~19,486,210 chars per method | 57.84-82.54 ms per method | preflight is mandatory |
 
 Interpretation:
 
@@ -544,10 +544,10 @@ Interpretation:
 
 Bun.serve phase split:
 
-| Routes | Route object prep | `Bun.serve()` init | Memory delta (MiB-style harness MB) | Request latency | Verdict |
-| ---: | ---: | ---: | ---: | ---: | --- |
-| 10,000 | 6.31 ms | 13377.53 ms | rss +59.90 MB, heap +4.15 MB | 173.99-249.73 us/request | init already too slow at 10k |
-| 100,000 | 60.27 ms | build-timeout >180s | prep-only rss +64.88 MB, heap +28.39 MB | n/a | prep completes; init does not complete within gate |
+|  Routes | Route object prep |  `Bun.serve()` init |     Memory delta (MiB-style harness MB) |          Request latency | Verdict                                            |
+| ------: | ----------------: | ------------------: | --------------------------------------: | -----------------------: | -------------------------------------------------- |
+|  10,000 |           6.31 ms |         13377.53 ms |            rss +59.90 MB, heap +4.15 MB | 173.99-249.73 us/request | init already too slow at 10k                       |
+| 100,000 |          60.27 ms | build-timeout >180s | prep-only rss +64.88 MB, heap +28.39 MB |                      n/a | prep completes; init does not complete within gate |
 
 Interpretation:
 
@@ -556,13 +556,13 @@ Interpretation:
 
 Pre-implementation closure:
 
-| Check | Result | Decision |
-| --- | --- | --- |
-| `bun test` | 557 pass, 5 fail | RED confirmed before implementation |
-| optional omit tests | 4 failures return missing optional as `undefined` | implementation must fix optional omit pass-through/cache behavior |
-| perf guard internal snapshot test | `snapshot.terminals` is undefined | test is stale against current snapshot shape and must be corrected to the real terminal metadata field |
-| `bun run build` | failed | current source has build-blocking type errors before optimization work |
-| build failure class | `MatchFn` is imported from `match-state` but not exported; `segment-compile.ts` also has a `string | undefined` argument error | fix type/export boundary before final green gate |
+| Check                             | Result                                                                                             | Decision                                                                                               |
+| --------------------------------- | -------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------ | ------------------------------------------------ |
+| `bun test`                        | 557 pass, 5 fail                                                                                   | RED confirmed before implementation                                                                    |
+| optional omit tests               | 4 failures return missing optional as `undefined`                                                  | implementation must fix optional omit pass-through/cache behavior                                      |
+| perf guard internal snapshot test | `snapshot.terminals` is undefined                                                                  | test is stale against current snapshot shape and must be corrected to the real terminal metadata field |
+| `bun run build`                   | failed                                                                                             | current source has build-blocking type errors before optimization work                                 |
+| build failure class               | `MatchFn` is imported from `match-state` but not exported; `segment-compile.ts` also has a `string | undefined` argument error                                                                              | fix type/export boundary before final green gate |
 
 Closure decision:
 
@@ -572,57 +572,57 @@ Closure decision:
 
 Review closure log:
 
-| Review issue | Closure |
-| --- | --- |
-| MB/MiB ambiguity | Memory target equivalents now use `MiB`; historical harness `MB` labels are defined as MiB-style output. |
-| `Ready` ambiguity | Split into `Implementation-ready`, `Gate-partial`, and `Evidence-confirmed`. |
-| Missing 100k mixed 3-run | Same-harness 3-run added; diagnostics/proxy runs are explicitly separated from statistical rows. |
-| Wildcard 10x target missing derivation | 10x is derived from `26280.32 / 3000 = 8.76x` plus validation/snapshot headroom; this is a best-case proxy because the 50k disjoint stress and 100k mixed Guard are different workloads. |
-| Regex disjointness undefined | Secure/default uses conservative AST-only disjointness; unknown overlap rejects. |
-| Numeric regex range disjointness underspecified | Numeric range disjointness is explicitly unsupported until a dedicated range parser spec exists. |
-| `?` query vs optional decorator ambiguity | Registration parse order and boundary fixtures are specified. |
-| Codegen compile-time gate ambiguity | Preflight hard gates and post-compile observed telemetry gates are separated. |
-| 32-method limit justification | Defined as a scoped bitmask performance cap with explicit `method-limit` failure and enterprise scope `<= 32` methods. |
-| 64+ method support question | Added as a P3 measured fallback candidate using two `Uint32` masks, `BigInt`, or sparse method table. |
-| HEAD/OPTIONS standards caveat | Router-layer no-fallback policy now states that service-layer HEAD/OPTIONS behavior remains application/server responsibility. |
-| code-cache pressure proxy undefined | Proxy is defined as generated function count, source bytes, compile wall time, first-call latency, RSS delta, and profiling symptoms; not byte-accurate JSC code-cache occupancy. |
-| RSS attribution gap | Byte-accurate RSS attribution remains unavailable from Bun heap snapshots; implementation acceptance uses internal object counters plus fresh-process before/after RSS deltas. |
-| versioned-api/wildcard-heavy target gaps | Dedicated planning bands and final gate rows added. |
-| strict `?`/`#` delimiter policy | Runtime normalization now uses secure raw-`#` no-match and first-`?` query stripping. |
-| percent-decoding completeness | Single-decode/no-double-decode, overlong UTF-8 rejection, and mixed-case dot fixtures added. |
-| Phase 4 prefix-index spec gap | Prefix trie counters, regex sibling policy, complexity caveats, and pseudocode added. |
-| Phase 5 RED benchmark wording | Microbench row is candidate-selection evidence only; default adoption requires fresh-process end-to-end proof. |
-| maxExpandedRoutes surface wiring | Added to hard limits, options schema, defaults, Infinity rejection, issue kinds, and Phase 4 enforcement (see §7.2 security/options and §13 Phase 4 pseudocode). |
-| Match phase normalization sync | Section 9.2 and Phase 2 now mirror the section 7.2 path-policy ordering. |
-| Phase 4 route mutation contract | Pseudocode now validates with a staging plan before committing trie mutations for a route (see §13 Phase 4 `validateExpandedRoute`/`commitExpandedRoute`). |
-| RFC by-number traceability | Added RFC 3986 §3.3/§3.5/§6.2.2.1 and RFC 3629 §3/§10 citations. |
-| Wildcard/static issue-kind symmetry | Same collision class must emit the same issue kind regardless of registration order; wildcard/static reachability emits `route-unreachable`. |
-| Regex sibling release gate | `maxRegexSiblingsPerSegment` is included in target bands and correctness gate fixtures. |
-| Regex-sibling RED/GREEN audit | `regex-sibling-limit` has dedicated issue kind, RED fixture, GREEN criterion, target band, and correctness gate entry (see §7 issue kinds, §13 Phase 4 RED/GREEN, §14.2). |
-| Phase 4 control-flow cleanup | Dead-store/redundant pseudocode issues were removed through staged validation and commit-only mutation (see §13 Phase 4 `planEdge` and `commitEdge`). |
-| Subtree wildcard self-count audit | `subtreeWildcardCount` prose now matches the ancestor-inclusive commit loop (see §13 Phase 4 algorithm and `commitExpandedRoute`). |
-| Phase 2 scanner mirror | Phase 2 now uses the same six-step normalization wording as section 7.2. |
-| Subtree wildcard prose precision | Clarified that the prefix attachment node, not a separate wildcard node, receives `subtreeWildcardCount++`. |
-| §8.6 wildcard/regex/expansion policy rows | Added wildcard/static, wildcard/wildcard, regex-sibling, and expansion-total rows to the conflict policy table. |
-| Wildcard/wildcard issue-kind rationale | Documented `route-unreachable` because the later wildcard is fully covered by the prior wildcard's suffix space. |
-| Param-child duplicate wording | Replaced ambiguous duplicate/conflict wording with explicit `route-duplicate`. |
-| Expansion counter lifetime | `totalExpandedRoutes` is specified as a per-build/seal batch counter initialized to 0 before validating pending routes. |
-| Phase 4 helper contracts | Added `createNode`, `createRegexNode`, `rootFor`, `safeRegexDisjoint`, `sameRegexAst`, `optionalExpansions`, and `sameTerminalIdentity` contracts. |
-| Phase 4 node metadata | Added `regexAst` and `terminalMeta` to make regex conflict checks and terminal alias diagnostics implementable from the spec. |
-| Cache/options defaults | Added `cacheSize`, `optionalParamBehavior`, `path-encoded-control`, and `option-invalid` surfaces across schema/defaults/issues/gates. |
-| Expansion cap enforcement | Added per-route `maxOptionalExpansions` and global `maxExpandedRoutes` pseudocode emit sites. |
-| Alias-terminal handling | Same terminal identity now aliases successfully instead of emitting `route-duplicate`; differing identity emits `route-conflict`. |
-| Alias context guard | Alias success is limited to optional-expansion routes; ordinary duplicate `add()` still emits `route-duplicate`. |
-| Regex same-AST child reuse | Same-position regex params with identical safe-regex AST merge as the same regex child before disjointness checks. |
-| Runtime safety policy | Added runtime regex sibling priority, build/seal concurrency policy, immutable-snapshot concurrent match policy, and §14.2 fixtures. |
-| §0 implementation language scope | TypeScript only on Bun JSC explicitly stated; WASM, native bindings, cross-runtime targets removed from candidate set. |
-| §5.2 Profile Gate executed | `bun --cpu-prof` (mixed `checkStaticWildcardConflict` 91.12%), `bun --heap-prof` (1.19 MiB exposed of ~700 MiB RSS), JSC shape stability, freeze/clone, `new Function` telemetry, perfect hash POC — all six executed and inlined. |
-| §5.3 Tier-1 re-verification | mitata + `do_not_optimize` re-runs confirm Map 1.99× faster, freeze 6.1× slower, clone-on-hit preferred at ≥5 keys, first-call median 221 ns at 16 nodes (1차 27 us는 instrumentation noise — superseded). |
-| §5.4 Tier-2 follow-ups | Cuckoo hash + sealed/frozen + realistic walker measured. Cuckoo REJECT (2.8× slower under TS scope), sealed/frozen no measurable benefit, realistic walker 184.94 ns reference. |
-| Phase 3 lock-in | clone-on-hit (spread) chosen; Object.freeze rejected. §13 Phase 3 line 1834 and §8.3 line 1324 updated. |
-| Phase 4b/4c/5b added | New Phase 4b (segment-tree insertion for wildcard-heavy), Phase 4c (compileStaticRoute for high-fanout), Phase 5b (object vs Map static-table representation) inserted in §13. |
-| Phase 6 algorithm revised | Codegen budget tightened to ≤16 nodes (p99) / ≤32 (p75 with warmup) per §5.3 D; build-time first-call warmup + iterative fallback locked. |
-| §10 Cuckoo / Bun.hash REJECT | Both perfect-hash variants under TS scope empirically rejected; §10 prose updated. |
+| Review issue                                    | Closure                                                                                                                                                                                                                            |
+| ----------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| MB/MiB ambiguity                                | Memory target equivalents now use `MiB`; historical harness `MB` labels are defined as MiB-style output.                                                                                                                           |
+| `Ready` ambiguity                               | Split into `Implementation-ready`, `Gate-partial`, and `Evidence-confirmed`.                                                                                                                                                       |
+| Missing 100k mixed 3-run                        | Same-harness 3-run added; diagnostics/proxy runs are explicitly separated from statistical rows.                                                                                                                                   |
+| Wildcard 10x target missing derivation          | 10x is derived from `26280.32 / 3000 = 8.76x` plus validation/snapshot headroom; this is a best-case proxy because the 50k disjoint stress and 100k mixed Guard are different workloads.                                           |
+| Regex disjointness undefined                    | Secure/default uses conservative AST-only disjointness; unknown overlap rejects.                                                                                                                                                   |
+| Numeric regex range disjointness underspecified | Numeric range disjointness is explicitly unsupported until a dedicated range parser spec exists.                                                                                                                                   |
+| `?` query vs optional decorator ambiguity       | Registration parse order and boundary fixtures are specified.                                                                                                                                                                      |
+| Codegen compile-time gate ambiguity             | Preflight hard gates and post-compile observed telemetry gates are separated.                                                                                                                                                      |
+| 32-method limit justification                   | Defined as a scoped bitmask performance cap with explicit `method-limit` failure and enterprise scope `<= 32` methods.                                                                                                             |
+| 64+ method support question                     | Added as a P3 measured fallback candidate using two `Uint32` masks, `BigInt`, or sparse method table.                                                                                                                              |
+| HEAD/OPTIONS standards caveat                   | Router-layer no-fallback policy now states that service-layer HEAD/OPTIONS behavior remains application/server responsibility.                                                                                                     |
+| code-cache pressure proxy undefined             | Proxy is defined as generated function count, source bytes, compile wall time, first-call latency, RSS delta, and profiling symptoms; not byte-accurate JSC code-cache occupancy.                                                  |
+| RSS attribution gap                             | Byte-accurate RSS attribution remains unavailable from Bun heap snapshots; implementation acceptance uses internal object counters plus fresh-process before/after RSS deltas.                                                     |
+| versioned-api/wildcard-heavy target gaps        | Dedicated planning bands and final gate rows added.                                                                                                                                                                                |
+| strict `?`/`#` delimiter policy                 | Runtime normalization now uses secure raw-`#` no-match and first-`?` query stripping.                                                                                                                                              |
+| percent-decoding completeness                   | Single-decode/no-double-decode, overlong UTF-8 rejection, and mixed-case dot fixtures added.                                                                                                                                       |
+| Phase 4 prefix-index spec gap                   | Prefix trie counters, regex sibling policy, complexity caveats, and pseudocode added.                                                                                                                                              |
+| Phase 5 RED benchmark wording                   | Microbench row is candidate-selection evidence only; default adoption requires fresh-process end-to-end proof.                                                                                                                     |
+| maxExpandedRoutes surface wiring                | Added to hard limits, options schema, defaults, Infinity rejection, issue kinds, and Phase 4 enforcement (see §7.2 security/options and §13 Phase 4 pseudocode).                                                                   |
+| Match phase normalization sync                  | Section 9.2 and Phase 2 now mirror the section 7.2 path-policy ordering.                                                                                                                                                           |
+| Phase 4 route mutation contract                 | Pseudocode now validates with a staging plan before committing trie mutations for a route (see §13 Phase 4 `validateExpandedRoute`/`commitExpandedRoute`).                                                                         |
+| RFC by-number traceability                      | Added RFC 3986 §3.3/§3.5/§6.2.2.1 and RFC 3629 §3/§10 citations.                                                                                                                                                                   |
+| Wildcard/static issue-kind symmetry             | Same collision class must emit the same issue kind regardless of registration order; wildcard/static reachability emits `route-unreachable`.                                                                                       |
+| Regex sibling release gate                      | `maxRegexSiblingsPerSegment` is included in target bands and correctness gate fixtures.                                                                                                                                            |
+| Regex-sibling RED/GREEN audit                   | `regex-sibling-limit` has dedicated issue kind, RED fixture, GREEN criterion, target band, and correctness gate entry (see §7 issue kinds, §13 Phase 4 RED/GREEN, §14.2).                                                          |
+| Phase 4 control-flow cleanup                    | Dead-store/redundant pseudocode issues were removed through staged validation and commit-only mutation (see §13 Phase 4 `planEdge` and `commitEdge`).                                                                              |
+| Subtree wildcard self-count audit               | `subtreeWildcardCount` prose now matches the ancestor-inclusive commit loop (see §13 Phase 4 algorithm and `commitExpandedRoute`).                                                                                                 |
+| Phase 2 scanner mirror                          | Phase 2 now uses the same six-step normalization wording as section 7.2.                                                                                                                                                           |
+| Subtree wildcard prose precision                | Clarified that the prefix attachment node, not a separate wildcard node, receives `subtreeWildcardCount++`.                                                                                                                        |
+| §8.6 wildcard/regex/expansion policy rows       | Added wildcard/static, wildcard/wildcard, regex-sibling, and expansion-total rows to the conflict policy table.                                                                                                                    |
+| Wildcard/wildcard issue-kind rationale          | Documented `route-unreachable` because the later wildcard is fully covered by the prior wildcard's suffix space.                                                                                                                   |
+| Param-child duplicate wording                   | Replaced ambiguous duplicate/conflict wording with explicit `route-duplicate`.                                                                                                                                                     |
+| Expansion counter lifetime                      | `totalExpandedRoutes` is specified as a per-build/seal batch counter initialized to 0 before validating pending routes.                                                                                                            |
+| Phase 4 helper contracts                        | Added `createNode`, `createRegexNode`, `rootFor`, `safeRegexDisjoint`, `sameRegexAst`, `optionalExpansions`, and `sameTerminalIdentity` contracts.                                                                                 |
+| Phase 4 node metadata                           | Added `regexAst` and `terminalMeta` to make regex conflict checks and terminal alias diagnostics implementable from the spec.                                                                                                      |
+| Cache/options defaults                          | Added `cacheSize`, `optionalParamBehavior`, `path-encoded-control`, and `option-invalid` surfaces across schema/defaults/issues/gates.                                                                                             |
+| Expansion cap enforcement                       | Added per-route `maxOptionalExpansions` and global `maxExpandedRoutes` pseudocode emit sites.                                                                                                                                      |
+| Alias-terminal handling                         | Same terminal identity now aliases successfully instead of emitting `route-duplicate`; differing identity emits `route-conflict`.                                                                                                  |
+| Alias context guard                             | Alias success is limited to optional-expansion routes; ordinary duplicate `add()` still emits `route-duplicate`.                                                                                                                   |
+| Regex same-AST child reuse                      | Same-position regex params with identical safe-regex AST merge as the same regex child before disjointness checks.                                                                                                                 |
+| Runtime safety policy                           | Added runtime regex sibling priority, build/seal concurrency policy, immutable-snapshot concurrent match policy, and §14.2 fixtures.                                                                                               |
+| §0 implementation language scope                | TypeScript only on Bun JSC explicitly stated; WASM, native bindings, cross-runtime targets removed from candidate set.                                                                                                             |
+| §5.2 Profile Gate executed                      | `bun --cpu-prof` (mixed `checkStaticWildcardConflict` 91.12%), `bun --heap-prof` (1.19 MiB exposed of ~700 MiB RSS), JSC shape stability, freeze/clone, `new Function` telemetry, perfect hash POC — all six executed and inlined. |
+| §5.3 Tier-1 re-verification                     | mitata + `do_not_optimize` re-runs confirm Map 1.99× faster, freeze 6.1× slower, clone-on-hit preferred at ≥5 keys, first-call median 221 ns at 16 nodes (1차 27 us는 instrumentation noise — superseded).                         |
+| §5.4 Tier-2 follow-ups                          | Cuckoo hash + sealed/frozen + realistic walker measured. Cuckoo REJECT (2.8× slower under TS scope), sealed/frozen no measurable benefit, realistic walker 184.94 ns reference.                                                    |
+| Phase 3 lock-in                                 | clone-on-hit (spread) chosen; Object.freeze rejected. §13 Phase 3 line 1834 and §8.3 line 1324 updated.                                                                                                                            |
+| Phase 4b/4c/5b added                            | New Phase 4b (segment-tree insertion for wildcard-heavy), Phase 4c (compileStaticRoute for high-fanout), Phase 5b (object vs Map static-table representation) inserted in §13.                                                     |
+| Phase 6 algorithm revised                       | Codegen budget tightened to ≤16 nodes (p99) / ≤32 (p75 with warmup) per §5.3 D; build-time first-call warmup + iterative fallback locked.                                                                                          |
+| §10 Cuckoo / Bun.hash REJECT                    | Both perfect-hash variants under TS scope empirically rejected; §10 prose updated.                                                                                                                                                 |
 
 ### 5.2. Pre-implementation Profile Gate (§14.5 verification, executed)
 
@@ -639,65 +639,65 @@ bun packages/router/bench/perfect-hash-poc.ts
 
 **1. CPU profile of `100k mixed` (`bun --cpu-prof`)**:
 
-| Top function | Samples | Share |
-| --- | ---: | ---: |
+| Top function                                               |         Samples |      Share |
+| ---------------------------------------------------------- | --------------: | ---------: |
 | `checkStaticWildcardConflict` (`pipeline/registration.ts`) | 18,391 / 20,183 | **91.12%** |
-| `next` | 794 | 3.93% |
-| `insertIntoSegmentTree` | 116 | 0.57% |
-| `stringSplitFast` | 113 | 0.56% |
-| `gc` | 82 | 0.41% |
+| `next`                                                     |             794 |      3.93% |
+| `insertIntoSegmentTree`                                    |             116 |      0.57% |
+| `stringSplitFast`                                          |             113 |      0.56% |
+| `gc`                                                       |              82 |      0.41% |
 
 The static/wildcard conflict scan dominates 91.12% of CPU time, confirming the §5.1 line 425–441 phase timer (39,191 ms / 312,487,500 scans) at the sample level. §13 Phase 4 wildcard prefix index is the correct target.
 
 **2. Heap profile of `100k param` (`bun --heap-prof`)**:
 
-| Top heap type | Self size | Share of dumped heap |
-| --- | ---: | ---: |
-| `code:FunctionCodeBlock` | 565 KiB | 46.57% |
-| `object:ModuleRecord` | 123 KiB | 10.11% |
-| `object shape:Structure` | 96 KiB | 7.88% |
-| Total dumped heap | **1.19 MiB** | 100% |
+| Top heap type            |    Self size | Share of dumped heap |
+| ------------------------ | -----------: | -------------------: |
+| `code:FunctionCodeBlock` |      565 KiB |               46.57% |
+| `object:ModuleRecord`    |      123 KiB |               10.11% |
+| `object shape:Structure` |       96 KiB |                7.88% |
+| Total dumped heap        | **1.19 MiB** |                 100% |
 
 Bun heap snapshot exposes only 1.19 MiB out of the ~700 MiB process RSS for this scenario, confirming §5.1 line 387 truth boundary: byte-accurate RSS attribution is not available from Bun heap snapshots. The dumped heap shows JSC metadata (code blocks, structures), not user object payload. Internal object counters (segment nodes, terminal slots, factories) remain the authoritative attribution path.
 
 **3. JSC object shape / dictionary-mode evidence (`jsc-shape-stability.ts`)**:
 
-| Probe | ns/op |
-| --- | ---: |
-| sealed null-proto, 100k keys lookup | 27.93 |
-| dictionary-mode null-proto (post mutation) | 27.31 |
-| `Map<string, number>` 100k get | 26.68 |
-| small null-proto, 4 keys (IC fast path) | 3.27 |
-| null-proto MISS lookup, 100k sealed | 11.25 |
-| 200-key structure transition (avg / max) | 441 / 5,584 ns |
+| Probe                                      |          ns/op |
+| ------------------------------------------ | -------------: |
+| sealed null-proto, 100k keys lookup        |          27.93 |
+| dictionary-mode null-proto (post mutation) |          27.31 |
+| `Map<string, number>` 100k get             |          26.68 |
+| small null-proto, 4 keys (IC fast path)    |           3.27 |
+| null-proto MISS lookup, 100k sealed        |          11.25 |
+| 200-key structure transition (avg / max)   | 441 / 5,584 ns |
 
 The §1 microbench "object lookup 1.12 ns" is valid for **small key sets where JSC inline cache (IC) succeeds**. At 100k keys the IC fast path is replaced by hash table lookup at ~27 ns, and `Map<string, number>` is essentially equivalent (26.68 ns). Method dispatch (≤32 keys) and segment-trie child lookup (small fanout per node) retain the 1.12 ns IC fast path. Static full-path tables at 100k benefit only marginally over `Map`, and the dictionary-mode penalty after key churn is negligible (27.31 vs 27.93).
 
 **4. `Object.freeze` vs clone-on-hit cost (`freeze-vs-clone.ts`)**:
 
-| Option | ns/op | Notes |
-| --- | ---: | --- |
-| Fresh object literal `{...}` | 6.63 | factory baseline |
-| `Object.freeze({...})` per call | **40.76** | 6.1× slower — reject for hot path |
-| Clone-on-hit (spread `{...cached}`) | **12.77** | 1.93× slower — viable |
-| Proxy wrapper per call | 23.41 | 3.5× slower |
-| Read frozen `.id` | 2.14 | reading a frozen object is free |
-| Read mutable `.id` | 2.64 | reading a mutable object is free |
-| substring materialize from Int32Array offsets | 26.55 | factory step (2 params) |
-| substring + `Object.freeze` | 58.95 | 2.2× over plain factory |
+| Option                                        |     ns/op | Notes                             |
+| --------------------------------------------- | --------: | --------------------------------- |
+| Fresh object literal `{...}`                  |      6.63 | factory baseline                  |
+| `Object.freeze({...})` per call               | **40.76** | 6.1× slower — reject for hot path |
+| Clone-on-hit (spread `{...cached}`)           | **12.77** | 1.93× slower — viable             |
+| Proxy wrapper per call                        |     23.41 | 3.5× slower                       |
+| Read frozen `.id`                             |      2.14 | reading a frozen object is free   |
+| Read mutable `.id`                            |      2.64 | reading a mutable object is free  |
+| substring materialize from Int32Array offsets |     26.55 | factory step (2 params)           |
+| substring + `Object.freeze`                   |     58.95 | 2.2× over plain factory           |
 
 **Phase 3 decision locked**: cache-safe params semantics use **clone-on-cache-hit (spread)**, not `Object.freeze`. `Object.freeze` is rejected on the hot path due to 6.1× per-call cost. This supersedes the §13 Phase 3 line 1389 "frozen cached params or clone-on-cache-hit" two-option choice.
 
 **5. `new Function` compile/first-call/code-cache pressure (`new-function-telemetry.ts`)**:
 
-| Walker nodes | Source size | Compile time | First-call | Warmed | Notes |
-| ---: | ---: | ---: | ---: | ---: | --- |
-| 16 | 1.1 KiB | 0.02 ms | **27 us** | 60 ns | first-call already exceeds Guard 10 us |
-| 64 | 4.2 KiB | 0.11 ms | **97 us** | 100 ns | 9.7× over Guard |
-| 256 | 16.9 KiB | 0.18 ms | **350 us** | 429 ns | 35× over Guard |
-| 1,024 | 67.9 KiB | 0.43 ms | **1,276 us** | 1,742 ns | 127× over Guard |
-| 4,096 | 277.9 KiB | 1.34 ms | **6,144 us** | 20,622 ns | 614× over Guard |
-| Code-cache pressure proxy: 200 functions × 64 nodes | | | | | RSS delta +192 KiB total, **0.96 KiB/function** |
+|                                        Walker nodes | Source size | Compile time |   First-call |    Warmed | Notes                                           |
+| --------------------------------------------------: | ----------: | -----------: | -----------: | --------: | ----------------------------------------------- |
+|                                                  16 |     1.1 KiB |      0.02 ms |    **27 us** |     60 ns | first-call already exceeds Guard 10 us          |
+|                                                  64 |     4.2 KiB |      0.11 ms |    **97 us** |    100 ns | 9.7× over Guard                                 |
+|                                                 256 |    16.9 KiB |      0.18 ms |   **350 us** |    429 ns | 35× over Guard                                  |
+|                                               1,024 |    67.9 KiB |      0.43 ms | **1,276 us** |  1,742 ns | 127× over Guard                                 |
+|                                               4,096 |   277.9 KiB |      1.34 ms | **6,144 us** | 20,622 ns | 614× over Guard                                 |
+| Code-cache pressure proxy: 200 functions × 64 nodes |             |              |              |           | RSS delta +192 KiB total, **0.96 KiB/function** |
 
 `new Function` compile time itself is cheap (≤1.34 ms even at 4,096 nodes), but the **first-call latency is dominated by JIT tier-up and exceeds the §6 Guard `first-match p99 ≤ 10 us` for every walker size**. Even a 16-node walker costs 27 us first-call.
 
@@ -705,11 +705,11 @@ The §1 microbench "object lookup 1.12 ns" is valid for **small key sets where J
 
 **6. Perfect hash + build-time `Bun.hash` POC (`perfect-hash-poc.ts`)**:
 
-| Option (100k key set) | Lookup ns/op | Build ns/key | Verdict |
-| --- | ---: | ---: | --- |
-| null-proto object | 27.58 | 72.68 | baseline |
-| `Bun.hash` + open-address `Int32Array` | **113.69** | 112.95 | **4.1× slower lookup → reject perfect-hash candidate** |
-| **`Map<string, number>`** | **15.53** | n/a | **1.78× faster lookup at 100k full-path scale** |
+| Option (100k key set)                  | Lookup ns/op | Build ns/key | Verdict                                                |
+| -------------------------------------- | -----------: | -----------: | ------------------------------------------------------ |
+| null-proto object                      |        27.58 |        72.68 | baseline                                               |
+| `Bun.hash` + open-address `Int32Array` |   **113.69** |       112.95 | **4.1× slower lookup → reject perfect-hash candidate** |
+| **`Map<string, number>`**              |    **15.53** |          n/a | **1.78× faster lookup at 100k full-path scale**        |
 
 The §10 line 1230 P3 "perfect hash" candidate is now empirically rejected: build-time `Bun.hash` plus open-address scan is 4.1× slower at lookup than the current null-proto object table. Build-time hash construction also costs 1.5× more than building the object table (113 vs 73 ns/key).
 
@@ -730,17 +730,17 @@ The §5.2 single-run microbench results were re-verified through six follow-ups 
 
 **B + A. `Map` vs null-proto object at 100k full-path scale (mitata, do_not_optimize, sharded and adversarial variants)**:
 
-| Probe | ns/iter (median) | p75 |
-| --- | ---: | ---: |
-| null-proto object 100k | 27.71 | 28.73 |
-| sealed null-proto object 100k | 27.95 | 28.97 |
-| **`Map<string, number>` 100k** | **13.87** | 17.23 |
-| sharded null-proto (32× ~3.1k) | 42.41 | 45.69 |
-| sharded `Map` (32× ~3.1k) | 25.11 | 29.13 |
-| collision-prone object (long shared prefix) | 33.89 | 34.80 |
-| collision-prone `Map` (long shared prefix) | 25.69 | 30.19 |
-| null-proto MISS (100k sealed) | 7.17 | 7.07 |
-| `Map` MISS (100k) | 8.63 | 8.54 |
+| Probe                                       | ns/iter (median) |   p75 |
+| ------------------------------------------- | ---------------: | ----: |
+| null-proto object 100k                      |            27.71 | 28.73 |
+| sealed null-proto object 100k               |            27.95 | 28.97 |
+| **`Map<string, number>` 100k**              |        **13.87** | 17.23 |
+| sharded null-proto (32× ~3.1k)              |            42.41 | 45.69 |
+| sharded `Map` (32× ~3.1k)                   |            25.11 | 29.13 |
+| collision-prone object (long shared prefix) |            33.89 | 34.80 |
+| collision-prone `Map` (long shared prefix)  |            25.69 | 30.19 |
+| null-proto MISS (100k sealed)               |             7.17 |  7.07 |
+| `Map` MISS (100k)                           |             8.63 |  8.54 |
 
 The §5.2 finding holds and is strengthened: **`Map<string, number>` is 1.99× faster than null-proto object at 100k full-path scale** even with `do_not_optimize` defeating dead-code elimination. `Map` retains 1.32–1.90× advantage across diverse key distributions (short/long/shared-prefix/numeric/mixed-case). The dead-code-elimination suspicion is rejected.
 
@@ -750,45 +750,45 @@ The §5.2 finding holds and is strengthened: **`Map<string, number>` is 1.99× f
 
 **End-to-end POC reversal at production-realistic shard size (task 15, `bench/poc-static-table-rep.ts`, 5-run fresh-process)**: The microbench reversal above measured `i % SHARDS` indexing as overhead. A production router does not pay that overhead because the method code is already a numeric value resolved before the static-table lookup (`tbl[methodCode][path]`, no modulo). When the harness mirrors that exact access pattern with **8 method × 12,500 routes/bucket** (production-realistic, not 32-shard adversarial), the result inverts:
 
-| Candidate | warmed hit ns | warmed miss ns | wrong-method ns | build ms | RSS MiB |
-|---|---:|---:|---:|---:|---:|
-| A1 per-method `Object.create(null)` | **7.59** | 16.26 | 21.22 | 19.1 | 14.1 |
-| A2 per-method `Map<string, number>` | 9.43 (1.24× slower) | **8.44** (1.93× faster) | **11.91** (1.78× faster) | **6.7** (2.85× faster) | **9.6** (32% less) |
-| A3 single global `Map` (str composite key) | 73.65 | 64.56 | 65.56 | 13.2 | 13.9 |
+| Candidate                                  |       warmed hit ns |          warmed miss ns |          wrong-method ns |               build ms |            RSS MiB |
+| ------------------------------------------ | ------------------: | ----------------------: | -----------------------: | ---------------------: | -----------------: |
+| A1 per-method `Object.create(null)`        |            **7.59** |                   16.26 |                    21.22 |                   19.1 |               14.1 |
+| A2 per-method `Map<string, number>`        | 9.43 (1.24× slower) | **8.44** (1.93× faster) | **11.91** (1.78× faster) | **6.7** (2.85× faster) | **9.6** (32% less) |
+| A3 single global `Map` (str composite key) |               73.65 |                   64.56 |                    65.56 |                   13.2 |               13.9 |
 
 **Reconciled finding**: the §5.3 B 1.99× Map advantage holds for **unsharded 100k single-table lookup** but inverts for **per-method-shard hit path** that production routers actually use. A3 single-global-Map suffers 60–70 ns composite-key concatenation cost. **Static table representation is workload-aware**: hit-dominant API gateway → A1 object retained; miss/wrong-method/build/RSS optimization → A2 Map; A3 rejected. §13 Phase 5b decision matrix must encode this trade-off, not pick a single winner from the unsharded microbench alone.
 
 **E. JSC shape stability across diverse key distributions (`shape-and-freeze-variants.ts`)**:
 
-| Pattern | object 100k | Map 100k | Map advantage |
-| --- | ---: | ---: | ---: |
-| short | 27.08 | 12.73 | 2.13× |
-| long | 31.92 | 24.17 | 1.32× |
-| shared-prefix | 32.46 | 17.98 | 1.81× |
-| numeric | 29.41 | 15.50 | 1.90× |
-| mixed-case | 33.04 | 19.04 | 1.74× |
+| Pattern       | object 100k | Map 100k | Map advantage |
+| ------------- | ----------: | -------: | ------------: |
+| short         |       27.08 |    12.73 |         2.13× |
+| long          |       31.92 |    24.17 |         1.32× |
+| shared-prefix |       32.46 |    17.98 |         1.81× |
+| numeric       |       29.41 |    15.50 |         1.90× |
+| mixed-case    |       33.04 |    19.04 |         1.74× |
 
 Map advantage is robust across 5 key patterns (short, long, shared-prefix, numeric, mixed-case): 1.32× minimum, 2.13× maximum. The object representation does not degrade catastrophically on any pattern, but it is consistently slower than `Map` at this scale.
 
 **F. `Object.freeze` vs clone-on-hit with varying param count (`shape-and-freeze-variants.ts`)**:
 
-| Param count | fresh factory | `Object.freeze({...})` | clone-on-hit (spread) | clone vs fresh |
-| ---: | ---: | ---: | ---: | ---: |
-| 2 | 11.90 ns | 44.42 ns | 14.11 ns | 1.19× slower |
-| 5 | 21.47 ns | 56.99 ns | 14.90 ns | **0.69× — faster than fresh** |
-| 10 | 41.36 ns | 80.57 ns | 21.90 ns | **0.53×** |
-| 20 | 88.56 ns | 137.43 ns | 26.70 ns | **0.30× (3.3× faster)** |
+| Param count | fresh factory | `Object.freeze({...})` | clone-on-hit (spread) |                clone vs fresh |
+| ----------: | ------------: | ---------------------: | --------------------: | ----------------------------: |
+|           2 |      11.90 ns |               44.42 ns |              14.11 ns |                  1.19× slower |
+|           5 |      21.47 ns |               56.99 ns |              14.90 ns | **0.69× — faster than fresh** |
+|          10 |      41.36 ns |               80.57 ns |              21.90 ns |                     **0.53×** |
+|          20 |      88.56 ns |              137.43 ns |              26.70 ns |       **0.30× (3.3× faster)** |
 
 **Phase 3 decision strengthens**: clone-on-hit is not merely "viable"; for routes with 5+ params it is faster than the fresh factory because the cached object is already constructed and only spread is required. At 20 params it is 3.3× faster than rebuilding the params object via factory. `Object.freeze` remains rejected (1.55× to 3.73× slower than fresh factory).
 
 **D. `new Function` first-call distribution (100 fresh compiles per node count, 10-call sequence)**:
 
 | Walker nodes | first med | first p75 | first p99 | first max | second med | 10th med |
-| ---: | ---: | ---: | ---: | ---: | ---: | ---: |
-| 16 | 221 ns | 311 | 6,447 | 22,919 | 205 | 199 |
-| 64 | 458 ns | 502 | 12,633 | 83,028 | 433 | 428 |
-| 256 | 1,552 ns | 1,589 | 14,857 | 276,427 | 1,514 | 1,511 |
-| 1,024 | 5,992 ns | 6,741 | 28,513 | 1,538,998 | 5,639 | 5,673 |
+| -----------: | --------: | --------: | --------: | --------: | ---------: | -------: |
+|           16 |    221 ns |       311 |     6,447 |    22,919 |        205 |      199 |
+|           64 |    458 ns |       502 |    12,633 |    83,028 |        433 |      428 |
+|          256 |  1,552 ns |     1,589 |    14,857 |   276,427 |      1,514 |    1,511 |
+|        1,024 |  5,992 ns |     6,741 |    28,513 | 1,538,998 |      5,639 |    5,673 |
 
 The §5.2 #5 single-run result of 27 us first-call for a 16-node walker was **measurement instrumentation noise**. The 100-sample distribution shows first-call median **221 ns** for 16 nodes and **458 ns** for 64 nodes. p75 stays under 1 us through 64 nodes. Second and tenth call drop to ~200–460 ns and stabilize.
 
@@ -796,14 +796,14 @@ The §5.2 #5 single-run result of 27 us first-call for a 16-node walker was **me
 
 **C. CPU profile across all six 100k shapes (other-than-mixed)**:
 
-| Scenario | Top hot function | Share |
-| --- | --- | ---: |
-| `100k mixed` | `checkStaticWildcardConflict` (`pipeline/registration.ts`) | 91.12% |
-| `100k param` | `emitNode` (`codegen/segment-compile.ts`) | 27.1% |
-| `100k wildcard-heavy` | `insertIntoSegmentTree` (`matcher/segment-tree.ts`) | 18.5% |
-| `100k versioned-api` | `emitNode` | 19.0% |
-| `100k high-fanout` | `compileStaticRoute` (`pipeline/registration.ts`) | 14.0% |
-| `100k static` (sampled implicitly via mixed top-2) | `next` / `stringSplitFast` | 3.93% / 0.56% |
+| Scenario                                           | Top hot function                                           |         Share |
+| -------------------------------------------------- | ---------------------------------------------------------- | ------------: |
+| `100k mixed`                                       | `checkStaticWildcardConflict` (`pipeline/registration.ts`) |        91.12% |
+| `100k param`                                       | `emitNode` (`codegen/segment-compile.ts`)                  |         27.1% |
+| `100k wildcard-heavy`                              | `insertIntoSegmentTree` (`matcher/segment-tree.ts`)        |         18.5% |
+| `100k versioned-api`                               | `emitNode`                                                 |         19.0% |
+| `100k high-fanout`                                 | `compileStaticRoute` (`pipeline/registration.ts`)          |         14.0% |
+| `100k static` (sampled implicitly via mixed top-2) | `next` / `stringSplitFast`                                 | 3.93% / 0.56% |
 
 The 91.12% `checkStaticWildcardConflict` cost is **scenario-specific to `100k mixed`**; other shapes spread their build cost across `emitNode`, `insertIntoSegmentTree`, `compileStaticRoute`, and `parseTokens` in the 14–27% range. `gc` is consistently 8–13% across shapes, so Phase 7 memory hygiene affects every shape uniformly.
 
@@ -828,14 +828,14 @@ The 91.12% `checkStaticWildcardConflict` cost is **scenario-specific to `100k mi
 
 `bench/tier2-followups.ts` runs four further investigations under mitata + `do_not_optimize`:
 
-| Probe | Result | Decision |
-| --- | ---: | --- |
-| plain null-proto object lookup (100k) | 28.61 ns/iter | baseline |
-| `Object.preventExtensions` sealed lookup | 29.23 ns/iter | no measurable benefit over plain |
-| `Object.freeze` lookup | 28.02 ns/iter | no measurable benefit over plain |
-| `Map<string, number>.get` | 14.87 ns/iter | **1.92× faster — third re-confirmation** |
-| Cuckoo hash (2 tables, TS-implemented djb2/FNV) | 80.26 ns/iter | **REJECT — 2.8× slower than object** |
-| realistic 64-route walker, 4 segments deep, codegen if-chain | 184.94 ns/iter | reference for Phase 6 walker shape |
+| Probe                                                        |         Result | Decision                                 |
+| ------------------------------------------------------------ | -------------: | ---------------------------------------- |
+| plain null-proto object lookup (100k)                        |  28.61 ns/iter | baseline                                 |
+| `Object.preventExtensions` sealed lookup                     |  29.23 ns/iter | no measurable benefit over plain         |
+| `Object.freeze` lookup                                       |  28.02 ns/iter | no measurable benefit over plain         |
+| `Map<string, number>.get`                                    |  14.87 ns/iter | **1.92× faster — third re-confirmation** |
+| Cuckoo hash (2 tables, TS-implemented djb2/FNV)              |  80.26 ns/iter | **REJECT — 2.8× slower than object**     |
+| realistic 64-route walker, 4 segments deep, codegen if-chain | 184.94 ns/iter | reference for Phase 6 walker shape       |
 
 **Findings**:
 
@@ -907,29 +907,29 @@ Initial 100k planning bands:
 
 These are provisional planning budgets, not final release gates. They are strict enough to reject clearly bad results, but final release approval requires refreshed full-matrix data and profile evidence. If a metric is not measured by a fresh-process gate, status is `not approved`.
 
-| Metric at 100k routes | Guard | Aggressive | Stretch |
-| --- | ---: | ---: | ---: |
-| static add+build p99 | <= 500 ms | <= 250 ms | <= 100 ms |
-| param add+build p99 | <= 1,500 ms | <= 750 ms | <= 300 ms |
-| mixed add+build p99 | <= 3,000 ms | <= 1,000 ms | <= 400 ms |
-| high-fanout add+build p99 | <= 500 ms | <= 250 ms | <= 100 ms |
-| versioned-api add+build p99 | <= 1,500 ms | <= 750 ms | <= 300 ms |
-| wildcard-heavy add+build p99 | <= 1,500 ms | <= 750 ms | <= 300 ms |
-| first-match p99 (100k workload) | <= 10 us | **n/a — unattainable at 100k** | **n/a — unattainable at 100k** |
-| first-match p99 (≤16-node sub-workload, codegen+warmup) | <= 10 us | <= 3 us | <= 1 us (median; p99 reachable only with 30-run-confirmed warmup) |
-| warmed static hit p99 | <= 100 ns | <= 50 ns | <= 15 ns |
-| warmed dynamic hit p99 | <= 150 ns | <= 75 ns | <= 25 ns |
-| 404/wrong-method p99 | <= 150 ns | <= 75 ns | <= 25 ns |
-| cache churn p99 | <= 500 ns | <= 200 ns | <= 75 ns |
-| cacheSize default/effective cap | <= 1,000 per method unless configured | same | same |
-| max expanded routes per build | <= 200,000 | <= 150,000 if no compatibility need | <= 125,000 only under Bun/JSC extreme profile with no compatibility need |
-| max regex siblings per segment | <= 32 | <= 16 if no compatibility need | <= 8 if no compatibility need |
-| RSS delta per route | <= 4,096 B | <= 2,048 B | <= 1,024 B |
-| heapUsed delta per route | <= 2,048 B | <= 1,024 B | <= 512 B |
-| arrayBuffers delta per route | <= 512 B | <= 256 B | <= 128 B |
-| codegen observed compile p99 per method | <= 10 ms | <= 5 ms | <= 2 ms |
-| emitted source per generated walker | <= 128 KiB | <= 64 KiB | <= 32 KiB |
-| dominant 100k mixed build phase share | <= 60% | <= 40% | <= 25% |
+| Metric at 100k routes                                   |                                 Guard |                          Aggressive |                                                                  Stretch |
+| ------------------------------------------------------- | ------------------------------------: | ----------------------------------: | -----------------------------------------------------------------------: |
+| static add+build p99                                    |                             <= 500 ms |                           <= 250 ms |                                                                <= 100 ms |
+| param add+build p99                                     |                           <= 1,500 ms |                           <= 750 ms |                                                                <= 300 ms |
+| mixed add+build p99                                     |                           <= 3,000 ms |                         <= 1,000 ms |                                                                <= 400 ms |
+| high-fanout add+build p99                               |                             <= 500 ms |                           <= 250 ms |                                                                <= 100 ms |
+| versioned-api add+build p99                             |                           <= 1,500 ms |                           <= 750 ms |                                                                <= 300 ms |
+| wildcard-heavy add+build p99                            |                           <= 1,500 ms |                           <= 750 ms |                                                                <= 300 ms |
+| first-match p99 (100k workload)                         |                              <= 10 us |      **n/a — unattainable at 100k** |                                           **n/a — unattainable at 100k** |
+| first-match p99 (≤16-node sub-workload, codegen+warmup) |                              <= 10 us |                             <= 3 us |        <= 1 us (median; p99 reachable only with 30-run-confirmed warmup) |
+| warmed static hit p99                                   |                             <= 100 ns |                            <= 50 ns |                                                                 <= 15 ns |
+| warmed dynamic hit p99                                  |                             <= 150 ns |                            <= 75 ns |                                                                 <= 25 ns |
+| 404/wrong-method p99                                    |                             <= 150 ns |                            <= 75 ns |                                                                 <= 25 ns |
+| cache churn p99                                         |                             <= 500 ns |                           <= 200 ns |                                                                 <= 75 ns |
+| cacheSize default/effective cap                         | <= 1,000 per method unless configured |                                same |                                                                     same |
+| max expanded routes per build                           |                            <= 200,000 | <= 150,000 if no compatibility need | <= 125,000 only under Bun/JSC extreme profile with no compatibility need |
+| max regex siblings per segment                          |                                 <= 32 |      <= 16 if no compatibility need |                                            <= 8 if no compatibility need |
+| RSS delta per route                                     |                            <= 4,096 B |                          <= 2,048 B |                                                               <= 1,024 B |
+| heapUsed delta per route                                |                            <= 2,048 B |                          <= 1,024 B |                                                                 <= 512 B |
+| arrayBuffers delta per route                            |                              <= 512 B |                            <= 256 B |                                                                 <= 128 B |
+| codegen observed compile p99 per method                 |                              <= 10 ms |                             <= 5 ms |                                                                  <= 2 ms |
+| emitted source per generated walker                     |                            <= 128 KiB |                           <= 64 KiB |                                                                <= 32 KiB |
+| dominant 100k mixed build phase share                   |                                <= 60% |                              <= 40% |                                                                   <= 25% |
 
 Measurement status:
 
@@ -941,11 +941,11 @@ Measurement status:
 
 Absolute memory equivalents at 100k routes:
 
-| Metric | Guard | Aggressive | Stretch |
-| --- | ---: | ---: | ---: |
-| RSS delta | <= 390.63 MiB | <= 195.31 MiB | <= 97.66 MiB |
-| heapUsed delta | <= 195.31 MiB | <= 97.66 MiB | <= 48.83 MiB |
-| arrayBuffers delta | <= 48.83 MiB | <= 24.41 MiB | <= 12.21 MiB |
+| Metric             |         Guard |    Aggressive |      Stretch |
+| ------------------ | ------------: | ------------: | -----------: |
+| RSS delta          | <= 390.63 MiB | <= 195.31 MiB | <= 97.66 MiB |
+| heapUsed delta     | <= 195.31 MiB |  <= 97.66 MiB | <= 48.83 MiB |
+| arrayBuffers delta |  <= 48.83 MiB |  <= 24.41 MiB | <= 12.21 MiB |
 
 Partial-gate statistics rule:
 
@@ -1251,7 +1251,7 @@ Compatibility mapping:
 - Public error class remains compatible with existing `RouterError` where possible. New batch validation errors use `kind: 'router-validation'` and carry `issues: RouterIssue[]`; internal issue schema uses the detailed `RouterIssueKind` list above.
 - Legacy external spelling from older code is handled only by a migration adapter; target spec and tests use `router-validation`.
 - Default numeric limits are: `maxMethodLength = 64`, `maxPathLength = 8192`, `maxSegmentLength = 1024`, `maxSegmentCount = 256`, `maxParams = 64`, `maxOptionalExpansions = 1024`, `maxExpandedRoutes = 200_000`, `maxRegexSiblingsPerSegment = 32`, and `cacheSize = 1000`.
-- Default `maxExpandedRoutes = 200_000`. This allows ordinary 100k route sets plus bounded optional expansion headroom, while rejecting pathological 100k * 1024 expansion attempts before trie insertion.
+- Default `maxExpandedRoutes = 200_000`. This allows ordinary 100k route sets plus bounded optional expansion headroom, while rejecting pathological 100k \* 1024 expansion attempts before trie insertion.
 - Default `maxRegexSiblingsPerSegment = 32`. This caps conservative regex-disjointness comparisons at one segment position.
 - Default `cacheSize = 1000`. Runtime cache containers are lazy, per method, and bounded by this value.
 - Default `optionalParamBehavior = 'omit'` for the target secure API. Existing compatibility behavior that returns `undefined` keys must be requested explicitly with `optionalParamBehavior: 'set-undefined'` or a compat migration profile.
@@ -1317,20 +1317,20 @@ codegen은 유지한다. 단, 모든 것을 codegen으로 만들지 않고 sourc
 
 Initial codegen limits:
 
-| Limit | Guard |
-| --- | ---: |
-| max generated source per walker | 128 KiB |
-| preferred generated source per walker | 64 KiB |
-| max generated source stretch target | 32 KiB |
-| max codegen candidate nodes per method (initial) | 4,096 |
+| Limit                                                                                                                                 |           Guard |
+| ------------------------------------------------------------------------------------------------------------------------------------- | --------------: |
+| max generated source per walker                                                                                                       |         128 KiB |
+| preferred generated source per walker                                                                                                 |          64 KiB |
+| max generated source stretch target                                                                                                   |          32 KiB |
+| max codegen candidate nodes per method (initial)                                                                                      |           4,096 |
 | **default codegen budget per §13 Phase 6 / 30-run × 100 sample distribution (task 28)** — p99 Guard 10us via codegen+mandatory-warmup | **≤ 256** nodes |
-| no-warmup p95-only cap (first-call p99 fails 10us at every count) | ≤ 64 nodes |
-| Aggressive 3us p99 (second-call) cap | ≤ 32 nodes |
-| Stretch 1us p99 — unattainable even with warmup | n/a |
-| **legacy ≤16 / ≤32 caps (5-run-derived, superseded by 30-run × 100 sample)** | obsolete |
-| legacy initial budget (not gate-passing) | 4,096 nodes |
-| max codegen candidate fanout | 64 |
-| max compile time per generated method | 10 ms |
+| no-warmup p95-only cap (first-call p99 fails 10us at every count)                                                                     |      ≤ 64 nodes |
+| Aggressive 3us p99 (second-call) cap                                                                                                  |      ≤ 32 nodes |
+| Stretch 1us p99 — unattainable even with warmup                                                                                       |             n/a |
+| **legacy ≤16 / ≤32 caps (5-run-derived, superseded by 30-run × 100 sample)**                                                          |        obsolete |
+| legacy initial budget (not gate-passing)                                                                                              |     4,096 nodes |
+| max codegen candidate fanout                                                                                                          |              64 |
+| max compile time per generated method                                                                                                 |           10 ms |
 
 Fallback:
 
@@ -1464,26 +1464,26 @@ int buffer와 bit 연산은 필요하다. 단, 라우터의 주 lookup 엔진이
 
 Route precedence and conflict policy:
 
-| Pattern relation | Default policy |
-| --- | --- |
-| same method + same normalized pattern | reject `route-duplicate` |
-| static vs param at same segment | static wins at match time |
-| static vs regex param at same segment | static wins at match time |
-| constrained regex param vs plain param same shape | reject `route-conflict`; plain param overlaps every valid non-slash regex segment |
-| constrained regex param vs constrained regex param same shape | reject `route-conflict` unless the safe-regex AST proves disjointness by the conservative rules in section 7.2 |
-| constrained regex param same AST at same segment | merge as same regex child; duplicate terminal is still checked at terminal insertion |
-| param name differs but shape same, e.g. `/:a` and `/:b` | reject `route-duplicate` for same method |
-| param name same and shape same | merge as same `paramChild` edge; duplicate terminal is still checked at terminal insertion |
-| wildcard vs any longer route made unreachable by wildcard | reject `route-unreachable` |
-| wildcard vs static terminal at same prefix | reject `route-unreachable` in both registration orders |
-| wildcard vs wildcard at same prefix | reject `route-unreachable`; the later wildcard is fully covered by the prior wildcard's suffix space |
-| regex siblings beyond `maxRegexSiblingsPerSegment` | reject `regex-sibling-limit` |
-| per-route optional expansions beyond `maxOptionalExpansions` | reject `optional-expansion-limit` before expanded-route insertion |
-| total expanded routes beyond `maxExpandedRoutes` | reject `expansion-total-limit` before trie insertion |
-| optional expansion produces duplicate shape | alias terminal only if handler/method/options identical; otherwise reject conflict |
-| wrong method same path | `match()` returns no-match; `allowedMethods(path)` may expose method metadata from the static/dynamic terminal table |
-| `HEAD` vs `GET` | no implicit fallback; only registered method matches |
-| `OPTIONS` | no implicit generated response; only registered method matches |
+| Pattern relation                                              | Default policy                                                                                                       |
+| ------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------- |
+| same method + same normalized pattern                         | reject `route-duplicate`                                                                                             |
+| static vs param at same segment                               | static wins at match time                                                                                            |
+| static vs regex param at same segment                         | static wins at match time                                                                                            |
+| constrained regex param vs plain param same shape             | reject `route-conflict`; plain param overlaps every valid non-slash regex segment                                    |
+| constrained regex param vs constrained regex param same shape | reject `route-conflict` unless the safe-regex AST proves disjointness by the conservative rules in section 7.2       |
+| constrained regex param same AST at same segment              | merge as same regex child; duplicate terminal is still checked at terminal insertion                                 |
+| param name differs but shape same, e.g. `/:a` and `/:b`       | reject `route-duplicate` for same method                                                                             |
+| param name same and shape same                                | merge as same `paramChild` edge; duplicate terminal is still checked at terminal insertion                           |
+| wildcard vs any longer route made unreachable by wildcard     | reject `route-unreachable`                                                                                           |
+| wildcard vs static terminal at same prefix                    | reject `route-unreachable` in both registration orders                                                               |
+| wildcard vs wildcard at same prefix                           | reject `route-unreachable`; the later wildcard is fully covered by the prior wildcard's suffix space                 |
+| regex siblings beyond `maxRegexSiblingsPerSegment`            | reject `regex-sibling-limit`                                                                                         |
+| per-route optional expansions beyond `maxOptionalExpansions`  | reject `optional-expansion-limit` before expanded-route insertion                                                    |
+| total expanded routes beyond `maxExpandedRoutes`              | reject `expansion-total-limit` before trie insertion                                                                 |
+| optional expansion produces duplicate shape                   | alias terminal only if handler/method/options identical; otherwise reject conflict                                   |
+| wrong method same path                                        | `match()` returns no-match; `allowedMethods(path)` may expose method metadata from the static/dynamic terminal table |
+| `HEAD` vs `GET`                                               | no implicit fallback; only registered method matches                                                                 |
+| `OPTIONS`                                                     | no implicit generated response; only registered method matches                                                       |
 
 ---
 
@@ -1580,16 +1580,16 @@ method 처리:
 
 재현 결과 기준 기본값은 object lookup이다.
 
-| Fanout/Key 형태 | 전략 |
-| --- | --- |
-| 일반 string segment | null-proto object |
-| 아주 작은 fixed static set and hot route | generated equality chain only after code-size/first-hit proof |
-| wildcard prefix only | generated prefix walker |
-| param-only chain | generated or iterative offset walker |
-| huge static full path table | **Workload-aware (task 15 POC, §5.3 reconciled)**: per-method `Object.create(null)` retained as default for hit-dominant API gateway workloads (object hit 7.59 ns < Map hit 9.43 ns at 8 method × 12,500 routes/bucket production-realistic shard); per-method `Map<string,number>` opt-in for miss/wrong-method/build/RSS-dominant workloads (Map miss 8.44 ns vs object 16.26 ns / Map build 6.7 ms vs object 19.1 ms / Map RSS 9.6 MiB vs object 14.1 MiB). Single global Map with composite key (`methodCode:path`) REJECTED — 60–70 ns concat overhead. Sharding justified by routing semantics, NOT by raw lookup speed (§5.3 line 735 unsharded microbench shows opposite trade-off due to `i % SHARDS` indexing overhead, irrelevant to numeric methodCode dispatch). |
-| compact metadata only | TypedArray |
-| method availability | bit mask or compact integer tag |
-| ASCII char-class prefilter | bitmap only after route-distribution proof |
+| Fanout/Key 형태                          | 전략                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           |
+| ---------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| 일반 string segment                      | null-proto object                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
+| 아주 작은 fixed static set and hot route | generated equality chain only after code-size/first-hit proof                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  |
+| wildcard prefix only                     | generated prefix walker                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        |
+| param-only chain                         | generated or iterative offset walker                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           |
+| huge static full path table              | **Workload-aware (task 15 POC, §5.3 reconciled)**: per-method `Object.create(null)` retained as default for hit-dominant API gateway workloads (object hit 7.59 ns < Map hit 9.43 ns at 8 method × 12,500 routes/bucket production-realistic shard); per-method `Map<string,number>` opt-in for miss/wrong-method/build/RSS-dominant workloads (Map miss 8.44 ns vs object 16.26 ns / Map build 6.7 ms vs object 19.1 ms / Map RSS 9.6 MiB vs object 14.1 MiB). Single global Map with composite key (`methodCode:path`) REJECTED — 60–70 ns concat overhead. Sharding justified by routing semantics, NOT by raw lookup speed (§5.3 line 735 unsharded microbench shows opposite trade-off due to `i % SHARDS` indexing overhead, irrelevant to numeric methodCode dispatch). |
+| compact metadata only                    | TypedArray                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     |
+| method availability                      | bit mask or compact integer tag                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                |
+| ASCII char-class prefilter               | bitmap only after route-distribution proof                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     |
 
 기각된 전략:
 
@@ -1614,7 +1614,7 @@ method 처리:
 현재 사실:
 
 - object node 500k: heap 증가가 크다.
-- Int32Array 500k*8 allocation probe: heap 증가는 없고 rss/arrayBuffers 쪽 증가를 별도로 봐야 한다. Raw payload is 15.26 MiB; measured RSS includes allocator/page effects.
+- Int32Array 500k\*8 allocation probe: heap 증가는 없고 rss/arrayBuffers 쪽 증가를 별도로 봐야 한다. Raw payload is 15.26 MiB; measured RSS includes allocator/page effects.
 - 100k static build/runtime state may retain duplicated static structures unless explicitly dropped or compacted after snapshot publication.
 - 100k param memory is not driven by duplicated params factory functions in the measured shape: there are 100,000 factory slots but only 1 unique factory function. The remaining candidates are segment node object graph, staticChildren objects, terminal arrays/slots, handlers, generated source, and cache state.
 
@@ -1660,7 +1660,7 @@ Implementation rule:
 - Secure/default profile에서는 unbounded `Infinity` limits를 금지하거나 explicit unsafe opt-out으로 격리한다.
 - 100k mixed build bottleneck을 재현 테스트로 고정하고 원인을 제거한다.
 - 100k mixed build must be phase-instrumented before optimization: parse, optional expansion, static insert, dynamic insert, wildcard conflict check, snapshot build, codegen.
-- Wildcard/static conflict validation moves from O(static * wildcard-prefix) scan to indexed prefix/trie validation if phase instrumentation confirms it as the 100k mixed bottleneck.
+- Wildcard/static conflict validation moves from O(static \* wildcard-prefix) scan to indexed prefix/trie validation if phase instrumentation confirms it as the 100k mixed bottleneck.
 
 ### P1: Hot Path
 
@@ -1701,18 +1701,18 @@ Implementation rule:
 
 ### Required RED Reproducers Before Router Refactor
 
-| Reproducer | Must prove | Acceptable outcome |
-| --- | --- | --- |
-| optional behavior | `optionalParamBehavior: 'omit'` is ignored by current seal path | failing test before fix |
-| params factory double-call | one dynamic hit invokes factory twice or allocates twice | failing counter/allocation test before fix; GREEN requires factory invocation count == 1 per successful dynamic match |
-| invalid method token | empty/space/control/delimiter methods are accepted today | failing validation test before fix |
-| registration path policy | query/fragment/control/malformed percent/dot path accepted today | failing validation test before fix |
-| runtime strict percent | malformed/unsafe encoded runtime path behavior is currently compat/raw-pass-through | policy test documents current behavior before change |
-| 100k mixed build | phase split identifies dominant build phase | timing output with phase percentages; GREEN requires dominant phase share <= 60% Guard after optimization |
-| 100k param memory | heap profile identifies top retained object groups | object-count/retained-size report |
-| cache order | static-first vs cache-first measured on static-hot, static-cold, churn, miss | p75/p99 comparison |
-| static layout | method-first vs compact path-first measured with multi-method and wrong-method semantics | latency + memory comparison |
-| codegen preflight | large tree codegen cost is measured before/after preflight | source bytes + compile ms |
+| Reproducer                 | Must prove                                                                               | Acceptable outcome                                                                                                    |
+| -------------------------- | ---------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------- |
+| optional behavior          | `optionalParamBehavior: 'omit'` is ignored by current seal path                          | failing test before fix                                                                                               |
+| params factory double-call | one dynamic hit invokes factory twice or allocates twice                                 | failing counter/allocation test before fix; GREEN requires factory invocation count == 1 per successful dynamic match |
+| invalid method token       | empty/space/control/delimiter methods are accepted today                                 | failing validation test before fix                                                                                    |
+| registration path policy   | query/fragment/control/malformed percent/dot path accepted today                         | failing validation test before fix                                                                                    |
+| runtime strict percent     | malformed/unsafe encoded runtime path behavior is currently compat/raw-pass-through      | policy test documents current behavior before change                                                                  |
+| 100k mixed build           | phase split identifies dominant build phase                                              | timing output with phase percentages; GREEN requires dominant phase share <= 60% Guard after optimization             |
+| 100k param memory          | heap profile identifies top retained object groups                                       | object-count/retained-size report                                                                                     |
+| cache order                | static-first vs cache-first measured on static-hot, static-cold, churn, miss             | p75/p99 comparison                                                                                                    |
+| static layout              | method-first vs compact path-first measured with multi-method and wrong-method semantics | latency + memory comparison                                                                                           |
+| codegen preflight          | large tree codegen cost is measured before/after preflight                               | source bytes + compile ms                                                                                             |
 
 ---
 
@@ -1897,7 +1897,7 @@ Performance risk:
 
 Goal:
 
-- Remove the reproduced O(static * wildcard-prefix) build blow-up.
+- Remove the reproduced O(static \* wildcard-prefix) build blow-up.
 
 Files:
 
@@ -1937,7 +1937,7 @@ Algorithm:
 - `paramChild` is a single shape edge by policy. A second same-position plain param with a different name is not a new edge; it emits `route-duplicate` for the same method.
 - `route-duplicate` covers same method plus structurally identical pattern shape, even when param names differ; it is not limited to byte-identical path strings.
 - `subtreeTerminalCount` is incremented on every visited ancestor, including the terminal node itself, at commit. Wildcard insertion reads this counter at any ancestor, including the prefix node, in O(1) without subtree enumeration.
-- Complexity for static/plain-param/wildcard prefix checks becomes O(segment count) per expanded route. Regex-param insertion adds sibling comparison cost O(regex siblings at that segment * conservative AST comparison). `maxRegexSiblingsPerSegment = 32` prevents unbounded sibling comparison and emits `regex-sibling-limit` when exceeded. Optional expansion multiplies work by expanded route count and must be capped globally.
+- Complexity for static/plain-param/wildcard prefix checks becomes O(segment count) per expanded route. Regex-param insertion adds sibling comparison cost O(regex siblings at that segment \* conservative AST comparison). `maxRegexSiblingsPerSegment = 32` prevents unbounded sibling comparison and emits `regex-sibling-limit` when exceeded. Optional expansion multiplies work by expanded route count and must be capped globally.
 - Pseudocode convention: `parts` excludes the trailing wildcard capture segment. `wildcardTail` is passed separately as `null | { name: string }`.
 - Batch validation convention: when `issue(...)` is emitted for a route, stop mutating the prefix index for that route but keep processing later routes so all independent issues can be collected.
 - Expansion counter convention: `totalExpandedRoutes` is a per-`build()`/`seal()` batch counter initialized to 0 before pending routes are validated. It is not module-level or router-lifetime state.
@@ -1979,7 +1979,13 @@ type ExpandedRoute = { methodCode: number; parts: RoutePart[]; wildcardTail: nul
 type RouteSpec = { meta: RouteMeta; parts: RoutePart[] };
 type IssuePlan = { issue: RouterIssueKind };
 type AliasPlan = { aliasOf: RouteMeta };
-type CommitPlan = { methodCode: number; edges: PlannedEdge[]; visited: PrefixTrieNode[]; wildcardTail: null | { name: string }; routeMeta: RouteMeta };
+type CommitPlan = {
+  methodCode: number;
+  edges: PlannedEdge[];
+  visited: PrefixTrieNode[];
+  wildcardTail: null | { name: string };
+  routeMeta: RouteMeta;
+};
 type PrefixPlan = IssuePlan | AliasPlan | CommitPlan;
 type PlannedEdge =
   | { kind: 'static'; parent: PrefixTrieNode; key: string; node?: PrefixTrieNode; plannedNode?: PrefixTrieNode }
@@ -2035,14 +2041,24 @@ function expandAndAdd(routeSpec: RouteSpec): void {
   }
 }
 
-function addExpandedRoute(methodCode: number, parts: RoutePart[], wildcardTail: null | { name: string }, routeMeta: RouteMeta): void {
+function addExpandedRoute(
+  methodCode: number,
+  parts: RoutePart[],
+  wildcardTail: null | { name: string },
+  routeMeta: RouteMeta,
+): void {
   const plan = validateExpandedRoute(methodCode, parts, wildcardTail, routeMeta);
   if ('issue' in plan) return issue(plan.issue, routeMeta);
   if ('aliasOf' in plan) return recordAlias(plan.aliasOf, routeMeta);
   commitExpandedRoute(plan);
 }
 
-function validateExpandedRoute(methodCode: number, parts: RoutePart[], wildcardTail: null | { name: string }, routeMeta: RouteMeta): PrefixPlan {
+function validateExpandedRoute(
+  methodCode: number,
+  parts: RoutePart[],
+  wildcardTail: null | { name: string },
+  routeMeta: RouteMeta,
+): PrefixPlan {
   let node = rootFor(methodCode);
   const visited = [node];
   const edges = [];
@@ -2063,9 +2079,7 @@ function validateExpandedRoute(methodCode: number, parts: RoutePart[], wildcardT
   } else {
     if (node.terminalMeta !== null) {
       if (!routeMeta.isOptionalExpansion) return { issue: 'route-duplicate' };
-      return sameTerminalIdentity(node.terminalMeta, routeMeta)
-        ? { aliasOf: node.terminalMeta }
-        : { issue: 'route-conflict' };
+      return sameTerminalIdentity(node.terminalMeta, routeMeta) ? { aliasOf: node.terminalMeta } : { issue: 'route-conflict' };
     }
     // This terminal check is distinct from the loop check above: the loop
     // catches ancestor wildcards; this catches a wildcard attached exactly
@@ -2323,10 +2337,10 @@ Algorithm:
 
 POC reproduction (`bench/poc-method-bitmask.ts`, 5 fresh-process runs, 100k routes × 1–4 methods/path):
 
-| Probe | Approach A (per-method tree iteration) | Approach B (per-path Map bitmask + popcount) | Approach C (per-path object bitmask + popcount) |
-| --- | ---: | ---: | ---: |
-| `allowedMethods(path)` × 100 cycle | 49.6–56.0 ns | **29.7–33.6 ns (1.57–1.71× faster)** | 31.0–39.0 ns (1.27–1.76× faster) |
-| wrong-method check | 64.3–73.6 ns | **24.1–28.0 ns (2.63–2.95× faster)** | 36.8–45.5 ns (1.52–1.92× faster) |
+| Probe                              | Approach A (per-method tree iteration) | Approach B (per-path Map bitmask + popcount) | Approach C (per-path object bitmask + popcount) |
+| ---------------------------------- | -------------------------------------: | -------------------------------------------: | ----------------------------------------------: |
+| `allowedMethods(path)` × 100 cycle |                           49.6–56.0 ns |         **29.7–33.6 ns (1.57–1.71× faster)** |                31.0–39.0 ns (1.27–1.76× faster) |
+| wrong-method check                 |                           64.3–73.6 ns |         **24.1–28.0 ns (2.63–2.95× faster)** |                36.8–45.5 ns (1.52–1.92× faster) |
 
 5-run is candidate-selection evidence; 30-run fresh-process gate required before final lock. Trend is consistent across 5 runs and matches §1 line 67 microbench rank (bitmask 2.18 ns < Set 3.43 ns).
 
@@ -2374,12 +2388,12 @@ Algorithm:
 **Cap re-derivation (task 28: 30 fresh processes × 100 samples = 3000 samples per node count)**:
 
 | nodes | first-call p99 | first-call max | second-call p99 (warmed) | second-call p999 | second-call max | 10th-call p99 |
-|---:|---:|---:|---:|---:|---:|---:|
-| 16 | 16,081 ns | 26,603 ns | **1,596 ns** | 11,884 ns | 25,330 ns | 1,437 ns |
-| 32 | 17,303 ns | 197,590 ns | **2,181 ns** | 17,921 ns | 38,461 ns | 1,490 ns |
-| 64 | 63,066 ns | 169,121 ns | **3,010 ns** | 27,561 ns | 33,847 ns | 2,877 ns |
-| 128 | 31,419 ns | 270,832 ns | **3,066 ns** | 50,917 ns | 95,189 ns | 3,597 ns |
-| 256 | 20,846 ns | 347,966 ns | **3,605 ns** | 28,809 ns | 108,385 ns | 2,991 ns |
+| ----: | -------------: | -------------: | -----------------------: | ---------------: | --------------: | ------------: |
+|    16 |      16,081 ns |      26,603 ns |             **1,596 ns** |        11,884 ns |       25,330 ns |      1,437 ns |
+|    32 |      17,303 ns |     197,590 ns |             **2,181 ns** |        17,921 ns |       38,461 ns |      1,490 ns |
+|    64 |      63,066 ns |     169,121 ns |             **3,010 ns** |        27,561 ns |       33,847 ns |      2,877 ns |
+|   128 |      31,419 ns |     270,832 ns |             **3,066 ns** |        50,917 ns |       95,189 ns |      3,597 ns |
+|   256 |      20,846 ns |     347,966 ns |             **3,605 ns** |        28,809 ns |      108,385 ns |      2,991 ns |
 
 Findings:
 
@@ -2394,12 +2408,13 @@ Findings:
 
 The previous 5-run table is preserved below for traceability:
 
-| Run | 16-node first p99 | 64-node first p99 | 256-node first p99 | 1024-node first p99 |
-|---:|---:|---:|---:|---:|
-| 5-run median | 6,272 | 2,838 | 8,164 | 40,362 |
-| 30-run × 100 sample p99 | 16,081 | 63,066 | 20,846 | (not measured) |
+|                     Run | 16-node first p99 | 64-node first p99 | 256-node first p99 | 1024-node first p99 |
+| ----------------------: | ----------------: | ----------------: | -----------------: | ------------------: |
+|            5-run median |             6,272 |             2,838 |              8,164 |              40,362 |
+| 30-run × 100 sample p99 |            16,081 |            63,066 |             20,846 |      (not measured) |
 
 5-run distribution understates first-call p99 by 2.6× (16-node) to 22× (64-node) compared to 3000-sample. Future cap derivations must use 30-run × 100 sample minimum.
+
 - Record optional telemetry in debug/profile mode.
 - Compile time cannot be known before compilation. The `10 ms` limit is an observed telemetry gate: if exceeded, subsequent builds for the same shape disable codegen through budget heuristics or lower thresholds.
 - Track JSC first-call/tier-up and generated function count in the gate output.

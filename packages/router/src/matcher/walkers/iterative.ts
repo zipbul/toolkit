@@ -1,6 +1,6 @@
 import type { DecoderFn, MatchFn, MatchState } from '../../types';
-import { TESTER_PASS, type SegmentNode } from '../../tree';
 
+import { TESTER_PASS, type SegmentNode } from '../../tree';
 
 /**
  * Single-pass, allocation-free walker for trees without ambiguous nodes
@@ -19,9 +19,9 @@ export function createIterativeWalker(root: SegmentNode, decoder: DecoderFn): Ma
     while (pos < len) {
       if (node.staticPrefix !== null) {
         const newPos = consumeStaticPrefix(node.staticPrefix, url, pos, len);
-        if (newPos < 0) return false;
+        if (newPos < 0) {return false;}
         pos = newPos;
-        if (pos >= len) break;
+        if (pos >= len) {break;}
       }
 
       // charCodeAt scan for the next '/' beats `indexOf('/', pos)` on
@@ -29,18 +29,13 @@ export function createIterativeWalker(root: SegmentNode, decoder: DecoderFn): Ma
       // workloads. indexOf wins past ~65 chars but those are rare for
       // HTTP request paths.
       let end = pos;
-      while (end < len && url.charCodeAt(end) !== 47) end++;
+      while (end < len && url.charCodeAt(end) !== 47) {end++;}
       const segLen = end - pos;
 
       // Single-static-child offset fast path: avoid substring alloc on
       // the most common shape (single static child per node).
       const sck = node.singleChildKey;
-      if (
-        sck !== null &&
-        node.singleChildNext !== null &&
-        sck.length === segLen &&
-        url.startsWith(sck, pos)
-      ) {
+      if (sck !== null && node.singleChildNext !== null && sck.length === segLen && url.startsWith(sck, pos)) {
         node = node.singleChildNext;
         pos = end === len ? len : end + 1;
         continue;
@@ -58,7 +53,7 @@ export function createIterativeWalker(root: SegmentNode, decoder: DecoderFn): Ma
       if (node.paramChild !== null && segLen > 0) {
         if (node.paramChild.tester !== null) {
           const decoded = decoder(url.substring(pos, end));
-          if (node.paramChild.tester(decoded) !== TESTER_PASS) return false;
+          if (node.paramChild.tester(decoded) !== TESTER_PASS) {return false;}
         }
         const pc = state.paramCount * 2;
         state.paramOffsets[pc] = pos;
@@ -70,7 +65,7 @@ export function createIterativeWalker(root: SegmentNode, decoder: DecoderFn): Ma
       }
 
       if (node.wildcardStore !== null) {
-        if (node.wildcardOrigin === 'multi' && pos >= len) return false;
+        if (node.wildcardOrigin === 'multi' && pos >= len) {return false;}
         const pc = state.paramCount * 2;
         state.paramOffsets[pc] = pos;
         state.paramOffsets[pc + 1] = len;
@@ -88,19 +83,14 @@ export function createIterativeWalker(root: SegmentNode, decoder: DecoderFn): Ma
 
 /** Walk a compacted single-static chain. Returns the new `pos` after
  *  the prefix matches, or `-1` to signal mismatch. */
-export function consumeStaticPrefix(
-  sp: ReadonlyArray<string>,
-  url: string,
-  pos: number,
-  len: number,
-): number {
+export function consumeStaticPrefix(sp: ReadonlyArray<string>, url: string, pos: number, len: number): number {
   for (let i = 0; i < sp.length; i++) {
     const seg = sp[i]!;
     const segLen = seg.length;
     const after = pos + segLen;
-    if (after > len) return -1;
-    if (!url.startsWith(seg, pos)) return -1;
-    if (after < len && url.charCodeAt(after) !== 47) return -1;
+    if (after > len) {return -1;}
+    if (!url.startsWith(seg, pos)) {return -1;}
+    if (after < len && url.charCodeAt(after) !== 47) {return -1;}
     pos = after === len ? len : after + 1;
   }
   return pos;

@@ -34,7 +34,6 @@
 ### Minor Changes
 
 - cf5f313: Rewrite router internals from segment-based binary trie to character-level radix trie.
-
   - Character-level LCP-split radix nodes with per-method tree isolation
   - Iterative radix walker with monomorphic property access (no closure tree)
   - Inline path normalization (preNormalize + needsDeepNorm fast path)
@@ -48,7 +47,6 @@
 ### Patch Changes
 
 - 665e37c: chore: quality audit across all public packages
-
   - Add `sideEffects: false` and `publishConfig.provenance` to all packages
   - Add `.npmignore` to all packages
   - Expand npm keywords for better discoverability

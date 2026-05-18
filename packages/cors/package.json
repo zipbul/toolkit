@@ -2,6 +2,20 @@
   "name": "@zipbul/cors",
   "version": "0.1.4",
   "description": "Framework-agnostic CORS library for standard Web APIs (Request/Response)",
+  "keywords": [
+    "bun",
+    "cors",
+    "cross-origin",
+    "fetch",
+    "http",
+    "middleware",
+    "preflight",
+    "typescript",
+    "web-api",
+    "zipbul"
+  ],
+  "homepage": "https://github.com/zipbul/toolkit/tree/main/packages/cors#readme",
+  "bugs": "https://github.com/zipbul/toolkit/issues",
   "license": "MIT",
   "author": "Junhyung Park (https://github.com/parkrevil)",
   "repository": {
@@ -9,24 +23,11 @@
     "url": "https://github.com/zipbul/toolkit",
     "directory": "packages/cors"
   },
-  "bugs": "https://github.com/zipbul/toolkit/issues",
-  "homepage": "https://github.com/zipbul/toolkit/tree/main/packages/cors#readme",
-  "keywords": [
-    "cors",
-    "cross-origin",
-    "preflight",
-    "http",
-    "fetch",
-    "web-api",
-    "bun",
-    "middleware",
-    "typescript",
-    "zipbul"
+  "files": [
+    "dist"
   ],
-  "engines": {
-    "bun": ">=1.0.0"
-  },
   "type": "module",
+  "sideEffects": false,
   "module": "dist/index.js",
   "types": "dist/index.d.ts",
   "exports": {
@@ -35,21 +36,20 @@
       "import": "./dist/index.js"
     }
   },
-  "files": [
-    "dist"
-  ],
-  "sideEffects": false,
   "publishConfig": {
     "provenance": true
   },
   "scripts": {
     "build": "bun build index.ts --outdir dist --target bun --format esm --packages external --production && tsc -p tsconfig.build.json",
-    "test": "bun test",
-    "coverage": "bun test --coverage"
+    "coverage": "bun test --coverage",
+    "test": "bun test"
   },
   "dependencies": {
     "@zipbul/result": "workspace:*",
     "@zipbul/shared": "workspace:*",
     "safe-regex2": "^5.0.0"
+  },
+  "engines": {
+    "bun": ">=1.0.0"
   }
 }

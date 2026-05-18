@@ -17,9 +17,10 @@
 import { expect } from 'bun:test';
 
 import type { Router } from '../src/router';
-import { RouterError } from '../src/error';
 import type { RouterErrorData } from '../src/types';
+
 import { getRouterInternals } from '../internal';
+import { RouterError } from '../src/error';
 
 /**
  * Run `fn` and return the `RouterError` it threw. Fails the surrounding
@@ -42,7 +43,7 @@ export function catchRouterError(fn: () => void): RouterError {
 export function firstBuildIssue<T>(router: Router<T>): RouterErrorData {
   const err = catchRouterError(() => router.build());
   expect(err.data.kind).toBe('route-validation');
-  if (err.data.kind !== 'route-validation') throw err;
+  if (err.data.kind !== 'route-validation') {throw err;}
   return err.data.errors[0]!.error;
 }
 
@@ -59,12 +60,16 @@ export function getRegistrationSnapshot<T>(router: Router<T>): {
   staticByMethod: ReadonlyArray<unknown>;
 } {
   const internals = getRouterInternals(router);
-  const snap = (internals.registration as unknown as { snapshot: {
-    handlers: T[];
-    terminalSlab: Int32Array;
-    segmentTrees: ReadonlyArray<unknown>;
-    staticByMethod: ReadonlyArray<unknown>;
-  } | null }).snapshot;
-  if (snap === null) throw new Error('Router not built — snapshot unavailable');
+  const snap = (
+    internals.registration as unknown as {
+      snapshot: {
+        handlers: T[];
+        terminalSlab: Int32Array;
+        segmentTrees: ReadonlyArray<unknown>;
+        staticByMethod: ReadonlyArray<unknown>;
+      } | null;
+    }
+  ).snapshot;
+  if (snap === null) {throw new Error('Router not built — snapshot unavailable');}
   return snap;
 }

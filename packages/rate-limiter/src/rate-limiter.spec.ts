@@ -1,12 +1,13 @@
 import { describe, test, expect, beforeEach } from 'bun:test';
 
-import { RateLimiter } from './rate-limiter';
-import { RateLimiterError } from './interfaces';
 import type { RateLimitAllowResult, RateLimitDenyResult, RateLimiterStore, StoreEntry } from './interfaces';
+
 import { RateLimitAction, RateLimiterErrorReason, Algorithm } from './enums';
-import { MemoryStore } from './stores/memory';
-import { WithFallbackStore, withFallback } from './stores/with-fallback';
+import { RateLimiterError } from './interfaces';
 import { validateRateLimiterOptions, resolveRateLimiterOptions } from './options';
+import { RateLimiter } from './rate-limiter';
+import { MemoryStore } from './stores/memory';
+import { withFallback } from './stores/with-fallback';
 
 // ── Helpers ─────────────────────────────────────────────────────────
 
@@ -14,8 +15,12 @@ function createClock(start = 0) {
   let now = start;
   return {
     now: () => now,
-    advance: (ms: number) => { now += ms; },
-    set: (ms: number) => { now = ms; },
+    advance: (ms: number) => {
+      now += ms;
+    },
+    set: (ms: number) => {
+      now = ms;
+    },
   };
 }
 
@@ -143,7 +148,9 @@ describe('per-call cost validation', () => {
 describe('SlidingWindow algorithm', () => {
   let clock: ReturnType<typeof createClock>;
 
-  beforeEach(() => { clock = createClock(1000); });
+  beforeEach(() => {
+    clock = createClock(1000);
+  });
 
   test('allows requests within limit', async () => {
     const limiter = RateLimiter.create({
@@ -305,7 +312,9 @@ describe('SlidingWindow algorithm', () => {
 describe('GCRA algorithm', () => {
   let clock: ReturnType<typeof createClock>;
 
-  beforeEach(() => { clock = createClock(1000); });
+  beforeEach(() => {
+    clock = createClock(1000);
+  });
 
   test('allows requests within limit', async () => {
     const limiter = RateLimiter.create({
@@ -424,7 +433,9 @@ describe('GCRA algorithm', () => {
 describe('TokenBucket algorithm', () => {
   let clock: ReturnType<typeof createClock>;
 
-  beforeEach(() => { clock = createClock(1000); });
+  beforeEach(() => {
+    clock = createClock(1000);
+  });
 
   test('allows requests within bucket', async () => {
     const limiter = RateLimiter.create({
@@ -464,7 +475,7 @@ describe('TokenBucket algorithm', () => {
       clock: clock.now,
     });
 
-    for (let i = 0; i < 10; i++) await limiter.consume('user1');
+    for (let i = 0; i < 10; i++) {await limiter.consume('user1');}
 
     clock.advance(5000);
     const r = await limiter.consume('user1');
@@ -480,7 +491,7 @@ describe('TokenBucket algorithm', () => {
     });
 
     // Drain all tokens
-    for (let i = 0; i < 5; i++) await limiter.consume('user1');
+    for (let i = 0; i < 5; i++) {await limiter.consume('user1');}
     expect((await limiter.consume('user1')).action).toBe(RateLimitAction.Deny);
 
     // Wait much longer than needed to fully refill
@@ -784,8 +795,8 @@ describe('compound rules', () => {
     const inner = new MemoryStore();
     let rule0UpdateCount = 0;
     const racyStore: RateLimiterStore = {
-      get: (key) => inner.get(key),
-      delete: (key) => inner.delete(key),
+      get: key => inner.get(key),
+      delete: key => inner.delete(key),
       clear: () => inner.clear(),
       update: (key, updater) => {
         const result = inner.update(key, updater);
@@ -795,7 +806,9 @@ describe('compound rules', () => {
           // After rule_0 consumed, deplete rule_1 to trigger race
           if (rule0UpdateCount === 2) {
             inner.update(key.replace(':rule_0', ':rule_1'), () => ({
-              value: 2, prev: 0, windowStart: 1000,
+              value: 2,
+              prev: 0,
+              windowStart: 1000,
             }));
           }
         }
@@ -806,7 +819,7 @@ describe('compound rules', () => {
     const limiter = RateLimiter.create({
       rules: [
         { limit: 10, window: 1000 },
-        { limit: 2, window: 1000 },  // limit=2 so first consume passes, race depletes it
+        { limit: 2, window: 1000 }, // limit=2 so first consume passes, race depletes it
       ],
       algorithm: Algorithm.SlidingWindow,
       clock: clock.now,
@@ -834,8 +847,8 @@ describe('compound rules', () => {
     const inner = new MemoryStore();
     let rule0UpdateCount = 0;
     const racyStore: RateLimiterStore = {
-      get: (key) => inner.get(key),
-      delete: (key) => inner.delete(key),
+      get: key => inner.get(key),
+      delete: key => inner.delete(key),
       clear: () => inner.clear(),
       update: (key, updater) => {
         const result = inner.update(key, updater);
@@ -844,7 +857,9 @@ describe('compound rules', () => {
           if (rule0UpdateCount === 2) {
             // Set rule_1 TAT far in the future to force deny
             inner.update(key.replace(':rule_0', ':rule_1'), () => ({
-              value: clock.now() + 50000, prev: 0, windowStart: 0,
+              value: clock.now() + 50000,
+              prev: 0,
+              windowStart: 0,
             }));
           }
         }
@@ -879,8 +894,8 @@ describe('compound rules', () => {
     const inner = new MemoryStore();
     let rule0UpdateCount = 0;
     const racyStore: RateLimiterStore = {
-      get: (key) => inner.get(key),
-      delete: (key) => inner.delete(key),
+      get: key => inner.get(key),
+      delete: key => inner.delete(key),
       clear: () => inner.clear(),
       update: (key, updater) => {
         const result = inner.update(key, updater);
@@ -889,7 +904,9 @@ describe('compound rules', () => {
           if (rule0UpdateCount === 2) {
             // Set rule_1 tokens to 0 to force deny
             inner.update(key.replace(':rule_0', ':rule_1'), () => ({
-              value: 0, prev: 0, windowStart: clock.now(),
+              value: 0,
+              prev: 0,
+              windowStart: clock.now(),
             }));
           }
         }
@@ -922,13 +939,13 @@ describe('compound rules', () => {
 
   test.each([Algorithm.SlidingWindow, Algorithm.GCRA, Algorithm.TokenBucket])(
     'refunds with async store (%s)',
-    async (algorithm) => {
+    async algorithm => {
       const clock = createClock(1000);
       const inner = new MemoryStore();
       let rule0UpdateCount = 0;
       const racyAsyncStore: RateLimiterStore = {
-        get: async (key) => inner.get(key),
-        delete: async (key) => inner.delete(key),
+        get: async key => inner.get(key),
+        delete: async key => inner.delete(key),
         clear: async () => inner.clear(),
         update: async (key, updater) => {
           const result = inner.update(key, updater);
@@ -972,8 +989,8 @@ describe('compound rules', () => {
     const inner = new MemoryStore();
     let rule0UpdateCount = 0;
     const racyStore: RateLimiterStore = {
-      get: (key) => inner.get(key),
-      delete: (key) => inner.delete(key),
+      get: key => inner.get(key),
+      delete: key => inner.delete(key),
       clear: () => inner.clear(),
       update: (key, updater) => {
         const result = inner.update(key, updater);
@@ -982,7 +999,9 @@ describe('compound rules', () => {
           if (rule0UpdateCount === 2) {
             // Set rule_1 to 0 tokens to force deny
             inner.update(key.replace(':rule_0', ':rule_1'), () => ({
-              value: 0, prev: 0, windowStart: clock.now(),
+              value: 0,
+              prev: 0,
+              windowStart: clock.now(),
             }));
           }
           // After the race is triggered, make rule_0 refund fail
@@ -1110,8 +1129,12 @@ describe('hooks', () => {
       algorithm: Algorithm.SlidingWindow,
       clock: clock.now,
       hooks: {
-        onConsume: () => { hookCalled = true; },
-        onLimit: () => { hookCalled = true; },
+        onConsume: () => {
+          hookCalled = true;
+        },
+        onLimit: () => {
+          hookCalled = true;
+        },
       },
     });
 
@@ -1126,7 +1149,9 @@ describe('hooks', () => {
       algorithm: Algorithm.SlidingWindow,
       clock: clock.now,
       hooks: {
-        onConsume: () => { throw new Error('hook error'); },
+        onConsume: () => {
+          throw new Error('hook error');
+        },
       },
     });
 
@@ -1148,10 +1173,18 @@ describe('store error handling', () => {
   test('wraps store errors in RateLimiterError with cause', async () => {
     const originalError = new Error('connection refused');
     const failingStore: RateLimiterStore = {
-      update: () => { throw originalError; },
-      get: () => { throw originalError; },
-      delete: () => { throw originalError; },
-      clear: () => { throw originalError; },
+      update: () => {
+        throw originalError;
+      },
+      get: () => {
+        throw originalError;
+      },
+      delete: () => {
+        throw originalError;
+      },
+      clear: () => {
+        throw originalError;
+      },
     };
 
     const limiter = RateLimiter.create({
@@ -1194,8 +1227,12 @@ describe('store error handling', () => {
     const limiter = RateLimiter.create({
       rules: { limit: 10, window: 1000 },
       store: {
-        update: () => { throw 'string error'; },
-        get: () => { throw 'string error'; },
+        update: () => {
+          throw 'string error';
+        },
+        get: () => {
+          throw 'string error';
+        },
         delete: () => {},
         clear: () => {},
       },
@@ -1213,8 +1250,12 @@ describe('store error handling', () => {
     const limiter = RateLimiter.create({
       rules: { limit: 10, window: 1000 },
       store: {
-        update: () => { throw new Error('fail'); },
-        get: () => { throw new Error('fail'); },
+        update: () => {
+          throw new Error('fail');
+        },
+        get: () => {
+          throw new Error('fail');
+        },
         delete: () => {},
         clear: () => {},
       },
@@ -1250,7 +1291,7 @@ describe('MemoryStore', () => {
     store.update('key1', () => ({ value: 1, prev: 0, windowStart: 1000 }));
 
     let received: StoreEntry | null = null;
-    store.update('key1', (current) => {
+    store.update('key1', current => {
       received = current;
       return { value: 2, prev: 0, windowStart: 1000 };
     });
@@ -1306,7 +1347,7 @@ describe('MemoryStore', () => {
     clock.advance(50);
 
     let receivedCurrent: StoreEntry | null = { value: 999, prev: 0, windowStart: 0 };
-    store.update('key', (current) => {
+    store.update('key', current => {
       receivedCurrent = current;
       return { value: 2, prev: 0, windowStart: 0 };
     });
@@ -1373,9 +1414,15 @@ describe('WithFallbackStore', () => {
 
   test('falls back when primary fails', async () => {
     const primary: RateLimiterStore = {
-      update: () => { throw new Error('down'); },
-      get: () => { throw new Error('down'); },
-      delete: () => { throw new Error('down'); },
+      update: () => {
+        throw new Error('down');
+      },
+      get: () => {
+        throw new Error('down');
+      },
+      delete: () => {
+        throw new Error('down');
+      },
       clear: () => {},
     };
     const fallback = new MemoryStore();
@@ -1411,9 +1458,15 @@ describe('WithFallbackStore', () => {
 
   test('delete falls back when primary fails', async () => {
     const primary: RateLimiterStore = {
-      update: () => { throw new Error('down'); },
-      get: () => { throw new Error('down'); },
-      delete: () => { throw new Error('down'); },
+      update: () => {
+        throw new Error('down');
+      },
+      get: () => {
+        throw new Error('down');
+      },
+      delete: () => {
+        throw new Error('down');
+      },
       clear: () => {},
     };
     const fallback = new MemoryStore();
@@ -1468,7 +1521,9 @@ describe('WithFallbackStore', () => {
 
     // Force primary to fail by making update throw
     const origUpdate = primary.update.bind(primary);
-    primary.update = () => { throw new Error('down'); };
+    primary.update = () => {
+      throw new Error('down');
+    };
 
     await store.update('key', () => ({ value: 1, prev: 0, windowStart: 0 }));
     expect(fallback.get('key')).toEqual({ value: 1, prev: 0, windowStart: 0 });
@@ -1492,13 +1547,17 @@ describe('WithFallbackStore', () => {
     const fallback = new MemoryStore();
 
     const store = withFallback(primary, fallback, {
-      healthCheck: async () => { throw new Error('check failed'); },
+      healthCheck: async () => {
+        throw new Error('check failed');
+      },
       restoreInterval: 50,
     });
 
     // Force fallback
     const origUpdate = primary.update.bind(primary);
-    primary.update = () => { throw new Error('down'); };
+    primary.update = () => {
+      throw new Error('down');
+    };
     await store.update('key', () => ({ value: 1, prev: 0, windowStart: 0 }));
 
     primary.update = origUpdate;
@@ -1575,10 +1634,7 @@ describe('result shape', () => {
 describe('RateLimiterError', () => {
   test('has correct name, reason, and cause', () => {
     const cause = new Error('original');
-    const error = new RateLimiterError(
-      { reason: RateLimiterErrorReason.StoreError, message: 'test message' },
-      { cause },
-    );
+    const error = new RateLimiterError({ reason: RateLimiterErrorReason.StoreError, message: 'test message' }, { cause });
 
     expect(error.name).toBe('RateLimiterError');
     expect(error.reason).toBe(RateLimiterErrorReason.StoreError);
@@ -1630,7 +1686,9 @@ describe('reset', () => {
       store: {
         update: () => ({ value: 0, prev: 0, windowStart: 0 }),
         get: () => null,
-        delete: () => { throw new Error('fail'); },
+        delete: () => {
+          throw new Error('fail');
+        },
         clear: () => {},
       },
     });
@@ -1656,7 +1714,7 @@ describe('reset', () => {
         get: () => null,
         delete: () => {
           deleteCount++;
-          if (deleteCount === 2) throw new Error('second delete fails');
+          if (deleteCount === 2) {throw new Error('second delete fails');}
         },
         clear: () => {},
       },

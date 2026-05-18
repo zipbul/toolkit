@@ -1,14 +1,15 @@
 import { describe, test, expect } from 'bun:test';
 
-import { parseMultipart } from './state-machine';
-import { PartQueue } from './part-queue';
-import { StreamingCallbacks, BufferingCallbacks } from './callbacks';
-import { BufferedMultipartFile } from './streaming-part';
-import { MultipartError } from '../interfaces';
 import type { MultipartFile, MultipartPart } from '../interfaces';
-import { MultipartErrorReason } from '../enums';
-import { resolveMultipartOptions } from '../options';
 import type { ParseAllResult } from '../types';
+
+import { MultipartErrorReason } from '../enums';
+import { MultipartError } from '../interfaces';
+import { resolveMultipartOptions } from '../options';
+import { StreamingCallbacks, BufferingCallbacks } from './callbacks';
+import { PartQueue } from './part-queue';
+import { parseMultipart } from './state-machine';
+import { BufferedMultipartFile } from './streaming-part';
 
 // ── Helpers ─────────────────────────────────────────────────────────
 
@@ -87,7 +88,9 @@ async function collectParts(
 
   parseMultipart(body, boundary, opts, callbacks)
     .then(() => queue.finish())
-    .catch((error) => { if (!queue.abandoned) queue.fail(error); });
+    .catch(error => {
+      if (!queue.abandoned) {queue.fail(error);}
+    });
 
   const parts: MultipartPart[] = [];
 
@@ -181,8 +184,7 @@ describe('parseMultipart', () => {
     test('3. file part (with filename + content-type)', async () => {
       const body = createBody(boundary, [
         {
-          headers:
-            'Content-Disposition: form-data; name="upload"; filename="test.txt"\r\nContent-Type: text/plain',
+          headers: 'Content-Disposition: form-data; name="upload"; filename="test.txt"\r\nContent-Type: text/plain',
           body: 'file contents here',
         },
       ]);
@@ -200,8 +202,7 @@ describe('parseMultipart', () => {
       const body = createBody(boundary, [
         { headers: 'Content-Disposition: form-data; name="username"', body: 'John' },
         {
-          headers:
-            'Content-Disposition: form-data; name="avatar"; filename="face.png"\r\nContent-Type: image/png',
+          headers: 'Content-Disposition: form-data; name="avatar"; filename="face.png"\r\nContent-Type: image/png',
           body: 'PNG_DATA',
         },
         { headers: 'Content-Disposition: form-data; name="bio"', body: 'Hello world' },
@@ -221,9 +222,7 @@ describe('parseMultipart', () => {
     });
 
     test('5. empty body part (zero-length body)', async () => {
-      const body = createBody(boundary, [
-        { headers: 'Content-Disposition: form-data; name="empty"', body: '' },
-      ]);
+      const body = createBody(boundary, [{ headers: 'Content-Disposition: form-data; name="empty"', body: '' }]);
 
       const parts = await collectParts(toStream(body), boundary, opts);
       expect(parts).toHaveLength(1);
@@ -232,9 +231,7 @@ describe('parseMultipart', () => {
     });
 
     test('6. bytes() returns Uint8Array', async () => {
-      const body = createBody(boundary, [
-        { headers: 'Content-Disposition: form-data; name="data"', body: 'binary' },
-      ]);
+      const body = createBody(boundary, [{ headers: 'Content-Disposition: form-data; name="data"', body: 'binary' }]);
 
       const parts = await collectParts(toStream(body), boundary, opts);
       const raw = await partBytes(parts[0]!);
@@ -262,9 +259,7 @@ describe('parseMultipart', () => {
 
   describe('chunked input (cross-chunk boundary splitting)', () => {
     test('8. very small chunks (5 bytes) — boundary split across chunks', async () => {
-      const body = createBody(boundary, [
-        { headers: 'Content-Disposition: form-data; name="field"', body: 'value' },
-      ]);
+      const body = createBody(boundary, [{ headers: 'Content-Disposition: form-data; name="field"', body: 'value' }]);
 
       const parts = await collectParts(toChunkedStream(body, 5), boundary, opts);
       expect(parts).toHaveLength(1);
@@ -273,9 +268,7 @@ describe('parseMultipart', () => {
     });
 
     test('9. single-byte chunks — extreme splitting', async () => {
-      const body = createBody(boundary, [
-        { headers: 'Content-Disposition: form-data; name="x"', body: 'y' },
-      ]);
+      const body = createBody(boundary, [{ headers: 'Content-Disposition: form-data; name="x"', body: 'y' }]);
 
       const parts = await collectParts(toChunkedStream(body, 1), boundary, opts);
       expect(parts).toHaveLength(1);
@@ -284,9 +277,7 @@ describe('parseMultipart', () => {
     });
 
     test('10. boundary split at EVERY possible byte position', async () => {
-      const body = createBody(boundary, [
-        { headers: 'Content-Disposition: form-data; name="k"', body: 'val' },
-      ]);
+      const body = createBody(boundary, [{ headers: 'Content-Disposition: form-data; name="k"', body: 'val' }]);
 
       for (let splitAt = 1; splitAt < body.length; splitAt++) {
         const stream = toTwoChunkStream(body, splitAt);
@@ -298,9 +289,7 @@ describe('parseMultipart', () => {
     });
 
     test('11. large chunk (entire body in one chunk)', async () => {
-      const body = createBody(boundary, [
-        { headers: 'Content-Disposition: form-data; name="big"', body: 'all at once' },
-      ]);
+      const body = createBody(boundary, [{ headers: 'Content-Disposition: form-data; name="big"', body: 'all at once' }]);
 
       const parts = await collectParts(toStream(body), boundary, opts);
       expect(parts).toHaveLength(1);
@@ -408,7 +397,9 @@ describe('parseMultipart', () => {
 
         parseMultipart(toStream(raw), boundary, opts, callbacks)
           .then(() => queue.finish())
-          .catch((error) => { if (!queue.abandoned) queue.fail(error); });
+          .catch(error => {
+            if (!queue.abandoned) {queue.fail(error);}
+          });
 
         for await (const part of queue) {
           collectedBeforeError.push(part);
@@ -433,13 +424,11 @@ describe('parseMultipart', () => {
       const limitOpts = resolveMultipartOptions({ maxFiles: 1, maxTotalSize: null });
       const body = createBody(boundary, [
         {
-          headers:
-            'Content-Disposition: form-data; name="f1"; filename="a.txt"\r\nContent-Type: text/plain',
+          headers: 'Content-Disposition: form-data; name="f1"; filename="a.txt"\r\nContent-Type: text/plain',
           body: 'a',
         },
         {
-          headers:
-            'Content-Disposition: form-data; name="f2"; filename="b.txt"\r\nContent-Type: text/plain',
+          headers: 'Content-Disposition: form-data; name="f2"; filename="b.txt"\r\nContent-Type: text/plain',
           body: 'b',
         },
       ]);
@@ -473,8 +462,7 @@ describe('parseMultipart', () => {
       const limitOpts = resolveMultipartOptions({ maxFileSize: 5, maxTotalSize: null });
       const body = createBody(boundary, [
         {
-          headers:
-            'Content-Disposition: form-data; name="f"; filename="big.txt"\r\nContent-Type: text/plain',
+          headers: 'Content-Disposition: form-data; name="f"; filename="big.txt"\r\nContent-Type: text/plain',
           body: 'this is way too big for five bytes',
         },
       ]);
@@ -490,9 +478,7 @@ describe('parseMultipart', () => {
 
     test('22. FieldTooLarge (maxFieldSize exceeded)', async () => {
       const limitOpts = resolveMultipartOptions({ maxFieldSize: 3, maxTotalSize: null });
-      const body = createBody(boundary, [
-        { headers: 'Content-Disposition: form-data; name="f"', body: 'too long for three' },
-      ]);
+      const body = createBody(boundary, [{ headers: 'Content-Disposition: form-data; name="f"', body: 'too long for three' }]);
 
       try {
         await collectParts(toStream(body), boundary, limitOpts);
@@ -525,8 +511,7 @@ describe('parseMultipart', () => {
       const limitOpts = resolveMultipartOptions({ maxHeaderSize: 20, maxTotalSize: null });
       const body = createBody(boundary, [
         {
-          headers:
-            'Content-Disposition: form-data; name="field_with_very_long_header_that_exceeds_the_limit"',
+          headers: 'Content-Disposition: form-data; name="field_with_very_long_header_that_exceeds_the_limit"',
           body: 'value',
         },
       ]);
@@ -545,8 +530,7 @@ describe('parseMultipart', () => {
       const limitOpts = resolveMultipartOptions({ maxFileSize: 50, maxTotalSize: null });
       const body = createBody(boundary, [
         {
-          headers:
-            'Content-Disposition: form-data; name="f"; filename="big.bin"\r\nContent-Type: application/octet-stream',
+          headers: 'Content-Disposition: form-data; name="f"; filename="big.bin"\r\nContent-Type: application/octet-stream',
           body: fileBody,
         },
       ]);
@@ -584,11 +568,7 @@ describe('parseMultipart', () => {
 
   describe('malformed input', () => {
     test('27. missing Content-Disposition → MalformedHeader', async () => {
-      const raw =
-        `--${boundary}\r\n` +
-        `Content-Type: text/plain\r\n\r\n` +
-        `body\r\n` +
-        `--${boundary}--\r\n`;
+      const raw = `--${boundary}\r\n` + `Content-Type: text/plain\r\n\r\n` + `body\r\n` + `--${boundary}--\r\n`;
 
       try {
         await collectParts(toStream(raw), boundary, opts);
@@ -676,9 +656,7 @@ describe('parseMultipart', () => {
 
     test('33. CRLF within field values (multiline text)', async () => {
       const multilineValue = 'line one\r\nline two\r\nline three';
-      const body = createBody(boundary, [
-        { headers: 'Content-Disposition: form-data; name="message"', body: multilineValue },
-      ]);
+      const body = createBody(boundary, [{ headers: 'Content-Disposition: form-data; name="message"', body: multilineValue }]);
 
       const parts = await collectParts(toStream(body), boundary, opts);
       expect(parts).toHaveLength(1);
@@ -689,8 +667,7 @@ describe('parseMultipart', () => {
       const largePart = 'X'.repeat(1024 * 1024); // 1 MiB
       const body = createBody(boundary, [
         {
-          headers:
-            'Content-Disposition: form-data; name="large"; filename="big.bin"\r\nContent-Type: application/octet-stream',
+          headers: 'Content-Disposition: form-data; name="large"; filename="big.bin"\r\nContent-Type: application/octet-stream',
           body: largePart,
         },
       ]);
@@ -809,9 +786,7 @@ describe('parseMultipart', () => {
     test('41. maxFieldSize: field exactly at limit succeeds', async () => {
       const fieldValue = 'A'.repeat(50);
       const limitOpts = resolveMultipartOptions({ maxFieldSize: 50, maxTotalSize: null });
-      const body = createBody(boundary, [
-        { headers: 'Content-Disposition: form-data; name="exact"', body: fieldValue },
-      ]);
+      const body = createBody(boundary, [{ headers: 'Content-Disposition: form-data; name="exact"', body: fieldValue }]);
 
       const parts = await collectParts(toStream(body), boundary, limitOpts);
       expect(parts).toHaveLength(1);
@@ -821,9 +796,7 @@ describe('parseMultipart', () => {
     test('42. maxFieldSize: field 1 byte over limit fails with FieldTooLarge', async () => {
       const fieldValue = 'A'.repeat(51);
       const limitOpts = resolveMultipartOptions({ maxFieldSize: 50, maxTotalSize: null });
-      const body = createBody(boundary, [
-        { headers: 'Content-Disposition: form-data; name="over"', body: fieldValue },
-      ]);
+      const body = createBody(boundary, [{ headers: 'Content-Disposition: form-data; name="over"', body: fieldValue }]);
 
       try {
         await collectParts(toStream(body), boundary, limitOpts);
@@ -835,9 +808,7 @@ describe('parseMultipart', () => {
     });
 
     test('43. maxTotalSize: body exactly at limit succeeds', async () => {
-      const body = createBody(boundary, [
-        { headers: 'Content-Disposition: form-data; name="f"', body: 'hello' },
-      ]);
+      const body = createBody(boundary, [{ headers: 'Content-Disposition: form-data; name="f"', body: 'hello' }]);
       const totalBytes = new TextEncoder().encode(body).length;
       const limitOpts = resolveMultipartOptions({ maxTotalSize: totalBytes });
 
@@ -847,9 +818,7 @@ describe('parseMultipart', () => {
     });
 
     test('44. maxTotalSize: body 1 byte over limit fails', async () => {
-      const body = createBody(boundary, [
-        { headers: 'Content-Disposition: form-data; name="f"', body: 'hello' },
-      ]);
+      const body = createBody(boundary, [{ headers: 'Content-Disposition: form-data; name="f"', body: 'hello' }]);
       const totalBytes = new TextEncoder().encode(body).length;
       const limitOpts = resolveMultipartOptions({ maxTotalSize: totalBytes - 1 });
 
@@ -903,9 +872,7 @@ describe('parseMultipart', () => {
       expect(header.length).toBe(targetSize);
 
       const limitOpts = resolveMultipartOptions({ maxHeaderSize: targetSize, maxTotalSize: null });
-      const body = createBody(boundary, [
-        { headers: header, body: 'value' },
-      ]);
+      const body = createBody(boundary, [{ headers: header, body: 'value' }]);
 
       const parts = await collectParts(toStream(body), boundary, limitOpts);
       expect(parts).toHaveLength(1);
@@ -923,9 +890,7 @@ describe('parseMultipart', () => {
       expect(header.length).toBe(targetSize + 1);
 
       const limitOpts = resolveMultipartOptions({ maxHeaderSize: targetSize, maxTotalSize: null });
-      const body = createBody(boundary, [
-        { headers: header, body: 'value' },
-      ]);
+      const body = createBody(boundary, [{ headers: header, body: 'value' }]);
 
       try {
         await collectParts(toStream(body), boundary, limitOpts);
@@ -970,8 +935,7 @@ describe('parseMultipart', () => {
       const largeValue = 'ABCDEFGHIJ'.repeat(50); // 500 bytes
       const body = createBody(boundary, [
         {
-          headers:
-            'Content-Disposition: form-data; name="big"; filename="data.bin"\r\nContent-Type: application/octet-stream',
+          headers: 'Content-Disposition: form-data; name="big"; filename="data.bin"\r\nContent-Type: application/octet-stream',
           body: largeValue,
         },
       ]);
@@ -1038,11 +1002,7 @@ describe('parseMultipart', () => {
     });
 
     test('54. final boundary without trailing CRLF — still parsed correctly', async () => {
-      const raw =
-        `--${boundary}\r\n` +
-        `Content-Disposition: form-data; name="field"\r\n\r\n` +
-        `value\r\n` +
-        `--${boundary}--`;
+      const raw = `--${boundary}\r\n` + `Content-Disposition: form-data; name="field"\r\n\r\n` + `value\r\n` + `--${boundary}--`;
 
       const parts = await collectParts(toStream(raw), boundary, opts);
       expect(parts).toHaveLength(1);
@@ -1062,8 +1022,7 @@ describe('parseMultipart', () => {
       });
       const body = createBody(boundary, [
         {
-          headers:
-            'Content-Disposition: form-data; name="f"; filename="big.bin"\r\nContent-Type: application/octet-stream',
+          headers: 'Content-Disposition: form-data; name="f"; filename="big.bin"\r\nContent-Type: application/octet-stream',
           body: fileBody,
         },
       ]);
@@ -1082,9 +1041,7 @@ describe('parseMultipart', () => {
 
   describe('BufferingCallbacks', () => {
     test('56. single field collected into fields map', async () => {
-      const body = createBody(boundary, [
-        { headers: 'Content-Disposition: form-data; name="field1"', body: 'hello' },
-      ]);
+      const body = createBody(boundary, [{ headers: 'Content-Disposition: form-data; name="field1"', body: 'hello' }]);
 
       const result = await collectPartsBuffered(toStream(body), boundary, opts);
       expect(result.fields.get('field1')).toEqual(['hello']);
@@ -1105,8 +1062,7 @@ describe('parseMultipart', () => {
     test('58. file collected into files map with correct data', async () => {
       const body = createBody(boundary, [
         {
-          headers:
-            'Content-Disposition: form-data; name="upload"; filename="test.txt"\r\nContent-Type: text/plain',
+          headers: 'Content-Disposition: form-data; name="upload"; filename="test.txt"\r\nContent-Type: text/plain',
           body: 'file contents here',
         },
       ]);
@@ -1126,8 +1082,7 @@ describe('parseMultipart', () => {
       const body = createBody(boundary, [
         { headers: 'Content-Disposition: form-data; name="username"', body: 'John' },
         {
-          headers:
-            'Content-Disposition: form-data; name="avatar"; filename="face.png"\r\nContent-Type: image/png',
+          headers: 'Content-Disposition: form-data; name="avatar"; filename="face.png"\r\nContent-Type: image/png',
           body: 'PNG_DATA',
         },
         { headers: 'Content-Disposition: form-data; name="bio"', body: 'Hello world' },
@@ -1167,8 +1122,7 @@ describe('parseMultipart', () => {
       const body = createBody(boundary, [
         { headers: 'Content-Disposition: form-data; name="chunked"', body: 'chunk test value' },
         {
-          headers:
-            'Content-Disposition: form-data; name="f"; filename="c.txt"\r\nContent-Type: text/plain',
+          headers: 'Content-Disposition: form-data; name="f"; filename="c.txt"\r\nContent-Type: text/plain',
           body: 'chunked file data',
         },
       ]);
@@ -1183,13 +1137,11 @@ describe('parseMultipart', () => {
     test('63. multiple files with same name', async () => {
       const body = createBody(boundary, [
         {
-          headers:
-            'Content-Disposition: form-data; name="docs"; filename="a.txt"\r\nContent-Type: text/plain',
+          headers: 'Content-Disposition: form-data; name="docs"; filename="a.txt"\r\nContent-Type: text/plain',
           body: 'file A',
         },
         {
-          headers:
-            'Content-Disposition: form-data; name="docs"; filename="b.txt"\r\nContent-Type: text/plain',
+          headers: 'Content-Disposition: form-data; name="docs"; filename="b.txt"\r\nContent-Type: text/plain',
           body: 'file B',
         },
       ]);
@@ -1209,13 +1161,11 @@ describe('parseMultipart', () => {
       const limitOpts = resolveMultipartOptions({ maxFiles: 1, maxTotalSize: null });
       const body = createBody(boundary, [
         {
-          headers:
-            'Content-Disposition: form-data; name="f1"; filename="a.txt"\r\nContent-Type: text/plain',
+          headers: 'Content-Disposition: form-data; name="f1"; filename="a.txt"\r\nContent-Type: text/plain',
           body: 'a',
         },
         {
-          headers:
-            'Content-Disposition: form-data; name="f2"; filename="b.txt"\r\nContent-Type: text/plain',
+          headers: 'Content-Disposition: form-data; name="f2"; filename="b.txt"\r\nContent-Type: text/plain',
           body: 'b',
         },
       ]);
@@ -1249,8 +1199,7 @@ describe('parseMultipart', () => {
       const limitOpts = resolveMultipartOptions({ maxFileSize: 5, maxTotalSize: null });
       const body = createBody(boundary, [
         {
-          headers:
-            'Content-Disposition: form-data; name="f"; filename="big.txt"\r\nContent-Type: text/plain',
+          headers: 'Content-Disposition: form-data; name="f"; filename="big.txt"\r\nContent-Type: text/plain',
           body: 'this is way too big for five bytes',
         },
       ]);
@@ -1266,9 +1215,7 @@ describe('parseMultipart', () => {
 
     test('67. FieldTooLarge via buffering path', async () => {
       const limitOpts = resolveMultipartOptions({ maxFieldSize: 3, maxTotalSize: null });
-      const body = createBody(boundary, [
-        { headers: 'Content-Disposition: form-data; name="f"', body: 'too long for three' },
-      ]);
+      const body = createBody(boundary, [{ headers: 'Content-Disposition: form-data; name="f"', body: 'too long for three' }]);
 
       try {
         await collectPartsBuffered(toStream(body), boundary, limitOpts);
@@ -1301,8 +1248,7 @@ describe('parseMultipart', () => {
       const limitOpts = resolveMultipartOptions({ maxHeaderSize: 20, maxTotalSize: null });
       const body = createBody(boundary, [
         {
-          headers:
-            'Content-Disposition: form-data; name="field_with_very_long_header_that_exceeds_the_limit"',
+          headers: 'Content-Disposition: form-data; name="field_with_very_long_header_that_exceeds_the_limit"',
           body: 'value',
         },
       ]);
@@ -1416,8 +1362,7 @@ describe('parseMultipart', () => {
       });
       const body = createBody(boundary, [
         {
-          headers:
-            'Content-Disposition: form-data; name="avatar"; filename="hack.exe"\r\nContent-Type: application/octet-stream',
+          headers: 'Content-Disposition: form-data; name="avatar"; filename="hack.exe"\r\nContent-Type: application/octet-stream',
           body: 'data',
         },
       ]);
@@ -1438,8 +1383,7 @@ describe('parseMultipart', () => {
       });
       const body = createBody(boundary, [
         {
-          headers:
-            'Content-Disposition: form-data; name="avatar"; filename="hack.exe"\r\nContent-Type: application/octet-stream',
+          headers: 'Content-Disposition: form-data; name="avatar"; filename="hack.exe"\r\nContent-Type: application/octet-stream',
           body: 'data',
         },
       ]);
@@ -1460,8 +1404,7 @@ describe('parseMultipart', () => {
       });
       const body = createBody(boundary, [
         {
-          headers:
-            'Content-Disposition: form-data; name="avatar"; filename="face.png"\r\nContent-Type: image/png',
+          headers: 'Content-Disposition: form-data; name="avatar"; filename="face.png"\r\nContent-Type: image/png',
           body: 'PNG_DATA',
         },
       ]);
@@ -1478,8 +1421,7 @@ describe('parseMultipart', () => {
       });
       const body = createBody(boundary, [
         {
-          headers:
-            'Content-Disposition: form-data; name="other"; filename="doc.pdf"\r\nContent-Type: application/pdf',
+          headers: 'Content-Disposition: form-data; name="other"; filename="doc.pdf"\r\nContent-Type: application/pdf',
           body: 'PDF_DATA',
         },
       ]);
@@ -1496,8 +1438,7 @@ describe('parseMultipart', () => {
       });
       const body = createBody(boundary, [
         {
-          headers:
-            'Content-Disposition: form-data; name="avatar"; filename="face.png"\r\nContent-Type: image/png; charset=utf-8',
+          headers: 'Content-Disposition: form-data; name="avatar"; filename="face.png"\r\nContent-Type: image/png; charset=utf-8',
           body: 'PNG_DATA',
         },
       ]);
@@ -1514,8 +1455,7 @@ describe('parseMultipart', () => {
       });
       const body = createBody(boundary, [
         {
-          headers:
-            'Content-Disposition: form-data; name="doc"; filename="readme.txt"\r\nContent-Type: text/plain',
+          headers: 'Content-Disposition: form-data; name="doc"; filename="readme.txt"\r\nContent-Type: text/plain',
           body: 'hello',
         },
       ]);
@@ -1532,8 +1472,7 @@ describe('parseMultipart', () => {
       });
       const body = createBody(boundary, [
         {
-          headers:
-            'Content-Disposition: form-data; name="avatar"; filename="face.gif"\r\nContent-Type: image/gif; charset=utf-8',
+          headers: 'Content-Disposition: form-data; name="avatar"; filename="face.gif"\r\nContent-Type: image/gif; charset=utf-8',
           body: 'GIF_DATA',
         },
       ]);
@@ -1573,8 +1512,7 @@ describe('parseMultipart', () => {
       const limitOpts = resolveMultipartOptions({ maxFileSize: 50, maxTotalSize: null });
       const body = createBody(boundary, [
         {
-          headers:
-            'Content-Disposition: form-data; name="f"; filename="exact.bin"\r\nContent-Type: application/octet-stream',
+          headers: 'Content-Disposition: form-data; name="f"; filename="exact.bin"\r\nContent-Type: application/octet-stream',
           body: fileBody,
         },
       ]);
@@ -1589,8 +1527,7 @@ describe('parseMultipart', () => {
       const limitOpts = resolveMultipartOptions({ maxFileSize: 50, maxTotalSize: null });
       const body = createBody(boundary, [
         {
-          headers:
-            'Content-Disposition: form-data; name="f"; filename="over.bin"\r\nContent-Type: application/octet-stream',
+          headers: 'Content-Disposition: form-data; name="f"; filename="over.bin"\r\nContent-Type: application/octet-stream',
           body: fileBody,
         },
       ]);
@@ -1609,8 +1546,7 @@ describe('parseMultipart', () => {
       const limitOpts = resolveMultipartOptions({ maxFileSize: 50, maxTotalSize: null });
       const body = createBody(boundary, [
         {
-          headers:
-            'Content-Disposition: form-data; name="f"; filename="exact.bin"\r\nContent-Type: application/octet-stream',
+          headers: 'Content-Disposition: form-data; name="f"; filename="exact.bin"\r\nContent-Type: application/octet-stream',
           body: fileBody,
         },
       ]);
@@ -1622,8 +1558,7 @@ describe('parseMultipart', () => {
       // 1 byte over
       const overBody = createBody(boundary, [
         {
-          headers:
-            'Content-Disposition: form-data; name="f"; filename="over.bin"\r\nContent-Type: application/octet-stream',
+          headers: 'Content-Disposition: form-data; name="f"; filename="over.bin"\r\nContent-Type: application/octet-stream',
           body: 'A'.repeat(51),
         },
       ]);

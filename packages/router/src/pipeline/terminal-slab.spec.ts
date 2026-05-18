@@ -51,19 +51,21 @@ describe('packTerminalSlab', () => {
     sparseBitmasks.length = 2;
     sparseBitmasks[1] = 0b11;
     const slab = packTerminalSlab([7, 8], [false, false], sparseBitmasks);
-    expect(slab[0 * TERMINAL_SLOTS + TERMINAL_PRESENT_BITMASK_OFFSET]).toBe(0);
+    expect(slab[0 + TERMINAL_PRESENT_BITMASK_OFFSET]).toBe(0);
     expect(slab[1 * TERMINAL_SLOTS + TERMINAL_PRESENT_BITMASK_OFFSET]).toBe(0b11);
   });
 
   it('packs multiple terminals with stable slot ordering', () => {
-    const slab = packTerminalSlab(
-      [10, 20, 30],
-      [false, true, false],
-      [0, 0b10, 0b1],
-    );
+    const slab = packTerminalSlab([10, 20, 30], [false, true, false], [0, 0b10, 0b1]);
     expect(slab.length).toBe(9);
-    expect(slab[0]).toBe(10); expect(slab[1]).toBe(0); expect(slab[2]).toBe(0);
-    expect(slab[3]).toBe(20); expect(slab[4]).toBe(1); expect(slab[5]).toBe(0b10);
-    expect(slab[6]).toBe(30); expect(slab[7]).toBe(0); expect(slab[8]).toBe(0b1);
+    expect(slab[0]).toBe(10);
+    expect(slab[1]).toBe(0);
+    expect(slab[2]).toBe(0);
+    expect(slab[3]).toBe(20);
+    expect(slab[4]).toBe(1);
+    expect(slab[5]).toBe(0b10);
+    expect(slab[6]).toBe(30);
+    expect(slab[7]).toBe(0);
+    expect(slab[8]).toBe(0b1);
   });
 });

@@ -25,7 +25,7 @@ bun add @zipbul/rate-limiter
 import { RateLimiter, Algorithm, RateLimitAction } from '@zipbul/rate-limiter';
 
 const limiter = RateLimiter.create({
-  rules: { limit: 100, window: 60_000 },   // 100 requests per minute
+  rules: { limit: 100, window: 60_000 }, // 100 requests per minute
   algorithm: Algorithm.SlidingWindow,
 });
 
@@ -46,11 +46,11 @@ if (result.action === RateLimitAction.Allow) {
 
 Three built-in algorithms are available. All share the same API — just change `algorithm`.
 
-| Algorithm | Best for | Behavior |
-|:----------|:---------|:---------|
-| `SlidingWindow` _(default)_ | General API rate limiting | Weighted interpolation between current and previous window |
-| `TokenBucket` | Bursty traffic with steady refill | Continuous token refill at a fixed rate |
-| `GCRA` | Strict scheduling / cell rate control | Tracks Theoretical Arrival Time (TAT) per request |
+| Algorithm                   | Best for                              | Behavior                                                   |
+| :-------------------------- | :------------------------------------ | :--------------------------------------------------------- |
+| `SlidingWindow` _(default)_ | General API rate limiting             | Weighted interpolation between current and previous window |
+| `TokenBucket`               | Bursty traffic with steady refill     | Continuous token refill at a fixed rate                    |
+| `GCRA`                      | Strict scheduling / cell rate control | Tracks Theoretical Arrival Time (TAT) per request          |
 
 ```typescript
 // Token Bucket
@@ -72,11 +72,11 @@ RateLimiter.create({
 
 ```typescript
 interface RateLimiterOptions {
-  rules: RateLimitRule | RateLimitRule[];  // Required
-  algorithm?: Algorithm;       // Default: SlidingWindow
-  store?: RateLimiterStore;    // Default: MemoryStore
-  clock?: () => number;        // Default: Date.now
-  cost?: number;               // Default: 1
+  rules: RateLimitRule | RateLimitRule[]; // Required
+  algorithm?: Algorithm; // Default: SlidingWindow
+  store?: RateLimiterStore; // Default: MemoryStore
+  clock?: () => number; // Default: Date.now
+  cost?: number; // Default: 1
   hooks?: RateLimiterHooks;
 }
 ```
@@ -157,13 +157,13 @@ Consumes tokens for the given key. Returns a discriminated union:
 type RateLimitResult = RateLimitAllowResult | RateLimitDenyResult;
 ```
 
-| Field | Allow | Deny |
-|:------|:------|:-----|
-| `action` | `'allow'` | `'deny'` |
-| `remaining` | Tokens left | `0` |
-| `limit` | Max tokens per window | Max tokens per window |
-| `resetAt` | Window reset timestamp (ms) | Window reset timestamp (ms) |
-| `retryAfter` | — | ms until next allowed request |
+| Field        | Allow                       | Deny                          |
+| :----------- | :-------------------------- | :---------------------------- |
+| `action`     | `'allow'`                   | `'deny'`                      |
+| `remaining`  | Tokens left                 | `0`                           |
+| `limit`      | Max tokens per window       | Max tokens per window         |
+| `resetAt`    | Window reset timestamp (ms) | Window reset timestamp (ms)   |
+| `retryAfter` | —                           | ms until next allowed request |
 
 ### `limiter.peek(key, options?)`
 
@@ -185,8 +185,8 @@ Default in-memory store. Suitable for single-process deployments.
 import { MemoryStore } from '@zipbul/rate-limiter';
 
 new MemoryStore({
-  maxSize: 10_000,   // FIFO eviction (default: unlimited)
-  ttl: 120_000,      // Lazy TTL in ms (default: no expiry)
+  maxSize: 10_000, // FIFO eviction (default: unlimited)
+  ttl: 120_000, // Lazy TTL in ms (default: no expiry)
 });
 ```
 
@@ -201,12 +201,11 @@ import Redis from 'ioredis';
 const redis = new Redis();
 const store = new RedisStore({
   client: {
-    eval: (script, keys, args) =>
-      redis.eval(script, keys.length, ...keys, ...args),
+    eval: (script, keys, args) => redis.eval(script, keys.length, ...keys, ...args),
   },
-  prefix: 'rl:',      // Key prefix (default: 'rl:')
-  ttl: 120_000,        // PEXPIRE in ms (default: no expiry)
-  maxRetries: 5,       // CAS retry limit (default: 5)
+  prefix: 'rl:', // Key prefix (default: 'rl:')
+  ttl: 120_000, // PEXPIRE in ms (default: no expiry)
+  maxRetries: 5, // CAS retry limit (default: 5)
 });
 
 RateLimiter.create({
@@ -244,23 +243,23 @@ try {
   await limiter.consume('user:123');
 } catch (e) {
   if (e instanceof RateLimiterError) {
-    e.reason;  // RateLimiterErrorReason.StoreError
+    e.reason; // RateLimiterErrorReason.StoreError
     e.message; // "Store operation failed"
-    e.cause;   // Original error
+    e.cause; // Original error
   }
 }
 ```
 
 ### `RateLimiterErrorReason`
 
-| Reason | Thrown by | Description |
-|:-------|:---------|:------------|
-| `InvalidLimit` | `create()` | `limit` must be a positive integer |
-| `InvalidWindow` | `create()` | `window` must be a positive integer (ms) |
-| `InvalidCost` | `create()` / `consume()` | `cost` must be a non-negative integer |
-| `InvalidAlgorithm` | `create()` | Unsupported algorithm value |
-| `EmptyRules` | `create()` | `rules` must not be empty |
-| `StoreError` | `consume()` / `peek()` | Store operation failed at runtime |
+| Reason             | Thrown by                | Description                              |
+| :----------------- | :----------------------- | :--------------------------------------- |
+| `InvalidLimit`     | `create()`               | `limit` must be a positive integer       |
+| `InvalidWindow`    | `create()`               | `window` must be a positive integer (ms) |
+| `InvalidCost`      | `create()` / `consume()` | `cost` must be a non-negative integer    |
+| `InvalidAlgorithm` | `create()`               | Unsupported algorithm value              |
+| `EmptyRules`       | `create()`               | `rules` must not be empty                |
+| `StoreError`       | `consume()` / `peek()`   | Store operation failed at runtime        |
 
 <br>
 
@@ -272,10 +271,18 @@ Implement the `RateLimiterStore` interface to use any backend:
 import type { RateLimiterStore, StoreEntry } from '@zipbul/rate-limiter';
 
 class MyStore implements RateLimiterStore {
-  update(key: string, updater: (current: StoreEntry | null) => StoreEntry): StoreEntry | Promise<StoreEntry> { /* ... */ }
-  get(key: string): StoreEntry | null | Promise<StoreEntry | null> { /* ... */ }
-  delete(key: string): void | Promise<void> { /* ... */ }
-  clear(): void | Promise<void> { /* ... */ }
+  update(key: string, updater: (current: StoreEntry | null) => StoreEntry): StoreEntry | Promise<StoreEntry> {
+    /* ... */
+  }
+  get(key: string): StoreEntry | null | Promise<StoreEntry | null> {
+    /* ... */
+  }
+  delete(key: string): void | Promise<void> {
+    /* ... */
+  }
+  clear(): void | Promise<void> {
+    /* ... */
+  }
 }
 ```
 

@@ -2,6 +2,20 @@
   "name": "@zipbul/shared",
   "version": "0.0.11",
   "description": "Type-safe HTTP enums and constants (methods, headers, status codes) for TypeScript",
+  "keywords": [
+    "bun",
+    "constants",
+    "enum",
+    "http",
+    "http-header",
+    "http-method",
+    "http-status",
+    "shared",
+    "typescript",
+    "zipbul"
+  ],
+  "homepage": "https://github.com/zipbul/toolkit/tree/main/packages/shared#readme",
+  "bugs": "https://github.com/zipbul/toolkit/issues",
   "license": "MIT",
   "author": "Junhyung Park (https://github.com/parkrevil)",
   "repository": {
@@ -9,24 +23,11 @@
     "url": "https://github.com/zipbul/toolkit",
     "directory": "packages/shared"
   },
-  "bugs": "https://github.com/zipbul/toolkit/issues",
-  "homepage": "https://github.com/zipbul/toolkit/tree/main/packages/shared#readme",
-  "keywords": [
-    "enum",
-    "constants",
-    "shared",
-    "http",
-    "http-header",
-    "http-status",
-    "http-method",
-    "bun",
-    "typescript",
-    "zipbul"
+  "files": [
+    "dist"
   ],
-  "engines": {
-    "bun": ">=1.0.0"
-  },
   "type": "module",
+  "sideEffects": false,
   "module": "dist/index.js",
   "types": "dist/index.d.ts",
   "exports": {
@@ -35,14 +36,13 @@
       "import": "./dist/index.js"
     }
   },
-  "files": [
-    "dist"
-  ],
-  "sideEffects": false,
   "publishConfig": {
     "provenance": true
   },
   "scripts": {
     "build": "bun build index.ts --outdir dist --target bun --format esm --production && tsc -p tsconfig.build.json"
+  },
+  "engines": {
+    "bun": ">=1.0.0"
   }
 }

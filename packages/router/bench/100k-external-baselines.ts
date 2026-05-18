@@ -1,16 +1,15 @@
 /* eslint-disable no-console */
 
-import { spawnSync } from 'node:child_process';
-import { performance } from 'node:perf_hooks';
-import { fileURLToPath } from 'node:url';
-
 import FindMyWay from 'find-my-way';
 import { RegExpRouter } from 'hono/router/reg-exp-router';
 import { TrieRouter } from 'hono/router/trie-router';
 import KoaTreeRouter from 'koa-tree-router';
 import { Memoirist } from 'memoirist';
-import { addRoute, createRouter as createRou3, findRoute } from 'rou3';
+import { spawnSync } from 'node:child_process';
+import { performance } from 'node:perf_hooks';
+import { fileURLToPath } from 'node:url';
 import { createRouter as createRadix3 } from 'radix3';
+import { addRoute, createRouter as createRou3, findRoute } from 'rou3';
 
 import { Router } from '../src/router';
 import { fmtMem, mem, median, percentile, printEnv, settleScavenger } from './helpers';
@@ -64,10 +63,10 @@ function mixedRoutes(): Route[] {
   const out: Route[] = [];
   for (let i = 0; i < COUNT; i++) {
     const mod = i % 4;
-    if (mod === 0) out.push(['GET', `/v${i % 20}/static/resource-${i}`, i]);
-    else if (mod === 1) out.push(['GET', `/v${i % 20}/users/:id/items/${i}`, i]);
-    else if (mod === 2) out.push(['POST', `/v${i % 20}/orgs/:org/repos/:repo/actions/${i}`, i]);
-    else out.push(['GET', `/v${i % 20}/files/${i}/*path`, i]);
+    if (mod === 0) {out.push(['GET', `/v${i % 20}/static/resource-${i}`, i]);}
+    else if (mod === 1) {out.push(['GET', `/v${i % 20}/users/:id/items/${i}`, i]);}
+    else if (mod === 2) {out.push(['POST', `/v${i % 20}/orgs/:org/repos/:repo/actions/${i}`, i]);}
+    else {out.push(['GET', `/v${i % 20}/files/${i}/*path`, i]);}
   }
   return out;
 }
@@ -143,13 +142,13 @@ function scenario(): Scenario {
 }
 
 function bench(name: string, fn: () => unknown): void {
-  for (let i = 0; i < 20_000; i++) fn();
+  for (let i = 0; i < 20_000; i++) {fn();}
 
   const start = nowNs();
   let checksum = 0;
   for (let i = 0; i < ITER; i++) {
     const result = fn();
-    if (result !== undefined && result !== null) checksum++;
+    if (result !== undefined && result !== null) {checksum++;}
   }
   const ns = Number(nowNs() - start) / ITER;
   console.log(`${name.padEnd(28)} ${ns.toFixed(2)} ns/op checksum=${checksum}`);
@@ -197,7 +196,7 @@ const adapterMeta: Record<string, AdapterMeta> = {
     pkg: 'find-my-way',
     scenarios: new Set(['static', 'param', 'wildcard', 'mixed']),
     notes: 'wildcard tail registered as bare `/*` (find-my-way drops the wildcard name)',
-    rewritePath: (path) => rewriteWildcardTrailing(path, '/*'),
+    rewritePath: path => rewriteWildcardTrailing(path, '/*'),
   },
   memoirist: {
     pkg: 'memoirist',
@@ -208,7 +207,7 @@ const adapterMeta: Record<string, AdapterMeta> = {
     pkg: 'rou3',
     scenarios: new Set(['static', 'param', 'wildcard', 'mixed']),
     notes: 'wildcard tail rewritten to `/**:name` (rou3 reserves `**` for catch-all)',
-    rewritePath: (path) => path.replace(/\/\*([^/]+)$/, '/**:$1'),
+    rewritePath: path => path.replace(/\/\*([^/]+)$/, '/**:$1'),
   },
   'hono-trie': {
     pkg: 'hono/router/trie-router',
@@ -229,12 +228,12 @@ const adapterMeta: Record<string, AdapterMeta> = {
     pkg: 'radix3',
     scenarios: new Set(['static', 'param', 'wildcard']),
     notes: 'method-agnostic — composite key `${method} ${path}` per route, lookup mirrors',
-    rewritePath: (path) => path.replace(/\/\*([^/]+)$/, '/**:$1'),
+    rewritePath: path => path.replace(/\/\*([^/]+)$/, '/**:$1'),
   },
 };
 
 function resolveAdapterVersion(pkg: string): string {
-  if (pkg.startsWith('@zipbul/')) return 'workspace';
+  if (pkg.startsWith('@zipbul/')) {return 'workspace';}
   // Hono ships subpath routers off the same `hono` package — resolve the
   // top-level package.json, not the subpath.
   const top = pkg.split('/')[0]!;
@@ -278,13 +277,17 @@ function correctnessCheck(
   return { ok: true };
 }
 
-async function measure(name: string, build: (rs: Route[]) => unknown, match: (router: unknown, method: string, path: string) => unknown): Promise<void> {
+async function measure(
+  name: string,
+  build: (rs: Route[]) => unknown,
+  match: (router: unknown, method: string, path: string) => unknown,
+): Promise<void> {
   const meta = adapterMeta[name];
   const sc = scenario();
   const version = meta !== undefined ? resolveAdapterVersion(meta.pkg) : 'unknown';
   console.log(
     `baseline=${name} version=${version} scenario=${scenarioName} routes=${COUNT}` +
-    ` buildTimeoutMs=${BUILD_TIMEOUT_MS} memCapMB=${BENCH_MEMORY_CAP_MB}`,
+      ` buildTimeoutMs=${BUILD_TIMEOUT_MS} memCapMB=${BENCH_MEMORY_CAP_MB}`,
   );
   if (meta === undefined) {
     console.log('skip=true reason=no-adapter-meta');
@@ -295,9 +298,7 @@ async function measure(name: string, build: (rs: Route[]) => unknown, match: (ro
     return;
   }
   const rewrite = meta.rewritePath;
-  const rs = rewrite === undefined
-    ? sc.routes
-    : sc.routes.map(([m, p, v]) => [m, rewrite(p), v] as Route);
+  const rs = rewrite === undefined ? sc.routes : sc.routes.map(([m, p, v]) => [m, rewrite(p), v] as Route);
   // Settle before `before` so RSS baseline matches regression-snapshot.ts:193.
   settleScavenger();
   const before = mem();
@@ -331,9 +332,7 @@ async function measure(name: string, build: (rs: Route[]) => unknown, match: (ro
   // numbers.
   const correctness = correctnessCheck(router, match, sc);
   if (!correctness.ok) {
-    console.log(
-      `correctnessClass=mismatch reason=${correctness.reason} detail=${JSON.stringify(correctness.detail)}`,
-    );
+    console.log(`correctnessClass=mismatch reason=${correctness.reason} detail=${JSON.stringify(correctness.detail)}`);
     return;
   }
   for (let i = 0; i < sc.hits.length; i++) {
@@ -349,91 +348,99 @@ async function measure(name: string, build: (rs: Route[]) => unknown, match: (ro
 }
 
 const builders: Record<string, () => Promise<void>> = {
-  zipbul: () => measure(
-    'zipbul',
-    (rs) => {
-      const router = new Router<number>();
-      for (const [method, path, value] of rs) router.add(method as 'GET', path, value);
-      router.build();
-      return router;
-    },
-    (router, method, path) => (router as Router<number>).match(method, path),
-  ),
-  'find-my-way': () => measure(
-    'find-my-way',
-    (rs) => {
-      // ignoreTrailingSlash:true to match 100k-external-correctness.ts:51.
-      const router = FindMyWay({ ignoreTrailingSlash: true });
-      for (const [method, path, value] of rs) router.on(method as 'GET', path, () => value);
-      return router;
-    },
-    (router, method, path) => (router as ReturnType<typeof FindMyWay>).find(method as 'GET', path),
-  ),
-  memoirist: () => measure(
-    'memoirist',
-    (rs) => {
-      const router = new Memoirist<number>();
-      for (const [method, path, value] of rs) router.add(method, path, value);
-      return router;
-    },
-    (router, method, path) => (router as Memoirist<number>).find(method, path),
-  ),
-  rou3: () => measure(
-    'rou3',
-    (rs) => {
-      const router = createRou3<number>();
-      for (const [method, path, value] of rs) addRoute(router, method, path, value);
-      return router;
-    },
-    (router, method, path) => findRoute(router as ReturnType<typeof createRou3<number>>, method, path),
-  ),
-  'hono-trie': () => measure(
-    'hono-trie',
-    (rs) => {
-      const router = new TrieRouter<number>();
-      for (const [method, path, value] of rs) router.add(method, path, value);
-      return router;
-    },
-    (router, method, path) => {
-      const result = (router as TrieRouter<number>).match(method, path) as unknown as [unknown[]];
-      return result[0].length > 0 ? result : null;
-    },
-  ),
-  'hono-regexp': () => measure(
-    'hono-regexp',
-    (rs) => {
-      const router = new RegExpRouter<number>();
-      for (const [method, path, value] of rs) router.add(method, path, value);
-      return router;
-    },
-    (router, method, path) => {
-      const result = (router as RegExpRouter<number>).match(method, path) as unknown as [unknown[]];
-      return result[0].length > 0 ? result : null;
-    },
-  ),
-  'koa-tree-router': () => measure(
-    'koa-tree-router',
-    (rs) => {
-      const router = new KoaTreeRouter() as any;
-      for (const [method, path, value] of rs) router.on(method, path, () => value);
-      return router;
-    },
-    (router, method, path) => {
-      const result = (router as any).find(method, path);
-      return result.handle === null ? null : result;
-    },
-  ),
-  radix3: () => measure(
-    'radix3',
-    (rs) => {
-      const router = createRadix3<any>() as any;
-      for (const [method, path, value] of rs) {
-        router.insert(`/${method}${path}`, { method, value });
-      }
-      return router;
-    },
-    (router, method, path) => (router as any).lookup(`/${method}${path}`) ?? null,
-  ),
+  zipbul: () =>
+    measure(
+      'zipbul',
+      rs => {
+        const router = new Router<number>();
+        for (const [method, path, value] of rs) {router.add(method as 'GET', path, value);}
+        router.build();
+        return router;
+      },
+      (router, method, path) => (router as Router<number>).match(method, path),
+    ),
+  'find-my-way': () =>
+    measure(
+      'find-my-way',
+      rs => {
+        // ignoreTrailingSlash:true to match 100k-external-correctness.ts:51.
+        const router = FindMyWay({ ignoreTrailingSlash: true });
+        for (const [method, path, value] of rs) {router.on(method as 'GET', path, () => value);}
+        return router;
+      },
+      (router, method, path) => (router as ReturnType<typeof FindMyWay>).find(method as 'GET', path),
+    ),
+  memoirist: () =>
+    measure(
+      'memoirist',
+      rs => {
+        const router = new Memoirist<number>();
+        for (const [method, path, value] of rs) {router.add(method, path, value);}
+        return router;
+      },
+      (router, method, path) => (router as Memoirist<number>).find(method, path),
+    ),
+  rou3: () =>
+    measure(
+      'rou3',
+      rs => {
+        const router = createRou3<number>();
+        for (const [method, path, value] of rs) {addRoute(router, method, path, value);}
+        return router;
+      },
+      (router, method, path) => findRoute(router as ReturnType<typeof createRou3<number>>, method, path),
+    ),
+  'hono-trie': () =>
+    measure(
+      'hono-trie',
+      rs => {
+        const router = new TrieRouter<number>();
+        for (const [method, path, value] of rs) {router.add(method, path, value);}
+        return router;
+      },
+      (router, method, path) => {
+        const result = (router as TrieRouter<number>).match(method, path) as unknown as [unknown[]];
+        return result[0].length > 0 ? result : null;
+      },
+    ),
+  'hono-regexp': () =>
+    measure(
+      'hono-regexp',
+      rs => {
+        const router = new RegExpRouter<number>();
+        for (const [method, path, value] of rs) {router.add(method, path, value);}
+        return router;
+      },
+      (router, method, path) => {
+        const result = (router as RegExpRouter<number>).match(method, path) as unknown as [unknown[]];
+        return result[0].length > 0 ? result : null;
+      },
+    ),
+  'koa-tree-router': () =>
+    measure(
+      'koa-tree-router',
+      rs => {
+        const router = new KoaTreeRouter() as any;
+        for (const [method, path, value] of rs) {router.on(method, path, () => value);}
+        return router;
+      },
+      (router, method, path) => {
+        const result = (router as any).find(method, path);
+        return result.handle === null ? null : result;
+      },
+    ),
+  radix3: () =>
+    measure(
+      'radix3',
+      rs => {
+        const router = createRadix3<any>() as any;
+        for (const [method, path, value] of rs) {
+          router.insert(`/${method}${path}`, { method, value });
+        }
+        return router;
+      },
+      (router, method, path) => (router as any).lookup(`/${method}${path}`) ?? null,
+    ),
 };
 
 if (isWorker) {
@@ -451,7 +458,9 @@ if (isWorker) {
   const RUNS = 3;
 
   printEnv();
-  console.log(`adapters=${adapters.length} scenarios=${scenarios.length} runs=${RUNS} (each pair runs in a fresh process; ${RUNS} runs per pair for percentile)`);
+  console.log(
+    `adapters=${adapters.length} scenarios=${scenarios.length} runs=${RUNS} (each pair runs in a fresh process; ${RUNS} runs per pair for percentile)`,
+  );
   // Scenario coverage subset of 100k-verification.ts (static/param/wildcard/mixed
   // only). high-fanout/versioned-api/regex-heavy aren't compared against externals
   // because hono-trie/hono-regexp/koa-tree-router/radix3 don't fully support them.
@@ -467,10 +476,10 @@ if (isWorker) {
 
   function parsePairRun(stdout: string): PairRun | null {
     const build = stdout.match(/build=([0-9.]+)ms mem=rss=([0-9.-]+)MB heap=([0-9.-]+)MB/);
-    if (build === null) return null;
-    const hits = [...stdout.matchAll(/^hit \d+\s+([0-9.]+) ns\/op checksum=/gm)].map((m) => Number(m[1]));
-    const misses = [...stdout.matchAll(/^miss \d+\s+([0-9.]+) ns\/op checksum=/gm)].map((m) => Number(m[1]));
-    const wrong = [...stdout.matchAll(/^wrong-method\s+([0-9.]+) ns\/op checksum=/gm)].map((m) => Number(m[1]));
+    if (build === null) {return null;}
+    const hits = [...stdout.matchAll(/^hit \d+\s+([0-9.]+) ns\/op checksum=/gm)].map(m => Number(m[1]));
+    const misses = [...stdout.matchAll(/^miss \d+\s+([0-9.]+) ns\/op checksum=/gm)].map(m => Number(m[1]));
+    const wrong = [...stdout.matchAll(/^wrong-method\s+([0-9.]+) ns\/op checksum=/gm)].map(m => Number(m[1]));
     return {
       buildMs: Number(build[1]),
       rssMb: Number(build[2]),
@@ -490,11 +499,7 @@ if (isWorker) {
       console.log(`\n=== ${adapter} / ${scenario} ===`);
       const runs: PairRun[] = [];
       for (let i = 0; i < RUNS; i++) {
-        const child = spawnSync(
-          'bun',
-          [selfPath, adapter, scenario],
-          { encoding: 'utf8', maxBuffer: 1024 * 1024 * 16 },
-        );
+        const child = spawnSync('bun', [selfPath, adapter, scenario], { encoding: 'utf8', maxBuffer: 1024 * 1024 * 16 });
         if (child.status !== 0) {
           console.error(`run=${i + 1} status=${child.status}`);
           console.error(child.stderr);
@@ -502,24 +507,24 @@ if (isWorker) {
         }
         process.stdout.write(child.stdout);
         const parsed = parsePairRun(child.stdout);
-        if (parsed !== null) runs.push(parsed);
+        if (parsed !== null) {runs.push(parsed);}
       }
-      if (runs.length === 0) continue;
-      const builds = runs.map((r) => r.buildMs);
-      const rss = runs.map((r) => r.rssMb);
-      const heap = runs.map((r) => r.heapMb);
-      const hits = runs.flatMap((r) => r.hitNs);
-      const misses = runs.flatMap((r) => r.missNs);
-      const wrong = runs.flatMap((r) => r.wrongMethodNs);
+      if (runs.length === 0) {continue;}
+      const builds = runs.map(r => r.buildMs);
+      const rss = runs.map(r => r.rssMb);
+      const heap = runs.map(r => r.heapMb);
+      const hits = runs.flatMap(r => r.hitNs);
+      const misses = runs.flatMap(r => r.missNs);
+      const wrong = runs.flatMap(r => r.wrongMethodNs);
       // builds/rss/heap are 1 sample per run (RUNS=3) → use max instead of p99
       // which would collapse to the same value.
       console.log(
         `summary adapter=${adapter} scenario=${scenario} runs=${runs.length} ` +
-        `buildMedian=${fmt(median(builds))}ms buildMax=${fmt(Math.max(...builds))}ms ` +
-        `rssMedian=${fmt(median(rss))}MB heapMedian=${fmt(median(heap))}MB ` +
-        `hitMedian=${fmt(median(hits))}ns hitP99=${fmt(percentile(hits, 99))}ns ` +
-        `missMedian=${fmt(median(misses))}ns missP99=${fmt(percentile(misses, 99))}ns ` +
-        `wrongMethodMedian=${fmt(median(wrong))}ns wrongMethodP99=${fmt(percentile(wrong, 99))}ns`,
+          `buildMedian=${fmt(median(builds))}ms buildMax=${fmt(Math.max(...builds))}ms ` +
+          `rssMedian=${fmt(median(rss))}MB heapMedian=${fmt(median(heap))}MB ` +
+          `hitMedian=${fmt(median(hits))}ns hitP99=${fmt(percentile(hits, 99))}ns ` +
+          `missMedian=${fmt(median(misses))}ns missP99=${fmt(percentile(misses, 99))}ns ` +
+          `wrongMethodMedian=${fmt(median(wrong))}ns wrongMethodP99=${fmt(percentile(wrong, 99))}ns`,
       );
     }
   }

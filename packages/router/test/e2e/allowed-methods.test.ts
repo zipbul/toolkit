@@ -51,7 +51,7 @@ describe('allowedMethods', () => {
   });
 
   it('strict trailing-slash with ignoreTrailingSlash=false', () => {
-    const r = new Router<number>({ trailingSlash: "strict" });
+    const r = new Router<number>({ trailingSlash: 'strict' });
     r.add('GET', '/users', 1);
     r.build();
 
@@ -140,11 +140,11 @@ describe('allowedMethods', () => {
     function classify(method: string, path: string): '200' | '405' | '404' {
       const out = r.match(method as 'GET', path);
 
-      if (out !== null) return '200';
+      if (out !== null) {return '200';}
 
       const allowed = r.allowedMethods(path);
 
-      if (allowed.length === 0) return '404';
+      if (allowed.length === 0) {return '404';}
 
       return '405';
     }

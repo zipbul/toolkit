@@ -1,6 +1,7 @@
-import { RateLimitAction } from '../enums';
 import type { RateLimitRule, RateLimiterStore, StoreEntry } from '../interfaces';
 import type { RateLimitResult } from '../types';
+
+import { RateLimitAction } from '../enums';
 
 /**
  * Generic Cell Rate Algorithm (GCRA).
@@ -28,7 +29,7 @@ export function gcra(
 
   let result!: RateLimitResult;
 
-  const entry = store.update(key, (current) => {
+  const entry = store.update(key, current => {
     const tat = current !== null ? Math.max(current.value, now) : now;
     const newTat = tat + increment;
     const allowAt = newTat - burstOffset;
@@ -42,7 +43,7 @@ export function gcra(
         retryAfter: Math.ceil(allowAt - now),
       };
       // Deny: return existing state unchanged, or minimal entry for new keys
-      if (current !== null) return current;
+      if (current !== null) {return current;}
       return { value: 0, prev: 0, windowStart: 0 };
     }
 
@@ -98,17 +99,12 @@ async function peekGcra(
 /**
  * Refunds a previously consumed GCRA request by reducing the TAT.
  */
-export function refundGcra(
-  key: string,
-  rule: RateLimitRule,
-  cost: number,
-  store: RateLimiterStore,
-): void | Promise<void> {
+export function refundGcra(key: string, rule: RateLimitRule, cost: number, store: RateLimiterStore): void | Promise<void> {
   const emissionInterval = rule.window / rule.limit;
   const increment = emissionInterval * cost;
   const result = store.update(key, (current: StoreEntry | null) => {
-    if (current === null) return { value: 0, prev: 0, windowStart: 0 };
+    if (current === null) {return { value: 0, prev: 0, windowStart: 0 };}
     return { value: Math.max(0, current.value - increment), prev: 0, windowStart: 0 };
   });
-  if (result instanceof Promise) return result.then(() => {});
+  if (result instanceof Promise) {return result.then(() => {});}
 }

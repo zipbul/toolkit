@@ -1,8 +1,8 @@
-import { describe, test, expect } from 'bun:test';
 import { isErr } from '@zipbul/result';
+import { describe, test, expect } from 'bun:test';
 
-import { extractBoundary } from './boundary';
 import { MultipartErrorReason } from '../enums';
+import { extractBoundary } from './boundary';
 
 describe('extractBoundary', () => {
   // ── Success cases ────────────────────────────────────────────────
@@ -130,9 +130,7 @@ describe('extractBoundary', () => {
     expect(isErr(result)).toBe(true);
     if (isErr(result)) {
       expect(result.data.reason).toBe(MultipartErrorReason.MissingBoundary);
-      expect(result.data.message).toBe(
-        `Boundary length (71) exceeds maximum of 70 characters (RFC 2046)`,
-      );
+      expect(result.data.message).toBe(`Boundary length (71) exceeds maximum of 70 characters (RFC 2046)`);
     }
   });
 
@@ -142,9 +140,7 @@ describe('extractBoundary', () => {
     expect(isErr(result)).toBe(true);
     if (isErr(result)) {
       expect(result.data.reason).toBe(MultipartErrorReason.MissingBoundary);
-      expect(result.data.message).toBe(
-        `Boundary length (1000) exceeds maximum of 70 characters (RFC 2046)`,
-      );
+      expect(result.data.message).toBe(`Boundary length (1000) exceeds maximum of 70 characters (RFC 2046)`);
     }
   });
 });

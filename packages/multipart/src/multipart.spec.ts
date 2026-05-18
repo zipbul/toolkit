@@ -1,17 +1,15 @@
 import { describe, test, expect } from 'bun:test';
 
-import { Multipart } from './multipart';
-import { MultipartError } from './interfaces';
 import type { MultipartPart } from './interfaces';
+
 import { MultipartErrorReason } from './enums';
+import { MultipartError } from './interfaces';
+import { Multipart } from './multipart';
 import { BufferedMultipartFile } from './parser/streaming-part';
 
 // ── Helpers ─────────────────────────────────────────────────────────
 
-function createMultipartRequest(
-  boundary: string,
-  parts: Array<{ headers: string; body: string }>,
-): Request {
+function createMultipartRequest(boundary: string, parts: Array<{ headers: string; body: string }>): Request {
   let raw = '';
 
   for (const part of parts) {
@@ -32,7 +30,7 @@ function createMultipartRequest(
 }
 
 async function partText(part: MultipartPart): Promise<string> {
-  if (part.isFile) return part.text();
+  if (part.isFile) {return part.text();}
   return part.text();
 }
 
@@ -184,7 +182,9 @@ describe('Multipart.parse', () => {
     });
 
     try {
-      for await (const _ of mp.parse(request)) { /* consume */ }
+      for await (const _ of mp.parse(request)) {
+        /* consume */
+      }
       expect(true).toBe(false);
     } catch (e) {
       expect(e).toBeInstanceOf(MultipartError);
@@ -201,7 +201,9 @@ describe('Multipart.parse', () => {
     });
 
     try {
-      for await (const _ of mp.parse(request)) { /* consume */ }
+      for await (const _ of mp.parse(request)) {
+        /* consume */
+      }
       expect(true).toBe(false);
     } catch (e) {
       expect(e).toBeInstanceOf(MultipartError);
@@ -217,7 +219,9 @@ describe('Multipart.parse', () => {
     });
 
     try {
-      for await (const _ of mp.parse(request)) { /* consume */ }
+      for await (const _ of mp.parse(request)) {
+        /* consume */
+      }
       expect(true).toBe(false);
     } catch (e) {
       expect(e).toBeInstanceOf(MultipartError);
@@ -234,7 +238,9 @@ describe('Multipart.parse', () => {
     });
 
     try {
-      for await (const _ of mp.parse(request)) { /* consume */ }
+      for await (const _ of mp.parse(request)) {
+        /* consume */
+      }
       expect(true).toBe(false);
     } catch (e) {
       expect(e).toBeInstanceOf(MultipartError);
@@ -354,10 +360,7 @@ describe('MultipartError', () => {
 
   test('supports cause option', () => {
     const cause = new TypeError('original');
-    const e = new MultipartError(
-      { reason: MultipartErrorReason.UnexpectedEnd, message: 'wrapped' },
-      { cause },
-    );
+    const e = new MultipartError({ reason: MultipartErrorReason.UnexpectedEnd, message: 'wrapped' }, { cause });
     expect(e.cause).toBe(cause);
   });
 

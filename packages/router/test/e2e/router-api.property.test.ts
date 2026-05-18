@@ -1,8 +1,9 @@
 import { describe, it, expect } from 'bun:test';
 import * as fc from 'fast-check';
 
-import { Router, RouterError } from '../../index';
 import type { MatchOutput } from '../../index';
+
+import { Router, RouterError } from '../../index';
 
 // ── Arbitraries ──
 
@@ -13,13 +14,11 @@ const ALPHANUM_CHARS = 'abcdefghijklmnopqrstuvwxyz0123456789'.split('');
 /** Generates a URL-safe segment: 1-20 alphanumeric + hyphen chars, starting with a letter. */
 const segmentArb = fc
   .array(fc.constantFrom(...URL_SAFE_CHARS), { minLength: 1, maxLength: 20 })
-  .map((chars) => chars.join(''))
-  .filter((s) => /^[a-z]/.test(s));
+  .map(chars => chars.join(''))
+  .filter(s => /^[a-z]/.test(s));
 
 /** Generates a valid static path like /seg1/seg2/seg3 with 1-5 segments. */
-const staticPathArb = fc
-  .array(segmentArb, { minLength: 1, maxLength: 5 })
-  .map((segments) => '/' + segments.join('/'));
+const staticPathArb = fc.array(segmentArb, { minLength: 1, maxLength: 5 }).map(segments => '/' + segments.join('/'));
 
 /** Generates an HTTP method. */
 const methodArb = fc.constantFrom(
@@ -33,14 +32,10 @@ const methodArb = fc.constantFrom(
 );
 
 /** Generates a param name: 2-10 lowercase letters. */
-const paramNameArb = fc
-  .array(fc.constantFrom(...ALPHA_CHARS), { minLength: 2, maxLength: 10 })
-  .map((chars) => chars.join(''));
+const paramNameArb = fc.array(fc.constantFrom(...ALPHA_CHARS), { minLength: 2, maxLength: 10 }).map(chars => chars.join(''));
 
 /** Generates a param value: 1-20 URL-safe alphanumeric chars. */
-const paramValueArb = fc
-  .array(fc.constantFrom(...ALPHANUM_CHARS), { minLength: 1, maxLength: 20 })
-  .map((chars) => chars.join(''));
+const paramValueArb = fc.array(fc.constantFrom(...ALPHANUM_CHARS), { minLength: 1, maxLength: 20 }).map(chars => chars.join(''));
 
 // ── Tests ──
 
@@ -48,42 +43,36 @@ describe('Router — property-based tests', () => {
   describe('round-trip invariant', () => {
     it('any route added via add() -> build() -> match() returns the registered value', () => {
       fc.assert(
-        fc.property(
-          fc.array(
-            fc.tuple(methodArb, staticPathArb),
-            { minLength: 1, maxLength: 20 },
-          ),
-          (routes) => {
-            const seen = new Set<string>();
-            const uniqueRoutes: Array<{ method: typeof routes[0][0]; path: string; value: number }> = [];
+        fc.property(fc.array(fc.tuple(methodArb, staticPathArb), { minLength: 1, maxLength: 20 }), routes => {
+          const seen = new Set<string>();
+          const uniqueRoutes: Array<{ method: (typeof routes)[0][0]; path: string; value: number }> = [];
 
-            for (const [method, path] of routes) {
-              const key = `${method}:${path}`;
+          for (const [method, path] of routes) {
+            const key = `${method}:${path}`;
 
-              if (!seen.has(key)) {
-                seen.add(key);
-                uniqueRoutes.push({ method, path, value: uniqueRoutes.length });
-              }
+            if (!seen.has(key)) {
+              seen.add(key);
+              uniqueRoutes.push({ method, path, value: uniqueRoutes.length });
             }
+          }
 
-            const router = new Router<number>();
+          const router = new Router<number>();
 
-            for (const { method, path, value } of uniqueRoutes) {
-              router.add(method, path, value);
+          for (const { method, path, value } of uniqueRoutes) {
+            router.add(method, path, value);
+          }
+
+          router.build();
+
+          for (const { method, path, value } of uniqueRoutes) {
+            const result = router.match(method, path);
+            expect(result).not.toBeNull();
+
+            if (result !== null) {
+              expect(result.value).toBe(value);
             }
-
-            router.build();
-
-            for (const { method, path, value } of uniqueRoutes) {
-              const result = router.match(method, path);
-              expect(result).not.toBeNull();
-
-              if (result !== null) {
-                expect(result.value).toBe(value);
-              }
-            }
-          },
-        ),
+          }
+        }),
         { numRuns: 100 },
       );
     });
@@ -95,7 +84,7 @@ describe('Router — property-based tests', () => {
         fc.property(
           fc
             .uniqueArray(paramNameArb, { minLength: 1, maxLength: 3, comparator: 'SameValue' })
-            .chain((paramNames) =>
+            .chain(paramNames =>
               fc.tuple(
                 fc.constant(paramNames),
                 fc.tuple(...paramNames.map(() => paramValueArb)),
@@ -103,7 +92,7 @@ describe('Router — property-based tests', () => {
               ),
             ),
           ([paramNames, paramValues, prefixSegments]) => {
-            const templateParts = [...prefixSegments, ...paramNames.map((n) => `:${n}`)];
+            const templateParts = [...prefixSegments, ...paramNames.map(n => `:${n}`)];
             const template = '/' + templateParts.join('/');
 
             const concreteParts = [...prefixSegments, ...paramValues];
@@ -133,70 +122,63 @@ describe('Router — property-based tests', () => {
   describe('idempotency invariant', () => {
     it('matching the same path N times returns identical results', () => {
       fc.assert(
-        fc.property(
-          methodArb,
-          staticPathArb,
-          (method, path) => {
-            const router = new Router<string>();
-            router.add(method, path, 'stable-handler');
-            router.build();
+        fc.property(methodArb, staticPathArb, (method, path) => {
+          const router = new Router<string>();
+          router.add(method, path, 'stable-handler');
+          router.build();
 
-            const results: Array<MatchOutput<string> | null> = [];
+          const results: Array<MatchOutput<string> | null> = [];
 
-            for (let i = 0; i < 5; i++) {
-              const result = router.match(method, path);
-              results.push(result);
+          for (let i = 0; i < 5; i++) {
+            const result = router.match(method, path);
+            results.push(result);
+          }
+
+          const first = results[0];
+          expect(first).not.toBeNull();
+
+          for (let i = 1; i < results.length; i++) {
+            const current = results[i];
+            expect(current).not.toBeNull();
+
+            if (first != null && current != null) {
+              expect(current.value).toBe(first.value);
+              expect(current.params).toEqual(first.params);
             }
-
-            const first = results[0];
-            expect(first).not.toBeNull();
-
-            for (let i = 1; i < results.length; i++) {
-              const current = results[i];
-              expect(current).not.toBeNull();
-
-              if (first != null && current != null) {
-                expect(current.value).toBe(first.value);
-                expect(current.params).toEqual(first.params);
-              }
-            }
-          },
-        ),
+          }
+        }),
         { numRuns: 100 },
       );
     });
 
     it('matching the same parametric path N times returns identical results', () => {
       fc.assert(
-        fc.property(
-          paramValueArb,
-          (paramValue) => {
-            const router = new Router<string>();
-            router.add('GET', '/users/:id', 'user-handler');
-            router.build();
+        fc.property(paramValueArb, paramValue => {
+          const router = new Router<string>();
+          router.add('GET', '/users/:id', 'user-handler');
+          router.build();
 
-            const concretePath = `/users/${paramValue}`;
-            const results: Array<MatchOutput<string> | null> = [];
+          const concretePath = `/users/${paramValue}`;
+          const results: Array<MatchOutput<string> | null> = [];
 
-            for (let i = 0; i < 5; i++) {
-              const result = router.match('GET', concretePath);
-              results.push(result);
+          for (let i = 0; i < 5; i++) {
+            const result = router.match('GET', concretePath);
+            results.push(result);
+          }
+
+          const first = results[0];
+          expect(first).not.toBeNull();
+
+          for (let i = 1; i < results.length; i++) {
+            const current = results[i];
+            expect(current).not.toBeNull();
+
+            if (first != null && current != null) {
+              expect(current.value).toBe(first.value);
+              expect(current.params).toEqual(first.params);
             }
-
-            const first = results[0];
-            expect(first).not.toBeNull();
-
-            for (let i = 1; i < results.length; i++) {
-              const current = results[i];
-              expect(current).not.toBeNull();
-
-              if (first != null && current != null) {
-                expect(current.value).toBe(first.value);
-                expect(current.params).toEqual(first.params);
-              }
-            }
-          },
-        ),
+          }
+        }),
         { numRuns: 100 },
       );
     });
@@ -212,27 +194,24 @@ describe('Router — property-based tests', () => {
       router.build();
 
       fc.assert(
-        fc.property(
-          fc.string({ unit: 'grapheme', minLength: 0, maxLength: 500 }),
-          (arbitraryPath) => {
-            // Must not crash — either returns a result or throws RouterError
-            try {
-              const result = router.match('GET', arbitraryPath);
+        fc.property(fc.string({ unit: 'grapheme', minLength: 0, maxLength: 500 }), arbitraryPath => {
+          // Must not crash — either returns a result or throws RouterError
+          try {
+            const result = router.match('GET', arbitraryPath);
 
-              if (result !== null) {
-                expect(result.value).toBeDefined();
-                expect(result.params).toBeDefined();
-                expect(result.meta).toBeDefined();
-              }
-            } catch (e) {
-              // RouterError is expected for invalid paths
-              expect(e).toBeInstanceOf(RouterError);
-              const err = e as RouterError;
-              expect(typeof err.data.kind).toBe('string');
-              expect(typeof err.data.message).toBe('string');
+            if (result !== null) {
+              expect(result.value).toBeDefined();
+              expect(result.params).toBeDefined();
+              expect(result.meta).toBeDefined();
             }
-          },
-        ),
+          } catch (e) {
+            // RouterError is expected for invalid paths
+            expect(e).toBeInstanceOf(RouterError);
+            const err = e as RouterError;
+            expect(typeof err.data.kind).toBe('string');
+            expect(typeof err.data.message).toBe('string');
+          }
+        }),
         { numRuns: 100 },
       );
     });
@@ -246,16 +225,19 @@ describe('Router — property-based tests', () => {
       fc.assert(
         fc.property(
           fc.oneof(
-            fc.string({ unit: 'grapheme', maxLength: 200 }).map((s) => '/' + encodeURIComponent(s)),
-            fc.array(fc.string({ unit: 'grapheme', minLength: 0, maxLength: 50 }), { minLength: 1, maxLength: 10 })
-              .map((parts) => '/' + parts.join('/')),
-            fc.array(fc.constantFrom('a', '/', ':', '*', '.', '-', '%', '2', 'F'), {
-              minLength: 100,
-              maxLength: 500,
-            }).map((chars) => chars.join('')),
+            fc.string({ unit: 'grapheme', maxLength: 200 }).map(s => '/' + encodeURIComponent(s)),
+            fc
+              .array(fc.string({ unit: 'grapheme', minLength: 0, maxLength: 50 }), { minLength: 1, maxLength: 10 })
+              .map(parts => '/' + parts.join('/')),
+            fc
+              .array(fc.constantFrom('a', '/', ':', '*', '.', '-', '%', '2', 'F'), {
+                minLength: 100,
+                maxLength: 500,
+              })
+              .map(chars => chars.join('')),
             fc.string({ minLength: 1, maxLength: 200 }),
           ),
-          (fuzzPath) => {
+          fuzzPath => {
             // Must not crash with unhandled exception
             try {
               router.match('GET', fuzzPath);

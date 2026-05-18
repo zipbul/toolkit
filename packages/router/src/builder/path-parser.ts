@@ -1,33 +1,29 @@
 import type { Result } from '@zipbul/result';
-import type { RouterErrorData } from '../types';
 
 import { err, isErr } from '@zipbul/result';
-import {
-  CC_COLON,
-  CC_PLUS,
-  CC_STAR,
-} from './constants';
-import { normalizeParamPatternSource } from './pattern-utils';
-import { validatePathChars } from './path-policy';
-
-// ── Types ──
 
 import type { PathPart } from '../tree';
+import type { RouterErrorData } from '../types';
 
-export interface ParseResult {
+import { CC_COLON, CC_PLUS, CC_STAR } from './constants';
+import { validatePathChars } from './path-policy';
+// ── Types ──
+import { normalizeParamPatternSource } from './pattern-utils';
+
+interface ParseResult {
   parts: PathPart[];
   normalized: string;
   isDynamic: boolean;
 }
 
-export interface PathParserConfig {
+interface PathParserConfig {
   caseSensitive: boolean;
   ignoreTrailingSlash: boolean;
 }
 
 // ── PathParser ──
 
-export class PathParser {
+class PathParser {
   private readonly config: PathParserConfig;
   private readonly activeParams = new Set<string>();
 
@@ -45,11 +41,11 @@ export class PathParser {
   parse(path: string): Result<ParseResult, RouterErrorData> {
     const validation = this.validatePath(path);
 
-    if (validation !== null) return validation;
+    if (validation !== null) {return validation;}
 
     const tokenizeResult = this.tokenize(path);
 
-    if (isErr(tokenizeResult)) return tokenizeResult;
+    if (isErr(tokenizeResult)) {return tokenizeResult;}
 
     const { segments, normalized } = tokenizeResult;
 
@@ -59,7 +55,7 @@ export class PathParser {
   // Single-pass char-code scan covering the structural-sanity check (leading
   private validatePath(path: string): Result<never, RouterErrorData> | null {
     const result = validatePathChars(path);
-    if (isErr(result)) return result;
+    if (isErr(result)) {return result;}
     return null;
   }
 
@@ -67,9 +63,7 @@ export class PathParser {
    * Stage 2 — split + normalize. Returns the segment array consumed by
    * stage 3 alongside the canonical normalized path used by lookup.
    */
-  private tokenize(
-    path: string,
-  ): Result<{ segments: string[]; normalized: string }, RouterErrorData> {
+  private tokenize(path: string): Result<{ segments: string[]; normalized: string }, RouterErrorData> {
     // Manual charCodeAt scan beats `String.split('/')` 2.7× on typical
     // HTTP paths (bench/split-vs-manual.ts: 60ns vs 164ns) — split's
     // native fast path allocates a fresh internal buffer per call while
@@ -131,7 +125,10 @@ export class PathParser {
       // the NFC normalize / UTF-8 encode path on ordinary ASCII paths.
       let hasNonAscii = false;
       for (let j = 0; j < seg.length; j++) {
-        if (seg.charCodeAt(j) >= 0x80) { hasNonAscii = true; break; }
+        if (seg.charCodeAt(j) >= 0x80) {
+          hasNonAscii = true;
+          break;
+        }
       }
       if (hasNonAscii) {
         seg = normalizeIriSegment(seg);
@@ -141,7 +138,7 @@ export class PathParser {
 
       if (!caseSensitive) {
         const lowered = seg.toLowerCase();
-        if (lowered !== seg) caseChanged = true;
+        if (lowered !== seg) {caseChanged = true;}
         segments[i] = lowered;
       }
     }
@@ -171,11 +168,7 @@ export class PathParser {
    * appears; consecutive statics share a single PathPart so the matcher can
    * compare prefixes in one go.
    */
-  private parseTokens(
-    segments: string[],
-    normalized: string,
-    path: string,
-  ): Result<ParseResult, RouterErrorData> {
+  private parseTokens(segments: string[], normalized: string, path: string): Result<ParseResult, RouterErrorData> {
     this.activeParams.clear();
 
     const parts: PathPart[] = [];
@@ -191,17 +184,17 @@ export class PathParser {
         flushStaticBuffer(acc, parts);
         isDynamic = true;
         const paramResult = this.parseParam(seg, path);
-        if (isErr(paramResult)) return paramResult;
+        if (isErr(paramResult)) {return paramResult;}
         // parseParam never returns a wildcard now that the colon-form
         // sugar (`:name+` / `:name*`) is rejected upstream — the
         // discriminant is always 'param' here.
         parts.push(paramResult);
-        if (!isLast) acc.buf = '/';
+        if (!isLast) {acc.buf = '/';}
       } else if (firstChar === CC_STAR) {
         flushStaticBuffer(acc, parts);
         isDynamic = true;
         const wcResult = this.parseWildcard(seg, i, segments.length, path);
-        if (isErr(wcResult)) return wcResult;
+        if (isErr(wcResult)) {return wcResult;}
         parts.push(wcResult);
       } else {
         appendStaticSegment(acc, seg, !isLast);
@@ -222,7 +215,7 @@ export class PathParser {
     let isOptional = false;
 
     const optionalResult = stripOptionalDecorator(core, seg, path);
-    if ('kind' in optionalResult) return err(optionalResult);
+    if ('kind' in optionalResult) {return err(optionalResult);}
     core = optionalResult.core;
     isOptional = optionalResult.isOptional;
 
@@ -230,17 +223,17 @@ export class PathParser {
     // must use the `*name` / `*name+` syntax exclusively. Reject the sugar at
     // parse time so two surface forms can't represent the same PathPart.
     const sugarRejection = rejectColonWildcardSugar(core, seg, path);
-    if (sugarRejection !== undefined) return err(sugarRejection);
+    if (sugarRejection !== undefined) {return err(sugarRejection);}
 
     const nameAndPattern = extractNameAndPattern(core, path);
-    if ('kind' in nameAndPattern) return err(nameAndPattern);
+    if ('kind' in nameAndPattern) {return err(nameAndPattern);}
     const { name, pattern } = nameAndPattern;
 
     const nameValidation = validateParamName(name, ':', path);
-    if (nameValidation !== null) return nameValidation;
+    if (nameValidation !== null) {return nameValidation;}
 
     const dup = this.registerParam(name, ':', path);
-    if (dup !== null) return dup;
+    if (dup !== null) {return dup;}
 
     // Regex pattern safety is the framework / user's responsibility — the
     // router does not gate against ReDoS-vulnerable shapes. Per policy
@@ -251,12 +244,7 @@ export class PathParser {
     return { type: 'param', name, pattern, optional: isOptional };
   }
 
-  private parseWildcard(
-    seg: string,
-    index: number,
-    totalSegments: number,
-    path: string,
-  ): Result<PathPart, RouterErrorData> {
+  private parseWildcard(seg: string, index: number, totalSegments: number, path: string): Result<PathPart, RouterErrorData> {
     // Determine origin
     let core = seg.slice(1); // skip '*'
     let origin: 'star' | 'multi' = 'star';
@@ -271,7 +259,7 @@ export class PathParser {
     if (name !== '*') {
       const validation = validateParamName(name, '*', path);
 
-      if (validation !== null) return validation;
+      if (validation !== null) {return validation;}
     }
 
     // Wildcard must be the last segment
@@ -286,7 +274,7 @@ export class PathParser {
 
     const dup = this.registerParam(name, '*', path);
 
-    if (dup !== null) return dup;
+    if (dup !== null) {return dup;}
 
     return { type: 'wildcard', name, origin };
   }
@@ -297,11 +285,7 @@ export class PathParser {
    * diagnostic. Caller must run `validateParamName` first — this helper
    * trusts the name shape and only enforces uniqueness.
    */
-  private registerParam(
-    name: string,
-    prefix: ':' | '*',
-    path: string,
-  ): Result<never, RouterErrorData> | null {
+  private registerParam(name: string, prefix: ':' | '*', path: string): Result<never, RouterErrorData> | null {
     if (this.activeParams.has(name)) {
       return err({
         kind: 'param-duplicate',
@@ -329,11 +313,7 @@ export class PathParser {
  * `prefix` is `:` for params and `*` for wildcards — used in the error
  * message so the user sees the exact form they wrote.
  */
-function validateParamName(
-  name: string,
-  prefix: ':' | '*',
-  path: string,
-): Result<never, RouterErrorData> | null {
+function validateParamName(name: string, prefix: ':' | '*', path: string): Result<never, RouterErrorData> | null {
   if (name === '') {
     return err({
       kind: 'route-parse',
@@ -385,14 +365,10 @@ function validateParamName(
  * route, so we cut the sugar at parse time and force the canonical form.
  * Returns `undefined` when the segment is not this shape.
  */
-export function rejectColonWildcardSugar(
-  core: string,
-  seg: string,
-  path: string,
-): RouterErrorData | undefined {
+function rejectColonWildcardSugar(core: string, seg: string, path: string): RouterErrorData | undefined {
   const tail = core.charAt(core.length - 1);
-  if (tail !== '+' && tail !== '*') return undefined;
-  if (core.includes('(')) return undefined;
+  if (tail !== '+' && tail !== '*') {return undefined;}
+  if (core.includes('(')) {return undefined;}
   const canonical = tail === '+' ? `*${core.slice(1, -1)}+` : `*${core.slice(1, -1)}`;
   return {
     kind: 'route-parse',
@@ -415,12 +391,12 @@ export function rejectColonWildcardSugar(
  * Returns `{ core, isOptional }` on success, a `RouterErrorData` carrier
  * on failure (no Result wrapper — caller already wraps in `err()`).
  */
-export function stripOptionalDecorator(
+function stripOptionalDecorator(
   core: string,
   seg: string,
   path: string,
 ): { core: string; isOptional: boolean } | RouterErrorData {
-  if (!core.endsWith('?')) return { core, isOptional: false };
+  if (!core.endsWith('?')) {return { core, isOptional: false };}
   const before = core.charCodeAt(core.length - 2);
   if (before === CC_PLUS || before === CC_STAR) {
     return {
@@ -439,10 +415,7 @@ export function stripOptionalDecorator(
  * Returns the parsed pair on success, a `RouterErrorData` carrier for
  * unclosed groups or empty/whitespace-only patterns.
  */
-export function extractNameAndPattern(
-  core: string,
-  path: string,
-): { name: string; pattern: string | null } | RouterErrorData {
+function extractNameAndPattern(core: string, path: string): { name: string; pattern: string | null } | RouterErrorData {
   const parenIdx = core.indexOf('(');
   if (parenIdx === -1) {
     return { name: core.slice(1), pattern: null };
@@ -488,8 +461,8 @@ interface StaticAccumulator {
 
 /** Flush whatever the accumulator holds into `parts` and reset it.
  *  No-op when the accumulator is empty. */
-export function flushStaticBuffer(acc: StaticAccumulator, parts: PathPart[]): void {
-  if (acc.buf.length === 0) return;
+function flushStaticBuffer(acc: StaticAccumulator, parts: PathPart[]): void {
+  if (acc.buf.length === 0) {return;}
   parts.push({ type: 'static', value: acc.buf, segments: acc.segments });
   acc.buf = '';
   acc.segments = [];
@@ -497,10 +470,10 @@ export function flushStaticBuffer(acc: StaticAccumulator, parts: PathPart[]): vo
 
 /** Append one literal segment to the accumulator. `hasNext` controls
  *  whether a trailing slash is appended for the next segment join. */
-export function appendStaticSegment(acc: StaticAccumulator, seg: string, hasNext: boolean): void {
+function appendStaticSegment(acc: StaticAccumulator, seg: string, hasNext: boolean): void {
   acc.buf += seg;
   acc.segments.push(seg);
-  if (hasNext) acc.buf += '/';
+  if (hasNext) {acc.buf += '/';}
 }
 
 /**
@@ -518,7 +491,7 @@ export function appendStaticSegment(acc: StaticAccumulator, seg: string, hasNext
  *
  * @internal exported for unit tests.
  */
-export function normalizeIriSegment(seg: string): string {
+function normalizeIriSegment(seg: string): string {
   const nfc = seg.normalize('NFC');
   let out = '';
   const encoder = NFC_ENCODER;
@@ -544,3 +517,13 @@ export function normalizeIriSegment(seg: string): string {
 const NFC_ENCODER = new TextEncoder();
 const HEX_UPPER = '0123456789ABCDEF';
 
+export {
+  appendStaticSegment,
+  extractNameAndPattern,
+  flushStaticBuffer,
+  normalizeIriSegment,
+  PathParser,
+  rejectColonWildcardSugar,
+  stripOptionalDecorator,
+};
+export type { ParseResult, PathParserConfig };

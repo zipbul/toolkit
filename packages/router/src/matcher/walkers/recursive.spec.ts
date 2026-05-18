@@ -4,8 +4,8 @@
  */
 import { describe, expect, it } from 'bun:test';
 
-import { consumeStaticPrefixRec, tryWildcardCapture } from './recursive';
 import { createMatchState } from '../match-state';
+import { consumeStaticPrefixRec, tryWildcardCapture } from './recursive';
 import { MULTI_WILDCARD_NODE, STAR_WILDCARD_NODE, STORE_NODE } from './test-fixtures';
 
 const STORE = STORE_NODE;

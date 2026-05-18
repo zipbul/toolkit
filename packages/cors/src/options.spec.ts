@@ -1,9 +1,10 @@
 import { describe, expect, it } from 'bun:test';
 
+import type { ResolvedCorsOptions } from './types';
+
 import { CORS_DEFAULT_METHODS, CORS_DEFAULT_OPTIONS_SUCCESS_STATUS } from './constants';
 import { CorsErrorReason } from './enums';
 import { resolveCorsOptions, validateCorsOptions } from './options';
-import type { ResolvedCorsOptions } from './types';
 
 describe('resolveCorsOptions', () => {
   it('should return all defaults when called without arguments', () => {

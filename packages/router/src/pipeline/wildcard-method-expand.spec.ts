@@ -7,10 +7,7 @@
 import { describe, expect, it } from 'bun:test';
 
 import { MethodRegistry } from '../method-registry';
-import {
-  WILDCARD_METHOD,
-  expandWildcardMethodRoutes,
-} from './wildcard-method-expand';
+import { WILDCARD_METHOD, expandWildcardMethodRoutes } from './wildcard-method-expand';
 
 interface Pending {
   method: string;
@@ -20,7 +17,7 @@ interface Pending {
 
 function makeRegistry(extraMethods: string[] = []): MethodRegistry {
   const registry = new MethodRegistry();
-  for (const m of extraMethods) registry.getOrCreate(m);
+  for (const m of extraMethods) {registry.getOrCreate(m);}
   return registry;
 }
 
@@ -47,15 +44,15 @@ describe('expandWildcardMethodRoutes — fans out * across registered methods', 
     const routes: Pending[] = [{ method: '*', path: '/x', value: 'x' }];
     expandWildcardMethodRoutes(routes, makeRegistry());
     expect(routes.length).toBe(7);
-    const methods = routes.map((r) => r.method).sort();
+    const methods = routes.map(r => r.method).sort();
     expect(methods).toEqual(['DELETE', 'GET', 'HEAD', 'OPTIONS', 'PATCH', 'POST', 'PUT']);
-    expect(routes.every((r) => r.path === '/x' && r.value === 'x')).toBe(true);
+    expect(routes.every(r => r.path === '/x' && r.value === 'x')).toBe(true);
   });
 
   it('includes custom methods already registered in the registry', () => {
     const routes: Pending[] = [{ method: '*', path: '/x', value: 'x' }];
     expandWildcardMethodRoutes(routes, makeRegistry(['PURGE']));
-    expect(routes.map((r) => r.method)).toContain('PURGE');
+    expect(routes.map(r => r.method)).toContain('PURGE');
   });
 
   it('includes custom methods first observed via non-* pending routes', () => {
@@ -64,7 +61,7 @@ describe('expandWildcardMethodRoutes — fans out * across registered methods', 
       { method: '*', path: '/x', value: 'x' },
     ];
     expandWildcardMethodRoutes(routes, makeRegistry());
-    const xMethods = routes.filter((r) => r.path === '/x').map((r) => r.method);
+    const xMethods = routes.filter(r => r.path === '/x').map(r => r.method);
     expect(xMethods).toContain('PURGE');
   });
 
@@ -85,8 +82,8 @@ describe('expandWildcardMethodRoutes — fans out * across registered methods', 
       { method: '*', path: '/y', value: 'y' },
     ];
     expandWildcardMethodRoutes(routes, makeRegistry());
-    const xRoutes = routes.filter((r) => r.path === '/x');
-    const yRoutes = routes.filter((r) => r.path === '/y');
+    const xRoutes = routes.filter(r => r.path === '/x');
+    const yRoutes = routes.filter(r => r.path === '/y');
     expect(xRoutes.length).toBe(7);
     expect(yRoutes.length).toBe(7);
   });

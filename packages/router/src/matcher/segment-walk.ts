@@ -1,20 +1,9 @@
 import type { DecoderFn, MatchFn, MatchState } from '../types';
-import {
-  compactSegmentTree,
-  getTenantFactor,
-  hasAmbiguousNode,
-  TESTER_PASS,
-  type SegmentNode,
-} from '../tree';
-import {
-  collectWarmupPaths,
-  compileSegmentTree,
-  tryCodegenStaticPrefixWildcard,
-  WARMUP_ITERATIONS,
-} from '../codegen';
 
-import { createIterativeWalker } from './walkers/iterative';
+import { collectWarmupPaths, compileSegmentTree, tryCodegenStaticPrefixWildcard, WARMUP_ITERATIONS } from '../codegen';
+import { compactSegmentTree, getTenantFactor, hasAmbiguousNode, TESTER_PASS, type SegmentNode } from '../tree';
 import { createFactoredWalker } from './walkers/factored';
+import { createIterativeWalker } from './walkers/iterative';
 import {
   createMultiPrefixFactoredWalker,
   createPrefixedFactoredWalker,
@@ -40,14 +29,10 @@ import { createRecursiveWalker } from './walkers/recursive';
  * suite. Synthesized warmup paths are well-formed origin-form pathnames
  * so a throw here is always a router bug, never a malformed input.
  */
-function warmupCompiledWalker(
-  walker: MatchFn,
-  root: SegmentNode,
-  state: MatchState,
-): void {
+function warmupCompiledWalker(walker: MatchFn, root: SegmentNode, state: MatchState): void {
   const paths = collectWarmupPaths(root);
   for (let it = 0; it < WARMUP_ITERATIONS; it++) {
-    for (const p of paths) walker(p, state);
+    for (const p of paths) {walker(p, state);}
   }
 }
 
@@ -66,11 +51,7 @@ function warmupCompiledWalker(
  * Each tier returns its own MatchFn closure; the dispatcher itself does
  * not appear on the match hot path.
  */
-export function createSegmentWalker(
-  root: SegmentNode,
-  decoder: DecoderFn,
-  warmupState: MatchState,
-): MatchFn {
+export function createSegmentWalker(root: SegmentNode, decoder: DecoderFn, warmupState: MatchState): MatchFn {
   const factorAtEntry = getTenantFactor(root);
   if (factorAtEntry !== undefined) {
     return createFactoredWalker(decoder, factorAtEntry.keyToTerminal, factorAtEntry.sharedNext);

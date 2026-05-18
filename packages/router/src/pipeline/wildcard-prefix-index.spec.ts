@@ -1,18 +1,14 @@
+import { isErr } from '@zipbul/result';
 /**
  * Unit spec for `wildcard-prefix-index.ts`. The prefix-trie validates
  * every commit before mutating; spec pins each conflict path and the
  * rollback contract by driving `planAndCommit` + `rollbackPlan` directly.
  */
 import { describe, expect, it } from 'bun:test';
-import { isErr } from '@zipbul/result';
 
 import type { PathPart } from '../tree';
-import {
-  WildcardPrefixIndex,
-  rollbackPlan,
-  type CommitPlan,
-  type RouteMeta,
-} from './wildcard-prefix-index';
+
+import { WildcardPrefixIndex, rollbackPlan, type CommitPlan, type RouteMeta } from './wildcard-prefix-index';
 
 let nextHandlerId = 0;
 
@@ -79,7 +75,7 @@ describe('planAndCommit — conflict rejections', () => {
     idx.planAndCommit(0, [STATIC_FILES, WILDCARD_TAIL], meta('GET', '/files/*rest'));
     const result = idx.planAndCommit(0, [STATIC_FILES, STATIC_X], meta('GET', '/files/x'));
     expect(isErr(result)).toBe(true);
-    if (isErr(result)) expect(result.data.kind).toBe('route-unreachable');
+    if (isErr(result)) {expect(result.data.kind).toBe('route-unreachable');}
   });
 
   it('returns route-duplicate when the same plain-param name conflicts on a different name', () => {
@@ -87,7 +83,7 @@ describe('planAndCommit — conflict rejections', () => {
     idx.planAndCommit(0, [STATIC_USERS, PARAM_ID], meta('GET', '/users/:id'));
     const result = idx.planAndCommit(0, [STATIC_USERS, PARAM_SLUG], meta('GET', '/users/:slug'));
     expect(isErr(result)).toBe(true);
-    if (isErr(result)) expect(result.data.kind).toBe('route-duplicate');
+    if (isErr(result)) {expect(result.data.kind).toBe('route-duplicate');}
   });
 
   it('returns route-conflict when a plain param is added next to a regex param sibling', () => {
@@ -95,7 +91,7 @@ describe('planAndCommit — conflict rejections', () => {
     idx.planAndCommit(0, [STATIC_USERS, PARAM_DIGITS], meta('GET', '/users/:id(\\d+)'));
     const result = idx.planAndCommit(0, [STATIC_USERS, PARAM_SLUG], meta('GET', '/users/:slug'));
     expect(isErr(result)).toBe(true);
-    if (isErr(result)) expect(result.data.kind).toBe('route-conflict');
+    if (isErr(result)) {expect(result.data.kind).toBe('route-conflict');}
   });
 
   it('returns route-conflict when distinct regex patterns clash as siblings', () => {
@@ -103,7 +99,7 @@ describe('planAndCommit — conflict rejections', () => {
     idx.planAndCommit(0, [STATIC_USERS, PARAM_DIGITS], meta('GET', '/users/:id(\\d+)'));
     const result = idx.planAndCommit(0, [STATIC_USERS, PARAM_LETTERS], meta('GET', '/users/:id([a-z]+)'));
     expect(isErr(result)).toBe(true);
-    if (isErr(result)) expect(result.data.kind).toBe('route-conflict');
+    if (isErr(result)) {expect(result.data.kind).toBe('route-conflict');}
   });
 
   it('returns route-duplicate for a same-prefix terminal collision', () => {
@@ -111,7 +107,7 @@ describe('planAndCommit — conflict rejections', () => {
     idx.planAndCommit(0, [STATIC_USERS], meta('GET', '/users'));
     const result = idx.planAndCommit(0, [STATIC_USERS], meta('GET', '/users'));
     expect(isErr(result)).toBe(true);
-    if (isErr(result)) expect(result.data.kind).toBe('route-duplicate');
+    if (isErr(result)) {expect(result.data.kind).toBe('route-duplicate');}
   });
 
   it('returns route-unreachable when a wildcard is registered where a descendant terminal exists', () => {
@@ -119,7 +115,7 @@ describe('planAndCommit — conflict rejections', () => {
     idx.planAndCommit(0, [STATIC_FILES, STATIC_X], meta('GET', '/files/x'));
     const result = idx.planAndCommit(0, [STATIC_FILES, WILDCARD_TAIL], meta('GET', '/files/*rest'));
     expect(isErr(result)).toBe(true);
-    if (isErr(result)) expect(result.data.kind).toBe('route-unreachable');
+    if (isErr(result)) {expect(result.data.kind).toBe('route-unreachable');}
   });
 });
 

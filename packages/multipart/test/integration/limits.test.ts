@@ -1,9 +1,10 @@
 import { describe, test, expect } from 'bun:test';
 
-import { Multipart } from '../../src/multipart';
-import { MultipartError } from '../../src/interfaces';
-import { MultipartErrorReason } from '../../src/enums';
 import type { MultipartPart } from '../../src/interfaces';
+
+import { MultipartErrorReason } from '../../src/enums';
+import { MultipartError } from '../../src/interfaces';
+import { Multipart } from '../../src/multipart';
 
 // ── Helpers ─────────────────────────────────────────────────────────
 
@@ -64,18 +65,15 @@ describe('Multipart — security limits', () => {
     const mp = Multipart.create({ maxFiles: 2 });
     const body = buildBody(boundary, [
       {
-        headers:
-          'Content-Disposition: form-data; name="f1"; filename="a.txt"\r\nContent-Type: text/plain',
+        headers: 'Content-Disposition: form-data; name="f1"; filename="a.txt"\r\nContent-Type: text/plain',
         body: 'a',
       },
       {
-        headers:
-          'Content-Disposition: form-data; name="f2"; filename="b.txt"\r\nContent-Type: text/plain',
+        headers: 'Content-Disposition: form-data; name="f2"; filename="b.txt"\r\nContent-Type: text/plain',
         body: 'b',
       },
       {
-        headers:
-          'Content-Disposition: form-data; name="f3"; filename="c.txt"\r\nContent-Type: text/plain',
+        headers: 'Content-Disposition: form-data; name="f3"; filename="c.txt"\r\nContent-Type: text/plain',
         body: 'c',
       },
     ]);
@@ -110,8 +108,7 @@ describe('Multipart — security limits', () => {
     const mp = Multipart.create({ maxFileSize: 10 });
     const body = buildBody(boundary, [
       {
-        headers:
-          'Content-Disposition: form-data; name="big"; filename="big.bin"\r\nContent-Type: application/octet-stream',
+        headers: 'Content-Disposition: form-data; name="big"; filename="big.bin"\r\nContent-Type: application/octet-stream',
         body: 'x'.repeat(100),
       },
     ]);
@@ -127,9 +124,7 @@ describe('Multipart — security limits', () => {
 
   test('enforces maxFieldSize limit', async () => {
     const mp = Multipart.create({ maxFieldSize: 5 });
-    const body = buildBody(boundary, [
-      { headers: 'Content-Disposition: form-data; name="long"', body: 'x'.repeat(100) },
-    ]);
+    const body = buildBody(boundary, [{ headers: 'Content-Disposition: form-data; name="long"', body: 'x'.repeat(100) }]);
 
     try {
       await consumeAll(mp.parse(createRequest(boundary, body)));
@@ -142,9 +137,7 @@ describe('Multipart — security limits', () => {
 
   test('enforces maxTotalSize limit', async () => {
     const mp = Multipart.create({ maxTotalSize: 50 });
-    const body = buildBody(boundary, [
-      { headers: 'Content-Disposition: form-data; name="a"', body: 'x'.repeat(100) },
-    ]);
+    const body = buildBody(boundary, [{ headers: 'Content-Disposition: form-data; name="a"', body: 'x'.repeat(100) }]);
 
     try {
       await consumeAll(mp.parse(createRequest(boundary, body)));
@@ -159,8 +152,7 @@ describe('Multipart — security limits', () => {
     const mp = Multipart.create({ maxHeaderSize: 20 });
     const body = buildBody(boundary, [
       {
-        headers:
-          'Content-Disposition: form-data; name="field-with-very-long-header-name-that-exceeds-limit"',
+        headers: 'Content-Disposition: form-data; name="field-with-very-long-header-name-that-exceeds-limit"',
         body: 'value',
       },
     ]);
@@ -185,8 +177,7 @@ describe('Multipart — security limits', () => {
       { headers: 'Content-Disposition: form-data; name="name"', body: 'Alice' },
       { headers: 'Content-Disposition: form-data; name="age"', body: '25' },
       {
-        headers:
-          'Content-Disposition: form-data; name="file"; filename="a.txt"\r\nContent-Type: text/plain',
+        headers: 'Content-Disposition: form-data; name="file"; filename="a.txt"\r\nContent-Type: text/plain',
         body: 'content',
       },
     ]);
@@ -202,8 +193,7 @@ describe('Multipart — security limits', () => {
     const body = buildBody(boundary, [
       { headers: 'Content-Disposition: form-data; name="field"', body: 'value' },
       {
-        headers:
-          'Content-Disposition: form-data; name="file"; filename="x.txt"\r\nContent-Type: text/plain',
+        headers: 'Content-Disposition: form-data; name="file"; filename="x.txt"\r\nContent-Type: text/plain',
         body: 'data',
       },
     ]);
@@ -218,9 +208,7 @@ describe('Multipart — security limits', () => {
   test('maxTotalSize null disables the limit', async () => {
     const mp = Multipart.create({ maxTotalSize: null, maxFieldSize: 200_000 });
     const largeValue = 'A'.repeat(100_000);
-    const body = buildBody(boundary, [
-      { headers: 'Content-Disposition: form-data; name="big"', body: largeValue },
-    ]);
+    const body = buildBody(boundary, [{ headers: 'Content-Disposition: form-data; name="big"', body: largeValue }]);
 
     const { fields } = await mp.parseAll(createRequest(boundary, body));
 
@@ -232,8 +220,7 @@ describe('Multipart — security limits', () => {
     const fileContent = 'x'.repeat(200);
     const body = buildBody(boundary, [
       {
-        headers:
-          'Content-Disposition: form-data; name="file"; filename="big.bin"\r\nContent-Type: application/octet-stream',
+        headers: 'Content-Disposition: form-data; name="file"; filename="big.bin"\r\nContent-Type: application/octet-stream',
         body: fileContent,
       },
     ]);
@@ -252,9 +239,7 @@ describe('Multipart — security limits', () => {
   test('chunked field limit: oversized field caught during streaming', async () => {
     const mp = Multipart.create({ maxFieldSize: 30 });
     const fieldContent = 'y'.repeat(200);
-    const body = buildBody(boundary, [
-      { headers: 'Content-Disposition: form-data; name="bigfield"', body: fieldContent },
-    ]);
+    const body = buildBody(boundary, [{ headers: 'Content-Disposition: form-data; name="bigfield"', body: fieldContent }]);
 
     const request = toChunkedRequest(boundary, body, 8);
 
@@ -271,8 +256,7 @@ describe('Multipart — security limits', () => {
     const mp = Multipart.create({ maxHeaderSize: 30 });
     const body = buildBody(boundary, [
       {
-        headers:
-          'Content-Disposition: form-data; name="a-very-long-name-that-will-exceed-the-small-header-limit"',
+        headers: 'Content-Disposition: form-data; name="a-very-long-name-that-will-exceed-the-small-header-limit"',
         body: 'val',
       },
     ]);
@@ -293,8 +277,7 @@ describe('Multipart — security limits', () => {
     const fileContent = 'z'.repeat(50);
     const body = buildBody(boundary, [
       {
-        headers:
-          'Content-Disposition: form-data; name="doc"; filename="big.txt"\r\nContent-Type: text/plain',
+        headers: 'Content-Disposition: form-data; name="doc"; filename="big.txt"\r\nContent-Type: text/plain',
         body: fileContent,
       },
     ]);
@@ -318,8 +301,7 @@ describe('Multipart — security limits', () => {
     const exactContent = 'x'.repeat(limit);
     const body = buildBody(boundary, [
       {
-        headers:
-          'Content-Disposition: form-data; name="file"; filename="exact.bin"\r\nContent-Type: application/octet-stream',
+        headers: 'Content-Disposition: form-data; name="file"; filename="exact.bin"\r\nContent-Type: application/octet-stream',
         body: exactContent,
       },
     ]);
@@ -335,8 +317,7 @@ describe('Multipart — security limits', () => {
     const overContent = 'x'.repeat(limit + 1);
     const body = buildBody(boundary, [
       {
-        headers:
-          'Content-Disposition: form-data; name="file"; filename="over.bin"\r\nContent-Type: application/octet-stream',
+        headers: 'Content-Disposition: form-data; name="file"; filename="over.bin"\r\nContent-Type: application/octet-stream',
         body: overContent,
       },
     ]);
@@ -355,18 +336,15 @@ describe('Multipart — security limits', () => {
 
     const okBody = buildBody(boundary, [
       {
-        headers:
-          'Content-Disposition: form-data; name="f1"; filename="1.txt"\r\nContent-Type: text/plain',
+        headers: 'Content-Disposition: form-data; name="f1"; filename="1.txt"\r\nContent-Type: text/plain',
         body: 'a',
       },
       {
-        headers:
-          'Content-Disposition: form-data; name="f2"; filename="2.txt"\r\nContent-Type: text/plain',
+        headers: 'Content-Disposition: form-data; name="f2"; filename="2.txt"\r\nContent-Type: text/plain',
         body: 'b',
       },
       {
-        headers:
-          'Content-Disposition: form-data; name="f3"; filename="3.txt"\r\nContent-Type: text/plain',
+        headers: 'Content-Disposition: form-data; name="f3"; filename="3.txt"\r\nContent-Type: text/plain',
         body: 'c',
       },
     ]);
@@ -377,23 +355,19 @@ describe('Multipart — security limits', () => {
 
     const overBody = buildBody(boundary, [
       {
-        headers:
-          'Content-Disposition: form-data; name="f1"; filename="1.txt"\r\nContent-Type: text/plain',
+        headers: 'Content-Disposition: form-data; name="f1"; filename="1.txt"\r\nContent-Type: text/plain',
         body: 'a',
       },
       {
-        headers:
-          'Content-Disposition: form-data; name="f2"; filename="2.txt"\r\nContent-Type: text/plain',
+        headers: 'Content-Disposition: form-data; name="f2"; filename="2.txt"\r\nContent-Type: text/plain',
         body: 'b',
       },
       {
-        headers:
-          'Content-Disposition: form-data; name="f3"; filename="3.txt"\r\nContent-Type: text/plain',
+        headers: 'Content-Disposition: form-data; name="f3"; filename="3.txt"\r\nContent-Type: text/plain',
         body: 'c',
       },
       {
-        headers:
-          'Content-Disposition: form-data; name="f4"; filename="4.txt"\r\nContent-Type: text/plain',
+        headers: 'Content-Disposition: form-data; name="f4"; filename="4.txt"\r\nContent-Type: text/plain',
         body: 'd',
       },
     ]);
@@ -410,9 +384,7 @@ describe('Multipart — security limits', () => {
   test('maxFieldSize exact boundary: field exactly at limit succeeds', async () => {
     const limit = 20;
     const mp = Multipart.create({ maxFieldSize: limit });
-    const body = buildBody(boundary, [
-      { headers: 'Content-Disposition: form-data; name="field"', body: 'y'.repeat(limit) },
-    ]);
+    const body = buildBody(boundary, [{ headers: 'Content-Disposition: form-data; name="field"', body: 'y'.repeat(limit) }]);
 
     const { fields } = await mp.parseAll(createRequest(boundary, body));
 
@@ -422,9 +394,7 @@ describe('Multipart — security limits', () => {
   test('maxFieldSize exact boundary: field 1 byte over limit fails', async () => {
     const limit = 20;
     const mp = Multipart.create({ maxFieldSize: limit });
-    const body = buildBody(boundary, [
-      { headers: 'Content-Disposition: form-data; name="field"', body: 'y'.repeat(limit + 1) },
-    ]);
+    const body = buildBody(boundary, [{ headers: 'Content-Disposition: form-data; name="field"', body: 'y'.repeat(limit + 1) }]);
 
     try {
       await consumeAll(mp.parse(createRequest(boundary, body)));
@@ -468,18 +438,15 @@ describe('Multipart — security limits', () => {
     const mp = Multipart.create({ maxParts: 2 });
     const body = buildBody(boundary, [
       {
-        headers:
-          'Content-Disposition: form-data; name="f1"; filename="a.txt"\r\nContent-Type: text/plain',
+        headers: 'Content-Disposition: form-data; name="f1"; filename="a.txt"\r\nContent-Type: text/plain',
         body: 'a',
       },
       {
-        headers:
-          'Content-Disposition: form-data; name="f2"; filename="b.txt"\r\nContent-Type: text/plain',
+        headers: 'Content-Disposition: form-data; name="f2"; filename="b.txt"\r\nContent-Type: text/plain',
         body: 'b',
       },
       {
-        headers:
-          'Content-Disposition: form-data; name="f3"; filename="c.txt"\r\nContent-Type: text/plain',
+        headers: 'Content-Disposition: form-data; name="f3"; filename="c.txt"\r\nContent-Type: text/plain',
         body: 'c',
       },
     ]);
@@ -498,8 +465,7 @@ describe('Multipart — security limits', () => {
     const body = buildBody(boundary, [
       { headers: 'Content-Disposition: form-data; name="field1"', body: 'val' },
       {
-        headers:
-          'Content-Disposition: form-data; name="f1"; filename="a.txt"\r\nContent-Type: text/plain',
+        headers: 'Content-Disposition: form-data; name="f1"; filename="a.txt"\r\nContent-Type: text/plain',
         body: 'a',
       },
       { headers: 'Content-Disposition: form-data; name="field2"', body: 'val2' },
@@ -518,13 +484,11 @@ describe('Multipart — security limits', () => {
     const mp = Multipart.create({ maxParts: 1 });
     const body = buildBody(boundary, [
       {
-        headers:
-          'Content-Disposition: form-data; name="f1"; filename="a.txt"\r\nContent-Type: text/plain',
+        headers: 'Content-Disposition: form-data; name="f1"; filename="a.txt"\r\nContent-Type: text/plain',
         body: 'a',
       },
       {
-        headers:
-          'Content-Disposition: form-data; name="f2"; filename="b.txt"\r\nContent-Type: text/plain',
+        headers: 'Content-Disposition: form-data; name="f2"; filename="b.txt"\r\nContent-Type: text/plain',
         body: 'b',
       },
     ]);
@@ -569,8 +533,7 @@ describe('Multipart — security limits', () => {
     const mp = Multipart.create({ maxTotalSize: 50, maxFileSize: 100 });
     const body = buildBody(boundary, [
       {
-        headers:
-          'Content-Disposition: form-data; name="file"; filename="big.bin"\r\nContent-Type: application/octet-stream',
+        headers: 'Content-Disposition: form-data; name="file"; filename="big.bin"\r\nContent-Type: application/octet-stream',
         body: 'x'.repeat(200),
       },
     ]);

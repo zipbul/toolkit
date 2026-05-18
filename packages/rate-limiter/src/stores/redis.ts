@@ -48,8 +48,8 @@ return 1
 `;
 
 function parseEntry(raw: unknown): StoreEntry | null {
-  if (raw === null || raw === undefined) return null;
-  if (!Array.isArray(raw) || raw.length < 3) return null;
+  if (raw === null || raw === undefined) {return null;}
+  if (!Array.isArray(raw) || raw.length < 3) {return null;}
   return {
     value: Number(raw[0]),
     prev: Number(raw[1]),
@@ -96,12 +96,22 @@ export class RedisStore implements RateLimiterStore {
       const next = updater(current);
       const isNew = current === null ? '1' : '0';
 
-      const args = current === null
-        ? ['0', '0', '0', String(next.value), String(next.prev), String(next.windowStart), String(this.ttl), isNew]
-        : [String(current.value), String(current.prev), String(current.windowStart), String(next.value), String(next.prev), String(next.windowStart), String(this.ttl), isNew];
+      const args =
+        current === null
+          ? ['0', '0', '0', String(next.value), String(next.prev), String(next.windowStart), String(this.ttl), isNew]
+          : [
+              String(current.value),
+              String(current.prev),
+              String(current.windowStart),
+              String(next.value),
+              String(next.prev),
+              String(next.windowStart),
+              String(this.ttl),
+              isNew,
+            ];
 
       const result = await this.client.eval(LUA_CAS, [fullKey], args);
-      if (Number(result) === 1) return next;
+      if (Number(result) === 1) {return next;}
     }
 
     throw new Error(`RedisStore CAS failed after ${this.maxRetries} retries (key: ${key})`);

@@ -11,9 +11,9 @@
  */
 import { describe, it, expect } from 'bun:test';
 
-import { Router } from '../../src/router';
-import { RouterError } from '../../src/error';
 import { getRouterInternals } from '../../internal';
+import { RouterError } from '../../src/error';
+import { Router } from '../../src/router';
 
 // ── API contract guarantees ─────────────────────────────────────────────────
 
@@ -175,7 +175,6 @@ describe('optional params', () => {
     expect('id' in m.params).toBe(true);
     expect(m.params.id).toBeUndefined();
   });
-
 });
 
 // ── Method specifications ─────────────────────────────────────────────────
@@ -268,9 +267,11 @@ describe('sealed state', () => {
     // missing fields and `Object.isFrozen(undefined)` is true, so the
     // asserts passed by accident. Rewritten against the real shape.
     const internal = getRouterInternals(r);
-    const snapshot = (internal.registration as unknown as {
-      snapshot: { segmentTrees: unknown[]; handlers: unknown[] };
-    }).snapshot;
+    const snapshot = (
+      internal.registration as unknown as {
+        snapshot: { segmentTrees: unknown[]; handlers: unknown[] };
+      }
+    ).snapshot;
     const matchLayer = internal.matchLayer as unknown as {
       activeMethodCodes: ReadonlyArray<readonly [string, number]>;
       trees: unknown[];
@@ -457,7 +458,6 @@ describe('edge case URLs', () => {
     expect(m).not.toBeNull();
     expect(m!.params).toEqual({ p1: '1', p2: '2', p3: '3', p4: '4', p5: '5', p6: '6' });
   });
-
 });
 
 // ── Cache behavior under stress ──────────────────────────────────────────
@@ -492,7 +492,6 @@ describe('cache stress', () => {
     expect(a.value).toBe(b.value);
     expect(a.params).toEqual(b.params);
   });
-
 });
 
 // ── Method registry boundary ─────────────────────────────────────────────

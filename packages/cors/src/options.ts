@@ -1,11 +1,13 @@
-import { err } from '@zipbul/result';
 import type { Result } from '@zipbul/result';
+
+import { err } from '@zipbul/result';
 import safe from 'safe-regex2';
+
+import type { CorsErrorData, CorsOptions } from './interfaces';
+import type { ResolvedCorsOptions } from './types';
 
 import { CORS_DEFAULT_METHODS, CORS_DEFAULT_OPTIONS_SUCCESS_STATUS } from './constants';
 import { CorsErrorReason } from './enums';
-import type { CorsErrorData, CorsOptions } from './interfaces';
-import type { ResolvedCorsOptions } from './types';
 
 /**
  * Takes partial {@link CorsOptions} and fills in every missing field with a
@@ -20,9 +22,7 @@ import type { ResolvedCorsOptions } from './types';
 export function resolveCorsOptions(options?: CorsOptions): ResolvedCorsOptions {
   return {
     origin: options?.origin ?? '*',
-    methods: options?.methods?.includes('*')
-      ? ['*']
-      : (options?.methods ?? CORS_DEFAULT_METHODS).map(m => m.toUpperCase()),
+    methods: options?.methods?.includes('*') ? ['*'] : (options?.methods ?? CORS_DEFAULT_METHODS).map(m => m.toUpperCase()),
     allowedHeaders: options?.allowedHeaders ?? null,
     exposedHeaders: options?.exposedHeaders ?? null,
     credentials: options?.credentials ?? false,
@@ -135,7 +135,11 @@ export function validateCorsOptions(resolved: ResolvedCorsOptions): Result<void,
     });
   }
 
-  if (!Number.isInteger(resolved.optionsSuccessStatus) || resolved.optionsSuccessStatus < 200 || resolved.optionsSuccessStatus > 299) {
+  if (
+    !Number.isInteger(resolved.optionsSuccessStatus) ||
+    resolved.optionsSuccessStatus < 200 ||
+    resolved.optionsSuccessStatus > 299
+  ) {
     return err<CorsErrorData>({
       reason: CorsErrorReason.InvalidStatusCode,
       message: 'optionsSuccessStatus must be a 2xx integer status code (200–299)',

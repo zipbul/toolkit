@@ -2,17 +2,30 @@
   "name": "@zipbul/toolkit",
   "private": true,
   "license": "MIT",
+  "workspaces": [
+    "packages/*"
+  ],
   "type": "module",
-  "workspaces": ["packages/*"],
   "scripts": {
     "changeset": "changeset",
-    "version-packages": "changeset version",
-    "release": "changeset publish"
+    "dpdm": "dpdm --no-warning --no-tree --exit-code circular:1 'packages/*/src/**/*.ts' 'packages/*/index.ts'",
+    "format": "oxfmt",
+    "format:check": "oxfmt --check",
+    "knip": "knip",
+    "lint": "oxlint --type-aware",
+    "release": "changeset publish",
+    "typecheck": "bunx tsc --noEmit",
+    "version-packages": "changeset version"
   },
   "devDependencies": {
     "@changesets/cli": "^2.29.8",
     "@types/bun": "latest",
-    "fast-check": "^4.5.3"
+    "dpdm": "^4.2.0",
+    "fast-check": "^4.5.3",
+    "knip": "^5.63.1",
+    "oxfmt": "^0.26.0",
+    "oxlint": "^1.41.0",
+    "oxlint-tsgolint": "^0.11.1"
   },
   "peerDependencies": {
     "typescript": "^5"

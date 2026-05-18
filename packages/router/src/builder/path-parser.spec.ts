@@ -1,9 +1,10 @@
-import { describe, it, expect } from 'bun:test';
 import { isErr } from '@zipbul/result';
+import { describe, it, expect } from 'bun:test';
 
-import { PathParser } from './path-parser';
-import type { PathParserConfig } from './path-parser';
 import type { PathPart } from '../tree';
+import type { PathParserConfig } from './path-parser';
+
+import { extractNameAndPattern, PathParser, rejectColonWildcardSugar, stripOptionalDecorator } from './path-parser';
 
 function defaultConfig(overrides: Partial<PathParserConfig> = {}): PathParserConfig {
   return {
@@ -23,13 +24,13 @@ describe('PathParser', () => {
     it('should reject empty path', () => {
       const result = parse('');
       expect(isErr(result)).toBe(true);
-      if (isErr(result)) expect(result.data.kind).toBe('path-missing-leading-slash');
+      if (isErr(result)) {expect(result.data.kind).toBe('path-missing-leading-slash');}
     });
 
     it('should reject path not starting with /', () => {
       const result = parse('users');
       expect(isErr(result)).toBe(true);
-      if (isErr(result)) expect(result.data.kind).toBe('path-missing-leading-slash');
+      if (isErr(result)) {expect(result.data.kind).toBe('path-missing-leading-slash');}
     });
 
     it('should accept root path /', () => {
@@ -67,7 +68,7 @@ describe('PathParser', () => {
       for (const path of ['/api//users', '//', '/a///b']) {
         const result = parse(path);
         expect(isErr(result)).toBe(true);
-        if (isErr(result)) expect(result.data.kind).toBe('path-empty-segment');
+        if (isErr(result)) {expect(result.data.kind).toBe('path-empty-segment');}
       }
     });
   });
@@ -110,7 +111,7 @@ describe('PathParser', () => {
     it('should reject anchored regex pattern sources at parse time', () => {
       const result = parse('/users/:id(^\\d+$)');
       expect(isErr(result)).toBe(true);
-      if (isErr(result)) expect(result.data.kind).toBe('route-parse');
+      if (isErr(result)) {expect(result.data.kind).toBe('route-parse');}
     });
 
     it('should parse optional param', () => {
@@ -125,19 +126,19 @@ describe('PathParser', () => {
     it('should reject duplicate param names', () => {
       const result = parse('/users/:id/posts/:id');
       expect(isErr(result)).toBe(true);
-      if (isErr(result)) expect(result.data.kind).toBe('param-duplicate');
+      if (isErr(result)) {expect(result.data.kind).toBe('param-duplicate');}
     });
 
     it('should reject empty param name', () => {
       const result = parse('/users/:');
       expect(isErr(result)).toBe(true);
-      if (isErr(result)) expect(result.data.kind).toBe('route-parse');
+      if (isErr(result)) {expect(result.data.kind).toBe('route-parse');}
     });
 
     it('should reject unclosed regex pattern', () => {
       const result = parse('/users/:id(\\d+');
       expect(isErr(result)).toBe(true);
-      if (isErr(result)) expect(result.data.kind).toBe('route-parse');
+      if (isErr(result)) {expect(result.data.kind).toBe('route-parse');}
     });
 
     it('should reject whitespace-only regex `(   )` as parse error', () => {
@@ -146,7 +147,7 @@ describe('PathParser', () => {
       // intent is explicit.
       const result = parse('/users/:id(   )');
       expect(isErr(result)).toBe(true);
-      if (isErr(result)) expect(result.data.kind).toBe('route-parse');
+      if (isErr(result)) {expect(result.data.kind).toBe('route-parse');}
     });
   });
 
@@ -157,7 +158,9 @@ describe('PathParser', () => {
       if (!isErr(result)) {
         expect(result.isDynamic).toBe(true);
         expect(result.parts[result.parts.length - 1]).toEqual({
-          type: 'wildcard', name: 'path', origin: 'star',
+          type: 'wildcard',
+          name: 'path',
+          origin: 'star',
         });
       }
     });
@@ -167,7 +170,9 @@ describe('PathParser', () => {
       expect(isErr(result)).toBe(false);
       if (!isErr(result)) {
         expect(result.parts[result.parts.length - 1]).toEqual({
-          type: 'wildcard', name: 'path', origin: 'multi',
+          type: 'wildcard',
+          name: 'path',
+          origin: 'multi',
         });
       }
     });
@@ -177,7 +182,9 @@ describe('PathParser', () => {
       expect(isErr(result)).toBe(false);
       if (!isErr(result)) {
         expect(result.parts[result.parts.length - 1]).toEqual({
-          type: 'wildcard', name: '*', origin: 'star',
+          type: 'wildcard',
+          name: '*',
+          origin: 'star',
         });
       }
     });
@@ -185,32 +192,32 @@ describe('PathParser', () => {
     it('should reject wildcard not at last segment', () => {
       const result = parse('/files/*path/extra');
       expect(isErr(result)).toBe(true);
-      if (isErr(result)) expect(result.data.kind).toBe('route-parse');
+      if (isErr(result)) {expect(result.data.kind).toBe('route-parse');}
     });
 
     it('should reject :name+ colon-form wildcard sugar (use *name+ instead)', () => {
       const result = parse('/files/:path+');
       expect(isErr(result)).toBe(true);
-      if (isErr(result)) expect(result.data.kind).toBe('route-parse');
+      if (isErr(result)) {expect(result.data.kind).toBe('route-parse');}
     });
 
     it('should reject :name* colon-form wildcard sugar (use *name instead)', () => {
       const result = parse('/files/:path*');
       expect(isErr(result)).toBe(true);
-      if (isErr(result)) expect(result.data.kind).toBe('route-parse');
+      if (isErr(result)) {expect(result.data.kind).toBe('route-parse');}
     });
 
     it('should reject :name+ not at last segment', () => {
       const result = parse('/files/:path+/extra');
       expect(isErr(result)).toBe(true);
-      if (isErr(result)) expect(result.data.kind).toBe('route-parse');
+      if (isErr(result)) {expect(result.data.kind).toBe('route-parse');}
     });
 
     it('should reject mixed optional and wildcard decorators', () => {
       for (const path of ['/:a+?', '/:a*?', '/:a?+', '/:a?*']) {
         const result = parse(path);
         expect(isErr(result)).toBe(true);
-        if (isErr(result)) expect(['route-parse', 'path-query']).toContain(result.data.kind);
+        if (isErr(result)) {expect(['route-parse', 'path-query']).toContain(result.data.kind);}
       }
     });
   });
@@ -240,7 +247,6 @@ describe('PathParser', () => {
         expect(result.normalized).toBe('/users');
       }
     });
-
   });
 
   describe('regex pattern body — router accepts any syntactically valid regex', () => {
@@ -264,14 +270,7 @@ describe('PathParser', () => {
       expect(isErr(result)).toBe(false);
     });
   });
-
 });
-
-import {
-  stripOptionalDecorator,
-  rejectColonWildcardSugar,
-  extractNameAndPattern,
-} from './path-parser';
 
 describe('stripOptionalDecorator', () => {
   it('returns isOptional=false when there is no trailing `?`', () => {
@@ -285,7 +284,7 @@ describe('stripOptionalDecorator', () => {
   it('rejects `:name+?` combinations', () => {
     const result = stripOptionalDecorator(':id+?', ':id+?', '/users/:id+?');
     expect('kind' in result).toBe(true);
-    if ('kind' in result) expect(result.kind).toBe('route-parse');
+    if ('kind' in result) {expect(result.kind).toBe('route-parse');}
   });
 
   it('rejects `:name*?` combinations', () => {

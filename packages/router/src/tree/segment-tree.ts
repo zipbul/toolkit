@@ -1,89 +1,32 @@
 import type { Result } from '@zipbul/result';
-import type { RouterErrorData } from '../types';
-import type { PatternTesterFn } from './pattern-tester';
-import type { PathPart } from './path-part';
 
 import { err } from '@zipbul/result';
+
+import type { RouterErrorData } from '../types';
+import type { PathPart } from './path-part';
+import type { ParamSegment, SegmentNode } from './node-types';
+import type { PatternTesterFn } from './pattern-tester';
+
 import { buildPatternTester } from './pattern-tester';
 import { UndoKind, applyUndo, type SegmentTreeUndoLog } from './undo';
 
-
-/**
- * Segment-based route tree. Each node corresponds to one URL segment
- * (no intra-segment splits). Built at Router.build() directly from
- * registered route parts.
- */
-export interface SegmentNode {
-  /** Terminal handler index when the URL ends here exactly. */
-  store: number | null;
-  /** Static children keyed by segment literal. NullProtoObj for property-access
-   *  speed. `null` when the node has no static children OR when the only
-   *  static child is held in the inline `singleChildKey` slot below. */
-  staticChildren: Record<string, SegmentNode> | null;
-  /**
-   * Inline single-static-child cache. When a node has exactly one static
-   * child, the key/next pair lives here rather than in a 1-entry
-   * `staticChildren` Record. Saves one `Object.create(null)` per such
-   * node and lets the walker resolve via a single string compare instead
-   * of a hash lookup. On the second static-child insertion the inline
-   * entry is promoted into `staticChildren` and these slots are cleared.
-   */
-  singleChildKey: string | null;
-  singleChildNext: SegmentNode | null;
-  /** Head of the param-alternative chain at this position. */
-  paramChild: ParamSegment | null;
-  /** Wildcard at this position. */
-  wildcardStore: number | null;
-  wildcardName: string | null;
-  wildcardOrigin: 'star' | 'multi' | null;
-  /**
-   * Compacted single-static-chain prefix produced by post-seal compaction.
-   * When set, the matcher must consume each segment in order against the
-   * input path before evaluating this node's children. Saves one
-   * SegmentNode + one staticChildren map per chain link removed. `null`
-   * for un-compacted nodes.
-   */
-  staticPrefix: string[] | null;
-}
-
 /** True when the node holds at least one static child (inline or Record). */
-export function hasAnyStaticChild(node: SegmentNode): boolean {
+function hasAnyStaticChild(node: SegmentNode): boolean {
   return node.singleChildKey !== null || node.staticChildren !== null;
 }
 
 /** Iterate every static child of `node` regardless of whether the entry
  *  is in the inline cache or the promoted `staticChildren` Record. */
-export function forEachStaticChild(
-  node: SegmentNode,
-  fn: (key: string, child: SegmentNode) => void,
-): void {
+function forEachStaticChild(node: SegmentNode, fn: (key: string, child: SegmentNode) => void): void {
   if (node.singleChildKey !== null && node.singleChildNext !== null) {
     fn(node.singleChildKey, node.singleChildNext);
   }
   if (node.staticChildren !== null) {
-    for (const k in node.staticChildren) fn(k, node.staticChildren[k]!);
+    for (const k in node.staticChildren) {fn(k, node.staticChildren[k]!);}
   }
 }
 
-export interface ParamSegment {
-  name: string;
-  tester: PatternTesterFn | null;
-  /** Source pattern string (or null for unconstrained). Used to detect
-   *  same-name conflicts at registration time without comparing compiled
-   *  tester object identity. */
-  patternSource: string | null;
-  /** First routeID that introduced this param. Two siblings sharing the
-   *  same ownerRouteID come from one route's optional-param expansion (e.g.
-   *  `/users/:a?/:b?` deliberately creates `:a` and `:b` siblings under the
-   *  same route) and bypass the unreachable-sibling check below. */
-  ownerRouteID: number;
-  /** Subtree rooted at this param. */
-  next: SegmentNode;
-  /** Linked-list pointer to the next param alternative at the same position. */
-  nextSibling: ParamSegment | null;
-}
-
-export function createSegmentNode(): SegmentNode {
+function createSegmentNode(): SegmentNode {
   return {
     store: null,
     staticChildren: null,
@@ -97,10 +40,8 @@ export function createSegmentNode(): SegmentNode {
   };
 }
 
-
-
 function rollbackUndo(undo: SegmentTreeUndoLog, start: number): void {
-  for (let i = undo.length - 1; i >= start; i--) applyUndo(undo[i]!);
+  for (let i = undo.length - 1; i >= start; i--) {applyUndo(undo[i]!);}
   undo.length = start;
 }
 
@@ -115,7 +56,7 @@ function rollbackUndo(undo: SegmentTreeUndoLog, start: number): void {
  *    literal child on a non-wildcard node) takes a single hash lookup and
  *    no allocation.
  */
-export function insertIntoSegmentTree(
+function insertIntoSegmentTree(
   root: SegmentNode,
   parts: PathPart[],
   handlerIndex: number,
@@ -166,7 +107,7 @@ export function insertIntoSegmentTree(
  * for missing children. Returns the descended node on success, or a
  * `RouterErrorData` carrier (no Result wrapper — caller runs rollback).
  */
-export function insertStaticSegments(
+function insertStaticSegments(
   node: SegmentNode,
   segs: ReadonlyArray<string>,
   undoLog: SegmentTreeUndoLog,
@@ -182,7 +123,10 @@ export function insertStaticSegments(
     const sc = node.staticChildren;
     if (sc !== null && node.wildcardStore === null) {
       const child = sc[seg];
-      if (child !== undefined) { node = child; continue; }
+      if (child !== undefined) {
+        node = child;
+        continue;
+      }
     }
 
     if (node.wildcardStore !== null) {
@@ -239,7 +183,7 @@ export function insertStaticSegments(
  * Returns `{ node }` on success or a `RouterErrorData` on conflict
  * (caller runs rollback).
  */
-export function insertParamPart(
+function insertParamPart(
   node: SegmentNode,
   part: { type: 'param'; name: string; pattern: string | null; optional: boolean },
   testerCache: Map<string, PatternTesterFn>,
@@ -257,7 +201,7 @@ export function insertParamPart(
   }
 
   const testerOrErr = resolveOrCompileTester(part, testerCache, undoLog);
-  if (isResolvedTesterError(testerOrErr)) return testerOrErr;
+  if (isResolvedTesterError(testerOrErr)) {return testerOrErr;}
   const tester = testerOrErr;
 
   if (node.paramChild === null) {
@@ -308,7 +252,7 @@ export function insertParamPart(
     p = p.nextSibling;
   }
 
-  if (matched !== null) return { node: matched.next };
+  if (matched !== null) {return { node: matched.next };}
 
   const fresh: ParamSegment = {
     name: part.name,
@@ -332,20 +276,18 @@ export function insertParamPart(
 /** Type guard so callers can narrow `resolveOrCompileTester` results
  *  without an `as` cast. RouterErrorData always carries a `kind` string;
  *  PatternTesterFn (function value) does not. */
-export function isResolvedTesterError(
-  result: PatternTesterFn | null | RouterErrorData,
-): result is RouterErrorData {
+function isResolvedTesterError(result: PatternTesterFn | null | RouterErrorData): result is RouterErrorData {
   return result !== null && typeof result === 'object' && 'kind' in result;
 }
 
-export function resolveOrCompileTester(
+function resolveOrCompileTester(
   part: { name: string; pattern: string | null },
   testerCache: Map<string, PatternTesterFn>,
   undoLog: SegmentTreeUndoLog,
 ): PatternTesterFn | null | RouterErrorData {
-  if (part.pattern === null) return null;
+  if (part.pattern === null) {return null;}
   const cached = testerCache.get(part.pattern);
-  if (cached !== undefined) return cached;
+  if (cached !== undefined) {return cached;}
   try {
     const compiled = new RegExp(`^(?:${part.pattern})$`);
     const tester = buildPatternTester(part.pattern, compiled);
@@ -366,7 +308,7 @@ export function resolveOrCompileTester(
  * Attach a wildcard terminal at `node`. Returns `undefined` on success
  * or a `RouterErrorData` on conflict.
  */
-export function attachWildcardTerminal(
+function attachWildcardTerminal(
   node: SegmentNode,
   part: { type: 'wildcard'; name: string; origin: 'star' | 'multi' },
   handlerIndex: number,
@@ -410,7 +352,7 @@ export function attachWildcardTerminal(
  * Attach a non-wildcard terminal store at `node`. Returns `undefined`
  * on success or a `RouterErrorData` on duplicate.
  */
-export function attachStoreTerminal(
+function attachStoreTerminal(
   node: SegmentNode,
   handlerIndex: number,
   undoLog: SegmentTreeUndoLog,
@@ -426,3 +368,17 @@ export function attachStoreTerminal(
   undoLog.push({ k: UndoKind.StoreSet, n: node });
   return undefined;
 }
+
+export {
+  attachStoreTerminal,
+  attachWildcardTerminal,
+  createSegmentNode,
+  forEachStaticChild,
+  hasAnyStaticChild,
+  insertIntoSegmentTree,
+  insertParamPart,
+  insertStaticSegments,
+  isResolvedTesterError,
+  resolveOrCompileTester,
+};
+export type { ParamSegment, SegmentNode } from './node-types';

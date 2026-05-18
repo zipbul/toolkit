@@ -1,5 +1,6 @@
-import { afterAll, describe, expect, test } from 'bun:test';
 import type { Server } from 'bun';
+
+import { afterAll, describe, expect, test } from 'bun:test';
 
 import { MultipartErrorReason } from '../../src/enums';
 import { MultipartError } from '../../src/interfaces';
@@ -24,10 +25,7 @@ function startServer(): Server {
           result[key] = values.length === 1 ? values[0] : values;
         }
 
-        const fileInfo: Record<
-          string,
-          { filename: string | undefined; size: number; contentType: string }
-        > = {};
+        const fileInfo: Record<string, { filename: string | undefined; size: number; contentType: string }> = {};
 
         for (const [key, parts] of files) {
           const last = parts[parts.length - 1]!;
@@ -260,8 +258,8 @@ describe('multipart e2e server', () => {
       expect(res.status).toBe(200);
     }
 
-    const bodies = await Promise.all(responses.map((r) => r.json()));
-    const indices = bodies.map((b) => b.index).sort();
+    const bodies = await Promise.all(responses.map(r => r.json()));
+    const indices = bodies.map(b => b.index).sort();
 
     expect(indices).toEqual(['0', '1', '2', '3', '4']);
 

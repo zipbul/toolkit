@@ -1,6 +1,7 @@
-import { RateLimitAction } from '../enums';
 import type { RateLimitRule, RateLimiterStore, StoreEntry } from '../interfaces';
 import type { RateLimitResult } from '../types';
+
+import { RateLimitAction } from '../enums';
 
 /**
  * Sliding Window Counter algorithm.
@@ -24,10 +25,10 @@ export function slidingWindow(
 
   let result!: RateLimitResult;
 
-  const entry = store.update(key, (current) => {
+  const entry = store.update(key, current => {
     const { count, prev, windowStart } = resolveWindowState(current, now, rule);
 
-    const weight = 1 - ((now - windowStart) / rule.window);
+    const weight = 1 - (now - windowStart) / rule.window;
     const estimated = count + Math.floor(prev * weight);
 
     if (estimated + cost > rule.limit) {
@@ -41,7 +42,7 @@ export function slidingWindow(
         retryAfter,
       };
       // Deny: return existing state unchanged
-      if (current !== null) return current;
+      if (current !== null) {return current;}
       return { value: 0, prev: 0, windowStart: now };
     }
 
@@ -100,7 +101,7 @@ async function peekSlidingWindow(
   const current = await store.get(key);
   const { count, prev, windowStart } = resolveWindowState(current, now, rule);
 
-  const weight = 1 - ((now - windowStart) / rule.window);
+  const weight = 1 - (now - windowStart) / rule.window;
   const estimated = count + Math.floor(prev * weight);
   const resetAt = windowStart + rule.window;
 
@@ -133,8 +134,8 @@ export function refundSlidingWindow(
   store: RateLimiterStore,
 ): void | Promise<void> {
   const result = store.update(key, (current: StoreEntry | null) => {
-    if (current === null) return { value: 0, prev: 0, windowStart: 0 };
+    if (current === null) {return { value: 0, prev: 0, windowStart: 0 };}
     return { value: Math.max(0, current.value - cost), prev: current.prev, windowStart: current.windowStart };
   });
-  if (result instanceof Promise) return result.then(() => {});
+  if (result instanceof Promise) {return result.then(() => {});}
 }

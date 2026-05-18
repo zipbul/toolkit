@@ -18,19 +18,17 @@
  * (with a printed reason) instead of silently emitting a `0 ns/op` line.
  */
 
-import { spawnSync } from 'node:child_process';
-import { fileURLToPath } from 'node:url';
-
-import { run, bench, summary, do_not_optimize } from 'mitata';
-
-import { Router } from '../src/router';
 import FindMyWay from 'find-my-way';
-import { Memoirist } from 'memoirist';
-import { createRouter as createRou3, addRoute, findRoute } from 'rou3';
 import { RegExpRouter } from 'hono/router/reg-exp-router';
 import { TrieRouter } from 'hono/router/trie-router';
 import KoaTreeRouter from 'koa-tree-router';
+import { Memoirist } from 'memoirist';
+import { run, bench, summary, do_not_optimize } from 'mitata';
+import { spawnSync } from 'node:child_process';
+import { fileURLToPath } from 'node:url';
+import { createRouter as createRou3, addRoute, findRoute } from 'rou3';
 
+import { Router } from '../src/router';
 import { printEnv } from './helpers';
 
 const ADAPTER_NAMES = ['zipbul', 'find-my-way', 'memoirist', 'rou3', 'hono-regexp', 'hono-trie', 'koa-tree-router'] as const;
@@ -147,10 +145,10 @@ interface Adapter {
 const adapters: Record<AdapterName, Adapter> = {
   zipbul: {
     name: 'zipbul',
-    rewrite: (p) => p,
-    setup: (rs) => {
+    rewrite: p => p,
+    setup: rs => {
       const r = new Router<number>();
-      for (const [m, p, v] of rs) r.add(m as 'GET', p, v);
+      for (const [m, p, v] of rs) {r.add(m as 'GET', p, v);}
       r.build();
       return r;
     },
@@ -160,10 +158,10 @@ const adapters: Record<AdapterName, Adapter> = {
     name: 'find-my-way',
     // find-my-way accepts a bare trailing `*` as catchall; named `*name`
     // is rejected at register time.
-    rewrite: (p) => p.replace(/\/\*[^/]+$/, '/*'),
-    setup: (rs) => {
+    rewrite: p => p.replace(/\/\*[^/]+$/, '/*'),
+    setup: rs => {
       const r = FindMyWay();
-      for (const [m, p, v] of rs) r.on(m as 'GET', p, () => v);
+      for (const [m, p, v] of rs) {r.on(m as 'GET', p, () => v);}
       return r;
     },
     match: (r, m, p) => (r as ReturnType<typeof FindMyWay>).find(m as 'GET', p),
@@ -171,10 +169,10 @@ const adapters: Record<AdapterName, Adapter> = {
   memoirist: {
     name: 'memoirist',
     // memoirist accepts canonical `*name`.
-    rewrite: (p) => p,
-    setup: (rs) => {
+    rewrite: p => p,
+    setup: rs => {
       const r = new Memoirist<number>();
-      for (const [m, p, v] of rs) r.add(m, p, v);
+      for (const [m, p, v] of rs) {r.add(m, p, v);}
       return r;
     },
     match: (r, m, p) => (r as Memoirist<number>).find(m, p),
@@ -182,10 +180,10 @@ const adapters: Record<AdapterName, Adapter> = {
   rou3: {
     name: 'rou3',
     // rou3 reserves `**:name` as the named catch-all form.
-    rewrite: (p) => p.replace(/\/\*([^/]+)$/, '/**:$1'),
-    setup: (rs) => {
+    rewrite: p => p.replace(/\/\*([^/]+)$/, '/**:$1'),
+    setup: rs => {
       const r = createRou3<number>();
-      for (const [m, p, v] of rs) addRoute(r, m, p, v);
+      for (const [m, p, v] of rs) {addRoute(r, m, p, v);}
       return r;
     },
     match: (r, m, p) => findRoute(r as ReturnType<typeof createRou3<number>>, m, p),
@@ -193,10 +191,10 @@ const adapters: Record<AdapterName, Adapter> = {
   'hono-regexp': {
     name: 'hono-regexp',
     // hono accepts a bare trailing `*` placeholder.
-    rewrite: (p) => p.replace(/\/\*[^/]+$/, '/*'),
-    setup: (rs) => {
+    rewrite: p => p.replace(/\/\*[^/]+$/, '/*'),
+    setup: rs => {
       const r = new RegExpRouter<number>();
-      for (const [m, p, v] of rs) r.add(m, p, v);
+      for (const [m, p, v] of rs) {r.add(m, p, v);}
       return r;
     },
     match: (r, m, p) => {
@@ -206,10 +204,10 @@ const adapters: Record<AdapterName, Adapter> = {
   },
   'hono-trie': {
     name: 'hono-trie',
-    rewrite: (p) => p.replace(/\/\*[^/]+$/, '/*'),
-    setup: (rs) => {
+    rewrite: p => p.replace(/\/\*[^/]+$/, '/*'),
+    setup: rs => {
       const r = new TrieRouter<number>();
-      for (const [m, p, v] of rs) r.add(m, p, v);
+      for (const [m, p, v] of rs) {r.add(m, p, v);}
       return r;
     },
     match: (r, m, p) => {
@@ -220,13 +218,13 @@ const adapters: Record<AdapterName, Adapter> = {
   'koa-tree-router': {
     name: 'koa-tree-router',
     // koa-tree-router uses `*name` as named catchall.
-    rewrite: (p) => p,
-    setup: (rs) => {
+    rewrite: p => p,
+    setup: rs => {
       const r = new KoaTreeRouter() as unknown as {
         on: (m: string, p: string, h: () => unknown) => void;
         find: (m: string, p: string) => { handle: unknown };
       };
-      for (const [m, p, v] of rs) r.on(m, p, () => v);
+      for (const [m, p, v] of rs) {r.on(m, p, () => v);}
       return r;
     },
     match: (r, m, p) => {
@@ -324,7 +322,9 @@ const isWorker = workerAdapter !== undefined && workerScenario !== undefined;
 if (!isWorker) {
   printEnv();
   const total = scenarios.length * ADAPTER_NAMES.length;
-  console.log(`adapters=${ADAPTER_NAMES.length} scenarios=${scenarios.length} pairs=${total} (each pair runs in a fresh process for JIT/IC/RSS isolation)`);
+  console.log(
+    `adapters=${ADAPTER_NAMES.length} scenarios=${scenarios.length} pairs=${total} (each pair runs in a fresh process for JIT/IC/RSS isolation)`,
+  );
   const selfPath = fileURLToPath(import.meta.url);
   let failCount = 0;
   for (const scenario of scenarios) {
@@ -348,9 +348,9 @@ if (adapter === undefined) {
   process.exit(1);
 }
 
-const scenario = scenarios.find((s) => s.label === workerScenario);
+const scenario = scenarios.find(s => s.label === workerScenario);
 if (scenario === undefined) {
-  console.error(`Unknown scenario '${workerScenario}'. Valid: ${scenarios.map((s) => s.label).join(', ')}`);
+  console.error(`Unknown scenario '${workerScenario}'. Valid: ${scenarios.map(s => s.label).join(', ')}`);
   process.exit(1);
 }
 
@@ -363,7 +363,9 @@ let router: unknown;
 try {
   router = adapter.setup(rewritten);
 } catch (e) {
-  console.log(`sanity=setup-failed adapter=${adapter.name} scenario=${scenario.label} error=${JSON.stringify(e instanceof Error ? e.message : String(e))}`);
+  console.log(
+    `sanity=setup-failed adapter=${adapter.name} scenario=${scenario.label} error=${JSON.stringify(e instanceof Error ? e.message : String(e))}`,
+  );
   process.exit(0);
 }
 
@@ -385,7 +387,9 @@ for (const [m, p] of scenario.misses) {
   const [m, p] = scenario.wrongMethod;
   const r = adapter.match(router, m, p);
   if (r !== null && r !== undefined) {
-    console.log(`sanity=wrong-method-not-null adapter=${adapter.name} scenario=${scenario.label} path=${JSON.stringify(`${m} ${p}`)}`);
+    console.log(
+      `sanity=wrong-method-not-null adapter=${adapter.name} scenario=${scenario.label} path=${JSON.stringify(`${m} ${p}`)}`,
+    );
     process.exit(0);
   }
 }

@@ -1,9 +1,10 @@
 import { describe, test, expect } from 'bun:test';
 
-import { Multipart } from '../../src/multipart';
-import { MultipartError } from '../../src/interfaces';
-import { MultipartErrorReason } from '../../src/enums';
 import type { MultipartPart } from '../../src/interfaces';
+
+import { MultipartErrorReason } from '../../src/enums';
+import { MultipartError } from '../../src/interfaces';
+import { Multipart } from '../../src/multipart';
 import { BufferedMultipartFile } from '../../src/parser/streaming-part';
 
 // ── Helpers ─────────────────────────────────────────────────────────
@@ -32,7 +33,7 @@ async function consumeAll(gen: AsyncGenerator<unknown>): Promise<void> {
   for await (const part of gen) {
     // For file parts, we need to consume the stream to avoid backpressure deadlock
     if (part && typeof part === 'object' && 'isFile' in part && (part as MultipartPart).isFile) {
-      await ((part as MultipartPart) as import('../../src/interfaces').MultipartFile).bytes();
+      await (part as MultipartPart as import('../../src/interfaces').MultipartFile).bytes();
     }
   }
 }
@@ -54,12 +55,12 @@ async function collectParts(gen: AsyncGenerator<MultipartPart>): Promise<Multipa
 }
 
 async function partText(part: MultipartPart): Promise<string> {
-  if (part.isFile) return part.text();
+  if (part.isFile) {return part.text();}
   return part.text();
 }
 
 async function partBytes(part: MultipartPart): Promise<Uint8Array> {
-  if (part.isFile) return part.bytes();
+  if (part.isFile) {return part.bytes();}
   return part.bytes();
 }
 
@@ -70,9 +71,7 @@ describe('Multipart — edge cases', () => {
 
   test('handles boundary with special characters (WebKit-style)', async () => {
     const boundary = '----WebKitFormBoundaryABC123xyz_-.';
-    const body = buildBody(boundary, [
-      { headers: 'Content-Disposition: form-data; name="field"', body: 'ok' },
-    ]);
+    const body = buildBody(boundary, [{ headers: 'Content-Disposition: form-data; name="field"', body: 'ok' }]);
 
     const parts = await collectParts(mp.parse(createRequest(boundary, body)));
 
@@ -91,9 +90,7 @@ describe('Multipart — edge cases', () => {
 
   test('handles whitespace-only body value', async () => {
     const boundary = 'ws-boundary';
-    const body = buildBody(boundary, [
-      { headers: 'Content-Disposition: form-data; name="space"', body: '   \n\t  ' },
-    ]);
+    const body = buildBody(boundary, [{ headers: 'Content-Disposition: form-data; name="space"', body: '   \n\t  ' }]);
 
     const parts = await collectParts(mp.parse(createRequest(boundary, body)));
 
@@ -103,9 +100,7 @@ describe('Multipart — edge cases', () => {
 
   test('boundary-like string in body with CRLF prefix is a delimiter, without is not', async () => {
     const boundary = 'tricky';
-    const body = buildBody(boundary, [
-      { headers: 'Content-Disposition: form-data; name="data"', body: 'some --tricky-- text' },
-    ]);
+    const body = buildBody(boundary, [{ headers: 'Content-Disposition: form-data; name="data"', body: 'some --tricky-- text' }]);
 
     const parts = await collectParts(mp.parse(createRequest(boundary, body)));
 
@@ -115,9 +110,7 @@ describe('Multipart — edge cases', () => {
 
   test('handles quoted boundary in Content-Type', async () => {
     const boundary = 'quoted-bound';
-    const body = buildBody(boundary, [
-      { headers: 'Content-Disposition: form-data; name="f"', body: 'val' },
-    ]);
+    const body = buildBody(boundary, [{ headers: 'Content-Disposition: form-data; name="f"', body: 'val' }]);
 
     const request = new Request('http://localhost/upload', {
       method: 'POST',
@@ -181,9 +174,7 @@ describe('Multipart — edge cases', () => {
   test('handles very long field names (200 chars)', async () => {
     const boundary = 'long-name';
     const longName = 'a'.repeat(200);
-    const body = buildBody(boundary, [
-      { headers: `Content-Disposition: form-data; name="${longName}"`, body: 'val' },
-    ]);
+    const body = buildBody(boundary, [{ headers: `Content-Disposition: form-data; name="${longName}"`, body: 'val' }]);
 
     const parts = await collectParts(mp.parse(createRequest(boundary, body)));
 
@@ -260,12 +251,7 @@ describe('Multipart — edge cases', () => {
 
   test('empty name in Content-Disposition throws MalformedHeader', async () => {
     const boundary = 'empty-name';
-    const raw =
-      `--${boundary}\r\n` +
-      `Content-Disposition: form-data; name=""\r\n` +
-      `\r\n` +
-      `data\r\n` +
-      `--${boundary}--\r\n`;
+    const raw = `--${boundary}\r\n` + `Content-Disposition: form-data; name=""\r\n` + `\r\n` + `data\r\n` + `--${boundary}--\r\n`;
 
     try {
       await consumeAll(mp.parse(createRequest(boundary, raw)));
@@ -279,11 +265,7 @@ describe('Multipart — edge cases', () => {
   test('non form-data directive throws MalformedHeader', async () => {
     const boundary = 'bad-directive';
     const raw =
-      `--${boundary}\r\n` +
-      `Content-Disposition: attachment; name="x"\r\n` +
-      `\r\n` +
-      `data\r\n` +
-      `--${boundary}--\r\n`;
+      `--${boundary}\r\n` + `Content-Disposition: attachment; name="x"\r\n` + `\r\n` + `data\r\n` + `--${boundary}--\r\n`;
 
     try {
       await consumeAll(mp.parse(createRequest(boundary, raw)));
@@ -312,9 +294,7 @@ describe('Multipart — edge cases', () => {
 
   test('boundary at max length (70 chars) works', async () => {
     const boundary = 'B'.repeat(70);
-    const body = buildBody(boundary, [
-      { headers: 'Content-Disposition: form-data; name="f"', body: 'ok' },
-    ]);
+    const body = buildBody(boundary, [{ headers: 'Content-Disposition: form-data; name="f"', body: 'ok' }]);
 
     const parts = await collectParts(mp.parse(createRequest(boundary, body)));
 
@@ -324,9 +304,7 @@ describe('Multipart — edge cases', () => {
 
   test('boundary too long (71 chars) throws error', async () => {
     const boundary = 'B'.repeat(71);
-    const body = buildBody(boundary, [
-      { headers: 'Content-Disposition: form-data; name="f"', body: 'ok' },
-    ]);
+    const body = buildBody(boundary, [{ headers: 'Content-Disposition: form-data; name="f"', body: 'ok' }]);
 
     try {
       await consumeAll(mp.parse(createRequest(boundary, body)));
@@ -396,9 +374,7 @@ describe('Multipart — edge cases', () => {
 
   test('concurrent parse calls on same instance both succeed independently', async () => {
     const boundary1 = 'concurrent-a';
-    const body1 = buildBody(boundary1, [
-      { headers: 'Content-Disposition: form-data; name="x"', body: 'alpha' },
-    ]);
+    const body1 = buildBody(boundary1, [{ headers: 'Content-Disposition: form-data; name="x"', body: 'alpha' }]);
 
     const boundary2 = 'concurrent-b';
     const body2 = buildBody(boundary2, [

@@ -39,12 +39,12 @@ parser.parse('q=hello%20world&lang=ko');
 
 ```typescript
 interface QueryParserOptions {
-  depth?: number;           // 기본값: 5
-  maxParams?: number;       // 기본값: 1000
-  nesting?: boolean;        // 기본값: false
-  arrayLimit?: number;      // 기본값: 20
-  duplicates?: 'first' | 'last' | 'array';  // 기본값: 'first'
-  strict?: boolean;         // 기본값: false
+  depth?: number; // 기본값: 5
+  maxParams?: number; // 기본값: 1000
+  nesting?: boolean; // 기본값: false
+  arrayLimit?: number; // 기본값: 20
+  duplicates?: 'first' | 'last' | 'array'; // 기본값: 'first'
+  strict?: boolean; // 기본값: false
 }
 ```
 
@@ -55,7 +55,7 @@ interface QueryParserOptions {
 ```typescript
 const parser = QueryParser.create({ depth: 2 });
 
-parser.parse('a[b][c]=1');    // { a: { b: { c: '1' } } }
+parser.parse('a[b][c]=1'); // { a: { b: { c: '1' } } }
 parser.parse('a[b][c][d]=1'); // 깊이 초과 — 무시
 ```
 
@@ -95,7 +95,7 @@ parser.parse('filter[status]=active&filter[role]=admin');
 ```typescript
 const parser = QueryParser.create({ nesting: true, arrayLimit: 5 });
 
-parser.parse('a[3]=ok');   // { a: [undefined, undefined, undefined, 'ok'] }
+parser.parse('a[3]=ok'); // { a: [undefined, undefined, undefined, 'ok'] }
 parser.parse('a[100]=no'); // 인덱스 초과 — 무시
 ```
 
@@ -103,11 +103,11 @@ parser.parse('a[100]=no'); // 인덱스 초과 — 무시
 
 중복 키 처리 전략 (HTTP Parameter Pollution 방어).
 
-| 값 | 동작 |
-|:---|:-----|
+| 값                 | 동작                                   |
+| :----------------- | :------------------------------------- |
 | `'first'` _(기본)_ | 첫 번째 값 유지 — HPP 공격에 가장 안전 |
-| `'last'` | 마지막 값 유지 |
-| `'array'` | 모든 값을 배열로 수집 |
+| `'last'`           | 마지막 값 유지                         |
+| `'array'`          | 모든 값을 배열로 수집                  |
 
 ```typescript
 // 입력: 'role=admin&role=user'
@@ -133,9 +133,9 @@ QueryParser.create({ duplicates: 'array' }).parse(input);
 ```typescript
 const parser = QueryParser.create({ strict: true });
 
-parser.parse('valid=ok');           // { valid: 'ok' }
-parser.parse('bad=%zz');            // QueryParserError throw
-parser.parse('a=1&a[b]=2');        // QueryParserError throw (구조 충돌)
+parser.parse('valid=ok'); // { valid: 'ok' }
+parser.parse('bad=%zz'); // QueryParserError throw
+parser.parse('a=1&a[b]=2'); // QueryParserError throw (구조 충돌)
 ```
 
 <br>
@@ -151,7 +151,7 @@ try {
   const parser = QueryParser.create({ depth: -1 });
 } catch (e) {
   if (e instanceof QueryParserError) {
-    e.reason;  // QueryParserErrorReason.InvalidDepth
+    e.reason; // QueryParserErrorReason.InvalidDepth
     e.message; // "depth must be a non-negative integer."
   }
 }
@@ -159,14 +159,14 @@ try {
 
 ### `QueryParserErrorReason`
 
-| Reason | 발생 위치 | 설명 |
-|:-------|:---------|:-----|
-| `InvalidDepth` | `create()` | `depth`가 0 이상의 정수가 아님 |
-| `InvalidParameterLimit` | `create()` | `maxParams`가 양의 정수가 아님 |
-| `InvalidArrayLimit` | `create()` | `arrayLimit`가 0 이상의 정수가 아님 |
-| `InvalidHppMode` | `create()` | `duplicates`가 `'first'`, `'last'`, `'array'` 중 하나가 아님 |
-| `MalformedQueryString` | `parse()` | 잘못된 문법 (strict 모드 전용) |
-| `ConflictingStructure` | `parse()` | 키가 스칼라와 중첩 구조로 동시 사용됨 (strict 모드 전용) |
+| Reason                  | 발생 위치  | 설명                                                         |
+| :---------------------- | :--------- | :----------------------------------------------------------- |
+| `InvalidDepth`          | `create()` | `depth`가 0 이상의 정수가 아님                               |
+| `InvalidParameterLimit` | `create()` | `maxParams`가 양의 정수가 아님                               |
+| `InvalidArrayLimit`     | `create()` | `arrayLimit`가 0 이상의 정수가 아님                          |
+| `InvalidHppMode`        | `create()` | `duplicates`가 `'first'`, `'last'`, `'array'` 중 하나가 아님 |
+| `MalformedQueryString`  | `parse()`  | 잘못된 문법 (strict 모드 전용)                               |
+| `ConflictingStructure`  | `parse()`  | 키가 스칼라와 중첩 구조로 동시 사용됨 (strict 모드 전용)     |
 
 <br>
 
@@ -206,19 +206,19 @@ try {
 
 ### vs 경쟁 라이브러리 (flat key-value)
 
-| 입력 | @zipbul/query-parser | node:querystring | URLSearchParams | qs |
-|:-----|---------------------:|-----------------:|----------------:|---:|
-| flat 10 params | 423 ns | 368 ns | 2.62 us | 4.65 us |
-| flat 50 params | 4.81 us | 4.36 us | 12.58 us | 19.40 us |
-| encoded 5 params | **955 ns** | 1.24 us | 1.60 us | 2.24 us |
+| 입력             | @zipbul/query-parser | node:querystring | URLSearchParams |       qs |
+| :--------------- | -------------------: | ---------------: | --------------: | -------: |
+| flat 10 params   |               423 ns |           368 ns |         2.62 us |  4.65 us |
+| flat 50 params   |              4.81 us |          4.36 us |        12.58 us | 19.40 us |
+| encoded 5 params |           **955 ns** |          1.24 us |         1.60 us |  2.24 us |
 
 ### vs qs (nested/array)
 
-| 입력 | @zipbul/query-parser | qs | 속도 차이 |
-|:-----|---------------------:|---:|----------:|
-| nested depth 3 | 162 ns | 1.01 us | **6.3x** |
-| array x10 | 1.39 us | 7.16 us | **5.2x** |
-| e-commerce payload | 1.12 us | 4.50 us | **4.0x** |
+| 입력               | @zipbul/query-parser |      qs | 속도 차이 |
+| :----------------- | -------------------: | ------: | --------: |
+| nested depth 3     |               162 ns | 1.01 us |  **6.3x** |
+| array x10          |              1.39 us | 7.16 us |  **5.2x** |
+| e-commerce payload |              1.12 us | 4.50 us |  **4.0x** |
 
 로컬에서 벤치마크 실행:
 

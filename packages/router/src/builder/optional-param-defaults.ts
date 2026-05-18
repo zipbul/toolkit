@@ -24,7 +24,7 @@ export class OptionalParamDefaults {
   }
 
   record(key: number, names: readonly string[]): void {
-    if (this.behavior === 'omit') return;
+    if (this.behavior === 'omit') {return;}
     this.defaults.set(key, names);
   }
 
@@ -34,7 +34,7 @@ export class OptionalParamDefaults {
   private static readonly EMPTY_SNAPSHOT: OptionalParamDefaultsSnapshot = { entries: [] };
 
   snapshot(): OptionalParamDefaultsSnapshot {
-    if (this.defaults.size === 0) return OptionalParamDefaults.EMPTY_SNAPSHOT;
+    if (this.defaults.size === 0) {return OptionalParamDefaults.EMPTY_SNAPSHOT;}
     return { entries: [...this.defaults] };
   }
 

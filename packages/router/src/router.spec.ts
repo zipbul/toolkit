@@ -1,9 +1,10 @@
 import { describe, it, expect } from 'bun:test';
 
-import { Router } from './router';
-import { RouterError } from './error';
 import type { RouterOptions } from './types';
+
 import { catchRouterError } from '../test/test-utils';
+import { RouterError } from './error';
+import { Router, validateCacheSize } from './router';
 
 // ── Fixtures ──
 
@@ -11,12 +12,9 @@ function makeRouter<T = number>(opts: RouterOptions = {}): Router<T> {
   return new Router<T>(opts);
 }
 
-function buildWith(
-  routes: Array<[string, string, number]>,
-  opts: RouterOptions = {},
-): Router<number> {
+function buildWith(routes: Array<[string, string, number]>, opts: RouterOptions = {}): Router<number> {
   const r = new Router<number>(opts);
-  for (const [method, path, value] of routes) r.add(method, path, value);
+  for (const [method, path, value] of routes) {r.add(method, path, value);}
   r.build();
   return r;
 }
@@ -201,7 +199,6 @@ describe('Router', () => {
         expect(e.data.errors.some(issue => issue.method === 'GET' && issue.error.kind === 'route-duplicate')).toBe(true);
       }
     });
-
   });
 
   // ---- ED (Edge) ----
@@ -230,7 +227,6 @@ describe('Router', () => {
       expect(first).toBe(r);
       expect(second).toBe(r);
     });
-
   });
 
   // ---- CO (Corner) ----
@@ -252,10 +248,7 @@ describe('Router', () => {
     });
 
     it('should apply combined preNormalize (caseSensitive:false + ignoreTrailingSlash)', () => {
-      const r = buildWith(
-        [['GET', '/users', 1]],
-        { pathCaseSensitive: false, trailingSlash: "ignore" },
-      );
+      const r = buildWith([['GET', '/users', 1]], { pathCaseSensitive: false, trailingSlash: 'ignore' });
 
       // Trailing slash + uppercase → both normalized
       const result = r.match('GET', '/Users/');
@@ -275,7 +268,6 @@ describe('Router', () => {
       expect(miss1).toBeNull();
       expect(miss2).toBeNull();
     });
-
   });
 
   // ---- ST (State Transition) ----
@@ -449,8 +441,6 @@ describe('Router', () => {
     });
   });
 });
-
-import { validateCacheSize } from './router';
 
 describe('validateCacheSize', () => {
   it('accepts an undefined input and returns the default 1000', () => {

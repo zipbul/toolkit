@@ -1,10 +1,6 @@
 import type { DecoderFn, MatchFn, MatchState } from '../../types';
-import {
-  TESTER_PASS,
-  type ParamSegment,
-  type SegmentNode,
-} from '../../tree';
 
+import { TESTER_PASS, type ParamSegment, type SegmentNode } from '../../tree';
 
 /**
  * Recursive backtracking walker. Used when `hasAmbiguousNode(root)` is
@@ -27,7 +23,7 @@ export function createRecursiveWalker(root: SegmentNode, decoder: DecoderFn): Ma
   ): boolean {
     if (param.tester !== null) {
       const val = decoder(path.substring(start, end));
-      if (param.tester(val) !== TESTER_PASS) return false;
+      if (param.tester(val) !== TESTER_PASS) {return false;}
     }
 
     const mark = state.paramCount;
@@ -44,35 +40,29 @@ export function createRecursiveWalker(root: SegmentNode, decoder: DecoderFn): Ma
     return false;
   }
 
-  function match(
-    node: SegmentNode,
-    path: string,
-    pos: number,
-    state: MatchState,
-    decoder: DecoderFn,
-  ): boolean {
+  function match(node: SegmentNode, path: string, pos: number, state: MatchState, decoder: DecoderFn): boolean {
     const len = path.length;
 
     if (node.staticPrefix !== null) {
       const newPos = consumeStaticPrefixRec(node.staticPrefix, path, pos, len);
-      if (newPos < 0) return false;
+      if (newPos < 0) {return false;}
       pos = newPos;
     }
 
-    if (pos >= len) return matchTerminalAtNode(node, len, state);
+    if (pos >= len) {return matchTerminalAtNode(node, len, state);}
 
     let end = pos;
-    while (end < len && path.charCodeAt(end) !== 47) end++;
+    while (end < len && path.charCodeAt(end) !== 47) {end++;}
     const segLen = end - pos;
 
-    if (tryStaticDescent(node, path, pos, end, segLen, len, state, decoder)) return true;
+    if (tryStaticDescent(node, path, pos, end, segLen, len, state, decoder)) {return true;}
 
     const head = node.paramChild;
     if (head !== null && segLen > 0) {
-      if (tryMatchParam(head, path, pos, end, state, decoder)) return true;
+      if (tryMatchParam(head, path, pos, end, state, decoder)) {return true;}
       let p: ParamSegment | null = head.nextSibling;
       while (p !== null) {
-        if (tryMatchParam(p, path, pos, end, state, decoder)) return true;
+        if (tryMatchParam(p, path, pos, end, state, decoder)) {return true;}
         p = p.nextSibling;
       }
     }
@@ -91,12 +81,7 @@ export function createRecursiveWalker(root: SegmentNode, decoder: DecoderFn): Ma
     decoder: DecoderFn,
   ): boolean {
     const sck = node.singleChildKey;
-    if (
-      sck !== null &&
-      node.singleChildNext !== null &&
-      sck.length === segLen &&
-      path.startsWith(sck, pos)
-    ) {
+    if (sck !== null && node.singleChildNext !== null && sck.length === segLen && path.startsWith(sck, pos)) {
       return match(node.singleChildNext, path, end === len ? len : end + 1, state, decoder);
     }
     if (node.staticChildren !== null) {
@@ -131,32 +116,22 @@ export function matchTerminalAtNode(node: SegmentNode, len: number, state: Match
   return false;
 }
 
-export function consumeStaticPrefixRec(
-  sp: ReadonlyArray<string>,
-  path: string,
-  pos: number,
-  len: number,
-): number {
+export function consumeStaticPrefixRec(sp: ReadonlyArray<string>, path: string, pos: number, len: number): number {
   for (let i = 0; i < sp.length; i++) {
     const seg = sp[i]!;
     const segLen = seg.length;
     const after = pos + segLen;
-    if (after > len) return -1;
-    if (!path.startsWith(seg, pos)) return -1;
-    if (after < len && path.charCodeAt(after) !== 47) return -1;
+    if (after > len) {return -1;}
+    if (!path.startsWith(seg, pos)) {return -1;}
+    if (after < len && path.charCodeAt(after) !== 47) {return -1;}
     pos = after === len ? len : after + 1;
   }
   return pos;
 }
 
-export function tryWildcardCapture(
-  node: SegmentNode,
-  pos: number,
-  len: number,
-  state: MatchState,
-): boolean {
-  if (node.wildcardStore === null) return false;
-  if (node.wildcardOrigin === 'multi' && pos >= len) return false;
+export function tryWildcardCapture(node: SegmentNode, pos: number, len: number, state: MatchState): boolean {
+  if (node.wildcardStore === null) {return false;}
+  if (node.wildcardOrigin === 'multi' && pos >= len) {return false;}
   const pc = state.paramCount * 2;
   state.paramOffsets[pc] = pos;
   state.paramOffsets[pc + 1] = len;

@@ -3,7 +3,7 @@ import { describe, it, expect } from 'bun:test';
 import { Router } from '../../src/router';
 
 describe('Router<T> cache', () => {
-  it('should use cache on second match when cache enabled (source=\'cache\')', () => {
+  it("should use cache on second match when cache enabled (source='cache')", () => {
     const router = new Router<string>({});
     router.add('GET', '/users/:id', 'user');
     router.build();
@@ -209,7 +209,7 @@ describe('Router<T> cache', () => {
 
     expect(() => {
       'use strict';
-      (a!.params).id = 'POISONED';
+      a!.params.id = 'POISONED';
     }).toThrow(TypeError);
 
     const b = r.match('GET', '/users/42');

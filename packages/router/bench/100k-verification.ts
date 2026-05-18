@@ -25,12 +25,12 @@ function nowNs(): bigint {
 }
 
 function bench(name: string, fn: () => unknown): void {
-  for (let i = 0; i < 20_000; i++) fn();
+  for (let i = 0; i < 20_000; i++) {fn();}
 
   const start = nowNs();
   let checksum = 0;
   for (let i = 0; i < ITER; i++) {
-    if (fn() !== null) checksum++;
+    if (fn() !== null) {checksum++;}
   }
   const end = nowNs();
   const ns = Number(end - start) / ITER;
@@ -101,10 +101,10 @@ function mixedScenario(): Scenario {
   const routes: Route[] = [];
   for (let i = 0; i < COUNT; i++) {
     const mod = i % 4;
-    if (mod === 0) routes.push(['GET', `/v${i % 20}/static/resource-${i}`, i]);
-    else if (mod === 1) routes.push(['GET', `/v${i % 20}/users/:id/items/${i}`, i]);
-    else if (mod === 2) routes.push(['POST', `/v${i % 20}/orgs/:org/repos/:repo/actions/${i}`, i]);
-    else routes.push(['GET', `/v${i % 20}/files/${i}/*path`, i]);
+    if (mod === 0) {routes.push(['GET', `/v${i % 20}/static/resource-${i}`, i]);}
+    else if (mod === 1) {routes.push(['GET', `/v${i % 20}/users/:id/items/${i}`, i]);}
+    else if (mod === 2) {routes.push(['POST', `/v${i % 20}/orgs/:org/repos/:repo/actions/${i}`, i]);}
+    else {routes.push(['GET', `/v${i % 20}/files/${i}/*path`, i]);}
   }
 
   return {
@@ -225,10 +225,12 @@ function wildcardConflictFeasibility(): void {
   const sizes = [1_000, 5_000, 10_000, 25_000, 50_000];
   for (const size of sizes) {
     const routes: Route[] = [];
-    for (let i = 0; i < size; i++) routes.push(['GET', `/wc/${i}/*path`, i]);
-    for (let i = 0; i < size; i++) routes.push(['GET', `/static/${i}/leaf`, i]);
-    const { router, buildMs, memDelta } = buildZipbul(routes);
-    console.log(`disjoint wildcards=${size} statics=${size} routes=${routes.length} add+build=${buildMs.toFixed(2)}ms mem=${memDelta}`);
+    for (let i = 0; i < size; i++) {routes.push(['GET', `/wc/${i}/*path`, i]);}
+    for (let i = 0; i < size; i++) {routes.push(['GET', `/static/${i}/leaf`, i]);}
+    const { buildMs, memDelta } = buildZipbul(routes);
+    console.log(
+      `disjoint wildcards=${size} statics=${size} routes=${routes.length} add+build=${buildMs.toFixed(2)}ms mem=${memDelta}`,
+    );
   }
 }
 
@@ -264,8 +266,10 @@ function mixedPhaseProxy(): void {
   ];
 
   for (const scenario of scenarios) {
-    const { router, buildMs, memDelta } = buildZipbul(scenario.routes);
-    console.log(`${scenario.name.padEnd(34)} routes=${String(scenario.routes.length).padStart(6)} add+build=${buildMs.toFixed(2)}ms mem=${memDelta}`);
+    const { buildMs, memDelta } = buildZipbul(scenario.routes);
+    console.log(
+      `${scenario.name.padEnd(34)} routes=${String(scenario.routes.length).padStart(6)} add+build=${buildMs.toFixed(2)}ms mem=${memDelta}`,
+    );
   }
 }
 
@@ -335,7 +339,7 @@ async function main(): Promise<void> {
   ];
 
   for (const scenario of scenarios) {
-    if (scenarioFilter !== 'all' && scenario.name !== scenarioFilter) continue;
+    if (scenarioFilter !== 'all' && scenario.name !== scenarioFilter) {continue;}
     runScenario(scenario);
   }
 

@@ -1,7 +1,7 @@
 import { describe, test, expect } from 'bun:test';
 
-import { RateLimiter } from '../../src/rate-limiter';
 import { RateLimitAction, Algorithm } from '../../src/enums';
+import { RateLimiter } from '../../src/rate-limiter';
 import { createClock } from '../helpers';
 
 describe('compound rules realistic timeline', () => {
@@ -72,7 +72,7 @@ describe('compound rules realistic timeline', () => {
 
     // Keep consuming in bursts of 5 per second until global blocks
     for (let phase = 0; phase < 10; phase++) {
-      if (phase > 0) clock.advance(1000);
+      if (phase > 0) {clock.advance(1000);}
       for (let i = 0; i < 5; i++) {
         const r = await limiter.consume('user1');
         if (r.action === RateLimitAction.Allow) {
@@ -135,7 +135,7 @@ describe('compound rules realistic timeline', () => {
     let deniedCount = 0;
     for (let i = 0; i < 10; i++) {
       const r = await limiter.consume('user1');
-      if (r.action === RateLimitAction.Deny) deniedCount++;
+      if (r.action === RateLimitAction.Deny) {deniedCount++;}
     }
     // Tight rule allows 5 (TAT recovers after 1001ms), then denies remaining 5
     expect(deniedCount).toBe(5);

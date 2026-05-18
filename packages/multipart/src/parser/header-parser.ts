@@ -1,8 +1,10 @@
-import { err } from '@zipbul/result';
 import type { Result } from '@zipbul/result';
 
-import { MultipartErrorReason } from '../enums';
+import { err } from '@zipbul/result';
+
 import type { MultipartErrorData } from '../interfaces';
+
+import { MultipartErrorReason } from '../enums';
 
 /**
  * Parsed Content-Disposition header fields.
@@ -40,11 +42,11 @@ export function parsePartHeaders(headerBlock: string): Result<PartHeaders, Multi
   const lines = normalized.split('\r\n');
 
   for (const line of lines) {
-    if (line.length === 0) continue;
+    if (line.length === 0) {continue;}
 
     const colonIndex = line.indexOf(':');
 
-    if (colonIndex === -1) continue;
+    if (colonIndex === -1) {continue;}
 
     const headerName = line.slice(0, colonIndex).trim().toLowerCase();
     const headerValue = line.slice(colonIndex + 1).trim();
@@ -129,7 +131,7 @@ const PARAM_PATTERNS: Record<string, RegExp> = {
 function extractParam(headerValue: string, paramName: string): string | undefined {
   const pattern = PARAM_PATTERNS[paramName];
 
-  if (pattern === undefined) return undefined;
+  if (pattern === undefined) {return undefined;}
 
   const match = headerValue.match(pattern);
 
@@ -140,7 +142,7 @@ function extractParam(headerValue: string, paramName: string): string | undefine
   // match[2] is the quoted value (with escapes), match[3] is the unquoted value
   let value = match[2] ?? match[3];
 
-  if (value === undefined) return undefined;
+  if (value === undefined) {return undefined;}
 
   // Unescape escaped characters within quoted values (e.g. \" → ")
   if (match[2] !== undefined) {

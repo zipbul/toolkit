@@ -1,7 +1,7 @@
 import { describe, test, expect, afterEach } from 'bun:test';
 
-import { RateLimiter } from '../../src/rate-limiter';
 import { RateLimitAction, Algorithm } from '../../src/enums';
+import { RateLimiter } from '../../src/rate-limiter';
 import { MemoryStore } from '../../src/stores/memory';
 import { withFallback, WithFallbackStore } from '../../src/stores/with-fallback';
 import { createClock } from '../helpers';
@@ -9,7 +9,9 @@ import { createClock } from '../helpers';
 describe('WithFallback store continuity', () => {
   let store: WithFallbackStore;
 
-  afterEach(() => { store?.dispose(); });
+  afterEach(() => {
+    store?.dispose();
+  });
 
   test('fallback starts fresh after primary failure — counter resets', async () => {
     const clock = createClock(1000);
@@ -20,15 +22,15 @@ describe('WithFallback store continuity', () => {
     store = withFallback(
       {
         update: (key, updater) => {
-          if (primaryDown) throw new Error('down');
+          if (primaryDown) {throw new Error('down');}
           return primary.update(key, updater);
         },
-        get: (key) => {
-          if (primaryDown) throw new Error('down');
+        get: key => {
+          if (primaryDown) {throw new Error('down');}
           return primary.get(key);
         },
-        delete: (key) => {
-          if (primaryDown) throw new Error('down');
+        delete: key => {
+          if (primaryDown) {throw new Error('down');}
           return primary.delete(key);
         },
         clear: () => primary.clear(),
@@ -72,15 +74,15 @@ describe('WithFallback store continuity', () => {
     store = withFallback(
       {
         update: (key, updater) => {
-          if (primaryDown) throw new Error('down');
+          if (primaryDown) {throw new Error('down');}
           return primary.update(key, updater);
         },
-        get: (key) => {
-          if (primaryDown) throw new Error('down');
+        get: key => {
+          if (primaryDown) {throw new Error('down');}
           return primary.get(key);
         },
-        delete: (key) => {
-          if (primaryDown) throw new Error('down');
+        delete: key => {
+          if (primaryDown) {throw new Error('down');}
           return primary.delete(key);
         },
         clear: () => primary.clear(),

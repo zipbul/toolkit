@@ -249,4 +249,3 @@ describe('RouterCache', () => {
     expect(cache.get('/d')).toBe('d');
   });
 });
-

@@ -1,4 +1,5 @@
 import type { Result, ResultAsync } from './types';
+
 import { err } from './err';
 
 /**
@@ -79,7 +80,7 @@ export function safe<T, E = unknown>(
 ): Result<T, E> | ResultAsync<T, E> {
   if (fnOrPromise instanceof Promise) {
     return fnOrPromise.then(
-      (value) => value as Result<T, E>,
+      value => value as Result<T, E>,
       (thrown: unknown) => (mapErr ? err(mapErr(thrown)) : err(thrown)) as Result<T, E>,
     );
   }

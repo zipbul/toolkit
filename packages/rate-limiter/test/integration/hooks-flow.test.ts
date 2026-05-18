@@ -1,8 +1,9 @@
 import { describe, test, expect } from 'bun:test';
 
-import { RateLimiter } from '../../src/rate-limiter';
-import { RateLimitAction, Algorithm } from '../../src/enums';
 import type { RateLimitAllowResult, RateLimitDenyResult } from '../../src/interfaces';
+
+import { RateLimitAction, Algorithm } from '../../src/enums';
+import { RateLimiter } from '../../src/rate-limiter';
 import { createClock } from '../helpers';
 
 describe('hooks in compound rules flow', () => {
@@ -66,8 +67,8 @@ describe('hooks in compound rules flow', () => {
       algorithm: Algorithm.SlidingWindow,
       clock: clock.now,
       hooks: {
-        onConsume: (key) => events.push({ type: 'consume', key }),
-        onLimit: (key) => events.push({ type: 'limit', key }),
+        onConsume: key => events.push({ type: 'consume', key }),
+        onLimit: key => events.push({ type: 'limit', key }),
       },
     });
 
@@ -97,8 +98,12 @@ describe('hooks in compound rules flow', () => {
       algorithm: Algorithm.SlidingWindow,
       clock: clock.now,
       hooks: {
-        onConsume: () => { hookCalled = true; },
-        onLimit: () => { hookCalled = true; },
+        onConsume: () => {
+          hookCalled = true;
+        },
+        onLimit: () => {
+          hookCalled = true;
+        },
       },
     });
 

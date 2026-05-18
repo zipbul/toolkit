@@ -6,8 +6,8 @@
  */
 import { describe, it, expect } from 'bun:test';
 
-import { Router } from '../../src/router';
 import { RouterError } from '../../src/error';
+import { Router } from '../../src/router';
 import { firstBuildIssue } from '../test-utils';
 
 describe('subtreeShapesEqual: terminal-store presence (C-03/04/05/06)', () => {
@@ -127,7 +127,7 @@ describe('walker tier consistency — every applicable tier returns the same res
     {
       name: 'prefixed-factor tier (single chain + 1500 fanout)',
       register: (r: Router<string>) => {
-        for (let i = 0; i < 1500; i++) r.add('GET', `/users/${i}/posts/:id`, `u-${i}`);
+        for (let i = 0; i < 1500; i++) {r.add('GET', `/users/${i}/posts/:id`, `u-${i}`);}
       },
       probes: [
         ['/users/0/posts/x', 'u-0'],
@@ -155,7 +155,7 @@ describe('walker tier consistency — every applicable tier returns the same res
     {
       name: 'root-level tenant factor (>1000 sibling tenants at root)',
       register: (r: Router<string>) => {
-        for (let i = 0; i < 1500; i++) r.add('GET', `/tenant-${i}/users/:id`, `t-${i}`);
+        for (let i = 0; i < 1500; i++) {r.add('GET', `/tenant-${i}/users/:id`, `t-${i}`);}
       },
       probes: [
         ['/tenant-0/users/x', 't-0'],
@@ -240,7 +240,11 @@ describe('rollback after route validation failure (R1)', () => {
       r.add('GET', '/users/:id?', 'ok-1'); // valid (1 optional)
       r.add('GET', '/' + Array.from({ length: 32 }, (_, i) => `:p${i}`).join('/'), 'too-many'); // 32 captures → reject
       r.add('GET', '/posts/:slug', 'ok-2'); // valid
-      try { r.build(); } catch (e) { return e as RouterError; }
+      try {
+        r.build();
+      } catch (e) {
+        return e as RouterError;
+      }
       throw new Error('expected build to throw');
     };
     const e1 = buildOnce();

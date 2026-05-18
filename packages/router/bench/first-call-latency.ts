@@ -9,6 +9,7 @@
  * child process spawn, which we currently don't do.
  */
 import { performance } from 'node:perf_hooks';
+
 import { Router } from '../src/router';
 import { percentile, printEnv } from './helpers';
 
@@ -18,13 +19,13 @@ function makeRouter(shape: Shape): Router<number> {
   const r = new Router<number>();
   switch (shape) {
     case 'static-small':
-      for (let i = 0; i < 10; i++) r.add('GET', `/r${i}`, i);
+      for (let i = 0; i < 10; i++) {r.add('GET', `/r${i}`, i);}
       break;
     case 'static-large':
-      for (let i = 0; i < 1000; i++) r.add('GET', `/api/v1/r${i}`, i);
+      for (let i = 0; i < 1000; i++) {r.add('GET', `/api/v1/r${i}`, i);}
       break;
     case 'param-medium':
-      for (let i = 0; i < 100; i++) r.add('GET', `/t${i}/u/:id/p/:pid`, i);
+      for (let i = 0; i < 100; i++) {r.add('GET', `/t${i}/u/:id/p/:pid`, i);}
       break;
   }
   r.build();
@@ -33,9 +34,12 @@ function makeRouter(shape: Shape): Router<number> {
 
 function pickHitPath(shape: Shape): string {
   switch (shape) {
-    case 'static-small': return '/r0';
-    case 'static-large': return '/api/v1/r0';
-    case 'param-medium': return '/t0/u/42/p/7';
+    case 'static-small':
+      return '/r0';
+    case 'static-large':
+      return '/api/v1/r0';
+    case 'param-medium':
+      return '/t0/u/42/p/7';
   }
 }
 
@@ -51,7 +55,7 @@ function probe(shape: Shape, samples: number): { ns: number[]; checksum: number 
     ns.push(dt);
     // Consume the result so JSC can't dead-code eliminate the match
     // call — the timed window would otherwise collapse to ~0.
-    if (out !== null && out !== undefined) checksum++;
+    if (out !== null && out !== undefined) {checksum++;}
   }
   ns.sort((a, b) => a - b);
   return { ns, checksum };
@@ -71,7 +75,9 @@ function stats(ns: number[]): { p50: number; p99: number; mean: number; min: num
 printEnv();
 const SAMPLES = 200;
 console.log(`first-call latency (samples=${SAMPLES}) — ns`);
-console.log(`${'shape'.padEnd(16)} ${'p50'.padStart(10)} ${'p99'.padStart(10)} ${'mean'.padStart(10)} ${'min'.padStart(10)} ${'max'.padStart(10)}`);
+console.log(
+  `${'shape'.padEnd(16)} ${'p50'.padStart(10)} ${'p99'.padStart(10)} ${'mean'.padStart(10)} ${'min'.padStart(10)} ${'max'.padStart(10)}`,
+);
 let totalChecksum = 0;
 for (const shape of ['static-small', 'static-large', 'param-medium'] as const) {
   // Discard first 5 (warmup)
@@ -79,7 +85,9 @@ for (const shape of ['static-small', 'static-large', 'param-medium'] as const) {
   const { ns, checksum } = probe(shape, SAMPLES);
   totalChecksum += checksum;
   const s = stats(ns);
-  console.log(`${shape.padEnd(16)} ${s.p50.toFixed(0).padStart(10)} ${s.p99.toFixed(0).padStart(10)} ${s.mean.toFixed(0).padStart(10)} ${s.min.toFixed(0).padStart(10)} ${s.max.toFixed(0).padStart(10)}`);
+  console.log(
+    `${shape.padEnd(16)} ${s.p50.toFixed(0).padStart(10)} ${s.p99.toFixed(0).padStart(10)} ${s.mean.toFixed(0).padStart(10)} ${s.min.toFixed(0).padStart(10)} ${s.max.toFixed(0).padStart(10)}`,
+  );
 }
 // Pin checksum past the loop so DCE can't strip the consumer above.
-if (totalChecksum < 0) console.log(totalChecksum);
+if (totalChecksum < 0) {console.log(totalChecksum);}

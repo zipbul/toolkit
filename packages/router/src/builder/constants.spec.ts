@@ -5,14 +5,7 @@
  */
 import { describe, expect, it } from 'bun:test';
 
-import {
-  CC_COLON,
-  CC_PLUS,
-  CC_SLASH,
-  CC_STAR,
-  END_ANCHOR_PATTERN,
-  START_ANCHOR_PATTERN,
-} from './constants';
+import { CC_COLON, CC_PLUS, CC_SLASH, CC_STAR, END_ANCHOR_PATTERN, START_ANCHOR_PATTERN } from './constants';
 
 describe('regex anchor patterns', () => {
   it('START_ANCHOR_PATTERN matches a literal leading ^', () => {

@@ -6,6 +6,9 @@
  */
 import { describe, expect, it } from 'bun:test';
 
+import type { PatternTesterFn } from './pattern-tester';
+import type { SegmentTreeUndoLog } from './undo';
+
 import {
   attachStoreTerminal,
   attachWildcardTerminal,
@@ -16,8 +19,6 @@ import {
   resolveOrCompileTester,
   type SegmentNode,
 } from './segment-tree';
-import type { PatternTesterFn } from './pattern-tester';
-import type { SegmentTreeUndoLog } from './undo';
 
 const newUndo = (): SegmentTreeUndoLog => [];
 const newCache = (): Map<string, PatternTesterFn> => new Map();
@@ -39,22 +40,14 @@ describe('isResolvedTesterError', () => {
 
 describe('resolveOrCompileTester', () => {
   it('returns null for an unconstrained param (pattern === null)', () => {
-    const tester = resolveOrCompileTester(
-      { name: 'id', pattern: null },
-      newCache(),
-      newUndo(),
-    );
+    const tester = resolveOrCompileTester({ name: 'id', pattern: null }, newCache(), newUndo());
     expect(tester).toBeNull();
   });
 
   it('compiles a fresh tester and caches it on first sight', () => {
     const cache = newCache();
     const undo = newUndo();
-    const t = resolveOrCompileTester(
-      { name: 'id', pattern: '\\d+' },
-      cache,
-      undo,
-    );
+    const t = resolveOrCompileTester({ name: 'id', pattern: '\\d+' }, cache, undo);
     expect(typeof t).toBe('function');
     expect(cache.size).toBe(1);
     expect(undo).toHaveLength(1);
@@ -70,11 +63,7 @@ describe('resolveOrCompileTester', () => {
   });
 
   it('returns route-parse error data for an invalid regex pattern', () => {
-    const out = resolveOrCompileTester(
-      { name: 'id', pattern: '[unclosed' },
-      newCache(),
-      newUndo(),
-    );
+    const out = resolveOrCompileTester({ name: 'id', pattern: '[unclosed' }, newCache(), newUndo());
     expect(isResolvedTesterError(out)).toBe(true);
     if (isResolvedTesterError(out)) {
       expect(out.kind).toBe('route-parse');
@@ -129,13 +118,7 @@ describe('insertParamPart', () => {
   it('creates a fresh paramChild on first insertion and returns the descended node', () => {
     const root = createSegmentNode();
     const undo = newUndo();
-    const out = insertParamPart(
-      root,
-      { type: 'param', name: 'id', pattern: null, optional: false },
-      newCache(),
-      0,
-      undo,
-    );
+    const out = insertParamPart(root, { type: 'param', name: 'id', pattern: null, optional: false }, newCache(), 0, undo);
     expect(out).not.toHaveProperty('kind');
     expect(root.paramChild).not.toBeNull();
     expect(root.paramChild!.name).toBe('id');
@@ -149,7 +132,7 @@ describe('insertParamPart', () => {
     const part = { type: 'param' as const, name: 'id', pattern: null, optional: false };
     const a = insertParamPart(root, part, cache, 0, undo);
     const b = insertParamPart(root, part, cache, 0, undo);
-    if ('node' in a && 'node' in b) expect(a.node).toBe(b.node);
+    if ('node' in a && 'node' in b) {expect(a.node).toBe(b.node);}
     expect(undo).toHaveLength(1); // no second ParamChildSet push
   });
 
@@ -158,13 +141,7 @@ describe('insertParamPart', () => {
     root.wildcardStore = 1;
     root.wildcardName = 'rest';
     root.wildcardOrigin = 'star';
-    const out = insertParamPart(
-      root,
-      { type: 'param', name: 'id', pattern: null, optional: false },
-      newCache(),
-      0,
-      newUndo(),
-    );
+    const out = insertParamPart(root, { type: 'param', name: 'id', pattern: null, optional: false }, newCache(), 0, newUndo());
     expect(out).toHaveProperty('kind');
     if ('kind' in out && out.kind === 'route-conflict') {
       expect(out.conflictsWith).toBe('*rest');
@@ -176,12 +153,7 @@ describe('attachWildcardTerminal', () => {
   it('writes the wildcard slot and pushes one undo entry on success', () => {
     const node = createSegmentNode();
     const undo = newUndo();
-    const out = attachWildcardTerminal(
-      node,
-      { type: 'wildcard', name: 'rest', origin: 'star' },
-      7,
-      undo,
-    );
+    const out = attachWildcardTerminal(node, { type: 'wildcard', name: 'rest', origin: 'star' }, 7, undo);
     expect(out).toBeUndefined();
     expect(node.wildcardStore).toBe(7);
     expect(node.wildcardName).toBe('rest');
@@ -194,14 +166,9 @@ describe('attachWildcardTerminal', () => {
     node.wildcardStore = 1;
     node.wildcardName = 'first';
     node.wildcardOrigin = 'star';
-    const out = attachWildcardTerminal(
-      node,
-      { type: 'wildcard', name: 'second', origin: 'star' },
-      9,
-      newUndo(),
-    );
+    const out = attachWildcardTerminal(node, { type: 'wildcard', name: 'second', origin: 'star' }, 9, newUndo());
     expect(out).toBeDefined();
-    if (out) expect(out.kind).toBe('route-conflict');
+    if (out) {expect(out.kind).toBe('route-conflict');}
   });
 
   it('returns route-duplicate when an existing wildcard has the same name', () => {
@@ -209,14 +176,9 @@ describe('attachWildcardTerminal', () => {
     node.wildcardStore = 1;
     node.wildcardName = 'rest';
     node.wildcardOrigin = 'star';
-    const out = attachWildcardTerminal(
-      node,
-      { type: 'wildcard', name: 'rest', origin: 'star' },
-      9,
-      newUndo(),
-    );
+    const out = attachWildcardTerminal(node, { type: 'wildcard', name: 'rest', origin: 'star' }, 9, newUndo());
     expect(out).toBeDefined();
-    if (out) expect(out.kind).toBe('route-duplicate');
+    if (out) {expect(out.kind).toBe('route-duplicate');}
   });
 
   it('returns route-conflict when a paramChild already occupies the position', () => {
@@ -229,14 +191,9 @@ describe('attachWildcardTerminal', () => {
       next: createSegmentNode(),
       nextSibling: null,
     };
-    const out = attachWildcardTerminal(
-      node,
-      { type: 'wildcard', name: 'rest', origin: 'star' },
-      9,
-      newUndo(),
-    );
+    const out = attachWildcardTerminal(node, { type: 'wildcard', name: 'rest', origin: 'star' }, 9, newUndo());
     expect(out).toBeDefined();
-    if (out) expect(out.kind).toBe('route-conflict');
+    if (out) {expect(out.kind).toBe('route-conflict');}
   });
 });
 
@@ -255,6 +212,6 @@ describe('attachStoreTerminal', () => {
     node.store = 1;
     const out = attachStoreTerminal(node, 2, newUndo());
     expect(out).toBeDefined();
-    if (out) expect(out.kind).toBe('route-duplicate');
+    if (out) {expect(out.kind).toBe('route-duplicate');}
   });
 });

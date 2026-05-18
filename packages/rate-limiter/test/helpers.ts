@@ -1,12 +1,17 @@
-import { MemoryStore } from '../src/stores/memory';
 import type { RateLimiterStore, StoreEntry } from '../src/interfaces';
+
+import { MemoryStore } from '../src/stores/memory';
 
 export function createClock(start = 0) {
   let now = start;
   return {
     now: () => now,
-    advance: (ms: number) => { now += ms; },
-    set: (ms: number) => { now = ms; },
+    advance: (ms: number) => {
+      now += ms;
+    },
+    set: (ms: number) => {
+      now = ms;
+    },
   };
 }
 

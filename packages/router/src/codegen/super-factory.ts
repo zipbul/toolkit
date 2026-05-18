@@ -1,4 +1,5 @@
 import type { RouteParams } from '../types';
+
 import { NullProtoObj } from '../internal';
 
 /**
@@ -12,11 +13,7 @@ import { NullProtoObj } from '../internal';
  * super-factory collapses that to O(1) per shape — N=20 went from
  * ~1M unique functions to 1 (RSS −33% measured).
  */
-export type SuperFactoryFn = (
-  presentBitmask: number,
-  u: string,
-  v: Int32Array,
-) => RouteParams;
+export type SuperFactoryFn = (presentBitmask: number, u: string, v: Int32Array) => RouteParams;
 
 export type FactoryCache = Map<string, SuperFactoryFn>;
 
@@ -41,12 +38,12 @@ export function getOrCreateSuperFactory(
 ): SuperFactoryFn {
   let cacheKey = omitBehavior ? 'O:' : 'S:';
   for (let n = 0; n < originalNames.length; n++) {
-    if (n > 0) cacheKey += ',';
+    if (n > 0) {cacheKey += ',';}
     cacheKey += originalNames[n]!;
     cacheKey += originalTypes[n] === 'wildcard' ? '#w' : '#p';
   }
   const cached = cache.get(cacheKey);
-  if (cached !== undefined) return cached;
+  if (cached !== undefined) {return cached;}
 
   // Super-factory body: walks originalNames in order, gates each
   // assignment on the corresponding bit in `m` (presentBitmask).
@@ -65,8 +62,7 @@ export function getOrCreateSuperFactory(
     body += '\n';
   }
   body += 'return p;';
-  const fresh = new Function('decoder', 'NullProtoObj', 'm', 'u', 'v', body)
-    .bind(null, decoder, NullProtoObj) as SuperFactoryFn;
+  const fresh = new Function('decoder', 'NullProtoObj', 'm', 'u', 'v', body).bind(null, decoder, NullProtoObj) as SuperFactoryFn;
   cache.set(cacheKey, fresh);
   return fresh;
 }
@@ -78,16 +74,13 @@ export function getOrCreateSuperFactory(
  * Caller bears the 31-bit ceiling: routes with more than 31 captures
  * must be rejected upstream so `1 << origIdx` never wraps.
  */
-export function computePresentBitmask(
-  originalNames: ReadonlyArray<string>,
-  present: ReadonlyArray<{ name: string }>,
-): number {
+export function computePresentBitmask(originalNames: ReadonlyArray<string>, present: ReadonlyArray<{ name: string }>): number {
   let mask = 0;
   for (let origIdx = 0; origIdx < originalNames.length; origIdx++) {
     const origName = originalNames[origIdx]!;
     for (let p = 0; p < present.length; p++) {
       if (present[p]!.name === origName) {
-        mask |= (1 << origIdx);
+        mask |= 1 << origIdx;
         break;
       }
     }

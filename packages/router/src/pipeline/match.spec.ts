@@ -7,8 +7,9 @@
 import { describe, expect, it } from 'bun:test';
 
 import type { PathNormalizer } from '../codegen';
-import { createMatchState } from '../matcher/match-state';
 import type { MatchFn } from '../types';
+
+import { createMatchState } from '../matcher/match-state';
 import { MatchLayer } from './match';
 
 interface LayerInput {
@@ -44,14 +45,7 @@ describe('allowedMethods — static-mask branch', () => {
     mask['/x'] = (1 << 1) | (1 << 3) | (1 << 5);
     const layer = makeLayer({
       mask,
-      active: [
-        ['A', 0] as const,
-        ['B', 1] as const,
-        ['C', 2] as const,
-        ['D', 3] as const,
-        ['E', 4] as const,
-        ['F', 5] as const,
-      ],
+      active: [['A', 0] as const, ['B', 1] as const, ['C', 2] as const, ['D', 3] as const, ['E', 4] as const, ['F', 5] as const],
     });
     expect([...layer.allowedMethods('/x')].sort()).toEqual(['B', 'D', 'F']);
   });
@@ -114,7 +108,7 @@ describe('allowedMethods — dynamic walker branch', () => {
 describe('allowedMethods — normalize preprocessing wiring', () => {
   it('applies normalizePath to the input before mask + walker dispatch', () => {
     const recorded: string[] = [];
-    const normalize: PathNormalizer = (path) => {
+    const normalize: PathNormalizer = path => {
       recorded.push(path);
       return path.toLowerCase();
     };

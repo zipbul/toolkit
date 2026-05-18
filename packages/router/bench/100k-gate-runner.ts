@@ -33,7 +33,7 @@ printEnv();
 
 function parseRun(stdout: string): RunResult {
   const build = stdout.match(/build=([0-9.]+)ms mem=rss=([0-9.-]+)MB heap=([0-9.-]+)MB arrayBuffers=([0-9.-]+)MB/);
-  if (build === null) throw new Error(`failed to parse build line\n${stdout}`);
+  if (build === null) {throw new Error(`failed to parse build line\n${stdout}`);}
 
   const firstNs = [...stdout.matchAll(/^first .+? (\d+)ns$/gm)].map(match => Number(match[1]));
   const hitNs = [...stdout.matchAll(/^hit .+? ([0-9.]+) ns\/op checksum=/gm)].map(match => Number(match[1]));
@@ -59,11 +59,7 @@ for (const scenario of scenarios) {
   console.log(`\n## ${scenario}`);
 
   for (let i = 0; i < runs; i++) {
-    const child = spawnSync(
-      'bun',
-      [verificationPath, scenario],
-      { encoding: 'utf8', maxBuffer: 1024 * 1024 * 16 },
-    );
+    const child = spawnSync('bun', [verificationPath, scenario], { encoding: 'utf8', maxBuffer: 1024 * 1024 * 16 });
 
     if (child.status !== 0) {
       console.error(child.stdout);
@@ -74,8 +70,8 @@ for (const scenario of scenarios) {
     const parsed = parseRun(child.stdout);
     results.push(parsed);
     console.log(
-      `run=${i + 1} build=${fmt(parsed.buildMs)}ms rss=${fmt(parsed.rssMb)}MB heap=${fmt(parsed.heapMb)}MB `
-      + `firstMax=${fmt(Math.max(...parsed.firstNs), 0)}ns hitMax=${fmt(Math.max(...parsed.hitNs))}ns missMax=${fmt(Math.max(...parsed.missNs))}ns`,
+      `run=${i + 1} build=${fmt(parsed.buildMs)}ms rss=${fmt(parsed.rssMb)}MB heap=${fmt(parsed.heapMb)}MB ` +
+        `firstMax=${fmt(Math.max(...parsed.firstNs), 0)}ns hitMax=${fmt(Math.max(...parsed.hitNs))}ns missMax=${fmt(Math.max(...parsed.missNs))}ns`,
     );
   }
 
@@ -91,11 +87,11 @@ for (const scenario of scenarios) {
   // are distinct; p75/p99 would collapse to max. first/hits/misses are
   // flatMapped over runs×scenario-paths so percentiles carry signal.
   console.log(
-    `summary scenario="${scenario}" runs=${runs} `
-    + `buildMedian=${fmt(median(builds))}ms buildMax=${fmt(Math.max(...builds))}ms `
-    + `rssMedian=${fmt(median(rss))}MB heapMedian=${fmt(median(heap))}MB arrayBuffersMedian=${fmt(median(buffers))}MB `
-    + `firstMedian=${fmt(median(first), 0)}ns firstP75=${fmt(percentile(first, 75), 0)}ns firstP99=${fmt(percentile(first, 99), 0)}ns `
-    + `hitMedian=${fmt(median(hits))}ns hitP75=${fmt(percentile(hits, 75))}ns hitP99=${fmt(percentile(hits, 99))}ns `
-    + `missMedian=${fmt(median(misses))}ns missP75=${fmt(percentile(misses, 75))}ns missP99=${fmt(percentile(misses, 99))}ns`,
+    `summary scenario="${scenario}" runs=${runs} ` +
+      `buildMedian=${fmt(median(builds))}ms buildMax=${fmt(Math.max(...builds))}ms ` +
+      `rssMedian=${fmt(median(rss))}MB heapMedian=${fmt(median(heap))}MB arrayBuffersMedian=${fmt(median(buffers))}MB ` +
+      `firstMedian=${fmt(median(first), 0)}ns firstP75=${fmt(percentile(first, 75), 0)}ns firstP99=${fmt(percentile(first, 99), 0)}ns ` +
+      `hitMedian=${fmt(median(hits))}ns hitP75=${fmt(percentile(hits, 75))}ns hitP99=${fmt(percentile(hits, 99))}ns ` +
+      `missMedian=${fmt(median(misses))}ns missP75=${fmt(percentile(misses, 75))}ns missP99=${fmt(percentile(misses, 99))}ns`,
   );
 }

@@ -1,7 +1,8 @@
 import { afterEach, describe, expect, it } from 'bun:test';
 
-import { DEFAULT_MARKER_KEY, err, isErr, safe, setMarkerKey } from '../index';
 import type { Result, ResultAsync } from '../index';
+
+import { DEFAULT_MARKER_KEY, err, isErr, safe, setMarkerKey } from '../index';
 
 describe('result', () => {
   afterEach(() => {
@@ -43,7 +44,7 @@ describe('result', () => {
   it('should work with Result function pattern: success case', () => {
     // Arrange
     function findItem(id: string): Result<{ id: string }, { code: string }> {
-      if (!id) return err({ code: 'INVALID' });
+      if (!id) {return err({ code: 'INVALID' });}
       return { id };
     }
     // Act
@@ -58,7 +59,7 @@ describe('result', () => {
   it('should work with Result function pattern: error case', () => {
     // Arrange
     function findItem(id: string): Result<{ id: string }, { code: string }> {
-      if (!id) return err({ code: 'INVALID' });
+      if (!id) {return err({ code: 'INVALID' });}
       return { id };
     }
     // Act
@@ -145,7 +146,7 @@ describe('result', () => {
   it('should work with generic Result function', () => {
     // Arrange
     function safeDivide(a: number, b: number): Result<number, string> {
-      if (b === 0) return err('division by zero');
+      if (b === 0) {return err('division by zero');}
       return a / b;
     }
     // Act
@@ -209,10 +210,7 @@ describe('result', () => {
 
     it('should produce ResultAsync narrowable by isErr when promise rejects with mapErr', async () => {
       // Arrange
-      const resultAsync: ResultAsync<string, string> = safe(
-        Promise.reject(new Error('async fail')),
-        (e) => (e as Error).message,
-      );
+      const resultAsync: ResultAsync<string, string> = safe(Promise.reject(new Error('async fail')), e => (e as Error).message);
       const result = await resultAsync;
       // Act / Assert
       expect(isErr(result)).toBe(true);

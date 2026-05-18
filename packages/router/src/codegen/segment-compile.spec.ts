@@ -6,6 +6,9 @@
  */
 import { describe, expect, it } from 'bun:test';
 
+import type { SegmentNode } from '../tree';
+
+import { createSegmentNode } from '../tree';
 import {
   emitMultiWildcardTerminal,
   emitRootSlashTerminal,
@@ -13,8 +16,6 @@ import {
   emitTesterCheck,
   emitWildcardStore,
 } from './segment-compile';
-import type { SegmentNode } from '../tree';
-import { createSegmentNode } from '../tree';
 
 describe('emitTesterCheck', () => {
   it('returns an empty string when there is no tester (testerIdx === -1)', () => {

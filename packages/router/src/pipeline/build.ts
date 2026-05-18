@@ -1,23 +1,10 @@
-import type {
-  MatchFn,
-  MatchOutput,
-  MatchState,
-  RouteParams,
-  RouterOptions,
-} from '../types';
+import type { MatchFn, MatchOutput, MatchState, RouteParams, RouterOptions } from '../types';
 import type { RegistrationSnapshot } from './registration';
 
-import { MethodRegistry } from '../method-registry';
+import { buildPathNormalizer, type PathNormalizer } from '../codegen';
 import { EMPTY_PARAMS, STATIC_META, createNullProtoBucket } from '../internal';
-import {
-  buildPathNormalizer,
-  type PathNormalizer,
-} from '../codegen';
-import {
-  createMatchState,
-  createSegmentWalker,
-  decoder,
-} from '../matcher';
+import { createMatchState, createSegmentWalker, decoder } from '../matcher';
+import { MethodRegistry } from '../method-registry';
 
 /**
  * Configuration for compiled match implementation.
@@ -62,7 +49,7 @@ export function buildFromRegistration<T>(
   const staticByPath: Record<string, { mask: number; outputs: Array<MatchOutput<T> | undefined> }> = createNullProtoBucket();
   for (let mc = 0; mc < snapshot.staticByMethod.length; mc++) {
     const inputBucket = snapshot.staticByMethod[mc];
-    if (inputBucket === undefined) continue;
+    if (inputBucket === undefined) {continue;}
 
     const outBucket = createNullProtoBucket<MatchOutput<T>>();
     staticOutputsByMethod[mc] = outBucket;

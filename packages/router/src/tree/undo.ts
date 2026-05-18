@@ -1,4 +1,4 @@
-import type { ParamSegment, SegmentNode } from './segment-tree';
+import type { ParamSegment, SegmentNode } from './node-types';
 import type { PatternTesterFn } from './pattern-tester';
 
 /**
@@ -88,11 +88,7 @@ export function pushStaticBucketResetUndo<T>(
  * `pushStaticBucketResetUndo` — collapses the `T → unknown` boundary
  * cast into one location.
  */
-export function pushStaticMapDeleteUndo<T>(
-  undoLog: SegmentTreeUndoLog,
-  map: Record<string, T>,
-  key: string,
-): void {
+export function pushStaticMapDeleteUndo<T>(undoLog: SegmentTreeUndoLog, map: Record<string, T>, key: string): void {
   undoLog.push({
     k: UndoKind.StaticMapDelete,
     map: map as unknown as Record<string, unknown>,
@@ -158,8 +154,12 @@ export function applyUndo(entry: UndoRecord): void {
       entry.n.singleChildNext = entry.next;
       return;
     case UndoKind.StaticPathMaskRestore:
-      if (entry.prevMask === 0) delete entry.map[entry.key];
-      else entry.map[entry.key] = entry.prevMask;
+      if (entry.prevMask === 0) {delete entry.map[entry.key];}
+      else {entry.map[entry.key] = entry.prevMask;}
       return;
+    default: {
+      const _exhaustive: never = entry;
+      void _exhaustive;
+    }
   }
 }

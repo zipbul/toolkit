@@ -1,19 +1,17 @@
-import { run, bench, boxplot, summary, do_not_optimize } from 'mitata';
-
 import type { HttpMethod } from '@zipbul/shared';
 
-import { Router } from '../src/router';
+import { run, bench, boxplot, summary, do_not_optimize } from 'mitata';
+
 import type { RouterOptions } from '../src/types';
+
+import { Router } from '../src/router';
 import { printEnv } from './helpers';
 
 printEnv();
 
 // ── Helpers ──
 
-function buildRouter<T>(
-  routes: Array<[string, string, T]>,
-  options: RouterOptions = {},
-): Router<T> {
+function buildRouter<T>(routes: Array<[string, string, T]>, options: RouterOptions = {}): Router<T> {
   const router = new Router<T>(options);
 
   for (const [method, path, value] of routes) {
@@ -84,16 +82,19 @@ const mixedRouter100 = buildRouter(MIXED_ROUTES_100);
 
 // trailingSlash:'ignore' + pathCaseSensitive:false exercise the full option pipeline.
 // No collapsed-slash option exists in RouterOptions, so that axis is not benched.
-const fullOptionsRouter = buildRouter([
-  ['GET', '/users/:id', 1],
-  ['GET', '/users/:id/posts/:postId', 2],
-  ['POST', '/users/:id/posts', 3],
-  ['GET', '/files/*path', 4],
-  ['GET', '/static/page', 5],
-], {
-  trailingSlash: 'ignore',
-  pathCaseSensitive: false,
-});
+const fullOptionsRouter = buildRouter(
+  [
+    ['GET', '/users/:id', 1],
+    ['GET', '/users/:id/posts/:postId', 2],
+    ['POST', '/users/:id/posts', 3],
+    ['GET', '/files/*path', 4],
+    ['GET', '/static/page', 5],
+  ],
+  {
+    trailingSlash: 'ignore',
+    pathCaseSensitive: false,
+  },
+);
 
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 //  BENCHMARKS

@@ -1,8 +1,8 @@
 import { describe, it, expect } from 'bun:test';
 
-import { Router } from '../../src/router';
-import { RouterError } from '../../src/error';
 import { MAX_OPTIONAL_SEGMENTS_PER_ROUTE } from '../../src/builder/route-expand';
+import { RouterError } from '../../src/error';
+import { Router } from '../../src/router';
 import { catchRouterError, firstBuildIssue } from '../test-utils';
 
 function fillMethodsToLimit(router: Router<string>): void {
@@ -12,7 +12,7 @@ function fillMethodsToLimit(router: Router<string>): void {
 }
 
 describe('Router<T> errors', () => {
-  it('should throw RouterError kind=\'router-sealed\' when add called after build', () => {
+  it("should throw RouterError kind='router-sealed' when add called after build", () => {
     const router = new Router<string>();
     router.add('GET', '/x', 'x');
     router.build();
@@ -80,7 +80,7 @@ describe('Router<T> errors', () => {
     }
   });
 
-  it('should throw kind=\'router-sealed\' when addAll called after build', () => {
+  it("should throw kind='router-sealed' when addAll called after build", () => {
     const router = new Router<string>();
     router.add('GET', '/x', 'x');
     router.build();
@@ -90,7 +90,7 @@ describe('Router<T> errors', () => {
     expect(err.data.registeredCount).toBe(0);
   });
 
-  it('should throw kind=\'method-limit\' when exceeding 32 methods', () => {
+  it("should throw kind='method-limit' when exceeding 32 methods", () => {
     const router = new Router<string>();
     fillMethodsToLimit(router);
     router.add('OVERFLOW_METHOD', '/overflow', 'overflow');
@@ -218,10 +218,12 @@ describe('Router<T> errors', () => {
     router.add('GET', '/x', 'x');
     router.build();
 
-    const err = catchRouterError(() => router.addAll([
-      ['POST', '/a', 'a'],
-      ['PUT', '/b', 'b'],
-    ]));
+    const err = catchRouterError(() =>
+      router.addAll([
+        ['POST', '/a', 'a'],
+        ['PUT', '/b', 'b'],
+      ]),
+    );
     expect(err.data.kind).toBe('router-sealed');
     expect(err.data.registeredCount).toBe(0);
   });

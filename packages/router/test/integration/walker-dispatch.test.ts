@@ -16,15 +16,17 @@
  */
 import { describe, it, expect } from 'bun:test';
 
-import { Router } from '../../src/router';
 import { getRouterInternals } from '../../internal';
+import { Router } from '../../src/router';
 
 // ── Helpers ─────────────────────────────────────────────────────────────────
 
 function pickedWalkerName(router: Router<string>): string | null {
-  const trees = (getRouterInternals(router) as unknown as {
-    matchLayer: { trees: Array<((u: string, s: unknown) => boolean) | null> };
-  }).matchLayer.trees;
+  const trees = (
+    getRouterInternals(router) as unknown as {
+      matchLayer: { trees: Array<((u: string, s: unknown) => boolean) | null> };
+    }
+  ).matchLayer.trees;
   const tree = trees.find(t => t != null);
   return tree ? tree.name : null;
 }

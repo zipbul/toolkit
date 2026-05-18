@@ -25,7 +25,6 @@
 ### Patch Changes
 
 - 665e37c: chore: quality audit across all public packages
-
   - Add `sideEffects: false` and `publishConfig.provenance` to all packages
   - Add `.npmignore` to all packages
   - Expand npm keywords for better discoverability
@@ -71,7 +70,6 @@
 ### Minor Changes
 
 - 08bfee5: Add `safe()` function and `ResultAsync` type
-
   - `safe(fn)` / `safe(fn, mapErr)`: wraps sync functions, catches throws into `Err`
   - `safe(promise)` / `safe(promise, mapErr)`: wraps Promises, catches rejections into `Err`
   - `ResultAsync<T, E>`: type alias for `Promise<Result<T, E>>`

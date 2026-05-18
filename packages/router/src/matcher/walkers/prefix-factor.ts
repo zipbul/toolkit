@@ -1,11 +1,6 @@
 import type { DecoderFn, MatchFn, MatchState } from '../../types';
-import {
-  detectTenantFactor,
-  setTenantFactor,
-  type SegmentNode,
-  type TenantFactor,
-} from '../../tree';
 
+import { detectTenantFactor, setTenantFactor, type SegmentNode, type TenantFactor } from '../../tree';
 import { walkSharedSubtree } from './factored';
 
 /**
@@ -23,12 +18,7 @@ function detectPrefixedFactorDry(
 
   // Bound the descent to keep this O(prefix depth) rather than O(tree).
   for (let depth = 0; depth < 32; depth++) {
-    if (
-      cur.paramChild !== null ||
-      cur.wildcardStore !== null ||
-      cur.store !== null ||
-      cur.staticPrefix !== null
-    ) {
+    if (cur.paramChild !== null || cur.wildcardStore !== null || cur.store !== null || cur.staticPrefix !== null) {
       break;
     }
 
@@ -43,22 +33,22 @@ function detectPrefixedFactorDry(
     } else if (cur.staticChildren !== null) {
       for (const k in cur.staticChildren) {
         count++;
-        if (count > 1) break;
+        if (count > 1) {break;}
         onlyKey = k;
         onlyChild = cur.staticChildren[k]!;
       }
     }
 
-    if (count !== 1 || onlyKey === null || onlyChild === null) break;
+    if (count !== 1 || onlyKey === null || onlyChild === null) {break;}
 
     prefixSegs.push(onlyKey);
     cur = onlyChild;
   }
 
-  if (prefixSegs.length === 0) return null;
+  if (prefixSegs.length === 0) {return null;}
 
   const factor = detectTenantFactor(cur);
-  if (factor === null) return null;
+  if (factor === null) {return null;}
 
   return { prefixSegs, factor, deepNode: cur };
 }
@@ -80,11 +70,9 @@ function applyPrefixedFactor(deepNode: SegmentNode, factor: TenantFactor): void 
  * to attach the factor and clear its staticChildren/singleChild slots
  * so the prefixed factored walker owns dispatch.
  */
-export function tryDetectPrefixedFactor(
-  root: SegmentNode,
-): { prefixSegs: string[]; factor: TenantFactor } | null {
+function tryDetectPrefixedFactor(root: SegmentNode): { prefixSegs: string[]; factor: TenantFactor } | null {
   const dry = detectPrefixedFactorDry(root);
-  if (dry === null) return null;
+  if (dry === null) {return null;}
   applyPrefixedFactor(dry.deepNode, dry.factor);
   return { prefixSegs: dry.prefixSegs, factor: dry.factor };
 }
@@ -95,7 +83,7 @@ export function tryDetectPrefixedFactor(
  * then walk the canonical shared subtree. Body after factor lookup is
  * structurally identical to `createFactoredWalker`.
  */
-export function createPrefixedFactoredWalker(
+function createPrefixedFactoredWalker(
   decoder: DecoderFn,
   prefixSegs: string[],
   keyToTerminal: Map<string, number>,
@@ -107,22 +95,14 @@ export function createPrefixedFactoredWalker(
     const len = url.length;
 
     const afterPrefix = consumeFixedPrefix(prefixSegs, prefixCount, url, 1, len);
-    if (afterPrefix < 0 || afterPrefix >= len) return false;
+    if (afterPrefix < 0 || afterPrefix >= len) {return false;}
 
     const keyEnd = scanSegmentEnd(url, afterPrefix, len);
     const seg = keyEnd === afterPrefix ? '' : url.substring(afterPrefix, keyEnd);
     const looked = keyToTerminal.get(seg);
-    if (looked === undefined) return false;
+    if (looked === undefined) {return false;}
 
-    return walkSharedSubtree(
-      sharedNext,
-      url,
-      keyEnd === len ? len : keyEnd + 1,
-      len,
-      looked,
-      decoder,
-      state,
-    );
+    return walkSharedSubtree(sharedNext, url, keyEnd === len ? len : keyEnd + 1, len, looked, decoder, state);
   };
 }
 
@@ -140,25 +120,20 @@ interface PrefixedFactorEntry {
  * application would force a fall-through walker which the IC cannot
  * unify, so we treat partial as "decline".
  */
-export function tryDetectMultiPrefixFactor(root: SegmentNode): Map<string, PrefixedFactorEntry> | null {
-  if (
-    root.paramChild !== null ||
-    root.wildcardStore !== null ||
-    root.store !== null ||
-    root.staticPrefix !== null
-  ) {
+function tryDetectMultiPrefixFactor(root: SegmentNode): Map<string, PrefixedFactorEntry> | null {
+  if (root.paramChild !== null || root.wildcardStore !== null || root.store !== null || root.staticPrefix !== null) {
     return null;
   }
 
   const childMap = root.staticChildren;
-  if (childMap === null) return null;
+  if (childMap === null) {return null;}
 
   let keyCount = 0;
   for (const _k in childMap) {
     keyCount++;
-    if (keyCount > 1) break;
+    if (keyCount > 1) {break;}
   }
-  if (keyCount < 2) return null;
+  if (keyCount < 2) {return null;}
 
   // Phase 1: dry-run every child, abort with tree intact on first failure.
   // Without phase split, a partially-mutated tree would feed the
@@ -216,21 +191,18 @@ export function tryDetectMultiPrefixFactor(root: SegmentNode): Map<string, Prefi
  * that entry's prefix segments, looks up the factor key, and walks the
  * shared subtree.
  */
-export function createMultiPrefixFactoredWalker(
-  decoder: DecoderFn,
-  childMap: Map<string, PrefixedFactorEntry>,
-): MatchFn {
+function createMultiPrefixFactoredWalker(decoder: DecoderFn, childMap: Map<string, PrefixedFactorEntry>): MatchFn {
   return function walk(url: string, state: MatchState): boolean {
     state.paramCount = 0;
     const len = url.length;
 
-    if (url === '/') return false;
+    if (url === '/') {return false;}
 
     let slash1 = 1;
-    while (slash1 < len && url.charCodeAt(slash1) !== 47) slash1++;
+    while (slash1 < len && url.charCodeAt(slash1) !== 47) {slash1++;}
     const firstSeg = slash1 === len ? url.substring(1) : url.substring(1, slash1);
     const entry = childMap.get(firstSeg);
-    if (entry === undefined) return false;
+    if (entry === undefined) {return false;}
 
     const afterPrefix = consumeFixedPrefix(
       entry.prefixSegs,
@@ -239,28 +211,20 @@ export function createMultiPrefixFactoredWalker(
       slash1 === len ? len : slash1 + 1,
       len,
     );
-    if (afterPrefix < 0 || afterPrefix >= len) return false;
+    if (afterPrefix < 0 || afterPrefix >= len) {return false;}
 
     const keyEnd = scanSegmentEnd(url, afterPrefix, len);
     const seg = keyEnd === afterPrefix ? '' : url.substring(afterPrefix, keyEnd);
     const looked = entry.keyToTerminal.get(seg);
-    if (looked === undefined) return false;
+    if (looked === undefined) {return false;}
 
-    return walkSharedSubtree(
-      entry.sharedNext,
-      url,
-      keyEnd === len ? len : keyEnd + 1,
-      len,
-      looked,
-      decoder,
-      state,
-    );
+    return walkSharedSubtree(entry.sharedNext, url, keyEnd === len ? len : keyEnd + 1, len, looked, decoder, state);
   };
 }
 
 /** Consume `prefixSegs` against `url` starting at `pos`. Returns the new
  *  position after the prefix matches, or `-1` on mismatch. */
-export function consumeFixedPrefix(
+function consumeFixedPrefix(
   prefixSegs: ReadonlyArray<string>,
   prefixCount: number,
   url: string,
@@ -271,17 +235,26 @@ export function consumeFixedPrefix(
     const seg = prefixSegs[i]!;
     const segLen = seg.length;
     const after = pos + segLen;
-    if (after > len) return -1;
-    if (!url.startsWith(seg, pos)) return -1;
-    if (after < len && url.charCodeAt(after) !== 47) return -1;
+    if (after > len) {return -1;}
+    if (!url.startsWith(seg, pos)) {return -1;}
+    if (after < len && url.charCodeAt(after) !== 47) {return -1;}
     pos = after === len ? len : after + 1;
   }
   return pos;
 }
 
 /** Scan `url` from `pos` to the next `/` or end. */
-export function scanSegmentEnd(url: string, pos: number, len: number): number {
+function scanSegmentEnd(url: string, pos: number, len: number): number {
   let end = pos;
-  while (end < len && url.charCodeAt(end) !== 47) end++;
+  while (end < len && url.charCodeAt(end) !== 47) {end++;}
   return end;
 }
+
+export {
+  consumeFixedPrefix,
+  createMultiPrefixFactoredWalker,
+  createPrefixedFactoredWalker,
+  scanSegmentEnd,
+  tryDetectMultiPrefixFactor,
+  tryDetectPrefixedFactor,
+};

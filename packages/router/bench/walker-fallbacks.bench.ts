@@ -5,16 +5,18 @@
 // comparable to each other; they are per-walker sanity timings.
 import { bench, do_not_optimize, run, summary } from 'mitata';
 
-import { Router } from '../src/router';
 import { getRouterInternals } from '../internal';
+import { Router } from '../src/router';
 import { printEnv } from './helpers';
 
 printEnv();
 
 function pickedWalkerSource(router: Router<string>): string {
-  const trees = (getRouterInternals(router) as unknown as {
-    matchLayer: { trees: Array<((u: string, s: unknown) => boolean) | null> };
-  }).matchLayer.trees;
+  const trees = (
+    getRouterInternals(router) as unknown as {
+      matchLayer: { trees: Array<((u: string, s: unknown) => boolean) | null> };
+    }
+  ).matchLayer.trees;
   const tree = trees.find(t => t != null);
 
   return tree === undefined || tree === null ? 'none' : tree.toString();

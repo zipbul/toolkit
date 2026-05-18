@@ -1,10 +1,11 @@
 import type { Result } from '@zipbul/result';
-import type { RouterErrorData } from '../types';
-import type { PathPart } from '../tree';
 
 import { err } from '@zipbul/result';
 
-export interface PrefixTrieNode {
+import type { PathPart } from '../tree';
+import type { RouterErrorData } from '../types';
+
+interface PrefixTrieNode {
   literalChildren: Record<string, PrefixTrieNode> | null;
   paramChild: PrefixTrieNode | null;
   paramName: string | null;
@@ -34,8 +35,8 @@ function getRegexParamChildren(node: PrefixTrieNode): PrefixTrieNode[] | null {
   return regexParamChildrenStore.get(node) ?? null;
 }
 function setRegexParamChildren(node: PrefixTrieNode, value: PrefixTrieNode[] | null): void {
-  if (value === null) regexParamChildrenStore.delete(node);
-  else regexParamChildrenStore.set(node, value);
+  if (value === null) {regexParamChildrenStore.delete(node);}
+  else {regexParamChildrenStore.set(node, value);}
 }
 function getRegexAst(node: PrefixTrieNode): string | null {
   return regexAstStore.get(node) ?? null;
@@ -47,11 +48,11 @@ function getWildcardName(node: PrefixTrieNode): string | null {
   return wildcardNameStore.get(node) ?? null;
 }
 function setWildcardName(node: PrefixTrieNode, value: string | null): void {
-  if (value === null) wildcardNameStore.delete(node);
-  else wildcardNameStore.set(node, value);
+  if (value === null) {wildcardNameStore.delete(node);}
+  else {wildcardNameStore.set(node, value);}
 }
 
-export interface RouteMeta {
+interface RouteMeta {
   routeIndex: number;
   path: string;
   method: string;
@@ -65,7 +66,7 @@ export interface RouteMeta {
  * `CommitPlan` carrier instead, eliminating per-route allocation churn under
  * 100k mixed/wildcard-heavy.
  */
-export interface CommitPlan {
+interface CommitPlan {
   /** Trie nodes from root through the terminal/prefix-attachment node. */
   visited: PrefixTrieNode[];
   /** Static-key + parent for each fresh literal edge (rollback removes from parent.literalChildren). */
@@ -78,7 +79,7 @@ export interface CommitPlan {
   wildcardTailName: string | null;
 }
 
-export class WildcardPrefixIndex {
+class WildcardPrefixIndex {
   private readonly roots = new Map<number, PrefixTrieNode>();
 
   /**
@@ -134,7 +135,7 @@ export class WildcardPrefixIndex {
         const segs = part.segments;
         for (let si = 0; si < segs.length; si++) {
           const seg = segs[si]!;
-          if (seg.length === 0) continue;
+          if (seg.length === 0) {continue;}
           if (getWildcardName(node) !== null) {
             return abort(routeUnreachable('ancestor wildcard makes this route unreachable', routeMeta));
           }
@@ -150,7 +151,7 @@ export class WildcardPrefixIndex {
             }
             child = createNode();
             children![seg] = child;
-            if (freshLiteralEdges === null) freshLiteralEdges = [];
+            if (freshLiteralEdges === null) {freshLiteralEdges = [];}
             freshLiteralEdges.push({ parent: node, key: seg, literalChildrenWasNull });
             node = child;
           }
@@ -169,7 +170,10 @@ export class WildcardPrefixIndex {
           if (siblings !== null) {
             for (let i = 0; i < siblings.length; i++) {
               const ex = siblings[i]!;
-              if (getRegexAst(ex) === part.pattern) { matched = ex; break; }
+              if (getRegexAst(ex) === part.pattern) {
+                matched = ex;
+                break;
+              }
             }
           }
           if (matched === null && siblings !== null && siblings.length > 0) {
@@ -191,7 +195,7 @@ export class WildcardPrefixIndex {
               setRegexParamChildren(node, siblings);
             }
             siblings!.push(fresh);
-            if (freshRegexParents === null) freshRegexParents = [];
+            if (freshRegexParents === null) {freshRegexParents = [];}
             freshRegexParents.push({ parent: node, createdArray });
             node = fresh;
           }
@@ -210,7 +214,7 @@ export class WildcardPrefixIndex {
             const fresh = createNode();
             node.paramName = part.name;
             node.paramChild = fresh;
-            if (freshParamParents === null) freshParamParents = [];
+            if (freshParamParents === null) {freshParamParents = [];}
             freshParamParents.push(node);
             node = fresh;
           }
@@ -227,10 +231,11 @@ export class WildcardPrefixIndex {
     partial.hasWildcardTail = wildcardTailName !== null;
     partial.wildcardTailName = wildcardTailName;
 
-    const attachResult = wildcardTailName !== null
-      ? attachWildcardTail(node, wildcardTailName, visited, partial, routeMeta)
-      : attachTerminal(node, visited, partial, routeMeta);
-    if (attachResult !== undefined) return attachResult;
+    const attachResult =
+      wildcardTailName !== null
+        ? attachWildcardTail(node, wildcardTailName, visited, partial, routeMeta)
+        : attachTerminal(node, visited, partial, routeMeta);
+    if (attachResult !== undefined) {return attachResult;}
 
     return partial;
   }
@@ -268,14 +273,14 @@ function applyRevert(plan: CommitPlan, decrementCounters: boolean): void {
     }
   }
   const terminalNode = visited[visited.length - 1]!;
-  if (plan.hasWildcardTail) setWildcardName(terminalNode, null);
-  else terminalNode.terminalMeta = null;
+  if (plan.hasWildcardTail) {setWildcardName(terminalNode, null);}
+  else {terminalNode.terminalMeta = null;}
   const fle = plan.freshLiteralEdges;
   if (fle !== null) {
     for (let i = fle.length - 1; i >= 0; i--) {
       const e = fle[i]!;
-      if (e.parent.literalChildren !== null) delete e.parent.literalChildren[e.key];
-      if (e.literalChildrenWasNull) e.parent.literalChildren = null;
+      if (e.parent.literalChildren !== null) {delete e.parent.literalChildren[e.key];}
+      if (e.literalChildrenWasNull) {e.parent.literalChildren = null;}
     }
   }
   const fpp = plan.freshParamParents;
@@ -293,7 +298,7 @@ function applyRevert(plan: CommitPlan, decrementCounters: boolean): void {
       const siblings = getRegexParamChildren(r.parent);
       if (siblings !== null) {
         siblings.pop();
-        if (r.createdArray) setRegexParamChildren(r.parent, null);
+        if (r.createdArray) {setRegexParamChildren(r.parent, null);}
       }
     }
   }
@@ -306,7 +311,7 @@ function applyRevert(plan: CommitPlan, decrementCounters: boolean): void {
  * plan itself as a tagged undo record (instead of a closure that captures
  * `plan`) avoids one closure allocation per route during high-volume builds.
  */
-export function rollbackPlan(plan: CommitPlan): void {
+function rollbackPlan(plan: CommitPlan): void {
   applyRevert(plan, true);
 }
 
@@ -365,7 +370,7 @@ function routeConflict(why: string, meta: RouteMeta): RouterErrorData {
  * `partial.freshX` carriers so revert can run cleanly on rejection.
  * Returns an `Err` Result on conflict, `undefined` on success.
  */
-export function attachWildcardTail(
+function attachWildcardTail(
   node: PrefixTrieNode,
   name: string,
   visited: PrefixTrieNode[],
@@ -377,7 +382,7 @@ export function attachWildcardTail(
     return err(routeUnreachable('a descendant terminal or wildcard already covers this prefix', routeMeta));
   }
   setWildcardName(node, name);
-  for (let i = 0; i < visited.length; i++) visited[i]!.subtreeWildcardCount++;
+  for (let i = 0; i < visited.length; i++) {visited[i]!.subtreeWildcardCount++;}
   return undefined;
 }
 
@@ -386,7 +391,7 @@ export function attachWildcardTail(
  * permitted optional-expansion duplicate, an `Err` Result on conflict,
  * `undefined` on a normal commit.
  */
-export function attachTerminal(
+function attachTerminal(
   node: PrefixTrieNode,
   visited: PrefixTrieNode[],
   partial: CommitPlan,
@@ -409,7 +414,7 @@ export function attachTerminal(
     return err(routeUnreachable('a wildcard is registered at this exact prefix', routeMeta));
   }
   node.terminalMeta = routeMeta;
-  for (let i = 0; i < visited.length; i++) visited[i]!.subtreeTerminalCount++;
+  for (let i = 0; i < visited.length; i++) {visited[i]!.subtreeTerminalCount++;}
   return undefined;
 }
 
@@ -425,3 +430,5 @@ function routeUnreachable(why: string, meta: RouteMeta): RouterErrorData {
   };
 }
 
+export { attachTerminal, attachWildcardTail, rollbackPlan, WildcardPrefixIndex };
+export type { CommitPlan, PrefixTrieNode, RouteMeta };

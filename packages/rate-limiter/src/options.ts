@@ -1,10 +1,12 @@
-import { err } from '@zipbul/result';
 import type { Result } from '@zipbul/result';
+
+import { err } from '@zipbul/result';
+
+import type { RateLimiterErrorData, RateLimiterOptions } from './interfaces';
+import type { ResolvedRateLimiterOptions } from './types';
 
 import { DEFAULT_ALGORITHM, DEFAULT_CLOCK, DEFAULT_COST, DEFAULT_HOOKS } from './constants';
 import { Algorithm, RateLimiterErrorReason } from './enums';
-import type { RateLimiterErrorData, RateLimiterOptions } from './interfaces';
-import type { ResolvedRateLimiterOptions } from './types';
 import { MemoryStore } from './stores/memory';
 
 /**

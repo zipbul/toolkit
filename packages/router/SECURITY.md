@@ -2,10 +2,10 @@
 
 ## Supported versions
 
-| Version | Security fixes |
-|---|---|
-| Latest `0.x` minor | Yes |
-| Older `0.x` minor | Upgrade to the latest `0.x` minor first |
+| Version            | Security fixes                          |
+| ------------------ | --------------------------------------- |
+| Latest `0.x` minor | Yes                                     |
+| Older `0.x` minor  | Upgrade to the latest `0.x` minor first |
 
 Pre-1.0 packages carry no security backport guarantee.
 

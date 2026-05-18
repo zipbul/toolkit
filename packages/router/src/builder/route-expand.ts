@@ -2,9 +2,9 @@ import type { PathPart } from '../tree';
 
 import { OptionalParamDefaults } from './optional-param-defaults';
 
-export const MAX_OPTIONAL_SEGMENTS_PER_ROUTE = 4;
+const MAX_OPTIONAL_SEGMENTS_PER_ROUTE = 4;
 
-export interface ExpandedRoute {
+interface ExpandedRoute {
   parts: PathPart[];
   handlerIndex: number;
   /**
@@ -21,11 +21,11 @@ interface OptionalCollection {
   names: string[];
 }
 
-export function countOptionalSegments(parts: PathPart[]): number {
+function countOptionalSegments(parts: PathPart[]): number {
   let count = 0;
 
   for (const part of parts) {
-    if (part.type === 'param' && part.optional) count++;
+    if (part.type === 'param' && part.optional) {count++;}
   }
 
   return count;
@@ -39,7 +39,7 @@ export function countOptionalSegments(parts: PathPart[]): number {
  * Records the omitted-param names against `optionalDefaults` so the matcher
  * can fill them with the configured optional-default value at match time.
  */
-export function expandOptional(
+function expandOptional(
   parts: PathPart[],
   handlerIndex: number,
   optionalDefaults: OptionalParamDefaults,
@@ -50,7 +50,10 @@ export function expandOptional(
   let firstOptional = -1;
   for (let i = 0; i < parts.length; i++) {
     const p = parts[i]!;
-    if (p.type === 'param' && p.optional) { firstOptional = i; break; }
+    if (p.type === 'param' && p.optional) {
+      firstOptional = i;
+      break;
+    }
   }
   if (firstOptional === -1) {
     return [{ parts, handlerIndex, isOptionalExpansion: false }];
@@ -94,21 +97,15 @@ function createStaticPart(value: string): PathPart {
  * "all-present" variant; subsequent indices iterate the 2^N - 1 non-empty
  * drop-subsets via bitmask. Empty results collapse to root `/`.
  */
-function enumerateExpansions(
-  parts: PathPart[],
-  handlerIndex: number,
-  optionalIndices: number[],
-): ExpandedRoute[] {
+function enumerateExpansions(parts: PathPart[], handlerIndex: number, optionalIndices: number[]): ExpandedRoute[] {
   const result: ExpandedRoute[] = [];
 
   // Full path (all optionals present, marked as required for insertion).
-  const fullParts = parts.map(p =>
-    p.type === 'param' && p.optional ? { ...p, optional: false } : p,
-  );
+  const fullParts = parts.map(p => (p.type === 'param' && p.optional ? { ...p, optional: false } : p));
   result.push({ parts: fullParts, handlerIndex, isOptionalExpansion: false });
 
   // Iterate the 2^N - 1 non-empty subsets of "which optionals to drop".
-  for (let bit = 1; bit < (1 << optionalIndices.length); bit++) {
+  for (let bit = 1; bit < 1 << optionalIndices.length; bit++) {
     const filtered = filterDroppedSegments(parts, optionalIndices, bit);
     const merged = mergeStaticParts(filtered);
     // Empty result means every required segment was an optional that got
@@ -129,11 +126,7 @@ function enumerateExpansions(
  * slash. Each surviving optional flips its `optional: true` flag off
  * because the insertion path treats it as required for that variant.
  */
-export function filterDroppedSegments(
-  parts: PathPart[],
-  optionalIndices: number[],
-  dropMask: number,
-): PathPart[] {
+function filterDroppedSegments(parts: PathPart[], optionalIndices: number[], dropMask: number): PathPart[] {
   const filtered: PathPart[] = [];
   for (let i = 0; i < parts.length; i++) {
     if (isDroppedAt(i, optionalIndices, dropMask)) {
@@ -147,13 +140,9 @@ export function filterDroppedSegments(
 }
 
 /** Bit `j` set in `dropMask` ⇔ `optionalIndices[j]` is dropped. */
-export function isDroppedAt(
-  partIndex: number,
-  optionalIndices: number[],
-  dropMask: number,
-): boolean {
+function isDroppedAt(partIndex: number, optionalIndices: number[], dropMask: number): boolean {
   for (let j = 0; j < optionalIndices.length; j++) {
-    if (optionalIndices[j] === partIndex && (dropMask & (1 << j))) return true;
+    if (optionalIndices[j] === partIndex && dropMask & (1 << j)) {return true;}
   }
   return false;
 }
@@ -165,10 +154,10 @@ export function isDroppedAt(
  * that one fixes double slashes produced by concatenation; this one
  * fixes single trailing slashes left by drops.
  */
-export function trimTrailingSlashOnDrop(filtered: PathPart[]): void {
-  if (filtered.length === 0) return;
+function trimTrailingSlashOnDrop(filtered: PathPart[]): void {
+  if (filtered.length === 0) {return;}
   const prev = filtered[filtered.length - 1]!;
-  if (prev.type !== 'static' || !prev.value.endsWith('/')) return;
+  if (prev.type !== 'static' || !prev.value.endsWith('/')) {return;}
   const trimmed = prev.value.slice(0, -1);
   if (trimmed.length > 0) {
     filtered[filtered.length - 1] = createStaticPart(trimmed);
@@ -210,3 +199,13 @@ function mergeStaticParts(parts: PathPart[]): PathPart[] {
 
   return result;
 }
+
+export {
+  countOptionalSegments,
+  expandOptional,
+  filterDroppedSegments,
+  isDroppedAt,
+  MAX_OPTIONAL_SEGMENTS_PER_ROUTE,
+  trimTrailingSlashOnDrop,
+};
+export type { ExpandedRoute };

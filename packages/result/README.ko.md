@@ -27,8 +27,8 @@ bun add @zipbul/result
 ```typescript
 // ❌ Throw — 호출자는 뭐가 올지 전혀 모릅니다
 function parseConfig(raw: string): Config {
-  if (!raw) throw new Error('empty input');      // 타입이 뭔가요? 알 수 없음.
-  if (!valid(raw)) throw new ValidationError();  // 조용히 상위로 전파됨.
+  if (!raw) throw new Error('empty input'); // 타입이 뭔가요? 알 수 없음.
+  if (!valid(raw)) throw new ValidationError(); // 조용히 상위로 전파됨.
   return JSON.parse(raw);
 }
 
@@ -55,7 +55,7 @@ const result = parseConfig(input);
 if (isErr(result)) {
   console.error(result.data); // string — TypeScript가 타입을 압니다
 } else {
-  console.log(result.host);   // Config — 완전히 좁혀짐
+  console.log(result.host); // Config — 완전히 좁혀짐
 }
 ```
 
@@ -103,10 +103,10 @@ if (isErr(result)) {
 import { err } from '@zipbul/result';
 ```
 
-| 오버로드 | 반환 | 설명 |
-|:---------|:-----|:-----|
-| `err()` | `Err<never>` | 데이터 없는 에러 |
-| `err<E>(data: E)` | `Err<E>` | 데이터가 첨부된 에러 |
+| 오버로드          | 반환         | 설명                 |
+| :---------------- | :----------- | :------------------- |
+| `err()`           | `Err<never>` | 데이터 없는 에러     |
+| `err<E>(data: E)` | `Err<E>`     | 데이터가 첨부된 에러 |
 
 ```typescript
 // 데이터 없음 — 단순 신호
@@ -124,9 +124,9 @@ const e3 = err({ code: 'TIMEOUT', retryAfter: 3000 });
 
 반환된 `Err`의 프로퍼티:
 
-| 프로퍼티 | 타입 | 설명 |
-|:---------|:-----|:-----|
-| `data` | `E` | 첨부된 에러 데이터 |
+| 프로퍼티 | 타입 | 설명               |
+| :------- | :--- | :----------------- |
+| `data`   | `E`  | 첨부된 에러 데이터 |
 
 > **불변성** — 모든 `Err`는 `Object.freeze()`됩니다. strict mode에서 프로퍼티를 수정하면 `TypeError`가 발생합니다.
 
@@ -141,7 +141,7 @@ import { isErr } from '@zipbul/result';
 ```
 
 ```typescript
-function isErr<E = unknown>(value: unknown): value is Err<E>
+function isErr<E = unknown>(value: unknown): value is Err<E>;
 ```
 
 - `value`가 null이 아닌 객체이고, 마커 프로퍼티가 `true`인 경우에만 `true`를 반환합니다.
@@ -171,10 +171,10 @@ if (isErr(result)) {
 type Result<T, E = never> = T | Err<E>;
 ```
 
-| 파라미터 | 기본값 | 설명 |
-|:---------|:-------|:-----|
-| `T` | — | 성공 값 타입 |
-| `E` | `never` | 에러 데이터 타입 |
+| 파라미터 | 기본값  | 설명             |
+| :------- | :------ | :--------------- |
+| `T`      | —       | 성공 값 타입     |
+| `E`      | `never` | 에러 데이터 타입 |
 
 ```typescript
 // 단순 — 에러 데이터 없음
@@ -211,12 +211,12 @@ type Err<E = never> = {
 import { safe } from '@zipbul/result';
 ```
 
-| 오버로드 | 반환 | 설명 |
-|:---------|:-----|:-----|
-| `safe(fn)` | `Result<T, unknown>` | 동기 — `fn()` 호출, throw 캐치 |
-| `safe(fn, mapErr)` | `Result<T, E>` | 동기 — throw 캐치, `mapErr`로 변환 |
-| `safe(promise)` | `ResultAsync<T, unknown>` | 비동기 — rejection 래핑 |
-| `safe(promise, mapErr)` | `ResultAsync<T, E>` | 비동기 — rejection 래핑, `mapErr`로 변환 |
+| 오버로드                | 반환                      | 설명                                     |
+| :---------------------- | :------------------------ | :--------------------------------------- |
+| `safe(fn)`              | `Result<T, unknown>`      | 동기 — `fn()` 호출, throw 캐치           |
+| `safe(fn, mapErr)`      | `Result<T, E>`            | 동기 — throw 캐치, `mapErr`로 변환       |
+| `safe(promise)`         | `ResultAsync<T, unknown>` | 비동기 — rejection 래핑                  |
+| `safe(promise, mapErr)` | `ResultAsync<T, E>`       | 비동기 — rejection 래핑, `mapErr`로 변환 |
 
 ```typescript
 // 동기 — throw할 수 있는 함수 래핑
@@ -230,17 +230,14 @@ if (isErr(result)) {
 // 동기 + mapErr — unknown throw를 타입이 있는 에러로 변환
 const typed = safe(
   () => JSON.parse(rawJson),
-  (e) => ({ code: 'PARSE_ERROR', message: String(e) }),
+  e => ({ code: 'PARSE_ERROR', message: String(e) }),
 );
 
 // 비동기 — reject될 수 있는 Promise 래핑
 const asyncResult = await safe(fetch('/api/data'));
 
 // 비동기 + mapErr
-const apiResult = await safe(
-  fetch('/api/users/1'),
-  (e) => ({ code: 'NETWORK', message: String(e) }),
-);
+const apiResult = await safe(fetch('/api/users/1'), e => ({ code: 'NETWORK', message: String(e) }));
 ```
 
 > **동기 경로** — `safe(fn)`은 `!(fn instanceof Promise)`로 함수를 감지합니다. Promise를 _반환하는_ 함수는 동기로 처리되며, Promise 객체가 성공값 `T`가 됩니다.
@@ -257,10 +254,10 @@ const apiResult = await safe(
 type ResultAsync<T, E = never> = Promise<Result<T, E>>;
 ```
 
-| 파라미터 | 기본값 | 설명 |
-|:---------|:-------|:-----|
-| `T` | — | 성공 값 타입 |
-| `E` | `never` | 에러 데이터 타입 |
+| 파라미터 | 기본값  | 설명             |
+| :------- | :------ | :--------------- |
+| `T`      | —       | 성공 값 타입     |
+| `E`      | `never` | 에러 데이터 타입 |
 
 ```typescript
 // 비동기 Result 반환 함수의 반환 타입으로 사용
@@ -271,10 +268,7 @@ async function fetchUser(id: number): ResultAsync<User, string> {
 }
 
 // 또는 기존 Promise를 safe()로 래핑
-const result: ResultAsync<Response, string> = safe(
-  fetch('/api/data'),
-  (e) => String(e),
-);
+const result: ResultAsync<Response, string> = safe(fetch('/api/data'), e => String(e));
 ```
 
 <br>
@@ -287,11 +281,11 @@ const result: ResultAsync<Response, string> = safe(
 import { DEFAULT_MARKER_KEY, getMarkerKey, setMarkerKey } from '@zipbul/result';
 ```
 
-| 내보내기 | 타입 | 설명 |
-|:---------|:-----|:-----|
-| `DEFAULT_MARKER_KEY` | `string` | `'__$$e_9f4a1c7b__'` — 기본 키 |
-| `getMarkerKey()` | `() => string` | 현재 마커 키 반환 |
-| `setMarkerKey(key)` | `(key: string) => void` | 마커 키 변경 |
+| 내보내기             | 타입                    | 설명                           |
+| :------------------- | :---------------------- | :----------------------------- |
+| `DEFAULT_MARKER_KEY` | `string`                | `'__$$e_9f4a1c7b__'` — 기본 키 |
+| `getMarkerKey()`     | `() => string`          | 현재 마커 키 반환              |
+| `setMarkerKey(key)`  | `(key: string) => void` | 마커 키 변경                   |
 
 ```typescript
 // 독립 모듈 간 감지 리셋
@@ -392,10 +386,7 @@ Bun.serve({
     const body = await parseBody(request);
 
     if (isErr(body)) {
-      return Response.json(
-        { error: body.data.code, message: body.data.message },
-        { status: 400 },
-      );
+      return Response.json({ error: body.data.code, message: body.data.message }, { status: 400 });
     }
 
     // body는 Payload

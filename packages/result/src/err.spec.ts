@@ -36,16 +36,22 @@ describe('err', () => {
       // Assert
       expect(result.data).toBe(42);
     });
-
   });
 
   describe('no-throw guarantee', () => {
     it('should not throw when data is a hostile Proxy', () => {
       // Arrange
-      const hostileProxy = new Proxy({}, {
-        get() { throw new Error('proxy trap'); },
-        has() { throw new Error('proxy trap'); },
-      });
+      const hostileProxy = new Proxy(
+        {},
+        {
+          get() {
+            throw new Error('proxy trap');
+          },
+          has() {
+            throw new Error('proxy trap');
+          },
+        },
+      );
       // Act / Assert
       expect(() => err(hostileProxy)).not.toThrow();
       const result = err(hostileProxy);
@@ -179,9 +185,7 @@ describe('err', () => {
       const r2 = err({ code: 'A' });
       // Assert
       expect(r1.data).toEqual(r2.data);
-      expect((r1 as Record<string, unknown>)[getMarkerKey()]).toBe(
-        (r2 as Record<string, unknown>)[getMarkerKey()],
-      );
+      expect((r1 as Record<string, unknown>)[getMarkerKey()]).toBe((r2 as Record<string, unknown>)[getMarkerKey()]);
     });
 
     it('should return different references for same arguments', () => {

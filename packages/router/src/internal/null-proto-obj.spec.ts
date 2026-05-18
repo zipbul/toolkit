@@ -6,14 +6,7 @@
  */
 import { describe, expect, it } from 'bun:test';
 
-import {
-  CACHE_META,
-  DYNAMIC_META,
-  EMPTY_PARAMS,
-  NullProtoObj,
-  STATIC_META,
-  createNullProtoBucket,
-} from './null-proto-obj';
+import { CACHE_META, DYNAMIC_META, EMPTY_PARAMS, NullProtoObj, STATIC_META, createNullProtoBucket } from './null-proto-obj';
 
 describe('NullProtoObj', () => {
   it('produces an object whose prototype chain does not include Object.prototype', () => {

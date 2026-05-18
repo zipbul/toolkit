@@ -74,7 +74,7 @@ describe('createSegmentWalker — iterative tier (non-ambiguous, exceeds codegen
   it('falls back to the iterative walker for wide non-ambiguous fanout', () => {
     // 400 zone prefixes, each with a unique terminal store. Single static
     // child per zone — no ambiguity, but blows past the codegen size budget.
-    const root = manyStaticChildren(400, (i) => leafWithStore(i + 1000));
+    const root = manyStaticChildren(400, i => leafWithStore(i + 1000));
 
     const walker = createSegmentWalker(root, identityDecoder, createMatchState(2));
     expect(walker.name).toBe('walk');

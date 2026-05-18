@@ -20,12 +20,7 @@ export class MultipartFileImpl implements MultipartFile {
   private readonly readable: ReadableStream<Uint8Array>;
   private consumed = false;
 
-  constructor(
-    name: string,
-    filename: string,
-    contentType: string,
-    readable: ReadableStream<Uint8Array>,
-  ) {
+  constructor(name: string, filename: string, contentType: string, readable: ReadableStream<Uint8Array>) {
     this.name = name;
     this.filename = filename;
     this.contentType = contentType;
@@ -60,8 +55,8 @@ export class MultipartFileImpl implements MultipartFile {
       totalLen += chunk.length;
     }
 
-    if (chunks.length === 0) return new Uint8Array(0);
-    if (chunks.length === 1) return chunks[0]!;
+    if (chunks.length === 0) {return new Uint8Array(0);}
+    if (chunks.length === 1) {return chunks[0]!;}
 
     const result = new Uint8Array(totalLen);
     let offset = 0;
@@ -106,14 +101,17 @@ export class MultipartFileImpl implements MultipartFile {
    * @internal Called by {@link Multipart.parse} between part yields.
    */
   drainIfUnconsumed(): void {
-    if (this.consumed) return;
+    if (this.consumed) {return;}
     this.consumed = true;
 
     const reader = this.readable.getReader();
     const pump = (): void => {
-      reader.read().then(({ done }) => {
-        if (!done) pump();
-      }).catch(() => {});
+      reader
+        .read()
+        .then(({ done }) => {
+          if (!done) {pump();}
+        })
+        .catch(() => {});
     };
 
     pump();
@@ -175,10 +173,7 @@ export class BufferedMultipartFile implements MultipartFile {
   }
 
   public async arrayBuffer(): Promise<ArrayBuffer> {
-    return this.data.buffer.slice(
-      this.data.byteOffset,
-      this.data.byteOffset + this.data.byteLength,
-    ) as ArrayBuffer;
+    return this.data.buffer.slice(this.data.byteOffset, this.data.byteOffset + this.data.byteLength) as ArrayBuffer;
   }
 
   public async saveTo(path: string): Promise<number> {

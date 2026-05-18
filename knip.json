@@ -1,0 +1,22 @@
+{
+  "$schema": "https://unpkg.com/knip@latest/schema.json",
+  "workspaces": {
+    "packages/*": {
+      "entry": [
+        "index.ts",
+        "internal.ts",
+        "src/**/*.{spec,test}.ts",
+        "test/**/*.{spec,test}.ts",
+        "bench/**/*.{ts,bench.ts}"
+      ],
+      "project": ["**/*.ts"]
+    }
+  },
+  "ignore": [
+    "**/node_modules/**",
+    "**/dist/**",
+    "**/build/**",
+    "**/target/**"
+  ],
+  "ignoreDependencies": ["@commitlint/cli", "mitata"]
+}
