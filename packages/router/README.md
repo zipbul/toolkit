@@ -75,23 +75,23 @@ if (result) {
 Creates a router instance. `T` is the type of the value stored with each route.
 
 ```typescript
-const router = new Router<string>();
-const router = new Router<() => Response>({ pathCaseSensitive: false });
+const stringRouter = new Router<string>();
+const handlerRouter = new Router<() => Response>({ pathCaseSensitive: false });
 ```
 
 All methods can be detached (`const m = router.match; m('GET', '/x')`) — they do not read `this`.
 
 ### `router.add(method, path, value)`
 
-Registers a route. Throws `RouterError` on invalid path, duplicate route, or if called after `build()`.
+Queues a route for registration. Path-syntax / conflict / duplicate validation runs at `build()` time, not on this call. Throws `RouterError({ kind: 'router-sealed' })` only if called after `build()`.
 
 ```typescript
 router.add('GET', '/users/:id', handler);
 router.add(['GET', 'POST'], '/data', handler); // multiple methods
-router.add('*', '/health', handler); // all standard methods
+router.add('*', '/health', handler); // expand-at-seal
 ```
 
-`'*'` expands to `GET / POST / PUT / PATCH / DELETE / OPTIONS / HEAD`.
+`'*'` expands at `build()` time to every method present at seal — the seven HTTP defaults (`GET / POST / PUT / PATCH / DELETE / OPTIONS / HEAD`) **plus** any custom method introduced by another route registered before `build()`.
 
 #### IRI registration (RFC 3987)
 
@@ -99,6 +99,7 @@ Both IRI (raw Unicode) and URI (percent-encoded UTF-8) forms are accepted **at r
 
 ```typescript
 router.add('GET', '/users/한국', handler);
+router.build();
 // Stored internally as `/users/%ED%95%9C%EA%B5%AD`.
 router.match('GET', '/users/%ED%95%9C%EA%B5%AD'); // ✓ matches
 router.match('GET', '/users/한국'); // ✗ does NOT match (see below)
@@ -110,12 +111,12 @@ router.match('GET', '/users/한국'); // ✗ does NOT match (see below)
 For a hand-constructed IRI input, normalize at the boundary:
 
 ```typescript
-const out = router.match('GET', new URL(`/users/${name}`, 'http://x').pathname);
+const out = router.match('GET', new URL(`/users/${name}`, 'http://localhost').pathname);
 ```
 
 ### `router.addAll(entries)`
 
-Registers multiple routes at once. Fail-fast: throws `RouterError` on the first failure with `data.registeredCount` indicating how many succeeded before the error.
+Queues multiple routes at once. Like `add()`, validation is deferred to `build()`; this call only throws `RouterError({ kind: 'router-sealed' })` if invoked after `build()`.
 
 ```typescript
 router.addAll([
@@ -155,11 +156,11 @@ if (result) {
 
 `meta.source` tells the caller how the match was resolved:
 
-| Value       | What it means for the caller                                                                                                                                              |
-| :---------- | :------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `'static'`  | A literal-path route (no params). The returned `MatchOutput` is shared across calls and frozen — do not mutate. `===` identity is preserved across identical hits.        |
-| `'cache'`   | A previously-resolved dynamic match served from cache. The cached `params` object is frozen and reused across hits — do not mutate, and do not rely on per-call identity. |
-| `'dynamic'` | First-time resolution for a dynamic route. Each call returns a fresh `MatchOutput` with its own `params` object.                                                          |
+| Value       | What it means for the caller                                                                                                                                       |
+| :---------- | :----------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `'static'`  | A literal-path route (no params). The returned `MatchOutput` is shared across calls and frozen — do not mutate. `===` identity is preserved across identical hits. |
+| `'cache'`   | A dynamic match served from cache. The cached `params` object is frozen and reused across hits — do not mutate, and do not rely on per-call identity.              |
+| `'dynamic'` | First-time resolution for a dynamic route. Each call returns a fresh `MatchOutput` with its own `params` object.                                                   |
 
 ### `router.allowedMethods(path)`
 
@@ -229,10 +230,10 @@ router.add('GET', '/:lang?/docs', handler);
 
 Capture the rest of the URL, including slashes. Wildcard values are **not** percent-decoded. Two semantics, two distinct spellings — colon-form sugar (`:name+` / `:name*`) is rejected at parse time:
 
-| Pattern  | Semantics                          | Empty match                                        |
-| :------- | :--------------------------------- | :------------------------------------------------- |
-| `*name`  | Star — match zero or more segments | `'/files'` against `/files/*path` → `{ path: '' }` |
-| `*name+` | Multi — match one or more segments | `'/assets'` against `/assets/*file+` → no match    |
+| Pattern  | Semantics                                                      | Empty match                                        |
+| :------- | :------------------------------------------------------------- | :------------------------------------------------- |
+| `*name`  | Star — match the entire tail, including slashes (may be empty) | `'/files'` against `/files/*path` → `{ path: '' }` |
+| `*name+` | Multi — match the entire tail, including slashes (non-empty)   | `'/assets'` against `/assets/*file+` → no match    |
 
 ```typescript
 router.add('GET', '/files/*path', handler);
@@ -241,7 +242,7 @@ router.add('GET', '/files/*path', handler);
 
 router.add('GET', '/assets/*file+', handler);
 // /assets/style.css → { file: 'style.css' }
-// /assets           → no match (multi origin requires non-empty tail)
+// /assets           → no match (`*name+` multi-wildcard requires a non-empty tail)
 ```
 
 ---
@@ -299,60 +300,66 @@ Validation options:
 
 ## 🚨 Error Handling
 
-| Method               | Throws                                                                                                  | Returns                  |
-| :------------------- | :------------------------------------------------------------------------------------------------------ | :----------------------- |
-| `add()` / `addAll()` | `RouterError` on invalid path, conflict, or sealed router                                               | `void`                   |
-| `build()`            | `RouterError({ kind: 'route-validation' })` listing every per-route failure                             | `this`                   |
-| `match()`            | `URIError` if a captured param's `%xx` is malformed — wrap in `try / catch` to map to `400 Bad Request` | `MatchOutput<T> \| null` |
-| `allowedMethods()`   | Never throws                                                                                            | `readonly string[]`      |
+| Method               | Throws                                                                                                                 | Returns                  |
+| :------------------- | :--------------------------------------------------------------------------------------------------------------------- | :----------------------- |
+| `add()` / `addAll()` | `RouterError({ kind: 'router-sealed' })` only — every other validation is deferred to `build()`                        | `void`                   |
+| `build()`            | `RouterError({ kind: 'route-validation' })` listing every per-route failure                                            | `this`                   |
+| `match()`            | `URIError` if a captured param's `%xx` is malformed — wrap in `try / catch` to map to `400 Bad Request`                | `MatchOutput<T> \| null` |
+| `allowedMethods()`   | `URIError` if the path drives a regex-param walker through malformed `%xx` — same `try / catch` treatment as `match()` | `readonly string[]`      |
 
 Every `RouterError` carries a structured `data` object — narrow on `data.kind` (discriminated union) to access kind-specific fields like `segment`, `conflictsWith`, `suggestion`, `path`, `method`.
 
 ```typescript
 import { Router, RouterError } from '@zipbul/router';
 
+router.add('GET', '/bad/(unmatched', handler);
+
 try {
-  router.add('GET', '/bad/(unmatched', handler);
+  router.build();
 } catch (e) {
   if (e instanceof RouterError) {
-    e.data.kind; // RouterErrorKind — discriminant
+    e.data.kind; // RouterErrorKind — discriminant (e.g. 'route-validation' from build())
     e.data.message; // Human-readable description
-    e.data.path; // The problematic path (when applicable)
-    e.data.method; // The HTTP method (when applicable)
+    if (e.data.kind === 'route-validation') {
+      e.data.errors; // ReadonlyArray<{ index, route, error: RouterErrorData }>
+    }
   }
 }
 ```
 
 ### Error Kinds
 
-| Kind                                                                                                                                                                                                                                               | When                                                                                                                                                          |
-| :------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | :------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `'router-sealed'`                                                                                                                                                                                                                                  | `add()` / `addAll()` called after `build()`                                                                                                                   |
-| `'route-duplicate'`                                                                                                                                                                                                                                | Same `(method, path)` already registered                                                                                                                      |
-| `'route-conflict'`                                                                                                                                                                                                                                 | Structural conflict — e.g. registering `/files/*a` then `/files/*b` for the same method, or registering `/files/x` after `/files/*path`                       |
-| `'route-unreachable'`                                                                                                                                                                                                                              | A new route would be shadowed by an existing wildcard / terminal at the same prefix — e.g. registering `/files/list` after `/files/*path` for the same method |
-| `'route-parse'`                                                                                                                                                                                                                                    | Invalid path syntax (no leading slash, unclosed regex group, illegal char in param name, etc.)                                                                |
-| `'param-duplicate'`                                                                                                                                                                                                                                | Same param name appears twice in one path (`/x/:id/y/:id`)                                                                                                    |
-| `'method-limit'`                                                                                                                                                                                                                                   | More than 32 distinct HTTP methods registered                                                                                                                 |
-| `'method-empty'` / `'method-invalid-token'`                                                                                                                                                                                                        | Method token violates the HTTP token grammar (RFC 9110 §5.6.2)                                                                                                |
-| `'path-missing-leading-slash'` / `'path-query'` / `'path-fragment'` / `'path-control-char'` / `'path-invalid-pchar'` / `'path-malformed-percent'` / `'path-invalid-utf8'` / `'path-encoded-slash'` / `'path-dot-segment'` / `'path-empty-segment'` | The registered path violates the router-grammar / RFC-conformance gate at registration time                                                                   |
-| `'router-options-invalid'`                                                                                                                                                                                                                         | A `RouterOptions` field failed validation (e.g. `cacheSize` outside `[1, 2³⁰]`)                                                                               |
-| `'route-validation'`                                                                                                                                                                                                                               | One or more routes failed validation during `build()` — `data.errors` lists each per-route failure                                                            |
+| Kind                                                                                                                                                                                                                                               | When                                                                                                                                                                                 |
+| :------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | :----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `'router-sealed'`                                                                                                                                                                                                                                  | `add()` / `addAll()` called after `build()`                                                                                                                                          |
+| `'route-duplicate'`                                                                                                                                                                                                                                | Same `(method, path)` already registered                                                                                                                                             |
+| `'route-conflict'`                                                                                                                                                                                                                                 | Structural collision at the same tree position — e.g. two wildcards with different names (`/files/*a` then `/files/*b`) or a regex param vs a non-regex param of the same name       |
+| `'route-unreachable'`                                                                                                                                                                                                                              | A new route would be shadowed by an existing wildcard / terminal at the same prefix — e.g. registering `/files/list` (or any specific path) after `/files/*path` for the same method |
+| `'route-parse'`                                                                                                                                                                                                                                    | Invalid path syntax (no leading slash, unclosed regex group, illegal char in param name, etc.)                                                                                       |
+| `'param-duplicate'`                                                                                                                                                                                                                                | Same param name appears twice in one path (`/x/:id/y/:id`)                                                                                                                           |
+| `'method-limit'`                                                                                                                                                                                                                                   | More than 32 distinct HTTP methods registered                                                                                                                                        |
+| `'method-empty'` / `'method-invalid-token'`                                                                                                                                                                                                        | Method token violates the HTTP token grammar (RFC 9110 §5.6.2)                                                                                                                       |
+| `'path-missing-leading-slash'` / `'path-query'` / `'path-fragment'` / `'path-control-char'` / `'path-invalid-pchar'` / `'path-malformed-percent'` / `'path-invalid-utf8'` / `'path-encoded-slash'` / `'path-dot-segment'` / `'path-empty-segment'` | The registered path violates the router-grammar / RFC-conformance gate at registration time                                                                                          |
+| `'router-options-invalid'`                                                                                                                                                                                                                         | A `RouterOptions` field failed validation (e.g. `cacheSize` outside `[1, 2³⁰]`)                                                                                                      |
+| `'route-validation'`                                                                                                                                                                                                                               | One or more routes failed validation during `build()` — `data.errors` lists each per-route failure                                                                                   |
 
 ### Conflict examples
 
 ```typescript
 // Cross-method coexistence is allowed
 router.add('GET', '/files/*path', getHandler);
-router.add('POST', '/files/*upload', postHandler); // ok
+router.add('POST', '/files/*upload', postHandler);
+router.build(); // ok
 
 // Same-method wildcard rename: route-conflict
 router.add('GET', '/files/*path', getHandler);
-router.add('GET', '/files/*upload', anotherHandler); // throws
+router.add('GET', '/files/*upload', anotherHandler);
+router.build(); // throws RouterError({ kind: 'route-validation', errors: [ { error: { kind: 'route-conflict', ... } } ] })
 
-// Static under wildcard prefix: route-conflict
+// Static under wildcard prefix: route-unreachable (the wildcard already swallows the entire suffix)
 router.add('GET', '/files/*path', getHandler);
-router.add('GET', '/files/list', listHandler); // throws
+router.add('GET', '/files/list', listHandler);
+router.build(); // throws RouterError({ kind: 'route-validation', errors: [ { error: { kind: 'route-unreachable', ... } } ] })
 ```
 
 ---
@@ -403,19 +410,17 @@ Bun.serve({
 
 ## ⚡ Performance
 
-Indicative hot-path numbers (Bun 1.3.13, Linux x64):
+Hot-path checkpoints (Bun 1.3.13, Linux x64):
 
 | Workload                               |           Range |
 | :------------------------------------- | --------------: |
-| `build()` — 100 routes                 |           ~2 ms |
-| `build()` — 10 000 routes              |          ~25 ms |
+| `build()` — 100 routes                 |        a few ms |
+| `build()` — 10 000 routes              |      tens of ms |
 | `match()` — hit / static               | single-digit ns |
 | `match()` — hit / dynamic (warm cache) |          ~10 ns |
-| `match()` — miss / wrong method        |           ~3 ns |
+| `match()` — miss / wrong method        |        a few ns |
 
-Head-to-head against `memoirist`, `find-my-way`, `rou3`, `hono` (RegExp + Trie), and `koa-tree-router`, `@zipbul/router` leads on every successful-match scenario and ties or wins most miss / wrong-method cases.
-
-Hardware variance is ±20 % and sub-10 ns ops hit clock-granularity noise — for the full table and noise distribution see [`bench-results.md`](./bench-results.md). Reproduce locally with:
+Hardware variance is ±20 % and sub-10 ns ops hit clock-granularity noise. Reproduce locally with:
 
 ```bash
 bun bench/regression-snapshot.ts   # self-bench (11 trials, σ-annotated)
