@@ -1,7 +1,15 @@
+// Purpose: verify each walker-selection branch (codegen / iterative / recursive)
+// is actually picked for shapes that should land on it. Each bench measures
+// its walker on a workload that triggers selection — routes counts and match
+// paths differ across the three benches, so the numbers are NOT directly
+// comparable to each other; they are per-walker sanity timings.
 import { bench, do_not_optimize, run, summary } from 'mitata';
 
 import { Router } from '../src/router';
 import { getRouterInternals } from '../internal';
+import { printEnv } from './helpers';
+
+printEnv();
 
 function pickedWalkerSource(router: Router<string>): string {
   const trees = (getRouterInternals(router) as unknown as {

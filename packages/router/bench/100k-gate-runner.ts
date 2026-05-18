@@ -1,6 +1,10 @@
 /* eslint-disable no-console */
 
 import { spawnSync } from 'node:child_process';
+import { dirname, resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
+
+import { median, percentile, printEnv } from './helpers';
 
 type RunResult = {
   buildMs: number;
@@ -12,7 +16,7 @@ type RunResult = {
   missNs: number[];
 };
 
-const defaultScenarios = [
+const scenarios = [
   '100k static',
   '100k param',
   '100k mixed',
@@ -20,21 +24,12 @@ const defaultScenarios = [
   '100k versioned-api',
   '100k wildcard-heavy',
   '100k regex-heavy',
-  '100k churn',
 ];
-const scenarios = process.argv.length > 2 ? process.argv.slice(2) : defaultScenarios;
-const runs = Number(process.env.RUNS ?? '3');
+const runs = 3;
+const benchDir = dirname(fileURLToPath(import.meta.url));
+const verificationPath = resolve(benchDir, '100k-verification.ts');
 
-function percentile(values: number[], p: number): number {
-  if (values.length === 0) return Number.NaN;
-  const sorted = [...values].sort((a, b) => a - b);
-  const index = Math.min(sorted.length - 1, Math.ceil((p / 100) * sorted.length) - 1);
-  return sorted[index]!;
-}
-
-function median(values: number[]): number {
-  return percentile(values, 50);
-}
+printEnv();
 
 function parseRun(stdout: string): RunResult {
   const build = stdout.match(/build=([0-9.]+)ms mem=rss=([0-9.-]+)MB heap=([0-9.-]+)MB arrayBuffers=([0-9.-]+)MB/);
@@ -66,8 +61,8 @@ for (const scenario of scenarios) {
   for (let i = 0; i < runs; i++) {
     const child = spawnSync(
       'bun',
-      ['packages/router/bench/100k-verification.ts', scenario],
-      { cwd: process.cwd(), encoding: 'utf8', maxBuffer: 1024 * 1024 * 16 },
+      [verificationPath, scenario],
+      { encoding: 'utf8', maxBuffer: 1024 * 1024 * 16 },
     );
 
     if (child.status !== 0) {
@@ -92,9 +87,12 @@ for (const scenario of scenarios) {
   const hits = results.flatMap(result => result.hitNs);
   const misses = results.flatMap(result => result.missNs);
 
+  // builds/rss/heap/buffers are 1 sample per run (runs=3) → only median+max
+  // are distinct; p75/p99 would collapse to max. first/hits/misses are
+  // flatMapped over runs×scenario-paths so percentiles carry signal.
   console.log(
     `summary scenario="${scenario}" runs=${runs} `
-    + `buildMedian=${fmt(median(builds))}ms buildP75=${fmt(percentile(builds, 75))}ms buildP99=${fmt(percentile(builds, 99))}ms `
+    + `buildMedian=${fmt(median(builds))}ms buildMax=${fmt(Math.max(...builds))}ms `
     + `rssMedian=${fmt(median(rss))}MB heapMedian=${fmt(median(heap))}MB arrayBuffersMedian=${fmt(median(buffers))}MB `
     + `firstMedian=${fmt(median(first), 0)}ns firstP75=${fmt(percentile(first, 75), 0)}ns firstP99=${fmt(percentile(first, 99), 0)}ns `
     + `hitMedian=${fmt(median(hits))}ns hitP75=${fmt(percentile(hits, 75))}ns hitP99=${fmt(percentile(hits, 99))}ns `

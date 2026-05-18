@@ -1,17 +1,25 @@
 /**
- * Apples-to-apples microbench against six external routers.
+ * Apples-to-apples cross-router microbench against seven adapters
+ * (zipbul, find-my-way, memoirist, rou3, hono-regexp, hono-trie,
+ * koa-tree-router). Each (adapter × scenario) pair runs in a fresh
+ * child process — JIT code cache, structure cache, IC state, and RSS
+ * baseline are isolated per pair. mitata's cross-router summary
+ * (normalized rankings, p-values) is sacrificed in exchange for true
+ * process-level isolation; compare adapters via stdout raw values.
  *
- * Each adapter is held to the same per-scenario sanity contract before any
- * timing runs:
+ * Each adapter is held to the same per-scenario sanity contract before
+ * any timing runs:
  *   - every hit path the bench will measure must return non-null
  *   - every declared miss path must return null
  *   - the declared wrong-method dispatch must return null
  *   - the wildcard syntax rewrite produces a path the adapter actually
  *     accepts at registration time
- * If any adapter fails the contract for a scenario, that adapter is
- * excluded from the scenario's bench block (with a printed reason)
- * instead of silently emitting a `0 ns/op` line.
+ * If an adapter fails the contract for a scenario, that pair is skipped
+ * (with a printed reason) instead of silently emitting a `0 ns/op` line.
  */
+
+import { spawnSync } from 'node:child_process';
+import { fileURLToPath } from 'node:url';
 
 import { run, bench, summary, do_not_optimize } from 'mitata';
 
@@ -22,6 +30,11 @@ import { createRouter as createRou3, addRoute, findRoute } from 'rou3';
 import { RegExpRouter } from 'hono/router/reg-exp-router';
 import { TrieRouter } from 'hono/router/trie-router';
 import KoaTreeRouter from 'koa-tree-router';
+
+import { printEnv } from './helpers';
+
+const ADAPTER_NAMES = ['zipbul', 'find-my-way', 'memoirist', 'rou3', 'hono-regexp', 'hono-trie', 'koa-tree-router'] as const;
+type AdapterName = (typeof ADAPTER_NAMES)[number];
 
 type Method = string;
 type Route = readonly [Method, string, number];
@@ -122,7 +135,7 @@ const GITHUB_ROUTES: Route[] = [
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 interface Adapter {
-  readonly name: string;
+  readonly name: AdapterName;
   /** Per-scenario route-shape rewrite; identity for adapters that accept
    *  the canonical `*name` named-wildcard form. */
   rewrite(path: string): string;
@@ -131,8 +144,8 @@ interface Adapter {
   match(router: unknown, method: Method, path: string): unknown;
 }
 
-const adapters: Adapter[] = [
-  {
+const adapters: Record<AdapterName, Adapter> = {
+  zipbul: {
     name: 'zipbul',
     rewrite: (p) => p,
     setup: (rs) => {
@@ -143,7 +156,7 @@ const adapters: Adapter[] = [
     },
     match: (r, m, p) => (r as Router<number>).match(m, p),
   },
-  {
+  'find-my-way': {
     name: 'find-my-way',
     // find-my-way accepts a bare trailing `*` as catchall; named `*name`
     // is rejected at register time.
@@ -155,7 +168,7 @@ const adapters: Adapter[] = [
     },
     match: (r, m, p) => (r as ReturnType<typeof FindMyWay>).find(m as 'GET', p),
   },
-  {
+  memoirist: {
     name: 'memoirist',
     // memoirist accepts canonical `*name`.
     rewrite: (p) => p,
@@ -166,7 +179,7 @@ const adapters: Adapter[] = [
     },
     match: (r, m, p) => (r as Memoirist<number>).find(m, p),
   },
-  {
+  rou3: {
     name: 'rou3',
     // rou3 reserves `**:name` as the named catch-all form.
     rewrite: (p) => p.replace(/\/\*([^/]+)$/, '/**:$1'),
@@ -177,7 +190,7 @@ const adapters: Adapter[] = [
     },
     match: (r, m, p) => findRoute(r as ReturnType<typeof createRou3<number>>, m, p),
   },
-  {
+  'hono-regexp': {
     name: 'hono-regexp',
     // hono accepts a bare trailing `*` placeholder.
     rewrite: (p) => p.replace(/\/\*[^/]+$/, '/*'),
@@ -191,7 +204,7 @@ const adapters: Adapter[] = [
       return out[0].length > 0 ? out : null;
     },
   },
-  {
+  'hono-trie': {
     name: 'hono-trie',
     rewrite: (p) => p.replace(/\/\*[^/]+$/, '/*'),
     setup: (rs) => {
@@ -204,7 +217,7 @@ const adapters: Adapter[] = [
       return out[0].length > 0 ? out : null;
     },
   },
-  {
+  'koa-tree-router': {
     name: 'koa-tree-router',
     // koa-tree-router uses `*name` as named catchall.
     rewrite: (p) => p,
@@ -221,14 +234,14 @@ const adapters: Adapter[] = [
       return out.handle === null ? null : out;
     },
   },
-];
+};
 
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 //  SCENARIO DEFINITIONS
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 interface Scenario {
-  /** Display label (also used to name bench summary blocks). */
+  /** Display label (also used to name bench summary blocks and worker argv). */
   label: string;
   /** Canonical route list (each adapter rewrites with `rewrite()` first). */
   routes: ReadonlyArray<Route>;
@@ -296,133 +309,112 @@ const scenarios: Scenario[] = [
     routes: STATIC_ROUTES,
     hits: [],
     misses: [['GET', '/nonexistent/path/that/does/not/exist']],
-    // wrong-method on a known-missing path is the same outcome as a plain
-    // miss; reuse the miss path so the axis is exercised consistently.
-    wrongMethod: ['POST', '/nonexistent/path/that/does/not/exist'],
+    wrongMethod: ['POST', '/api/v1/resource50'],
   },
 ];
 
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-//  SANITY GATE
+//  ORCHESTRATOR / WORKER SPLIT
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-interface BuiltAdapter {
-  adapter: Adapter;
-  router: unknown;
-  /** True iff every hit/miss/wrong-method assertion passed for this scenario. */
-  passed: boolean;
-  failureReason?: string;
-}
+const workerAdapter = process.argv[2];
+const workerScenario = process.argv[3];
+const isWorker = workerAdapter !== undefined && workerScenario !== undefined;
 
-function buildAndCheck(scenario: Scenario): BuiltAdapter[] {
-  return adapters.map((adapter) => {
-    let router: unknown;
-    const rewritten = scenario.routes.map(([m, p, v]) => [m, adapter.rewrite(p), v] as Route);
-    try {
-      router = adapter.setup(rewritten);
-    } catch (e) {
-      return {
-        adapter,
-        router: null,
-        passed: false,
-        failureReason: `setup-failed: ${e instanceof Error ? e.message : String(e)}`,
-      };
-    }
-    for (const [m, p] of scenario.hits) {
-      const r = adapter.match(router, m, p);
-      if (r === null || r === undefined) {
-        return { adapter, router, passed: false, failureReason: `hit-null: ${m} ${p}` };
+if (!isWorker) {
+  printEnv();
+  const total = scenarios.length * ADAPTER_NAMES.length;
+  console.log(`adapters=${ADAPTER_NAMES.length} scenarios=${scenarios.length} pairs=${total} (each pair runs in a fresh process for JIT/IC/RSS isolation)`);
+  const selfPath = fileURLToPath(import.meta.url);
+  let failCount = 0;
+  for (const scenario of scenarios) {
+    for (const adapterName of ADAPTER_NAMES) {
+      console.log(`\n## ${scenario.label} / ${adapterName}`);
+      const child = spawnSync('bun', [selfPath, adapterName, scenario.label], {
+        stdio: ['ignore', 'inherit', 'inherit'],
+      });
+      if (child.status !== 0) {
+        console.error(`pair=${scenario.label}/${adapterName} exited with status ${child.status}`);
+        failCount++;
       }
-    }
-    for (const [m, p] of scenario.misses) {
-      const r = adapter.match(router, m, p);
-      if (r !== null && r !== undefined) {
-        return { adapter, router, passed: false, failureReason: `miss-not-null: ${m} ${p}` };
-      }
-    }
-    {
-      const [m, p] = scenario.wrongMethod;
-      const r = adapter.match(router, m, p);
-      if (r !== null && r !== undefined) {
-        return { adapter, router, passed: false, failureReason: `wrong-method-not-null: ${m} ${p}` };
-      }
-    }
-    return { adapter, router, passed: true };
-  });
-}
-
-// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-//  BENCH HARNESS
-// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-const builtPerScenario = scenarios.map((s) => ({ scenario: s, built: buildAndCheck(s) }));
-
-console.log('## Sanity gate');
-for (const { scenario, built } of builtPerScenario) {
-  for (const b of built) {
-    if (b.passed) {
-      console.log(`  ${scenario.label.padEnd(14)} ${b.adapter.name.padEnd(18)} OK`);
-    } else {
-      console.log(`  ${scenario.label.padEnd(14)} ${b.adapter.name.padEnd(18)} EXCLUDED reason=${b.failureReason}`);
     }
   }
+  process.exit(failCount > 0 ? 1 : 0);
 }
-console.log('');
 
-/**
- * Run a single hit/miss/wrong-method block for one scenario. Each adapter
- * that survived the sanity gate contributes one mitata bench entry; the
- * input arguments are identical across adapters so the comparison is
- * apples-to-apples.
- */
-function benchScenario(scenario: Scenario, built: BuiltAdapter[]): void {
-  // Hit benches — one summary per declared hit path.
+const adapter = adapters[workerAdapter as AdapterName];
+if (adapter === undefined) {
+  console.error(`Unknown adapter '${workerAdapter}'. Valid: ${ADAPTER_NAMES.join(', ')}`);
+  process.exit(1);
+}
+
+const scenario = scenarios.find((s) => s.label === workerScenario);
+if (scenario === undefined) {
+  console.error(`Unknown scenario '${workerScenario}'. Valid: ${scenarios.map((s) => s.label).join(', ')}`);
+  process.exit(1);
+}
+
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+//  SANITY GATE (worker-local; one adapter × one scenario)
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+const rewritten = scenario.routes.map(([m, p, v]) => [m, adapter.rewrite(p), v] as Route);
+let router: unknown;
+try {
+  router = adapter.setup(rewritten);
+} catch (e) {
+  console.log(`sanity=setup-failed adapter=${adapter.name} scenario=${scenario.label} error=${JSON.stringify(e instanceof Error ? e.message : String(e))}`);
+  process.exit(0);
+}
+
+for (const [m, p] of scenario.hits) {
+  const r = adapter.match(router, m, p);
+  if (r === null || r === undefined) {
+    console.log(`sanity=hit-null adapter=${adapter.name} scenario=${scenario.label} path=${JSON.stringify(`${m} ${p}`)}`);
+    process.exit(0);
+  }
+}
+for (const [m, p] of scenario.misses) {
+  const r = adapter.match(router, m, p);
+  if (r !== null && r !== undefined) {
+    console.log(`sanity=miss-not-null adapter=${adapter.name} scenario=${scenario.label} path=${JSON.stringify(`${m} ${p}`)}`);
+    process.exit(0);
+  }
+}
+{
+  const [m, p] = scenario.wrongMethod;
+  const r = adapter.match(router, m, p);
+  if (r !== null && r !== undefined) {
+    console.log(`sanity=wrong-method-not-null adapter=${adapter.name} scenario=${scenario.label} path=${JSON.stringify(`${m} ${p}`)}`);
+    process.exit(0);
+  }
+}
+console.log(`sanity=ok adapter=${adapter.name} scenario=${scenario.label}`);
+
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+//  BENCH (single adapter × single scenario)
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+summary(() => {
   scenario.hits.forEach(([m, path], idx) => {
-    summary(() => {
-      for (const b of built) {
-        if (!b.passed) continue;
-        const router = b.router;
-        const adapter = b.adapter;
-        bench(`${scenario.label}/hit${scenario.hits.length > 1 ? `-${idx}` : ''} — ${adapter.name}`, () => {
-          do_not_optimize(adapter.match(router, m, path));
-        });
-      }
+    bench(`${scenario.label}/hit${scenario.hits.length > 1 ? `-${idx}` : ''} — ${adapter.name}`, () => {
+      do_not_optimize(adapter.match(router, m, path));
     });
   });
 
-  // Miss bench.
   if (scenario.misses.length > 0) {
     const [m, path] = scenario.misses[0]!;
-    summary(() => {
-      for (const b of built) {
-        if (!b.passed) continue;
-        const router = b.router;
-        const adapter = b.adapter;
-        bench(`${scenario.label}/miss — ${adapter.name}`, () => {
-          do_not_optimize(adapter.match(router, m, path));
-        });
-      }
+    bench(`${scenario.label}/miss — ${adapter.name}`, () => {
+      do_not_optimize(adapter.match(router, m, path));
     });
   }
 
-  // Wrong-method bench.
   {
     const [m, path] = scenario.wrongMethod;
-    summary(() => {
-      for (const b of built) {
-        if (!b.passed) continue;
-        const router = b.router;
-        const adapter = b.adapter;
-        bench(`${scenario.label}/wrong-method — ${adapter.name}`, () => {
-          do_not_optimize(adapter.match(router, m, path));
-        });
-      }
+    bench(`${scenario.label}/wrong-method — ${adapter.name}`, () => {
+      do_not_optimize(adapter.match(router, m, path));
     });
   }
-}
-
-for (const { scenario, built } of builtPerScenario) {
-  benchScenario(scenario, built);
-}
+});
 
 await run();

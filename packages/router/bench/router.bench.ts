@@ -4,6 +4,9 @@ import type { HttpMethod } from '@zipbul/shared';
 
 import { Router } from '../src/router';
 import type { RouterOptions } from '../src/types';
+import { printEnv } from './helpers';
+
+printEnv();
 
 // ── Helpers ──
 
@@ -53,7 +56,6 @@ function generateMixedRoutes(count: number): Array<[string, string, number]> {
 
 // ── Route sets ──
 
-const STATIC_ROUTES_10: Array<[string, string, number]> = generateStaticRoutes(10);
 const STATIC_ROUTES_100: Array<[string, string, number]> = generateStaticRoutes(100);
 const STATIC_ROUTES_500: Array<[string, string, number]> = generateStaticRoutes(500);
 const STATIC_ROUTES_1000: Array<[string, string, number]> = generateStaticRoutes(1000);
@@ -61,13 +63,9 @@ const MIXED_ROUTES_100: Array<[string, string, number]> = generateMixedRoutes(10
 
 // ── Pre-built routers ──
 
-const staticRouter10 = buildRouter(STATIC_ROUTES_10);
-const staticRouter100 = buildRouter(STATIC_ROUTES_100);
-const staticRouter500 = buildRouter(STATIC_ROUTES_500);
-const staticRouter1000 = buildRouter(STATIC_ROUTES_1000);
-
-const cachedRouter100 = buildRouter(STATIC_ROUTES_100, { enableCache: true, cacheSize: 200 });
-const cachedRouter1000 = buildRouter(STATIC_ROUTES_1000, { enableCache: true, cacheSize: 2000 });
+// Static lookups hit a hash bucket regardless of table size (compileStaticOnlySingleMethod);
+// one router suffices — extra sizes would just confirm the same O(1).
+const staticRouter = buildRouter(STATIC_ROUTES_100);
 
 const paramRouter = buildRouter([
   ['GET', '/users/:id', 1],
@@ -76,13 +74,6 @@ const paramRouter = buildRouter([
   ['GET', '/orgs/:orgId/teams/:teamId/members/:memberId', 4],
 ]);
 
-const paramRouterCached = buildRouter([
-  ['GET', '/users/:id', 1],
-  ['GET', '/users/:id/posts/:postId', 2],
-  ['GET', '/users/:id/posts/:postId/comments/:commentId', 3],
-  ['GET', '/orgs/:orgId/teams/:teamId/members/:memberId', 4],
-], { enableCache: true, cacheSize: 1000 });
-
 const wildcardRouter = buildRouter([
   ['GET', '/static/*path', 1],
   ['GET', '/files/*filepath', 2],
@@ -90,8 +81,9 @@ const wildcardRouter = buildRouter([
 ]);
 
 const mixedRouter100 = buildRouter(MIXED_ROUTES_100);
-const mixedRouter100Cached = buildRouter(MIXED_ROUTES_100, { enableCache: true, cacheSize: 200 });
 
+// trailingSlash:'ignore' + pathCaseSensitive:false exercise the full option pipeline.
+// No collapsed-slash option exists in RouterOptions, so that axis is not benched.
 const fullOptionsRouter = buildRouter([
   ['GET', '/users/:id', 1],
   ['GET', '/users/:id/posts/:postId', 2],
@@ -99,55 +91,18 @@ const fullOptionsRouter = buildRouter([
   ['GET', '/files/*path', 4],
   ['GET', '/static/page', 5],
 ], {
-  ignoreTrailingSlash: true,
-  caseSensitive: false,
-  enableCache: true,
-  cacheSize: 500,
+  trailingSlash: 'ignore',
+  pathCaseSensitive: false,
 });
-
-// warm up caches
-for (const path of ['/api/v1/resource0', '/api/v1/resource50', '/api/v1/resource99']) {
-  cachedRouter100.match('GET', path);
-}
-
-for (const path of ['/api/v1/resource0', '/api/v1/resource500', '/api/v1/resource999']) {
-  cachedRouter1000.match('GET', path);
-}
-
-for (const path of ['/users/42', '/users/42/posts/7', '/users/42/posts/7/comments/1']) {
-  paramRouterCached.match('GET', path);
-}
-
-for (const path of ['/static/path/0', '/users/1/posts/0', '/files/0/readme.txt']) {
-  mixedRouter100Cached.match('GET', path);
-}
-
-for (const path of ['/users/42', '/static/page', '/files/docs/readme.md']) {
-  fullOptionsRouter.match('GET', path);
-}
 
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 //  BENCHMARKS
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-// ── 1. Static route match ──
+// ── 1. Static route match (single bucket lookup) ──
 
-summary(() => {
-  bench('static match (10 routes)', () => {
-    do_not_optimize(staticRouter10.match('GET', '/api/v1/resource5'));
-  });
-
-  bench('static match (100 routes)', () => {
-    do_not_optimize(staticRouter100.match('GET', '/api/v1/resource50'));
-  });
-
-  bench('static match (500 routes)', () => {
-    do_not_optimize(staticRouter500.match('GET', '/api/v1/resource250'));
-  });
-
-  bench('static match (1000 routes)', () => {
-    do_not_optimize(staticRouter1000.match('GET', '/api/v1/resource500'));
-  });
+bench('static match (hash bucket, 100 routes)', () => {
+  do_not_optimize(staticRouter.match('GET', '/api/v1/resource50'));
 });
 
 // ── 2. Parametric route match ──
@@ -186,63 +141,13 @@ summary(() => {
   });
 });
 
-// ── 4. Cache hit vs miss ──
+// ── 4. Match miss (404, single bucket lookup) ──
 
-summary(() => {
-  bench('cache hit (100 routes)', () => {
-    do_not_optimize(cachedRouter100.match('GET', '/api/v1/resource50'));
-  });
-
-  bench('no-cache (100 routes)', () => {
-    do_not_optimize(staticRouter100.match('GET', '/api/v1/resource50'));
-  });
-
-  bench('cache hit (1000 routes)', () => {
-    do_not_optimize(cachedRouter1000.match('GET', '/api/v1/resource500'));
-  });
-
-  bench('no-cache (1000 routes)', () => {
-    do_not_optimize(staticRouter1000.match('GET', '/api/v1/resource500'));
-  });
+bench('404 miss (hash bucket, 100 routes)', () => {
+  do_not_optimize(staticRouter.match('GET', '/nonexistent/path'));
 });
 
-// ── 5. Cache hit vs miss (parametric) ──
-
-summary(() => {
-  bench('param cache hit: /users/:id', () => {
-    do_not_optimize(paramRouterCached.match('GET', '/users/42'));
-  });
-
-  bench('param no-cache: /users/:id', () => {
-    do_not_optimize(paramRouter.match('GET', '/users/42'));
-  });
-
-  bench('param cache hit: 3-deep', () => {
-    do_not_optimize(paramRouterCached.match('GET', '/users/42/posts/7/comments/1'));
-  });
-
-  bench('param no-cache: 3-deep', () => {
-    do_not_optimize(paramRouter.match('GET', '/users/42/posts/7/comments/1'));
-  });
-});
-
-// ── 6. Match miss (404) ──
-
-summary(() => {
-  bench('404 miss (10 routes)', () => {
-    do_not_optimize(staticRouter10.match('GET', '/nonexistent/path'));
-  });
-
-  bench('404 miss (100 routes)', () => {
-    do_not_optimize(staticRouter100.match('GET', '/nonexistent/path'));
-  });
-
-  bench('404 miss (1000 routes)', () => {
-    do_not_optimize(staticRouter1000.match('GET', '/nonexistent/path'));
-  });
-});
-
-// ── 7. Mixed route types ──
+// ── 5. Mixed route types ──
 
 summary(() => {
   bench('mixed static hit (100 routes)', () => {
@@ -256,17 +161,9 @@ summary(() => {
   bench('mixed wildcard hit (100 routes)', () => {
     do_not_optimize(mixedRouter100.match('GET', '/files/0/docs/readme.md'));
   });
-
-  bench('mixed cached static hit', () => {
-    do_not_optimize(mixedRouter100Cached.match('GET', '/static/path/0'));
-  });
-
-  bench('mixed cached param hit', () => {
-    do_not_optimize(mixedRouter100Cached.match('GET', '/users/1/posts/0'));
-  });
 });
 
-// ── 8. Full options pipeline ──
+// ── 6. Full options pipeline (case-insensitive + trailing slash) ──
 
 summary(() => {
   bench('full-options static match', () => {
@@ -284,19 +181,11 @@ summary(() => {
   bench('full-options trailing slash', () => {
     do_not_optimize(fullOptionsRouter.match('GET', '/Users/42/'));
   });
-
-  bench('full-options collapsed slashes', () => {
-    do_not_optimize(fullOptionsRouter.match('GET', '//Users///42'));
-  });
 });
 
-// ── 9. Route registration (add + build) ──
+// ── 7. Route registration (add + build) ──
 
 boxplot(() => {
-  bench('add+build 10 static routes', () => {
-    do_not_optimize(buildRouter(STATIC_ROUTES_10));
-  }).gc('inner');
-
   bench('add+build 100 static routes', () => {
     do_not_optimize(buildRouter(STATIC_ROUTES_100));
   }).gc('inner');
@@ -308,35 +197,19 @@ boxplot(() => {
   bench('add+build 1000 static routes', () => {
     do_not_optimize(buildRouter(STATIC_ROUTES_1000));
   }).gc('inner');
-});
 
-boxplot(() => {
   bench('add+build 100 mixed routes', () => {
     do_not_optimize(buildRouter(MIXED_ROUTES_100));
   }).gc('inner');
-
-  bench('add+build 100 mixed + cache', () => {
-    do_not_optimize(buildRouter(MIXED_ROUTES_100, { enableCache: true }));
-  }).gc('inner');
 });
 
-// ── 10. Regex param match (7-1) ──
+// ── 8. Regex param match ──
 
 const regexParamRouter = buildRouter([
   ['GET', '/:id(\\d+)', 1],
   ['GET', '/:id(\\d+)/comments', 2],
   ['GET', '/users/:id(\\d+)/posts/:postId(\\d+)', 3],
 ]);
-
-const regexParamRouterCached = buildRouter([
-  ['GET', '/:id(\\d+)', 1],
-  ['GET', '/:id(\\d+)/comments', 2],
-  ['GET', '/users/:id(\\d+)/posts/:postId(\\d+)', 3],
-], { enableCache: true, cacheSize: 500 });
-
-// warm up
-regexParamRouterCached.match('GET', '/42');
-regexParamRouterCached.match('GET', '/users/42/posts/7');
 
 summary(() => {
   bench('regex param match: /:id(\\d+)', () => {
@@ -350,29 +223,15 @@ summary(() => {
   bench('regex param match: /:id(\\d+)/comments', () => {
     do_not_optimize(regexParamRouter.match('GET', '/42/comments'));
   });
-
-  bench('regex param cache hit: /:id(\\d+)', () => {
-    do_not_optimize(regexParamRouterCached.match('GET', '/42'));
-  });
 });
 
-// ── 11. Optional param match (7-2) ──
+// ── 9. Optional param match ──
 
 const optionalParamRouter = buildRouter([
   ['GET', '/:lang?/docs', 1],
   ['GET', '/:lang?/docs/:section', 2],
   ['GET', '/api/:version?/users', 3],
 ]);
-
-const optionalParamRouterCached = buildRouter([
-  ['GET', '/:lang?/docs', 1],
-  ['GET', '/:lang?/docs/:section', 2],
-  ['GET', '/api/:version?/users', 3],
-], { enableCache: true, cacheSize: 500 });
-
-// warm up
-optionalParamRouterCached.match('GET', '/en/docs');
-optionalParamRouterCached.match('GET', '/docs');
 
 summary(() => {
   bench('optional param match: with lang param (/en/docs)', () => {
@@ -386,17 +245,9 @@ summary(() => {
   bench('optional param match: nested /:lang?/docs/:section', () => {
     do_not_optimize(optionalParamRouter.match('GET', '/en/docs/intro'));
   });
-
-  bench('optional param cache hit: with lang', () => {
-    do_not_optimize(optionalParamRouterCached.match('GET', '/en/docs'));
-  });
-
-  bench('optional param cache hit: without lang', () => {
-    do_not_optimize(optionalParamRouterCached.match('GET', '/docs'));
-  });
 });
 
-// ── 12. Multi-method match (7-3) ──
+// ── 10. Multi-method match ──
 
 const multiMethodRouter = buildRouter([
   ['GET', '/api/resources/:id', 1],
@@ -430,7 +281,7 @@ summary(() => {
   });
 });
 
-// ── 13. addAll bulk registration (7-4) ──
+// ── 11. addAll bulk registration ──
 
 function generateParamRoutes(count: number): Array<[string, string, number]> {
   const methods: Array<'GET' | 'POST' | 'PUT' | 'DELETE'> = ['GET', 'POST', 'PUT', 'DELETE'];

@@ -2,24 +2,11 @@
 
 import { performance } from 'node:perf_hooks';
 
-const COUNT = Number(process.argv[2] ?? 100_000);
+import { fmtMem, mem, median, printEnv, settleScavenger } from './helpers';
+
+const COUNT = 100_000;
 const ITER = 2_000;
-
-function gc(): void {
-  if (typeof Bun !== 'undefined') Bun.gc(true);
-}
-
-function mem(): NodeJS.MemoryUsage {
-  gc();
-  return process.memoryUsage();
-}
-
-function fmtMem(before: NodeJS.MemoryUsage, after: NodeJS.MemoryUsage): string {
-  const rss = (after.rss - before.rss) / 1024 / 1024;
-  const heap = (after.heapUsed - before.heapUsed) / 1024 / 1024;
-  const arrayBuffers = (after.arrayBuffers - before.arrayBuffers) / 1024 / 1024;
-  return `rss=${rss.toFixed(2)}MB heap=${heap.toFixed(2)}MB arrayBuffers=${arrayBuffers.toFixed(2)}MB`;
-}
+const WARM_RUNS = 3;
 
 // Phase split per ULT §13 Phase 8 line 2493-2494: route prep, serve init,
 // first request, warmed request — each emits its own latency line so a
@@ -28,10 +15,11 @@ function fmtMem(before: NodeJS.MemoryUsage, after: NodeJS.MemoryUsage): string {
 const SERVE_BUILD_TIMEOUT_MS = 60_000;
 const SERVE_MEM_CAP_MB = 2_048;
 
-console.log(`bun=${Bun.version} node=${process.version} platform=${process.platform} arch=${process.arch}`);
+printEnv();
 console.log(`buildTimeoutMs=${SERVE_BUILD_TIMEOUT_MS} memCapMB=${SERVE_MEM_CAP_MB}`);
 console.log(`preparing routes=${COUNT}`);
 
+settleScavenger();
 const before = mem();
 const prepStart = performance.now();
 const routes: Record<string, Response> = {};
@@ -39,20 +27,26 @@ const routes: Record<string, Response> = {};
 for (let i = 0; i < COUNT; i++) {
   routes[`/api/v1/resource-${i}`] = new Response(String(i));
 }
-const afterPrep = mem();
 const prepMs = performance.now() - prepStart;
+settleScavenger();
+const afterPrep = mem();
 console.log(`routes object prepared prep=${prepMs.toFixed(2)}ms mem=${fmtMem(before, afterPrep)}`);
 
-const buildStart = performance.now();
+function startServer(): { server: ReturnType<typeof Bun.serve>; buildMs: number } {
+  const t0 = performance.now();
+  const s = Bun.serve({
+    port: 0,
+    routes,
+    fetch() {
+      return new Response('miss', { status: 404 });
+    },
+  });
+  return { server: s, buildMs: performance.now() - t0 };
+}
+
 console.log('starting Bun.serve');
-const server = Bun.serve({
-  port: 0,
-  routes,
-  fetch() {
-    return new Response('miss', { status: 404 });
-  },
-});
-const buildMs = performance.now() - buildStart;
+let { server, buildMs } = startServer();
+settleScavenger();
 const after = mem();
 
 if (buildMs > SERVE_BUILD_TIMEOUT_MS) {
@@ -81,9 +75,14 @@ async function firstRequest(path: string): Promise<{ usFirst: number; statusFirs
 
 async function warmedRequest(path: string): Promise<{ usAvg: number; checksum: number }> {
   // Warmed request loop: 100 warmup hits so JIT and connection state are
-  // stable, then ITER measurements. Reported value is the post-warmup
-  // average per-request latency.
-  for (let i = 0; i < 100; i++) await fetch(`http://127.0.0.1:${server.port}${path}`);
+  // stable, then ITER measurements. Body must be consumed every loop so
+  // the warmup walks the same code path as the timed loop below
+  // (skipping .text() leaves connection drain incomplete and biases the
+  // measured loop's first iterations).
+  for (let i = 0; i < 100; i++) {
+    const res = await fetch(`http://127.0.0.1:${server.port}${path}`);
+    await res.text();
+  }
 
   const start = performance.now();
   let checksum = 0;
@@ -96,12 +95,39 @@ async function warmedRequest(path: string): Promise<{ usAvg: number; checksum: n
   return { usAvg, checksum };
 }
 
+let restartCount = 0;
+let restartTotalMs = 0;
+async function restartServer(): Promise<void> {
+  server.stop(true);
+  const { server: s, buildMs: ms } = startServer();
+  server = s;
+  restartCount++;
+  restartTotalMs += ms;
+}
+
 async function benchPhases(path: string): Promise<void> {
+  // Fresh server before cold measurement so cold isn't contaminated by
+  // prior path's warm state (JIT, connection cache).
+  await restartServer();
   const cold = await firstRequest(path);
-  const warm = await warmedRequest(path);
+
+  // Fresh server before each warm run so WARM_RUNS variance reflects
+  // independent measurements, not the same JIT/conn cache observed
+  // multiple times.
+  const warmMeans: number[] = [];
+  let warmChecksum = 0;
+  for (let i = 0; i < WARM_RUNS; i++) {
+    await restartServer();
+    const w = await warmedRequest(path);
+    warmMeans.push(w.usAvg);
+    warmChecksum = w.checksum;
+  }
+  // WARM_RUNS=3 → p99 collapses to max; report only median/min/max.
   console.log(
     `${path.padEnd(28)} firstRequest=${cold.usFirst.toFixed(2)}us status=${cold.statusFirst}` +
-    ` warmedAvg=${warm.usAvg.toFixed(2)}us checksum=${warm.checksum}`,
+    ` warmedRuns=${WARM_RUNS} warmedMedian=${median(warmMeans).toFixed(2)}us` +
+    ` warmedMin=${Math.min(...warmMeans).toFixed(2)}us` +
+    ` warmedMax=${Math.max(...warmMeans).toFixed(2)}us checksum=${warmChecksum}`,
   );
 }
 
@@ -113,3 +139,8 @@ try {
 } finally {
   server.stop(true);
 }
+const restartMean = restartCount > 0 ? restartTotalMs / restartCount : 0;
+console.log(
+  `serverRestarts=${restartCount} restartTotalMs=${restartTotalMs.toFixed(2)} ` +
+  `restartMeanMs=${restartMean.toFixed(2)}`,
+);

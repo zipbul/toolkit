@@ -1,6 +1,8 @@
 /* eslint-disable no-console */
 
+import { spawnSync } from 'node:child_process';
 import { performance } from 'node:perf_hooks';
+import { fileURLToPath } from 'node:url';
 
 import FindMyWay from 'find-my-way';
 import { RegExpRouter } from 'hono/router/reg-exp-router';
@@ -11,29 +13,20 @@ import { addRoute, createRouter as createRou3, findRoute } from 'rou3';
 import { createRouter as createRadix3 } from 'radix3';
 
 import { Router } from '../src/router';
+import { fmtMem, mem, median, percentile, printEnv, settleScavenger } from './helpers';
 
 type Route = [method: string, path: string, value: number];
 
 const COUNT = 100_000;
 const ITER = 200_000;
-const target = process.argv[2] ?? 'zipbul';
-const scenarioName = process.argv[3] ?? 'static';
 
-function gc(): void {
-  if (typeof Bun !== 'undefined') Bun.gc(true);
-}
-
-function mem(): NodeJS.MemoryUsage {
-  gc();
-  return process.memoryUsage();
-}
-
-function fmtMem(before: NodeJS.MemoryUsage, after: NodeJS.MemoryUsage): string {
-  const rss = (after.rss - before.rss) / 1024 / 1024;
-  const heap = (after.heapUsed - before.heapUsed) / 1024 / 1024;
-  const arrayBuffers = (after.arrayBuffers - before.arrayBuffers) / 1024 / 1024;
-  return `rss=${rss.toFixed(2)}MB heap=${heap.toFixed(2)}MB arrayBuffers=${arrayBuffers.toFixed(2)}MB`;
-}
+// argv is an internal worker-mode IPC for the self-spawn loop below.
+// End users never pass argv — they just `bun bench/100k-external-baselines.ts`
+// and the orchestrator branch spawns one fresh process per
+// router × scenario so JIT/RSS isolation is preserved.
+const isWorker = process.argv.length > 2;
+const target = process.argv[2] ?? '';
+const scenarioName = process.argv[3] ?? '';
 
 function nowNs(): bigint {
   return process.hrtime.bigint();
@@ -79,16 +72,16 @@ function mixedRoutes(): Route[] {
   return out;
 }
 
+type MethodPath = readonly [method: string, path: string];
+
 interface Scenario {
   routes: Route[];
-  hits: string[];
-  misses: string[];
-  /**
-   * Same path as one of the hits but registered under a different method.
-   * Used to verify the adapter actually rejects mismatched methods rather
-   * than returning the GET route for a POST request.
-   */
-  wrongMethod: { method: string; path: string };
+  /** Method-aware hits so mixed scenarios (POST/DELETE/PATCH routes)
+   *  are exercised under the correct method, matching 100k-verification. */
+  hits: readonly MethodPath[];
+  misses: readonly MethodPath[];
+  /** Same path as a hit but registered under a different method. */
+  wrongMethod: MethodPath;
 }
 
 function scenario(): Scenario {
@@ -96,14 +89,12 @@ function scenario(): Scenario {
     return {
       routes: paramRoutes(),
       hits: [
-        '/tenant-0/users/42/posts/7',
-        '/tenant-50000/users/42/posts/7',
-        '/tenant-99999/users/42/posts/7',
+        ['GET', '/tenant-0/users/42/posts/7'],
+        ['GET', '/tenant-50000/users/42/posts/7'],
+        ['GET', '/tenant-99999/users/42/posts/7'],
       ],
-      misses: [
-        '/tenant-x/users/42/posts/7',
-      ],
-      wrongMethod: { method: 'POST', path: '/tenant-0/users/42/posts/7' },
+      misses: [['GET', '/tenant-x/users/42/posts/7']],
+      wrongMethod: ['POST', '/tenant-0/users/42/posts/7'],
     };
   }
 
@@ -111,16 +102,12 @@ function scenario(): Scenario {
     return {
       routes: wildcardRoutes(),
       hits: [
-        // Match the bucket numbering used by wildcardRoutes()
-        // (`bucket-${b*1000+g}` for g in [0,1000), b in [0,100)).
-        '/files/group-0/bucket-0/a.txt',
-        '/files/group-500/bucket-50500/a/b/c.txt',
-        '/files/group-999/bucket-99999/a/b/c.txt',
+        ['GET', '/files/group-0/bucket-0/a.txt'],
+        ['GET', '/files/group-0/bucket-50000/a/b/c.txt'],
+        ['GET', '/files/group-999/bucket-99999/a/b/c.txt'],
       ],
-      misses: [
-        '/files/group-x/bucket-0/a.txt',
-      ],
-      wrongMethod: { method: 'POST', path: '/files/group-0/bucket-0/a.txt' },
+      misses: [['GET', '/files/group-x/bucket-0/a.txt']],
+      wrongMethod: ['POST', '/files/group-0/bucket-0/a.txt'],
     };
   }
 
@@ -128,14 +115,13 @@ function scenario(): Scenario {
     return {
       routes: mixedRoutes(),
       hits: [
-        '/v0/static/resource-0',
-        '/v1/users/42/items/50001',
-        '/v19/files/99999/a/b/c.txt',
+        ['GET', '/v0/static/resource-0'],
+        ['GET', '/v1/users/42/items/50001'],
+        ['POST', '/v2/orgs/acme/repos/core/actions/50002'],
+        ['GET', '/v19/files/99999/a/b/c.txt'],
       ],
-      misses: [
-        '/v0/none',
-      ],
-      wrongMethod: { method: 'PATCH', path: '/v0/static/resource-0' },
+      misses: [['GET', '/v0/none']],
+      wrongMethod: ['PATCH', '/v0/static/resource-0'],
     };
   }
 
@@ -147,14 +133,12 @@ function scenario(): Scenario {
   return {
     routes: staticRoutes(),
     hits: [
-      '/api/v1/resource-0',
-      '/api/v1/resource-50000',
-      '/api/v1/resource-99999',
+      ['GET', '/api/v1/resource-0'],
+      ['GET', '/api/v1/resource-50000'],
+      ['GET', '/api/v1/resource-99999'],
     ],
-    misses: [
-      '/api/v1/resource-x',
-    ],
-    wrongMethod: { method: 'POST', path: '/api/v1/resource-0' },
+    misses: [['GET', '/api/v1/resource-x']],
+    wrongMethod: ['POST', '/api/v1/resource-0'],
   };
 }
 
@@ -270,24 +254,25 @@ function correctnessCheck(
   match: (router: unknown, method: string, path: string) => unknown,
   sc: Scenario,
 ): { ok: true } | { ok: false; reason: string; detail: string } {
-  for (const hit of sc.hits) {
-    const r = match(router, 'GET', hit);
+  for (const [m, p] of sc.hits) {
+    const r = match(router, m, p);
     if (r === null || r === undefined) {
-      return { ok: false, reason: 'hit-returned-null', detail: hit };
+      return { ok: false, reason: 'hit-returned-null', detail: `${m} ${p}` };
     }
   }
-  for (const miss of sc.misses) {
-    const r = match(router, 'GET', miss);
+  for (const [m, p] of sc.misses) {
+    const r = match(router, m, p);
     if (r !== null && r !== undefined) {
-      return { ok: false, reason: 'miss-returned-non-null', detail: miss };
+      return { ok: false, reason: 'miss-returned-non-null', detail: `${m} ${p}` };
     }
   }
-  const wm = match(router, sc.wrongMethod.method, sc.wrongMethod.path);
+  const [wmm, wmp] = sc.wrongMethod;
+  const wm = match(router, wmm, wmp);
   if (wm !== null && wm !== undefined) {
     return {
       ok: false,
       reason: 'wrong-method-returned-non-null',
-      detail: `${sc.wrongMethod.method} ${sc.wrongMethod.path}`,
+      detail: `${wmm} ${wmp}`,
     };
   }
   return { ok: true };
@@ -313,6 +298,8 @@ async function measure(name: string, build: (rs: Route[]) => unknown, match: (ro
   const rs = rewrite === undefined
     ? sc.routes
     : sc.routes.map(([m, p, v]) => [m, rewrite(p), v] as Route);
+  // Settle before `before` so RSS baseline matches regression-snapshot.ts:193.
+  settleScavenger();
   const before = mem();
   const start = performance.now();
   let router: unknown;
@@ -327,13 +314,11 @@ async function measure(name: string, build: (rs: Route[]) => unknown, match: (ro
     console.log(`build=${buildMs.toFixed(2)}ms timeoutClass=build phase exceeded ${BUILD_TIMEOUT_MS}ms`);
     return;
   }
-  // Wait long enough for libpas's scavenger to run multiple ticks
-  // (~300 ms each) so RSS settles to its steady-state working set.
-  // 400 ms was too tight against the scavenger period — single-run RSS
-  // varied 55 → 222 → 397 MB depending on whether the read landed
-  // before or after the next tick. 800 ms guarantees ≥2 scavenge cycles
-  // for every adapter and stabilises the reading across runs.
-  await new Promise(r => setTimeout(r, 800));
+  // Unified 1500ms settle (helpers.settleScavenger) so RSS measurement
+  // matches 100k-verification.ts head-to-head. Without it, the two
+  // harnesses would compare zipbul to memoirist under different
+  // scavenger windows and the resulting RSS column would be unfair.
+  settleScavenger();
   const after = mem();
   if (after.rss / 1024 / 1024 > BENCH_MEMORY_CAP_MB) {
     console.log(`build=${buildMs.toFixed(2)}ms memCapClass=exceeded rss=${(after.rss / 1024 / 1024).toFixed(2)}MB`);
@@ -351,11 +336,16 @@ async function measure(name: string, build: (rs: Route[]) => unknown, match: (ro
     );
     return;
   }
-  bench('hit first', () => match(router, 'GET', sc.hits[0]!));
-  bench('hit middle', () => match(router, 'GET', sc.hits[1]!));
-  bench('hit last', () => match(router, 'GET', sc.hits[2]!));
-  bench('miss', () => match(router, 'GET', sc.misses[0]!));
-  bench('wrong-method', () => match(router, sc.wrongMethod.method, sc.wrongMethod.path));
+  for (let i = 0; i < sc.hits.length; i++) {
+    const [m, p] = sc.hits[i]!;
+    bench(`hit ${i}`, () => match(router, m, p));
+  }
+  for (let i = 0; i < sc.misses.length; i++) {
+    const [m, p] = sc.misses[i]!;
+    bench(`miss ${i}`, () => match(router, m, p));
+  }
+  const [wm, wp] = sc.wrongMethod;
+  bench('wrong-method', () => match(router, wm, wp));
 }
 
 const builders: Record<string, () => Promise<void>> = {
@@ -372,7 +362,8 @@ const builders: Record<string, () => Promise<void>> = {
   'find-my-way': () => measure(
     'find-my-way',
     (rs) => {
-      const router = FindMyWay();
+      // ignoreTrailingSlash:true to match 100k-external-correctness.ts:51.
+      const router = FindMyWay({ ignoreTrailingSlash: true });
       for (const [method, path, value] of rs) router.on(method as 'GET', path, () => value);
       return router;
     },
@@ -445,11 +436,91 @@ const builders: Record<string, () => Promise<void>> = {
   ),
 };
 
-const run = builders[target];
-if (run === undefined) {
-  console.error(`Unknown baseline '${target}'. Choices: ${Object.keys(builders).join(', ')}`);
-  process.exit(1);
-}
+if (isWorker) {
+  const run = builders[target];
+  if (run === undefined) {
+    console.error(`Unknown baseline '${target}'. Choices: ${Object.keys(builders).join(', ')}`);
+    process.exit(1);
+  }
+  printEnv();
+  await run();
+} else {
+  const selfPath = fileURLToPath(import.meta.url);
+  const scenarios = ['static', 'param', 'wildcard', 'mixed'] as const;
+  const adapters = Object.keys(builders);
+  const RUNS = 3;
 
-console.log(`bun=${typeof Bun !== 'undefined' ? Bun.version : 'n/a'} node=${process.version} platform=${process.platform} arch=${process.arch}`);
-await run();
+  printEnv();
+  console.log(`adapters=${adapters.length} scenarios=${scenarios.length} runs=${RUNS} (each pair runs in a fresh process; ${RUNS} runs per pair for percentile)`);
+  // Scenario coverage subset of 100k-verification.ts (static/param/wildcard/mixed
+  // only). high-fanout/versioned-api/regex-heavy aren't compared against externals
+  // because hono-trie/hono-regexp/koa-tree-router/radix3 don't fully support them.
+
+  interface PairRun {
+    buildMs: number;
+    rssMb: number;
+    heapMb: number;
+    hitNs: number[];
+    missNs: number[];
+    wrongMethodNs: number[];
+  }
+
+  function parsePairRun(stdout: string): PairRun | null {
+    const build = stdout.match(/build=([0-9.]+)ms mem=rss=([0-9.-]+)MB heap=([0-9.-]+)MB/);
+    if (build === null) return null;
+    const hits = [...stdout.matchAll(/^hit \d+\s+([0-9.]+) ns\/op checksum=/gm)].map((m) => Number(m[1]));
+    const misses = [...stdout.matchAll(/^miss \d+\s+([0-9.]+) ns\/op checksum=/gm)].map((m) => Number(m[1]));
+    const wrong = [...stdout.matchAll(/^wrong-method\s+([0-9.]+) ns\/op checksum=/gm)].map((m) => Number(m[1]));
+    return {
+      buildMs: Number(build[1]),
+      rssMb: Number(build[2]),
+      heapMb: Number(build[3]),
+      hitNs: hits,
+      missNs: misses,
+      wrongMethodNs: wrong,
+    };
+  }
+
+  function fmt(value: number, digits = 2): string {
+    return Number.isFinite(value) ? value.toFixed(digits) : 'n/a';
+  }
+
+  for (const scenario of scenarios) {
+    for (const adapter of adapters) {
+      console.log(`\n=== ${adapter} / ${scenario} ===`);
+      const runs: PairRun[] = [];
+      for (let i = 0; i < RUNS; i++) {
+        const child = spawnSync(
+          'bun',
+          [selfPath, adapter, scenario],
+          { encoding: 'utf8', maxBuffer: 1024 * 1024 * 16 },
+        );
+        if (child.status !== 0) {
+          console.error(`run=${i + 1} status=${child.status}`);
+          console.error(child.stderr);
+          continue;
+        }
+        process.stdout.write(child.stdout);
+        const parsed = parsePairRun(child.stdout);
+        if (parsed !== null) runs.push(parsed);
+      }
+      if (runs.length === 0) continue;
+      const builds = runs.map((r) => r.buildMs);
+      const rss = runs.map((r) => r.rssMb);
+      const heap = runs.map((r) => r.heapMb);
+      const hits = runs.flatMap((r) => r.hitNs);
+      const misses = runs.flatMap((r) => r.missNs);
+      const wrong = runs.flatMap((r) => r.wrongMethodNs);
+      // builds/rss/heap are 1 sample per run (RUNS=3) → use max instead of p99
+      // which would collapse to the same value.
+      console.log(
+        `summary adapter=${adapter} scenario=${scenario} runs=${runs.length} ` +
+        `buildMedian=${fmt(median(builds))}ms buildMax=${fmt(Math.max(...builds))}ms ` +
+        `rssMedian=${fmt(median(rss))}MB heapMedian=${fmt(median(heap))}MB ` +
+        `hitMedian=${fmt(median(hits))}ns hitP99=${fmt(percentile(hits, 99))}ns ` +
+        `missMedian=${fmt(median(misses))}ns missP99=${fmt(percentile(misses, 99))}ns ` +
+        `wrongMethodMedian=${fmt(median(wrong))}ns wrongMethodP99=${fmt(percentile(wrong, 99))}ns`,
+      );
+    }
+  }
+}

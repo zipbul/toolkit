@@ -12,7 +12,6 @@ delta in the PR body.
 | `router.bench.txt` | `bun run bench` (= `bench/router.bench.ts`) | Self-regression: hot-path matching, cache, full-options, build time. § 0.1~0.4 of REFACTOR.md. |
 | `comparison.bench.txt` | `bun run bench/comparison.bench.ts` | Competitor parity: find-my-way, hono (Trie + RegExp), koa-tree-router, memoirist, rou3. § 0.5. |
 | `complex-shapes.bench.txt` | `bun run bench/complex-shapes.bench.ts` | Complex route-shape regression. |
-| `percent-gate.bench.txt` | `bun run bench/percent-gate.bench.ts` | URL-decode gate policy. |
 | `env.txt` | `uname` + `bun --version` + `lscpu` + `/proc/cpuinfo` MHz + scaling info + load | Reproducibility metadata. |
 
 ## Refresh policy

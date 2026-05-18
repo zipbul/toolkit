@@ -3,6 +3,7 @@
 import { performance } from 'node:perf_hooks';
 
 import { Router } from '../src/router';
+import { fmtMem, mem, printEnv, settleScavenger } from './helpers';
 
 type Route = [method: string, path: string, value: number];
 type Scenario = {
@@ -14,31 +15,10 @@ type Scenario = {
 
 const COUNT = 100_000;
 const ITER = 500_000;
+// argv is an internal worker-mode IPC: when 100k-gate-runner.ts spawns
+// this file with a scenario name, only that scenario runs. End users
+// just `bun bench/100k-verification.ts` and get the full suite.
 const scenarioFilter = process.argv[2] ?? 'all';
-
-function gc(): void {
-  // Multi-pass: a single full collection misses post-build garbage when
-  // the segment-tree share pass leaves a large island of unreachable
-  // nodes that JSC can only clean up after the previous cycle's
-  // free-lists have settled. Five passes are enough to reach steady state
-  // on every shape we measure (verified: 5 GCs drives heap from
-  // 270 MiB -> 12 MiB on `100k param` post-share).
-  if (typeof Bun !== 'undefined') {
-    for (let i = 0; i < 5; i++) Bun.gc(true);
-  }
-}
-
-function mem(): NodeJS.MemoryUsage {
-  gc();
-  return process.memoryUsage();
-}
-
-function fmtMem(before: NodeJS.MemoryUsage, after: NodeJS.MemoryUsage): string {
-  const rss = (after.rss - before.rss) / 1024 / 1024;
-  const heap = (after.heapUsed - before.heapUsed) / 1024 / 1024;
-  const arrayBuffers = (after.arrayBuffers - before.arrayBuffers) / 1024 / 1024;
-  return `rss=${rss.toFixed(2)}MB heap=${heap.toFixed(2)}MB arrayBuffers=${arrayBuffers.toFixed(2)}MB`;
-}
 
 function nowNs(): bigint {
   return process.hrtime.bigint();
@@ -69,6 +49,7 @@ function buildZipbul(routes: Route[]): { router: Router<number>; buildMs: number
 
   router.build();
   const buildMs = performance.now() - addStart;
+  settleScavenger();
   const after = mem();
 
   return { router, buildMs, memDelta: fmtMem(before, after) };
@@ -235,28 +216,9 @@ function regexHeavyScenario(): Scenario {
   };
 }
 
-function churnScenario(): Scenario {
-  // 100k param routes; hits/misses use unique paths each call to force
-  // cache eviction churn. Probes cycle through 100k unique IDs (10× cacheSize).
-  const routes: Route[] = [];
-  for (let i = 0; i < COUNT; i++) {
-    routes.push(['GET', `/c-${i}/u/:id`, i]);
-  }
-  // Hits/misses are sampled across the full key space to maximize churn.
-  return {
-    name: '100k churn',
-    routes,
-    hits: [
-      ['GET', '/c-0/u/1'],
-      ['GET', '/c-50000/u/9999'],
-      ['GET', '/c-99999/u/424242'],
-    ],
-    misses: [
-      ['GET', '/c-x/u/1'],
-      ['GET', '/c-0/zzz/1'],
-    ],
-  };
-}
+// Real cache-churn measurement lives in cacheTraversalFeasibility() below
+// (unique-ish path per call defeats the cache). A fixed-hit/fixed-miss
+// scenario at this scale would just duplicate paramScenario().
 
 function wildcardConflictFeasibility(): void {
   console.log('\n## wildcard conflict feasibility');
@@ -339,6 +301,10 @@ function runScenario(scenario: Scenario): void {
   console.log(`\n## ${scenario.name}`);
   console.log(`routes=${scenario.routes.length}`);
 
+  // Settle libpas pages from the previous scenario so this scenario's
+  // RSS baseline isn't inflated by the prior shape's transient frees.
+  settleScavenger();
+
   const built = buildZipbul(scenario.routes);
   console.log(`build=${built.buildMs.toFixed(2)}ms mem=${built.memDelta}`);
 
@@ -355,92 +321,8 @@ function runScenario(scenario: Scenario): void {
   }
 }
 
-function candidateMicrobench(): void {
-  console.log('\n## candidate microbench');
-
-  const path = '/api/v1/resource-50000';
-  const methodCode = Object.create(null) as Record<string, number>;
-  methodCode.GET = 0;
-  methodCode.POST = 1;
-
-  const methodFirst = [Object.create(null), Object.create(null)] as Array<Record<string, number>>;
-  methodFirst[0]![path] = 1;
-  const pathFirst = Object.create(null) as Record<string, Int32Array>;
-  const arr = new Int32Array(8).fill(-1);
-  arr[0] = 1;
-  pathFirst[path] = arr;
-
-  const staticBucket = Object.create(null) as Record<string, number>;
-  staticBucket[path] = 1;
-  const hitCache = new Map<string, number>();
-  hitCache.set(path, 1);
-  const missCache = new Set<string>();
-
-  bench('method-first static table', () => methodFirst[methodCode.GET]![path] ?? null);
-  bench('path-first method array', () => pathFirst[path]?.[methodCode.GET] ?? null);
-  bench('static-first then cache', () => staticBucket[path] ?? hitCache.get(path) ?? null);
-  bench('cache-first then static', () => hitCache.get(path) ?? staticBucket[path] ?? null);
-  bench('miss-cache check then static', () => missCache.has(path) ? null : staticBucket[path] ?? null);
-
-  const url = '/tenant-50000/users/42/posts/7';
-  bench('indexOf segment scan', () => {
-    let pos = 1;
-    let count = 0;
-    while (pos < url.length) {
-      const end = url.indexOf('/', pos);
-      if (end === -1) return count + url.length;
-      count += end;
-      pos = end + 1;
-    }
-    return count;
-  });
-  bench('manual segment scan', () => {
-    let count = 0;
-    for (let i = 1; i < url.length; i++) {
-      if (url.charCodeAt(i) === 47) count += i;
-    }
-    return count;
-  });
-}
-
-async function tryUrlPatternBaseline(): Promise<void> {
-  console.log('\n## URLPattern baseline feasibility');
-  const routes = staticScenario().routes;
-  const before = mem();
-  const start = performance.now();
-  try {
-    const patterns = routes.map(([, path, value]) => ({ pattern: new URLPattern({ pathname: path }), value }));
-    const buildMs = performance.now() - start;
-    const after = mem();
-    console.log(`URLPattern build ok count=${patterns.length} build=${buildMs.toFixed(2)}ms mem=${fmtMem(before, after)}`);
-    const target = '/api/v1/resource-99999';
-    const iterations = 1_000;
-    for (let i = 0; i < 100; i++) {
-      for (const entry of patterns) {
-        if (entry.pattern.test({ pathname: target })) break;
-      }
-    }
-    const scanStart = nowNs();
-    let checksum = 0;
-    for (let i = 0; i < iterations; i++) {
-      for (const entry of patterns) {
-        if (entry.pattern.test({ pathname: target })) {
-          checksum += entry.value;
-          break;
-        }
-      }
-    }
-    const scanNs = Number(nowNs() - scanStart) / iterations;
-    console.log(`URLPattern linear last ${scanNs.toFixed(2)} ns/op checksum=${checksum}`);
-  } catch (error) {
-    console.log(`URLPattern build failed: ${error instanceof Error ? error.message : String(error)}`);
-  }
-}
-
 async function main(): Promise<void> {
-  console.log(`bun=${typeof Bun !== 'undefined' ? Bun.version : 'n/a'}`);
-  console.log(`node=${process.version}`);
-  console.log(`platform=${process.platform} arch=${process.arch}`);
+  printEnv();
 
   const scenarios = [
     staticScenario(),
@@ -450,17 +332,11 @@ async function main(): Promise<void> {
     versionedApiScenario(),
     wildcardHeavyScenario(),
     regexHeavyScenario(),
-    churnScenario(),
   ];
 
   for (const scenario of scenarios) {
     if (scenarioFilter !== 'all' && scenario.name !== scenarioFilter) continue;
     runScenario(scenario);
-  }
-
-  if (scenarioFilter === 'all' || scenarioFilter === 'candidates') {
-    candidateMicrobench();
-    await tryUrlPatternBaseline();
   }
 
   if (scenarioFilter === 'all' || scenarioFilter === 'wildcard-conflict-feasibility') {

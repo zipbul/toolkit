@@ -415,12 +415,11 @@ Bun.serve({
 
 `memoirist`, `find-my-way`, `rou3`, `hono` (RegExp + Trie), `koa-tree-router` 와 head-to-head 에서 `@zipbul/router` 는 모든 "성공 매치" 시나리오 1위, 대부분 miss / wrong-method 시나리오에서 1위 또는 동률.
 
-하드웨어 변동 ±20%, sub-10 ns 연산은 clock 해상도 노이즈 — 전체 표, 노이즈 분포, production-realistic single-router 벤치는 [`bench-results.md`](./bench-results.md) 참조. 로컬 재현:
+하드웨어 변동 ±20%, sub-10 ns 연산은 clock 해상도 노이즈 — 전체 표와 노이즈 분포는 [`bench-results.md`](./bench-results.md) 참조. 로컬 재현:
 
 ```bash
 bun bench/regression-snapshot.ts   # 자체 벤치 (11 trial, σ annotated)
-bun bench/comparison.bench.ts      # 23 시나리오 cross-router head-to-head
-bun bench/comparison-solo.bench.ts # production-realistic per-router probe
+bun bench/comparison.bench.ts      # cross-router head-to-head
 ```
 
 ---

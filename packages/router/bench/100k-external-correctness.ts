@@ -1,7 +1,12 @@
 /* eslint-disable no-console */
 /* Baseline correctness gate vs external routers — checks exact value,
- * params, wrong-method behavior, and wildcard capture. */
+ * params, wrong-method behavior, and wildcard capture.
+ * Exception: koa-tree-router's API can't return the stored value without
+ * invoking the handler, so its value check is skipped (params still
+ * verified). See L107/L184. */
 export {};
+
+import { performance } from 'node:perf_hooks';
 
 import FindMyWay from 'find-my-way';
 import { TrieRouter } from 'hono/router/trie-router';
@@ -9,6 +14,9 @@ import KoaTreeRouter from 'koa-tree-router';
 import { Memoirist } from 'memoirist';
 import { addRoute, createRouter as createRou3, findRoute } from 'rou3';
 import { Router } from '../src/router';
+import { printEnv } from './helpers';
+
+printEnv();
 
 type Probe = {
   method: string;
@@ -22,7 +30,6 @@ type Adapter = {
   name: string;
   build: (routes: Array<[string, string, number]>) => any;
   match: (router: any, method: string, path: string) => null | { value: any; params?: any };
-  supports: { static: boolean; param: boolean; wildcard: boolean; mixed: boolean; regex: boolean; wrongMethod: boolean };
 };
 
 const adapters: Adapter[] = [
@@ -38,7 +45,6 @@ const adapters: Adapter[] = [
       const out = r.match(m, p);
       return out === null ? null : { value: out.value, params: out.params };
     },
-    supports: { static: true, param: true, wildcard: true, mixed: true, regex: true, wrongMethod: true },
   },
   {
     name: 'find-my-way',
@@ -52,7 +58,6 @@ const adapters: Adapter[] = [
       if (out === null) return null;
       return { value: (out.store as number), params: out.params };
     },
-    supports: { static: true, param: true, wildcard: true, mixed: true, regex: false, wrongMethod: true },
   },
   {
     name: 'rou3',
@@ -71,7 +76,6 @@ const adapters: Adapter[] = [
       if (out === undefined) return null;
       return { value: out.data!, params: out.params };
     },
-    supports: { static: true, param: true, wildcard: true, mixed: true, regex: false, wrongMethod: true },
   },
   {
     name: 'memoirist',
@@ -85,7 +89,6 @@ const adapters: Adapter[] = [
       if (out === null) return null;
       return { value: out.store, params: out.params };
     },
-    supports: { static: true, param: true, wildcard: true, mixed: true, regex: false, wrongMethod: true },
   },
   {
     name: 'koa-tree-router',
@@ -101,7 +104,6 @@ const adapters: Adapter[] = [
       if (out.params) for (const { key, value } of out.params) params[key] = value;
       return { value: undefined, params }; // koa returns handle/params, value retrieval requires invoke
     },
-    supports: { static: true, param: true, wildcard: true, mixed: true, regex: false, wrongMethod: true },
   },
   {
     name: 'hono-trie',
@@ -125,7 +127,6 @@ const adapters: Adapter[] = [
       }
       return { value, params };
     },
-    supports: { static: true, param: true, wildcard: true, mixed: true, regex: true, wrongMethod: true },
   },
 ];
 
@@ -142,13 +143,9 @@ function deepEqualParams(a: Record<string, any> | undefined, b: Record<string, a
   return true;
 }
 
-function runScenario(scenarioName: string, routes: Array<[string, string, number]>, probes: Probe[], skipFor: string[] = []): void {
+function runScenario(scenarioName: string, routes: Array<[string, string, number]>, probes: Probe[]): void {
   console.log(`\n=== scenario: ${scenarioName} (routes=${routes.length}, probes=${probes.length}) ===`);
   for (const a of adapters) {
-    if (skipFor.includes(a.name)) {
-      console.log(`  ${a.name.padEnd(18)}: SKIP (declared unsupported)`);
-      continue;
-    }
     let r: any;
     const buildStart = performance.now();
     try { r = a.build(routes); } catch (e) {

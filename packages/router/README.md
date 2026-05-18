@@ -415,12 +415,11 @@ Indicative hot-path numbers (Bun 1.3.13, Linux x64):
 
 Head-to-head against `memoirist`, `find-my-way`, `rou3`, `hono` (RegExp + Trie), and `koa-tree-router`, `@zipbul/router` leads on every successful-match scenario and ties or wins most miss / wrong-method cases.
 
-Hardware variance is ±20 % and sub-10 ns ops hit clock-granularity noise — for the full table, noise distribution, and the production-realistic single-router bench, see [`bench-results.md`](./bench-results.md). Reproduce locally with:
+Hardware variance is ±20 % and sub-10 ns ops hit clock-granularity noise — for the full table and noise distribution see [`bench-results.md`](./bench-results.md). Reproduce locally with:
 
 ```bash
 bun bench/regression-snapshot.ts   # self-bench (11 trials, σ-annotated)
-bun bench/comparison.bench.ts      # 23-scenario cross-router head-to-head
-bun bench/comparison-solo.bench.ts # production-realistic per-router probe
+bun bench/comparison.bench.ts      # cross-router head-to-head
 ```
 
 ---
