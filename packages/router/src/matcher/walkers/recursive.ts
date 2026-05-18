@@ -12,7 +12,7 @@ import { TESTER_PASS, type ParamSegment, type SegmentNode } from '../../tree';
  * restores it on miss so that a sibling param attempt sees a clean
  * paramOffsets state.
  */
-export function createRecursiveWalker(root: SegmentNode, decoder: DecoderFn): MatchFn {
+function createRecursiveWalker(root: SegmentNode, decoder: DecoderFn): MatchFn {
   function tryMatchParam(
     param: ParamSegment,
     path: string,
@@ -114,7 +114,7 @@ export function createRecursiveWalker(root: SegmentNode, decoder: DecoderFn): Ma
   };
 }
 
-export function matchTerminalAtNode(node: SegmentNode, len: number, state: MatchState): boolean {
+function matchTerminalAtNode(node: SegmentNode, len: number, state: MatchState): boolean {
   if (node.store !== null) {
     state.handlerIndex = node.store;
     return true;
@@ -163,3 +163,5 @@ export function tryWildcardCapture(node: SegmentNode, pos: number, len: number, 
   state.handlerIndex = node.wildcardStore;
   return true;
 }
+
+export { createRecursiveWalker };

@@ -682,5 +682,5 @@ function recordExpansionTerminal<T>(
   return tIdx;
 }
 
-export { checkDynamicRouteCaps, collectRouteShape, ensureSegmentTreeRoot, pushHandler, Registration, recordExpansionTerminal };
+export { checkDynamicRouteCaps, collectRouteShape, Registration };
 export type { RegistrationSnapshot };

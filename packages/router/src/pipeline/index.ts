@@ -6,10 +6,8 @@
  * not re-exported here because no external layer depends on them.
  */
 
-export type { BuildResult } from './build';
 export { buildFromRegistration } from './build';
 
 export { MatchLayer } from './match';
 
-export type { RegistrationSnapshot } from './registration';
 export { Registration } from './registration';

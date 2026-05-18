@@ -555,13 +555,5 @@ function normalizeIriSegment(seg: string): string {
 const NFC_ENCODER = new TextEncoder();
 const HEX_UPPER = '0123456789ABCDEF';
 
-export {
-  appendStaticSegment,
-  extractNameAndPattern,
-  flushStaticBuffer,
-  normalizeIriSegment,
-  PathParser,
-  rejectColonWildcardSugar,
-  stripOptionalDecorator,
-};
-export type { ParseResult, PathParserConfig };
+export { extractNameAndPattern, PathParser, rejectColonWildcardSugar, stripOptionalDecorator };
+export type { PathParserConfig };

@@ -459,5 +459,5 @@ function routeUnreachable(why: string, meta: RouteMeta): RouterErrorData {
   };
 }
 
-export { attachTerminal, attachWildcardTail, rollbackPlan, WildcardPrefixIndex };
-export type { CommitPlan, PrefixTrieNode, RouteMeta };
+export { rollbackPlan, WildcardPrefixIndex };
+export type { CommitPlan, RouteMeta };

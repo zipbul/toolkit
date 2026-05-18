@@ -212,4 +212,3 @@ export {
   MAX_OPTIONAL_SEGMENTS_PER_ROUTE,
   trimTrailingSlashOnDrop,
 };
-export type { ExpandedRoute };

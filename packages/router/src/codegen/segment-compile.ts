@@ -476,11 +476,8 @@ export {
   collectWarmupPaths,
   compileSegmentTree,
   emitMultiWildcardTerminal,
-  emitParamBranch,
   emitRootSlashTerminal,
-  emitStaticChildren,
   emitStrictTerminal,
   emitTesterCheck,
   emitWildcardStore,
 };
-export type { CompiledPackage };
