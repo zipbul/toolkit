@@ -11,7 +11,9 @@ import { readFileSync } from 'node:fs';
  *  segment-tree shares; verified to drive heap 270→12 MiB on `100k param`. */
 export function gc(): void {
   if (typeof Bun !== 'undefined') {
-    for (let i = 0; i < 5; i++) {Bun.gc(true);}
+    for (let i = 0; i < 5; i++) {
+      Bun.gc(true);
+    }
   }
 }
 
@@ -20,7 +22,9 @@ export function gc(): void {
  *  returns RSS asynchronously (~300 ms tick). 1.5 s settles every shape
  *  we measure. Sync via Bun.sleepSync so callers stay synchronous. */
 export function settleScavenger(ms = 1500): void {
-  if (typeof Bun !== 'undefined') {Bun.sleepSync(ms);}
+  if (typeof Bun !== 'undefined') {
+    Bun.sleepSync(ms);
+  }
   gc();
 }
 
@@ -57,18 +61,30 @@ export function printEnv(): void {
   const cpu = tryRead('/proc/cpuinfo');
   if (cpu !== null) {
     const model = cpu.match(/^model name\s*:\s*(.*)$/m)?.[1]?.trim();
-    if (model !== undefined) {parts.push(`cpu=${JSON.stringify(model)}`);}
+    if (model !== undefined) {
+      parts.push(`cpu=${JSON.stringify(model)}`);
+    }
     const cores = cpu.match(/^processor\s*:/gm)?.length;
-    if (cores !== undefined) {parts.push(`cores=${cores}`);}
+    if (cores !== undefined) {
+      parts.push(`cores=${cores}`);
+    }
   }
   const gov = tryRead('/sys/devices/system/cpu/cpu0/cpufreq/scaling_governor')?.trim();
-  if (gov !== undefined && gov !== null && gov !== '') {parts.push(`governor=${gov}`);}
+  if (gov !== undefined && gov !== null && gov !== '') {
+    parts.push(`governor=${gov}`);
+  }
   const kernel = tryRead('/proc/sys/kernel/osrelease')?.trim();
-  if (kernel !== undefined && kernel !== null && kernel !== '') {parts.push(`kernel=${kernel}`);}
+  if (kernel !== undefined && kernel !== null && kernel !== '') {
+    parts.push(`kernel=${kernel}`);
+  }
   const loadavg = tryRead('/proc/loadavg')?.trim().split(/\s+/).slice(0, 3).join(',');
-  if (loadavg !== undefined && loadavg !== null && loadavg !== '') {parts.push(`loadavg=${loadavg}`);}
+  if (loadavg !== undefined && loadavg !== null && loadavg !== '') {
+    parts.push(`loadavg=${loadavg}`);
+  }
   const cgroup = tryRead('/proc/self/cgroup')?.trim().split('\n').pop();
-  if (cgroup !== undefined && cgroup !== null && cgroup !== '') {parts.push(`cgroup=${JSON.stringify(cgroup)}`);}
+  if (cgroup !== undefined && cgroup !== null && cgroup !== '') {
+    parts.push(`cgroup=${JSON.stringify(cgroup)}`);
+  }
   console.log(parts.join(' '));
 }
 
@@ -77,7 +93,9 @@ export function printEnv(): void {
  *  sample; callers reporting both as distinct columns should either raise
  *  the run count or drop the higher percentile from the output. */
 export function percentile(values: readonly number[], p: number): number {
-  if (values.length === 0) {return Number.NaN;}
+  if (values.length === 0) {
+    return Number.NaN;
+  }
   const sorted = [...values].sort((a, b) => a - b);
   const idx = Math.min(sorted.length - 1, Math.ceil((p / 100) * sorted.length) - 1);
   return sorted[idx]!;

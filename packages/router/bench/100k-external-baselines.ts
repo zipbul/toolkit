@@ -63,10 +63,15 @@ function mixedRoutes(): Route[] {
   const out: Route[] = [];
   for (let i = 0; i < COUNT; i++) {
     const mod = i % 4;
-    if (mod === 0) {out.push(['GET', `/v${i % 20}/static/resource-${i}`, i]);}
-    else if (mod === 1) {out.push(['GET', `/v${i % 20}/users/:id/items/${i}`, i]);}
-    else if (mod === 2) {out.push(['POST', `/v${i % 20}/orgs/:org/repos/:repo/actions/${i}`, i]);}
-    else {out.push(['GET', `/v${i % 20}/files/${i}/*path`, i]);}
+    if (mod === 0) {
+      out.push(['GET', `/v${i % 20}/static/resource-${i}`, i]);
+    } else if (mod === 1) {
+      out.push(['GET', `/v${i % 20}/users/:id/items/${i}`, i]);
+    } else if (mod === 2) {
+      out.push(['POST', `/v${i % 20}/orgs/:org/repos/:repo/actions/${i}`, i]);
+    } else {
+      out.push(['GET', `/v${i % 20}/files/${i}/*path`, i]);
+    }
   }
   return out;
 }
@@ -142,13 +147,17 @@ function scenario(): Scenario {
 }
 
 function bench(name: string, fn: () => unknown): void {
-  for (let i = 0; i < 20_000; i++) {fn();}
+  for (let i = 0; i < 20_000; i++) {
+    fn();
+  }
 
   const start = nowNs();
   let checksum = 0;
   for (let i = 0; i < ITER; i++) {
     const result = fn();
-    if (result !== undefined && result !== null) {checksum++;}
+    if (result !== undefined && result !== null) {
+      checksum++;
+    }
   }
   const ns = Number(nowNs() - start) / ITER;
   console.log(`${name.padEnd(28)} ${ns.toFixed(2)} ns/op checksum=${checksum}`);
@@ -233,7 +242,9 @@ const adapterMeta: Record<string, AdapterMeta> = {
 };
 
 function resolveAdapterVersion(pkg: string): string {
-  if (pkg.startsWith('@zipbul/')) {return 'workspace';}
+  if (pkg.startsWith('@zipbul/')) {
+    return 'workspace';
+  }
   // Hono ships subpath routers off the same `hono` package — resolve the
   // top-level package.json, not the subpath.
   const top = pkg.split('/')[0]!;
@@ -353,7 +364,9 @@ const builders: Record<string, () => Promise<void>> = {
       'zipbul',
       rs => {
         const router = new Router<number>();
-        for (const [method, path, value] of rs) {router.add(method as 'GET', path, value);}
+        for (const [method, path, value] of rs) {
+          router.add(method as 'GET', path, value);
+        }
         router.build();
         return router;
       },
@@ -365,7 +378,9 @@ const builders: Record<string, () => Promise<void>> = {
       rs => {
         // ignoreTrailingSlash:true to match 100k-external-correctness.ts:51.
         const router = FindMyWay({ ignoreTrailingSlash: true });
-        for (const [method, path, value] of rs) {router.on(method as 'GET', path, () => value);}
+        for (const [method, path, value] of rs) {
+          router.on(method as 'GET', path, () => value);
+        }
         return router;
       },
       (router, method, path) => (router as ReturnType<typeof FindMyWay>).find(method as 'GET', path),
@@ -375,7 +390,9 @@ const builders: Record<string, () => Promise<void>> = {
       'memoirist',
       rs => {
         const router = new Memoirist<number>();
-        for (const [method, path, value] of rs) {router.add(method, path, value);}
+        for (const [method, path, value] of rs) {
+          router.add(method, path, value);
+        }
         return router;
       },
       (router, method, path) => (router as Memoirist<number>).find(method, path),
@@ -385,7 +402,9 @@ const builders: Record<string, () => Promise<void>> = {
       'rou3',
       rs => {
         const router = createRou3<number>();
-        for (const [method, path, value] of rs) {addRoute(router, method, path, value);}
+        for (const [method, path, value] of rs) {
+          addRoute(router, method, path, value);
+        }
         return router;
       },
       (router, method, path) => findRoute(router as ReturnType<typeof createRou3<number>>, method, path),
@@ -395,7 +414,9 @@ const builders: Record<string, () => Promise<void>> = {
       'hono-trie',
       rs => {
         const router = new TrieRouter<number>();
-        for (const [method, path, value] of rs) {router.add(method, path, value);}
+        for (const [method, path, value] of rs) {
+          router.add(method, path, value);
+        }
         return router;
       },
       (router, method, path) => {
@@ -408,7 +429,9 @@ const builders: Record<string, () => Promise<void>> = {
       'hono-regexp',
       rs => {
         const router = new RegExpRouter<number>();
-        for (const [method, path, value] of rs) {router.add(method, path, value);}
+        for (const [method, path, value] of rs) {
+          router.add(method, path, value);
+        }
         return router;
       },
       (router, method, path) => {
@@ -421,7 +444,9 @@ const builders: Record<string, () => Promise<void>> = {
       'koa-tree-router',
       rs => {
         const router = new KoaTreeRouter() as any;
-        for (const [method, path, value] of rs) {router.on(method, path, () => value);}
+        for (const [method, path, value] of rs) {
+          router.on(method, path, () => value);
+        }
         return router;
       },
       (router, method, path) => {
@@ -476,7 +501,9 @@ if (isWorker) {
 
   function parsePairRun(stdout: string): PairRun | null {
     const build = stdout.match(/build=([0-9.]+)ms mem=rss=([0-9.-]+)MB heap=([0-9.-]+)MB/);
-    if (build === null) {return null;}
+    if (build === null) {
+      return null;
+    }
     const hits = [...stdout.matchAll(/^hit \d+\s+([0-9.]+) ns\/op checksum=/gm)].map(m => Number(m[1]));
     const misses = [...stdout.matchAll(/^miss \d+\s+([0-9.]+) ns\/op checksum=/gm)].map(m => Number(m[1]));
     const wrong = [...stdout.matchAll(/^wrong-method\s+([0-9.]+) ns\/op checksum=/gm)].map(m => Number(m[1]));
@@ -507,9 +534,13 @@ if (isWorker) {
         }
         process.stdout.write(child.stdout);
         const parsed = parsePairRun(child.stdout);
-        if (parsed !== null) {runs.push(parsed);}
+        if (parsed !== null) {
+          runs.push(parsed);
+        }
       }
-      if (runs.length === 0) {continue;}
+      if (runs.length === 0) {
+        continue;
+      }
       const builds = runs.map(r => r.buildMs);
       const rss = runs.map(r => r.rssMb);
       const heap = runs.map(r => r.heapMb);

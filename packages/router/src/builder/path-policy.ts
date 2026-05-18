@@ -39,8 +39,11 @@ function validatePathChars(path: string): Result<void, RouterErrorData> {
   for (let i = 0; i < len; i++) {
     const c = path.charCodeAt(i);
 
-    if (c === 0x28) {parenDepth++;}
-    else if (c === 0x29 && parenDepth > 0) {parenDepth--;}
+    if (c === 0x28) {
+      parenDepth++;
+    } else if (c === 0x29 && parenDepth > 0) {
+      parenDepth--;
+    }
 
     // Universal byte rules — apply both inside and outside regex groups.
     if ((c >= 0x00 && c <= 0x1f) || c === 0x7f) {
@@ -57,7 +60,9 @@ function validatePathChars(path: string): Result<void, RouterErrorData> {
     // converts non-ASCII to percent-encoded UTF-8 (RFC 3986 URI wire
     // form) before the path enters the segment tree. `/users/한국` and
     // `/users/%ED%95%9C%EA%B5%AD` both store the same canonical URI.
-    if (c >= 0x80) {continue;}
+    if (c >= 0x80) {
+      continue;
+    }
 
     if (c === 0x25) {
       if (i + 2 >= len || !isHex(path.charCodeAt(i + 1)) || !isHex(path.charCodeAt(i + 2))) {
@@ -160,8 +165,12 @@ function failDecode(kind: DecodeFailKind, msg: string, suggestion: string, path:
 }
 
 function hexValue(c: number): number {
-  if (c >= 0x30 && c <= 0x39) {return c - 0x30;}
-  if (c >= 0x41 && c <= 0x46) {return c - 0x41 + 10;}
+  if (c >= 0x30 && c <= 0x39) {
+    return c - 0x30;
+  }
+  if (c >= 0x41 && c <= 0x46) {
+    return c - 0x41 + 10;
+  }
   return c - 0x61 + 10;
 }
 
@@ -362,7 +371,9 @@ function isDotSegment(path: string, segStart: number, segEnd: number): boolean {
     nonDot = true;
     break;
   }
-  if (nonDot) {return false;}
+  if (nonDot) {
+    return false;
+  }
   return dotCount === 1 || dotCount === 2;
 }
 
@@ -372,9 +383,15 @@ function isDotSegment(path: string, segStart: number, segEnd: number): boolean {
 // `:` / `@` / `/` / `?` / `%` per RFC 3986 path-char grammar.
 const ACCEPTABLE_PCHAR_TABLE = (() => {
   const t = new Uint8Array(128);
-  for (let c = 0x41; c <= 0x5a; c++) {t[c] = 1;} // A-Z
-  for (let c = 0x61; c <= 0x7a; c++) {t[c] = 1;} // a-z
-  for (let c = 0x30; c <= 0x39; c++) {t[c] = 1;} // 0-9
+  for (let c = 0x41; c <= 0x5a; c++) {
+    t[c] = 1;
+  } // A-Z
+  for (let c = 0x61; c <= 0x7a; c++) {
+    t[c] = 1;
+  } // a-z
+  for (let c = 0x30; c <= 0x39; c++) {
+    t[c] = 1;
+  } // 0-9
   for (const c of [
     0x2d,
     0x2e,
@@ -396,8 +413,9 @@ const ACCEPTABLE_PCHAR_TABLE = (() => {
     0x2f,
     0x3f,
     0x25, // : @ / ? %
-  ])
-    {t[c] = 1;}
+  ]) {
+    t[c] = 1;
+  }
   return t;
 })();
 

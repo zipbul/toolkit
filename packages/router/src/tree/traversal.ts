@@ -16,7 +16,9 @@ export function compactSegmentTree(root: SegmentNode): void {
   const internPrefix = (parts: string[]): string[] => {
     const key = parts.join('\x00');
     const existing = prefixIntern.get(key);
-    if (existing !== undefined) {return existing;}
+    if (existing !== undefined) {
+      return existing;
+    }
     prefixIntern.set(key, parts);
     return parts;
   };
@@ -25,7 +27,9 @@ export function compactSegmentTree(root: SegmentNode): void {
   const visited = new Set<SegmentNode>();
   while (stack.length > 0) {
     const node = stack.pop()!;
-    if (visited.has(node)) {continue;}
+    if (visited.has(node)) {
+      continue;
+    }
     visited.add(node);
 
     forEachStaticChild(node, (key, child) => {
@@ -95,7 +99,9 @@ export function foldStaticChain(start: SegmentNode): { target: SegmentNode; fold
     target.staticPrefix === null
   ) {
     const peek = peekSingleStaticChild(target);
-    if (peek.many || peek.key === null || peek.child === null) {break;}
+    if (peek.many || peek.key === null || peek.child === null) {
+      break;
+    }
     folded.push(peek.key);
     target = peek.child;
   }

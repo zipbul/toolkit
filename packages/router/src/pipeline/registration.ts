@@ -141,7 +141,9 @@ class Registration<T> {
     this.assertNotSealed({ path, method: Array.isArray(method) ? method[0] : (method as string) });
 
     if (Array.isArray(method)) {
-      for (const m of method) {this.pendingRoutes.push({ method: m, path, value });}
+      for (const m of method) {
+        this.pendingRoutes.push({ method: m, path, value });
+      }
       return;
     }
 
@@ -168,7 +170,9 @@ class Registration<T> {
       optionalParamBehavior?: 'omit' | 'set-undefined';
     } = {},
   ): RegistrationSnapshot<T> {
-    if (this.snapshot !== null) {return this.snapshot;}
+    if (this.snapshot !== null) {
+      return this.snapshot;
+    }
 
     const methodRegistrySnapshot = this.methodRegistry.snapshot();
     const optionalDefaultsSnapshot = this.optionalParamDefaults.snapshot();
@@ -256,7 +260,9 @@ class Registration<T> {
         // next build() call constructs a fresh prefix index). Drop it
         // before the GC so the closure-captured PrefixIndex CommitPlan
         // entries become eligible for collection.
-        if (issues.length === 0) {undo.length = 0;}
+        if (issues.length === 0) {
+          undo.length = 0;
+        }
         // Bun.gc(true) runs JSC's full collect AND mimalloc's fragmented-
         // memory cleanup in one call. Bun.shrink() saved an extra ~8 MB
         // historically but is `@deprecated` in bun-types 1.3.13 and may
@@ -317,7 +323,9 @@ class Registration<T> {
   }
 
   private assertNotSealed(ctx: { path?: string; method?: string; registeredCount?: number }): void {
-    if (!this.sealed) {return;}
+    if (!this.sealed) {
+      return;
+    }
 
     throw new RouterError({
       kind: 'router-sealed',
@@ -375,7 +383,9 @@ class Registration<T> {
   ): Result<void, RouterErrorData> {
     const conflict = this.runPrefixIndexPlan(parts, methodCode, route, undo);
 
-    if (isErr(conflict)) {return conflict;}
+    if (isErr(conflict)) {
+      return conflict;
+    }
 
     let bucket = state.staticByMethod[methodCode];
     if (bucket === undefined) {
@@ -423,7 +433,9 @@ class Registration<T> {
   ): Result<void, RouterErrorData> {
     const shape = collectRouteShape(parts);
     const capCheck = checkDynamicRouteCaps(route, shape);
-    if (capCheck !== undefined) {return err(capCheck);}
+    if (capCheck !== undefined) {
+      return err(capCheck);
+    }
 
     const root = ensureSegmentTreeRoot(state, methodCode, undo);
     const hIdx = pushHandler(state, route.value, undo);
@@ -431,7 +443,9 @@ class Registration<T> {
 
     for (const expanded of expansion) {
       const prefixCheck = this.runPrefixIndexPlan(expanded.parts, methodCode, route, undo, hIdx, expanded.isOptionalExpansion);
-      if (isErr(prefixCheck)) {return prefixCheck;}
+      if (isErr(prefixCheck)) {
+        return prefixCheck;
+      }
 
       const tIdx = recordExpansionTerminal(state, expanded.parts, shape, hIdx, factoryCache, omitBehavior, decoder, undo);
 
@@ -477,7 +491,9 @@ class Registration<T> {
     if (isErr(planResult)) {
       return err<RouterErrorData>({ ...planResult.data, path: route.path, method: route.method });
     }
-    if (planResult === 'alias') {return undefined;}
+    if (planResult === 'alias') {
+      return undefined;
+    }
     undo.push({
       k: UndoKind.PrefixIndexPlan,
       rollback: rollbackPlan as (plan: unknown) => void,
@@ -514,9 +530,13 @@ function createBuildState<T>(): BuildState<T> {
 function applyTenantFactors(segmentTrees: ReadonlyArray<SegmentNode | null>): void {
   let factorApplied = false;
   for (const root of segmentTrees) {
-    if (root === undefined || root === null) {continue;}
+    if (root === undefined || root === null) {
+      continue;
+    }
     const factor = detectTenantFactor(root);
-    if (factor === null) {continue;}
+    if (factor === null) {
+      continue;
+    }
     setTenantFactor(root, factor);
     // Drop the original high-fanout staticChildren now that the factor
     // map owns the dispatch — they're no longer reachable from the walker.
@@ -525,7 +545,9 @@ function applyTenantFactors(segmentTrees: ReadonlyArray<SegmentNode | null>): vo
     root.singleChildNext = null;
     factorApplied = true;
   }
-  if (factorApplied) {Bun.gc(true);}
+  if (factorApplied) {
+    Bun.gc(true);
+  }
 }
 
 function rollback(undo: SegmentTreeUndoLog, mark: number): void {
@@ -555,7 +577,9 @@ function collectRouteShape(parts: ReadonlyArray<PathPart>): RouteShape {
     if (p.type === 'param') {
       originalNames.push(p.name);
       originalTypes.push('param');
-      if (p.optional) {optionalCount++;}
+      if (p.optional) {
+        optionalCount++;
+      }
     } else if (p.type === 'wildcard') {
       originalNames.push(p.name);
       originalTypes.push('wildcard');
@@ -595,7 +619,9 @@ function checkDynamicRouteCaps(route: { path: string }, shape: RouteShape): Rout
  *  push the rollback marker. Returns the root node either way. */
 function ensureSegmentTreeRoot<T>(state: BuildState<T>, methodCode: number, undo: SegmentTreeUndoLog): SegmentNode {
   const existing = state.segmentTrees[methodCode];
-  if (existing !== undefined && existing !== null) {return existing;}
+  if (existing !== undefined && existing !== null) {
+    return existing;
+  }
   const fresh = createSegmentNode();
   state.segmentTrees[methodCode] = fresh;
   undo.push({ k: UndoKind.SegmentTreeReset, trees: state.segmentTrees, mc: methodCode });
@@ -656,12 +682,5 @@ function recordExpansionTerminal<T>(
   return tIdx;
 }
 
-export {
-  checkDynamicRouteCaps,
-  collectRouteShape,
-  ensureSegmentTreeRoot,
-  pushHandler,
-  Registration,
-  recordExpansionTerminal,
-};
+export { checkDynamicRouteCaps, collectRouteShape, ensureSegmentTreeRoot, pushHandler, Registration, recordExpansionTerminal };
 export type { RegistrationSnapshot };

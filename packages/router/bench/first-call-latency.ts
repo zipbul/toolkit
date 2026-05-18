@@ -19,13 +19,19 @@ function makeRouter(shape: Shape): Router<number> {
   const r = new Router<number>();
   switch (shape) {
     case 'static-small':
-      for (let i = 0; i < 10; i++) {r.add('GET', `/r${i}`, i);}
+      for (let i = 0; i < 10; i++) {
+        r.add('GET', `/r${i}`, i);
+      }
       break;
     case 'static-large':
-      for (let i = 0; i < 1000; i++) {r.add('GET', `/api/v1/r${i}`, i);}
+      for (let i = 0; i < 1000; i++) {
+        r.add('GET', `/api/v1/r${i}`, i);
+      }
       break;
     case 'param-medium':
-      for (let i = 0; i < 100; i++) {r.add('GET', `/t${i}/u/:id/p/:pid`, i);}
+      for (let i = 0; i < 100; i++) {
+        r.add('GET', `/t${i}/u/:id/p/:pid`, i);
+      }
       break;
   }
   r.build();
@@ -55,7 +61,9 @@ function probe(shape: Shape, samples: number): { ns: number[]; checksum: number 
     ns.push(dt);
     // Consume the result so JSC can't dead-code eliminate the match
     // call — the timed window would otherwise collapse to ~0.
-    if (out !== null && out !== undefined) {checksum++;}
+    if (out !== null && out !== undefined) {
+      checksum++;
+    }
   }
   ns.sort((a, b) => a - b);
   return { ns, checksum };
@@ -90,4 +98,6 @@ for (const shape of ['static-small', 'static-large', 'param-medium'] as const) {
   );
 }
 // Pin checksum past the loop so DCE can't strip the consumer above.
-if (totalChecksum < 0) {console.log(totalChecksum);}
+if (totalChecksum < 0) {
+  console.log(totalChecksum);
+}

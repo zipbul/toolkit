@@ -37,7 +37,9 @@ function timeIt(name: string, iters: number, fn: () => unknown): Sample {
   let checksum = 0;
   for (let i = 0; i < Math.min(iters, 1000); i++) {
     const r = fn();
-    if (r !== null && r !== undefined) {checksum++;}
+    if (r !== null && r !== undefined) {
+      checksum++;
+    }
   }
 
   // 11 trials so the median lands on a real sample. min + p99 highlight
@@ -50,13 +52,17 @@ function timeIt(name: string, iters: number, fn: () => unknown): Sample {
     const start = nowNs();
     for (let i = 0; i < iters; i++) {
       const r = fn();
-      if (r !== null && r !== undefined) {checksum++;}
+      if (r !== null && r !== undefined) {
+        checksum++;
+      }
     }
     const end = nowNs();
     samples.push(Number(end - start) / iters);
   }
   // Force checksum to live past the loop so DCE can't strip it.
-  if (checksum < 0) {console.log(checksum);}
+  if (checksum < 0) {
+    console.log(checksum);
+  }
   samples.sort((a, b) => a - b);
   const min = samples[0]!;
   const median = samples[Math.floor(TRIALS / 2)]!;
@@ -90,22 +96,30 @@ function rssMB(): number {
 
 function buildStaticRouter(count: number): Router<string> {
   const r = new Router<string>();
-  for (let i = 0; i < count; i++) {r.add('GET', `/static/${i}`, `s-${i}`);}
+  for (let i = 0; i < count; i++) {
+    r.add('GET', `/static/${i}`, `s-${i}`);
+  }
   r.build();
   return r;
 }
 
 function buildDynamicRouter(count: number): Router<string> {
   const r = new Router<string>();
-  for (let i = 0; i < count; i++) {r.add('GET', `/api/v1/group-${i}/items/:id`, `d-${i}`);}
+  for (let i = 0; i < count; i++) {
+    r.add('GET', `/api/v1/group-${i}/items/:id`, `d-${i}`);
+  }
   r.build();
   return r;
 }
 
 function buildMixedRouter(count: number): Router<string> {
   const r = new Router<string>();
-  for (let i = 0; i < count / 2; i++) {r.add('GET', `/static/${i}`, `s-${i}`);}
-  for (let i = 0; i < count / 2; i++) {r.add('GET', `/api/v1/group-${i}/items/:id`, `d-${i}`);}
+  for (let i = 0; i < count / 2; i++) {
+    r.add('GET', `/static/${i}`, `s-${i}`);
+  }
+  for (let i = 0; i < count / 2; i++) {
+    r.add('GET', `/api/v1/group-${i}/items/:id`, `d-${i}`);
+  }
   r.build();
   return r;
 }
@@ -117,14 +131,18 @@ function buildSamples(): Sample[] {
 
   for (const count of [10, 100, 1000, 10_000]) {
     const routes: Array<[string, string, string]> = [];
-    for (let i = 0; i < count; i++) {routes.push(['GET', `/api/v1/group-${i}/items/:id`, `h-${i}`]);}
+    for (let i = 0; i < count; i++) {
+      routes.push(['GET', `/api/v1/group-${i}/items/:id`, `h-${i}`]);
+    }
 
     forceGc();
     const iters = count <= 100 ? 50 : count <= 1000 ? 10 : 2;
     samples.push(
       timeIt(`build/${count}-dynamic-routes`, iters, () => {
         const r = new Router<string>();
-        for (const [m, p, v] of routes) {r.add(m, p, v);}
+        for (const [m, p, v] of routes) {
+          r.add(m, p, v);
+        }
         r.build();
         // Return the built router so timeIt's checksum consumer can prove
         // the build had side effects; without a return the entire build

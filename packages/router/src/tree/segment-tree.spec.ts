@@ -132,7 +132,9 @@ describe('insertParamPart', () => {
     const part = { type: 'param' as const, name: 'id', pattern: null, optional: false };
     const a = insertParamPart(root, part, cache, 0, undo);
     const b = insertParamPart(root, part, cache, 0, undo);
-    if ('node' in a && 'node' in b) {expect(a.node).toBe(b.node);}
+    if ('node' in a && 'node' in b) {
+      expect(a.node).toBe(b.node);
+    }
     expect(undo).toHaveLength(1); // no second ParamChildSet push
   });
 
@@ -168,7 +170,9 @@ describe('attachWildcardTerminal', () => {
     node.wildcardOrigin = 'star';
     const out = attachWildcardTerminal(node, { type: 'wildcard', name: 'second', origin: 'star' }, 9, newUndo());
     expect(out).toBeDefined();
-    if (out) {expect(out.kind).toBe('route-conflict');}
+    if (out) {
+      expect(out.kind).toBe('route-conflict');
+    }
   });
 
   it('returns route-duplicate when an existing wildcard has the same name', () => {
@@ -178,7 +182,9 @@ describe('attachWildcardTerminal', () => {
     node.wildcardOrigin = 'star';
     const out = attachWildcardTerminal(node, { type: 'wildcard', name: 'rest', origin: 'star' }, 9, newUndo());
     expect(out).toBeDefined();
-    if (out) {expect(out.kind).toBe('route-duplicate');}
+    if (out) {
+      expect(out.kind).toBe('route-duplicate');
+    }
   });
 
   it('returns route-conflict when a paramChild already occupies the position', () => {
@@ -193,7 +199,9 @@ describe('attachWildcardTerminal', () => {
     };
     const out = attachWildcardTerminal(node, { type: 'wildcard', name: 'rest', origin: 'star' }, 9, newUndo());
     expect(out).toBeDefined();
-    if (out) {expect(out.kind).toBe('route-conflict');}
+    if (out) {
+      expect(out.kind).toBe('route-conflict');
+    }
   });
 });
 
@@ -212,6 +220,8 @@ describe('attachStoreTerminal', () => {
     node.store = 1;
     const out = attachStoreTerminal(node, 2, newUndo());
     expect(out).toBeDefined();
-    if (out) {expect(out.kind).toBe('route-duplicate');}
+    if (out) {
+      expect(out.kind).toBe('route-duplicate');
+    }
   });
 });

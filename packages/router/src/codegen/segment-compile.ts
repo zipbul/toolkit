@@ -28,7 +28,9 @@ function estimateSegmentTreeCodegen(root: SegmentNode, nodeCap: number): Codegen
   const stack: SegmentNode[] = [root];
 
   while (stack.length > 0) {
-    if (nodes > nodeCap) {return { nodes, oversized: true };}
+    if (nodes > nodeCap) {
+      return { nodes, oversized: true };
+    }
     const node = stack.pop()!;
     nodes++;
     forEachStaticChild(node, (_, child) => {
@@ -58,7 +60,9 @@ function collectWarmupPaths(root: SegmentNode): string[] {
       return { key: n.singleChildKey, child: n.singleChildNext };
     }
     if (n.staticChildren !== null) {
-      for (const seg in n.staticChildren) {return { key: seg, child: n.staticChildren[seg]! };}
+      for (const seg in n.staticChildren) {
+        return { key: seg, child: n.staticChildren[seg]! };
+      }
     }
     return null;
   };
@@ -99,7 +103,9 @@ function collectWarmupPaths(root: SegmentNode): string[] {
     out.push('/__warm__/__warm__');
   }
 
-  if (out.length === 0) {out.push('/__zipbul_warmup__');}
+  if (out.length === 0) {
+    out.push('/__zipbul_warmup__');
+  }
   return out;
 }
 
@@ -114,13 +120,19 @@ interface CompiledPackage {
 function compileSegmentTree(root: SegmentNode): CompiledPackage | null {
   // Bail on ambiguous trees: codegen only handles unique-winner trees.
   // Ambiguous trees (static+param collision) fallback to recursive walker.
-  if (hasAmbiguousNode(root)) {return null;}
+  if (hasAmbiguousNode(root)) {
+    return null;
+  }
 
-  if (estimateSegmentTreeCodegen(root, MAX_NODES_DEFAULT).oversized) {return null;}
+  if (estimateSegmentTreeCodegen(root, MAX_NODES_DEFAULT).oversized) {
+    return null;
+  }
 
   const ctx: EmitContext = { bail: false, testers: [], pendingParams: [] };
   const body = emitNode(ctx, root, 'pos0');
-  if (ctx.bail) {return null;}
+  if (ctx.bail) {
+    return null;
+  }
 
   const source = `
 'use strict';
@@ -138,7 +150,9 @@ ${body}
   return false;
 };`;
 
-  if (source.length > MAX_SOURCE_BYTES_HARD) {return null;}
+  if (source.length > MAX_SOURCE_BYTES_HARD) {
+    return null;
+  }
 
   try {
     const factory = new Function('testers', 'TESTER_PASS', 'decoder', source) as CompiledPackage['factory'];
@@ -208,11 +222,15 @@ function emitNode(ctx: EmitContext, node: SegmentNode, posVar: string): string {
   const innerPos = `pos${parseInt(posDigits) + 1}`;
 
   let code = emitStaticChildren(ctx, node, posVar, innerPos);
-  if (ctx.bail) {return '';}
+  if (ctx.bail) {
+    return '';
+  }
 
   if (node.paramChild !== null) {
     code += emitParamBranch(ctx, node.paramChild, posVar, slashVar, innerPos);
-    if (ctx.bail) {return '';}
+    if (ctx.bail) {
+      return '';
+    }
   }
 
   if (node.wildcardStore !== null) {
@@ -241,7 +259,9 @@ function emitStaticChildren(ctx: EmitContext, node: SegmentNode, posVar: string,
   forEachStaticChild(node, (seg, child) => {
     siblings.push({ seg, child });
   });
-  if (siblings.length === 0) {return '';}
+  if (siblings.length === 0) {
+    return '';
+  }
 
   if (siblings.length >= STATIC_CHILD_DISPATCH_THRESHOLD) {
     return emitStaticChildrenSwitch(ctx, siblings, posVar, innerPos);
@@ -249,9 +269,13 @@ function emitStaticChildren(ctx: EmitContext, node: SegmentNode, posVar: string,
 
   let code = '';
   for (const { seg, child } of siblings) {
-    if (ctx.bail) {return '';}
+    if (ctx.bail) {
+      return '';
+    }
     code += emitStaticChildBlock(ctx, seg, child, posVar, innerPos);
-    if (ctx.bail) {return '';}
+    if (ctx.bail) {
+      return '';
+    }
   }
   return code;
 }
@@ -282,7 +306,9 @@ function emitStaticChildrenSwitch(
     let inner = '';
     for (const { seg, child } of bucket) {
       inner += emitStaticChildBlock(ctx, seg, child, posVar, innerPos);
-      if (ctx.bail) {return '';}
+      if (ctx.bail) {
+        return '';
+      }
     }
     body += `
       case ${charCode}: {${inner}
@@ -301,7 +327,9 @@ function emitStaticChildBlock(ctx: EmitContext, seg: string, child: SegmentNode,
   const segLen = seg.length;
   const nextPos = `${innerPos}_s${seg.replace(/[^a-z0-9]/gi, '_')}`;
   const childInner = emitNode(ctx, child, nextPos);
-  if (ctx.bail) {return '';}
+  if (ctx.bail) {
+    return '';
+  }
   return `
     if (url.startsWith(${JSON.stringify(seg)}, ${posVar})) {
       var c = url.charCodeAt(${posVar} + ${segLen});
@@ -366,7 +394,9 @@ function emitParamBranch(
   ctx.pendingParams.push([posVar, slashVar] as const);
   const inner = emitNode(ctx, next, innerPos);
   ctx.pendingParams.pop();
-  if (ctx.bail) {return '';}
+  if (ctx.bail) {
+    return '';
+  }
 
   code += `
     if (${slashVar} !== -1 && ${slashVar} > ${posVar}) {
@@ -382,18 +412,14 @@ ${inner}
 }
 
 function emitTesterCheck(testerIdx: number, posVar: string, slashVar: string): string {
-  if (testerIdx === -1) {return '';}
+  if (testerIdx === -1) {
+    return '';
+  }
   return `
       if (testers[${testerIdx}](decoder(url.substring(${posVar}, ${slashVar} === -1 ? len : ${slashVar}))) !== TESTER_PASS) return false;`;
 }
 
-function emitStrictTerminal(
-  ctx: EmitContext,
-  posVar: string,
-  slashVar: string,
-  testerCheck: string,
-  storeIdx: number,
-): string {
+function emitStrictTerminal(ctx: EmitContext, posVar: string, slashVar: string, testerCheck: string, storeIdx: number): string {
   const flush = emitFlushPendingWrites(ctx.pendingParams, [[posVar, 'len']]);
   return `
     if (${slashVar} === -1 && ${posVar} < len) {

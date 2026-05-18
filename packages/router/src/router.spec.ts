@@ -14,7 +14,9 @@ function makeRouter<T = number>(opts: RouterOptions = {}): Router<T> {
 
 function buildWith(routes: Array<[string, string, number]>, opts: RouterOptions = {}): Router<number> {
   const r = new Router<number>(opts);
-  for (const [method, path, value] of routes) {r.add(method, path, value);}
+  for (const [method, path, value] of routes) {
+    r.add(method, path, value);
+  }
   r.build();
   return r;
 }

@@ -165,9 +165,13 @@ function emitMethodCharSwitch(
 function emitNormalize(cfg: NormalizeCfg, outVar: string): string {
   const lines = [`var ${outVar} = path;`];
   const trim = emitTrailingSlashTrim(cfg, outVar);
-  if (trim !== '') {lines.push(trim);}
+  if (trim !== '') {
+    lines.push(trim);
+  }
   const lower = emitLowerCase(cfg, outVar);
-  if (lower !== '') {lines.push(lower);}
+  if (lower !== '') {
+    lines.push(lower);
+  }
   return lines.join('\n');
 }
 
@@ -462,7 +466,9 @@ function runWarmup<T>(compiled: CompiledMatch<T>, cfg: MatchConfig<T>): void {
   const warmPaths = ['/__zipbul_warmup__', '/__zipbul_warmup__/sub'];
   for (let it = 0; it < WARMUP_ITERATIONS; it++) {
     for (const [methodName] of cfg.activeMethodCodes) {
-      for (const p of warmPaths) {compiled(methodName, p);}
+      for (const p of warmPaths) {
+        compiled(methodName, p);
+      }
     }
   }
 }

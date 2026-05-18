@@ -9,7 +9,9 @@ interface CacheEntry<T> {
  * Enables bitwise AND masking instead of modulo.
  */
 function nextPow2(n: number): number {
-  if (n <= 1) {return 1;}
+  if (n <= 1) {
+    return 1;
+  }
 
   let v = n - 1;
 

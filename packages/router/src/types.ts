@@ -78,9 +78,9 @@ export type RouterErrorData = {
   /** addAll() fail-fast 시 에러 전까지 성공한 등록 수 */
   registeredCount?: number;
 } &
-  (
   // ── State / options ─────────────────────────────────────────────────
-  | { kind: 'router-sealed'; message: string; suggestion: string }
+  (
+    | { kind: 'router-sealed'; message: string; suggestion: string }
     | { kind: 'router-options-invalid'; message: string; suggestion: string }
     // ── Routes interaction (build) ──────────────────────────────────────
     | { kind: 'route-validation'; message: string; errors: RouteValidationIssue[] }

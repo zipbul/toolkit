@@ -24,10 +24,14 @@ export function createFactoredWalker(decoder: DecoderFn, keyToTerminal: Map<stri
     // lookup below returns undefined for this input and we fall through
     // to `return false` cleanly.
     let slash1 = 1;
-    while (slash1 < len && url.charCodeAt(slash1) !== 47) {slash1++;}
+    while (slash1 < len && url.charCodeAt(slash1) !== 47) {
+      slash1++;
+    }
     const firstSeg = slash1 === len ? url.substring(1) : url.substring(1, slash1);
     const looked = keyToTerminal.get(firstSeg);
-    if (looked === undefined) {return false;}
+    if (looked === undefined) {
+      return false;
+    }
 
     return walkSharedSubtree(sharedNext, url, slash1 === len ? len : slash1 + 1, len, looked, decoder, state);
   };
@@ -68,7 +72,9 @@ export function walkSharedSubtree(
 
   while (pos < len) {
     let end = pos;
-    while (end < len && url.charCodeAt(end) !== 47) {end++;}
+    while (end < len && url.charCodeAt(end) !== 47) {
+      end++;
+    }
     const segLen = end - pos;
 
     const sck = node.singleChildKey;
@@ -81,7 +87,9 @@ export function walkSharedSubtree(
     if (node.paramChild !== null && segLen > 0) {
       if (node.paramChild.tester !== null) {
         const decoded = decoder(url.substring(pos, end));
-        if (node.paramChild.tester(decoded) !== TESTER_PASS) {return false;}
+        if (node.paramChild.tester(decoded) !== TESTER_PASS) {
+          return false;
+        }
       }
       const pc = state.paramCount * 2;
       state.paramOffsets[pc] = pos;

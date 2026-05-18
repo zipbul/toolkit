@@ -69,10 +69,14 @@ export class MethodRegistry {
     // `bench/method-research/H-validate-cache.bench.ts` shows 4.43× win
     // at 100k repeated add()s of the same 5 methods.
     const existing = this.codeMap[method];
-    if (existing !== undefined) {return existing;}
+    if (existing !== undefined) {
+      return existing;
+    }
 
     const tokenCheck = validateMethodToken(method);
-    if (isErr(tokenCheck)) {return tokenCheck;}
+    if (isErr(tokenCheck)) {
+      return tokenCheck;
+    }
 
     if (this.nextOffset >= MAX_METHODS) {
       return err({
@@ -113,7 +117,9 @@ export class MethodRegistry {
    */
   getAllCodes(): ReadonlyArray<readonly [string, number]> {
     const out: Array<readonly [string, number]> = [];
-    for (const k in this.codeMap) {out.push([k, this.codeMap[k]!] as const);}
+    for (const k in this.codeMap) {
+      out.push([k, this.codeMap[k]!] as const);
+    }
     return out;
   }
 
@@ -129,7 +135,9 @@ export class MethodRegistry {
 
   snapshot(): MethodRegistrySnapshot {
     const entries: Array<readonly [string, number]> = [];
-    for (const k in this.codeMap) {entries.push([k, this.codeMap[k]!]);}
+    for (const k in this.codeMap) {
+      entries.push([k, this.codeMap[k]!]);
+    }
     return { entries, nextOffset: this.nextOffset };
   }
 

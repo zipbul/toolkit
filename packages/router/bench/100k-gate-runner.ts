@@ -33,7 +33,9 @@ printEnv();
 
 function parseRun(stdout: string): RunResult {
   const build = stdout.match(/build=([0-9.]+)ms mem=rss=([0-9.-]+)MB heap=([0-9.-]+)MB arrayBuffers=([0-9.-]+)MB/);
-  if (build === null) {throw new Error(`failed to parse build line\n${stdout}`);}
+  if (build === null) {
+    throw new Error(`failed to parse build line\n${stdout}`);
+  }
 
   const firstNs = [...stdout.matchAll(/^first .+? (\d+)ns$/gm)].map(match => Number(match[1]));
   const hitNs = [...stdout.matchAll(/^hit .+? ([0-9.]+) ns\/op checksum=/gm)].map(match => Number(match[1]));

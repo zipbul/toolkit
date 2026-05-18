@@ -52,7 +52,9 @@ export class MatchLayer {
     this.trees = deps.trees;
     this.staticPathMethodMask = deps.staticPathMethodMask;
     const names: string[] = [];
-    for (const [name, code] of deps.activeMethodCodes) {names[code] = name;}
+    for (const [name, code] of deps.activeMethodCodes) {
+      names[code] = name;
+    }
     this.methodNameByCode = names;
   }
 
@@ -92,7 +94,9 @@ export class MatchLayer {
       const lowest = mask & -mask;
       const code = 31 - Math.clz32(lowest);
       const name = this.methodNameByCode[code];
-      if (name !== undefined) {out.push(name);}
+      if (name !== undefined) {
+        out.push(name);
+      }
       mask ^= lowest;
     }
 
@@ -104,9 +108,13 @@ export class MatchLayer {
     for (let i = 0; i < active.length; i++) {
       const entry = active[i]!;
       const methodCode = entry[1];
-      if ((staticMask & (1 << methodCode)) !== 0) {continue;}
+      if ((staticMask & (1 << methodCode)) !== 0) {
+        continue;
+      }
       const tr = this.trees[methodCode];
-      if (tr === null || tr === undefined) {continue;}
+      if (tr === null || tr === undefined) {
+        continue;
+      }
       if (tr(sp, state)) {
         out.push(entry[0]);
       }

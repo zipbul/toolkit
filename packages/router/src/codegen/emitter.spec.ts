@@ -62,7 +62,9 @@ function baseConfig<T>(overrides: Partial<Cfg<T>> = {}): Cfg<T> {
     const byPath: Record<string, { mask: number; outputs: Array<MatchOutput<T> | undefined> }> = Object.create(null);
     for (let mc = 0; mc < merged.staticOutputsByMethod.length; mc++) {
       const bucket = merged.staticOutputsByMethod[mc];
-      if (bucket === undefined) {continue;}
+      if (bucket === undefined) {
+        continue;
+      }
       for (const path in bucket) {
         let e = byPath[path];
         if (e === undefined) {
@@ -168,7 +170,9 @@ describe('compileMatchFn — mixed (dynamic walker + cache + slab unpack)', () =
     // shapes by writing one [start, end] pair into paramOffsets.
     const walker: MatchFn = (url, state) => {
       const prefix = '/x/';
-      if (!url.startsWith(prefix)) {return false;}
+      if (!url.startsWith(prefix)) {
+        return false;
+      }
       state.handlerIndex = 0;
       state.paramOffsets[0] = prefix.length;
       state.paramOffsets[1] = url.length;

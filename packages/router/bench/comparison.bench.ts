@@ -148,7 +148,9 @@ const adapters: Record<AdapterName, Adapter> = {
     rewrite: p => p,
     setup: rs => {
       const r = new Router<number>();
-      for (const [m, p, v] of rs) {r.add(m as 'GET', p, v);}
+      for (const [m, p, v] of rs) {
+        r.add(m as 'GET', p, v);
+      }
       r.build();
       return r;
     },
@@ -161,7 +163,9 @@ const adapters: Record<AdapterName, Adapter> = {
     rewrite: p => p.replace(/\/\*[^/]+$/, '/*'),
     setup: rs => {
       const r = FindMyWay();
-      for (const [m, p, v] of rs) {r.on(m as 'GET', p, () => v);}
+      for (const [m, p, v] of rs) {
+        r.on(m as 'GET', p, () => v);
+      }
       return r;
     },
     match: (r, m, p) => (r as ReturnType<typeof FindMyWay>).find(m as 'GET', p),
@@ -172,7 +176,9 @@ const adapters: Record<AdapterName, Adapter> = {
     rewrite: p => p,
     setup: rs => {
       const r = new Memoirist<number>();
-      for (const [m, p, v] of rs) {r.add(m, p, v);}
+      for (const [m, p, v] of rs) {
+        r.add(m, p, v);
+      }
       return r;
     },
     match: (r, m, p) => (r as Memoirist<number>).find(m, p),
@@ -183,7 +189,9 @@ const adapters: Record<AdapterName, Adapter> = {
     rewrite: p => p.replace(/\/\*([^/]+)$/, '/**:$1'),
     setup: rs => {
       const r = createRou3<number>();
-      for (const [m, p, v] of rs) {addRoute(r, m, p, v);}
+      for (const [m, p, v] of rs) {
+        addRoute(r, m, p, v);
+      }
       return r;
     },
     match: (r, m, p) => findRoute(r as ReturnType<typeof createRou3<number>>, m, p),
@@ -194,7 +202,9 @@ const adapters: Record<AdapterName, Adapter> = {
     rewrite: p => p.replace(/\/\*[^/]+$/, '/*'),
     setup: rs => {
       const r = new RegExpRouter<number>();
-      for (const [m, p, v] of rs) {r.add(m, p, v);}
+      for (const [m, p, v] of rs) {
+        r.add(m, p, v);
+      }
       return r;
     },
     match: (r, m, p) => {
@@ -207,7 +217,9 @@ const adapters: Record<AdapterName, Adapter> = {
     rewrite: p => p.replace(/\/\*[^/]+$/, '/*'),
     setup: rs => {
       const r = new TrieRouter<number>();
-      for (const [m, p, v] of rs) {r.add(m, p, v);}
+      for (const [m, p, v] of rs) {
+        r.add(m, p, v);
+      }
       return r;
     },
     match: (r, m, p) => {
@@ -224,7 +236,9 @@ const adapters: Record<AdapterName, Adapter> = {
         on: (m: string, p: string, h: () => unknown) => void;
         find: (m: string, p: string) => { handle: unknown };
       };
-      for (const [m, p, v] of rs) {r.on(m, p, () => v);}
+      for (const [m, p, v] of rs) {
+        r.on(m, p, () => v);
+      }
       return r;
     },
     match: (r, m, p) => {

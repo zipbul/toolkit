@@ -34,7 +34,9 @@ const adapters: Adapter[] = [
     name: 'zipbul',
     build: rs => {
       const r = new Router<number>();
-      for (const [m, p, v] of rs) {r.add(m as any, p, v);}
+      for (const [m, p, v] of rs) {
+        r.add(m as any, p, v);
+      }
       r.build();
       return r;
     },
@@ -47,12 +49,16 @@ const adapters: Adapter[] = [
     name: 'find-my-way',
     build: rs => {
       const r = FindMyWay({ ignoreTrailingSlash: true });
-      for (const [m, p, v] of rs) {r.on(m as any, p as string, () => v, v as any);}
+      for (const [m, p, v] of rs) {
+        r.on(m as any, p as string, () => v, v as any);
+      }
       return r;
     },
     match: (r, m, p) => {
       const out = r.find(m as any, p);
-      if (out === null) {return null;}
+      if (out === null) {
+        return null;
+      }
       return { value: out.store as number, params: out.params };
     },
   },
@@ -70,7 +76,9 @@ const adapters: Adapter[] = [
     },
     match: (r, m, p) => {
       const out = findRoute(r, m, p);
-      if (out === undefined) {return null;}
+      if (out === undefined) {
+        return null;
+      }
       return { value: out.data!, params: out.params };
     },
   },
@@ -78,12 +86,16 @@ const adapters: Adapter[] = [
     name: 'memoirist',
     build: rs => {
       const r = new Memoirist<number>();
-      for (const [m, p, v] of rs) {r.add(m, p, v);}
+      for (const [m, p, v] of rs) {
+        r.add(m, p, v);
+      }
       return r;
     },
     match: (r, m, p) => {
       const out = r.find(m, p);
-      if (out === null) {return null;}
+      if (out === null) {
+        return null;
+      }
       return { value: out.store, params: out.params };
     },
   },
@@ -91,14 +103,22 @@ const adapters: Adapter[] = [
     name: 'koa-tree-router',
     build: rs => {
       const r = new KoaTreeRouter() as any;
-      for (const [m, p, v] of rs) {r.on(m, p, () => v, { v });}
+      for (const [m, p, v] of rs) {
+        r.on(m, p, () => v, { v });
+      }
       return r;
     },
     match: (r, m, p) => {
       const out = r.find(m, p);
-      if (out === null || out.handle === null) {return null;}
+      if (out === null || out.handle === null) {
+        return null;
+      }
       const params: Record<string, string> = {};
-      if (out.params) {for (const { key, value } of out.params) {params[key] = value;}}
+      if (out.params) {
+        for (const { key, value } of out.params) {
+          params[key] = value;
+        }
+      }
       return { value: undefined, params }; // koa returns handle/params, value retrieval requires invoke
     },
   },
@@ -106,12 +126,16 @@ const adapters: Adapter[] = [
     name: 'hono-trie',
     build: rs => {
       const r = new TrieRouter<number>();
-      for (const [m, p, v] of rs) {r.add(m, p, v);}
+      for (const [m, p, v] of rs) {
+        r.add(m, p, v);
+      }
       return r;
     },
     match: (r, m, p) => {
       const result = r.match(m, p) as any;
-      if (!result || !result[0] || result[0].length === 0) {return null;}
+      if (!result || !result[0] || result[0].length === 0) {
+        return null;
+      }
       const handlerEntry = result[0][0];
       const value = handlerEntry[0] as number;
       const paramIdxMap = handlerEntry[1] as Record<string, number>;
@@ -119,7 +143,9 @@ const adapters: Adapter[] = [
       const params: Record<string, string> = {};
       if (paramIdxMap && paramArr) {
         for (const [k, idx] of Object.entries(paramIdxMap)) {
-          if (paramArr[idx] !== undefined) {params[k] = paramArr[idx] as string;}
+          if (paramArr[idx] !== undefined) {
+            params[k] = paramArr[idx] as string;
+          }
         }
       }
       return { value, params };
@@ -128,14 +154,24 @@ const adapters: Adapter[] = [
 ];
 
 function deepEqualParams(a: Record<string, any> | undefined, b: Record<string, any> | undefined): boolean {
-  if (a === undefined && b === undefined) {return true;}
-  if (a === undefined || b === undefined) {return false;}
+  if (a === undefined && b === undefined) {
+    return true;
+  }
+  if (a === undefined || b === undefined) {
+    return false;
+  }
   const ak = Object.keys(a).sort();
   const bk = Object.keys(b).sort();
-  if (ak.length !== bk.length) {return false;}
+  if (ak.length !== bk.length) {
+    return false;
+  }
   for (let i = 0; i < ak.length; i++) {
-    if (ak[i] !== bk[i]) {return false;}
-    if (a[ak[i]!] !== b[ak[i]!]) {return false;}
+    if (ak[i] !== bk[i]) {
+      return false;
+    }
+    if (a[ak[i]!] !== b[ak[i]!]) {
+      return false;
+    }
   }
   return true;
 }
@@ -166,8 +202,9 @@ function runScenario(scenarioName: string, routes: Array<[string, string, number
         continue;
       }
       if (probe.expect.kind === 'no-match') {
-        if (res === null) {pass++;}
-        else {
+        if (res === null) {
+          pass++;
+        } else {
           fail++;
           fails.push(`${probe.method} ${probe.path} → expected no-match, got ${JSON.stringify(res).slice(0, 60)}`);
         }
@@ -180,8 +217,9 @@ function runScenario(scenarioName: string, routes: Array<[string, string, number
         // koa-tree-router can't return value; only check params
         const valueMatches = a.name === 'koa-tree-router' ? true : res.value === probe.expect.value;
         const paramsMatch = deepEqualParams(res.params as any, probe.expect.params);
-        if (valueMatches && paramsMatch) {pass++;}
-        else {
+        if (valueMatches && paramsMatch) {
+          pass++;
+        } else {
           fail++;
           fails.push(
             `${probe.method} ${probe.path} → value=${res.value}, params=${JSON.stringify(res.params)} (expected ${probe.expect.value}, ${JSON.stringify(probe.expect.params)})`,
@@ -190,14 +228,20 @@ function runScenario(scenarioName: string, routes: Array<[string, string, number
       }
     }
     console.log(`  ${a.name.padEnd(18)}: build=${buildMs.toFixed(1)}ms  ${pass}/${probes.length} pass  ${fail} fail`);
-    for (const f of fails.slice(0, 3)) {console.log(`     ✗ ${f}`);}
-    if (fails.length > 3) {console.log(`     ... +${fails.length - 3} more`);}
+    for (const f of fails.slice(0, 3)) {
+      console.log(`     ✗ ${f}`);
+    }
+    if (fails.length > 3) {
+      console.log(`     ... +${fails.length - 3} more`);
+    }
   }
 }
 
 // ─── 1. Static scenario ───
 const staticRoutes: Array<[string, string, number]> = [];
-for (let i = 0; i < 1000; i++) {staticRoutes.push(['GET', `/api/v1/resource-${i}`, i]);}
+for (let i = 0; i < 1000; i++) {
+  staticRoutes.push(['GET', `/api/v1/resource-${i}`, i]);
+}
 
 runScenario('static-1k', staticRoutes, [
   { method: 'GET', path: '/api/v1/resource-0', expect: { kind: 'match', value: 0, params: {} } },
@@ -209,7 +253,9 @@ runScenario('static-1k', staticRoutes, [
 
 // ─── 2. Param scenario ───
 const paramRoutes: Array<[string, string, number]> = [];
-for (let i = 0; i < 1000; i++) {paramRoutes.push(['GET', `/tenant-${i}/users/:user/posts/:post`, i]);}
+for (let i = 0; i < 1000; i++) {
+  paramRoutes.push(['GET', `/tenant-${i}/users/:user/posts/:post`, i]);
+}
 
 runScenario('param-1k', paramRoutes, [
   { method: 'GET', path: '/tenant-0/users/42/posts/7', expect: { kind: 'match', value: 0, params: { user: '42', post: '7' } } },
@@ -224,7 +270,9 @@ runScenario('param-1k', paramRoutes, [
 
 // ─── 3. Wildcard scenario ───
 const wildcardRoutes: Array<[string, string, number]> = [];
-for (let i = 0; i < 100; i++) {wildcardRoutes.push(['GET', `/files/group-${i}/*path`, i]);}
+for (let i = 0; i < 100; i++) {
+  wildcardRoutes.push(['GET', `/files/group-${i}/*path`, i]);
+}
 
 runScenario('wildcard-100', wildcardRoutes, [
   { method: 'GET', path: '/files/group-0/a/b/c.txt', expect: { kind: 'match', value: 0, params: { path: 'a/b/c.txt' } } },

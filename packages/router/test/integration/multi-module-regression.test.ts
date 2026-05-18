@@ -127,7 +127,9 @@ describe('walker tier consistency — every applicable tier returns the same res
     {
       name: 'prefixed-factor tier (single chain + 1500 fanout)',
       register: (r: Router<string>) => {
-        for (let i = 0; i < 1500; i++) {r.add('GET', `/users/${i}/posts/:id`, `u-${i}`);}
+        for (let i = 0; i < 1500; i++) {
+          r.add('GET', `/users/${i}/posts/:id`, `u-${i}`);
+        }
       },
       probes: [
         ['/users/0/posts/x', 'u-0'],
@@ -155,7 +157,9 @@ describe('walker tier consistency — every applicable tier returns the same res
     {
       name: 'root-level tenant factor (>1000 sibling tenants at root)',
       register: (r: Router<string>) => {
-        for (let i = 0; i < 1500; i++) {r.add('GET', `/tenant-${i}/users/:id`, `t-${i}`);}
+        for (let i = 0; i < 1500; i++) {
+          r.add('GET', `/tenant-${i}/users/:id`, `t-${i}`);
+        }
       },
       probes: [
         ['/tenant-0/users/x', 't-0'],

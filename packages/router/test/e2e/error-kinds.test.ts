@@ -56,7 +56,9 @@ describe('RouterErrorKind reproducers (full coverage of 22 kinds)', () => {
 
   it('method-limit', () => {
     expectKindOnBuild(r => {
-      for (let i = 0; i < 40; i++) {r.add(`M${i.toString().padStart(2, '0')}`, '/x', `v-${i}`);}
+      for (let i = 0; i < 40; i++) {
+        r.add(`M${i.toString().padStart(2, '0')}`, '/x', `v-${i}`);
+      }
     }, 'method-limit');
   });
 

@@ -41,11 +41,15 @@ class PathParser {
   parse(path: string): Result<ParseResult, RouterErrorData> {
     const validation = this.validatePath(path);
 
-    if (validation !== null) {return validation;}
+    if (validation !== null) {
+      return validation;
+    }
 
     const tokenizeResult = this.tokenize(path);
 
-    if (isErr(tokenizeResult)) {return tokenizeResult;}
+    if (isErr(tokenizeResult)) {
+      return tokenizeResult;
+    }
 
     const { segments, normalized } = tokenizeResult;
 
@@ -55,7 +59,9 @@ class PathParser {
   // Single-pass char-code scan covering the structural-sanity check (leading
   private validatePath(path: string): Result<never, RouterErrorData> | null {
     const result = validatePathChars(path);
-    if (isErr(result)) {return result;}
+    if (isErr(result)) {
+      return result;
+    }
     return null;
   }
 
@@ -138,7 +144,9 @@ class PathParser {
 
       if (!caseSensitive) {
         const lowered = seg.toLowerCase();
-        if (lowered !== seg) {caseChanged = true;}
+        if (lowered !== seg) {
+          caseChanged = true;
+        }
         segments[i] = lowered;
       }
     }
@@ -184,17 +192,23 @@ class PathParser {
         flushStaticBuffer(acc, parts);
         isDynamic = true;
         const paramResult = this.parseParam(seg, path);
-        if (isErr(paramResult)) {return paramResult;}
+        if (isErr(paramResult)) {
+          return paramResult;
+        }
         // parseParam never returns a wildcard now that the colon-form
         // sugar (`:name+` / `:name*`) is rejected upstream — the
         // discriminant is always 'param' here.
         parts.push(paramResult);
-        if (!isLast) {acc.buf = '/';}
+        if (!isLast) {
+          acc.buf = '/';
+        }
       } else if (firstChar === CC_STAR) {
         flushStaticBuffer(acc, parts);
         isDynamic = true;
         const wcResult = this.parseWildcard(seg, i, segments.length, path);
-        if (isErr(wcResult)) {return wcResult;}
+        if (isErr(wcResult)) {
+          return wcResult;
+        }
         parts.push(wcResult);
       } else {
         appendStaticSegment(acc, seg, !isLast);
@@ -215,7 +229,9 @@ class PathParser {
     let isOptional = false;
 
     const optionalResult = stripOptionalDecorator(core, seg, path);
-    if ('kind' in optionalResult) {return err(optionalResult);}
+    if ('kind' in optionalResult) {
+      return err(optionalResult);
+    }
     core = optionalResult.core;
     isOptional = optionalResult.isOptional;
 
@@ -223,17 +239,25 @@ class PathParser {
     // must use the `*name` / `*name+` syntax exclusively. Reject the sugar at
     // parse time so two surface forms can't represent the same PathPart.
     const sugarRejection = rejectColonWildcardSugar(core, seg, path);
-    if (sugarRejection !== undefined) {return err(sugarRejection);}
+    if (sugarRejection !== undefined) {
+      return err(sugarRejection);
+    }
 
     const nameAndPattern = extractNameAndPattern(core, path);
-    if ('kind' in nameAndPattern) {return err(nameAndPattern);}
+    if ('kind' in nameAndPattern) {
+      return err(nameAndPattern);
+    }
     const { name, pattern } = nameAndPattern;
 
     const nameValidation = validateParamName(name, ':', path);
-    if (nameValidation !== null) {return nameValidation;}
+    if (nameValidation !== null) {
+      return nameValidation;
+    }
 
     const dup = this.registerParam(name, ':', path);
-    if (dup !== null) {return dup;}
+    if (dup !== null) {
+      return dup;
+    }
 
     // Regex pattern safety is the framework / user's responsibility — the
     // router does not gate against ReDoS-vulnerable shapes. Per policy
@@ -259,7 +283,9 @@ class PathParser {
     if (name !== '*') {
       const validation = validateParamName(name, '*', path);
 
-      if (validation !== null) {return validation;}
+      if (validation !== null) {
+        return validation;
+      }
     }
 
     // Wildcard must be the last segment
@@ -274,7 +300,9 @@ class PathParser {
 
     const dup = this.registerParam(name, '*', path);
 
-    if (dup !== null) {return dup;}
+    if (dup !== null) {
+      return dup;
+    }
 
     return { type: 'wildcard', name, origin };
   }
@@ -367,8 +395,12 @@ function validateParamName(name: string, prefix: ':' | '*', path: string): Resul
  */
 function rejectColonWildcardSugar(core: string, seg: string, path: string): RouterErrorData | undefined {
   const tail = core.charAt(core.length - 1);
-  if (tail !== '+' && tail !== '*') {return undefined;}
-  if (core.includes('(')) {return undefined;}
+  if (tail !== '+' && tail !== '*') {
+    return undefined;
+  }
+  if (core.includes('(')) {
+    return undefined;
+  }
   const canonical = tail === '+' ? `*${core.slice(1, -1)}+` : `*${core.slice(1, -1)}`;
   return {
     kind: 'route-parse',
@@ -396,7 +428,9 @@ function stripOptionalDecorator(
   seg: string,
   path: string,
 ): { core: string; isOptional: boolean } | RouterErrorData {
-  if (!core.endsWith('?')) {return { core, isOptional: false };}
+  if (!core.endsWith('?')) {
+    return { core, isOptional: false };
+  }
   const before = core.charCodeAt(core.length - 2);
   if (before === CC_PLUS || before === CC_STAR) {
     return {
@@ -462,7 +496,9 @@ interface StaticAccumulator {
 /** Flush whatever the accumulator holds into `parts` and reset it.
  *  No-op when the accumulator is empty. */
 function flushStaticBuffer(acc: StaticAccumulator, parts: PathPart[]): void {
-  if (acc.buf.length === 0) {return;}
+  if (acc.buf.length === 0) {
+    return;
+  }
   parts.push({ type: 'static', value: acc.buf, segments: acc.segments });
   acc.buf = '';
   acc.segments = [];
@@ -473,7 +509,9 @@ function flushStaticBuffer(acc: StaticAccumulator, parts: PathPart[]): void {
 function appendStaticSegment(acc: StaticAccumulator, seg: string, hasNext: boolean): void {
   acc.buf += seg;
   acc.segments.push(seg);
-  if (hasNext) {acc.buf += '/';}
+  if (hasNext) {
+    acc.buf += '/';
+  }
 }
 
 /**

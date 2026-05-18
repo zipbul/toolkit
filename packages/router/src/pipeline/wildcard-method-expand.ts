@@ -29,7 +29,9 @@ function expandWildcardMethodRoutes<T extends MethodPending>(pendingRoutes: T[],
       break;
     }
   }
-  if (!hasWildcardMethod) {return;}
+  if (!hasWildcardMethod) {
+    return;
+  }
 
   const sealMethods: string[] = [];
   const seen = new Set<string>();
@@ -47,7 +49,9 @@ function expandWildcardMethodRoutes<T extends MethodPending>(pendingRoutes: T[],
   const expanded: T[] = [];
   for (const r of pendingRoutes) {
     if (r.method === WILDCARD_METHOD) {
-      for (const m of sealMethods) {expanded.push({ ...r, method: m });}
+      for (const m of sealMethods) {
+        expanded.push({ ...r, method: m });
+      }
     } else {
       expanded.push(r);
     }
@@ -59,7 +63,9 @@ function expandWildcardMethodRoutes<T extends MethodPending>(pendingRoutes: T[],
   // but JSC traditionally throws RangeError around ~500k args). A simple
   // length swap + index assignment side-steps the cap entirely.
   pendingRoutes.length = expanded.length;
-  for (let i = 0; i < expanded.length; i++) {pendingRoutes[i] = expanded[i]!;}
+  for (let i = 0; i < expanded.length; i++) {
+    pendingRoutes[i] = expanded[i]!;
+  }
 }
 
 export { expandWildcardMethodRoutes, WILDCARD_METHOD };

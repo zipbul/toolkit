@@ -59,7 +59,9 @@ describe('rollback semantic equivalence', () => {
 
   it('prefix-index node counters are exactly zero after total batch rollback', () => {
     const r1 = new Router<string>();
-    for (let i = 0; i < 50; i++) {r1.add('GET', `/a/${i}`, 'x');}
+    for (let i = 0; i < 50; i++) {
+      r1.add('GET', `/a/${i}`, 'x');
+    }
     r1.add('GET', '/a/0', 'duplicate');
     expect(() => r1.build()).toThrow(RouterError);
 
@@ -69,7 +71,9 @@ describe('rollback semantic equivalence', () => {
     expect(() => r2.build()).toThrow(RouterError);
 
     const r3 = new Router<string>();
-    for (let i = 0; i < 50; i++) {r3.add('GET', `/x/${i}`, 'x');}
+    for (let i = 0; i < 50; i++) {
+      r3.add('GET', `/x/${i}`, 'x');
+    }
     r3.build();
     for (let i = 0; i < 50; i++) {
       expect(r3.match('GET', `/x/${i}`)?.value).toBe('x');
@@ -114,7 +118,9 @@ describe('rollback semantic equivalence', () => {
 
   it('codegen pre-walk node-count gate bails cleanly on huge trees and falls back to walker', () => {
     const r = new Router<string>();
-    for (let i = 0; i < 1000; i++) {r.add('GET', `/leaf-${i}/:tail`, `h${i}`);}
+    for (let i = 0; i < 1000; i++) {
+      r.add('GET', `/leaf-${i}/:tail`, `h${i}`);
+    }
     r.build();
     expect(r.match('GET', '/leaf-0/x')?.value).toBe('h0');
     expect(r.match('GET', '/leaf-500/abc')?.value).toBe('h500');

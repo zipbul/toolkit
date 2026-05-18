@@ -38,12 +38,16 @@ export function getOrCreateSuperFactory(
 ): SuperFactoryFn {
   let cacheKey = omitBehavior ? 'O:' : 'S:';
   for (let n = 0; n < originalNames.length; n++) {
-    if (n > 0) {cacheKey += ',';}
+    if (n > 0) {
+      cacheKey += ',';
+    }
     cacheKey += originalNames[n]!;
     cacheKey += originalTypes[n] === 'wildcard' ? '#w' : '#p';
   }
   const cached = cache.get(cacheKey);
-  if (cached !== undefined) {return cached;}
+  if (cached !== undefined) {
+    return cached;
+  }
 
   // Super-factory body: walks originalNames in order, gates each
   // assignment on the corresponding bit in `m` (presentBitmask).

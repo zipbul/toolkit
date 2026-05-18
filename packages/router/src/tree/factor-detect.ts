@@ -45,26 +45,42 @@ function setTenantFactor(node: SegmentNode, factor: TenantFactor): void {
  * tax).
  */
 function detectTenantFactor(root: SegmentNode, minSiblings = 1000): TenantFactor | null {
-  if (root.store !== null) {return null;}
-  if (root.paramChild !== null || root.wildcardStore !== null) {return null;}
-  if (root.staticChildren === null) {return null;}
+  if (root.store !== null) {
+    return null;
+  }
+  if (root.paramChild !== null || root.wildcardStore !== null) {
+    return null;
+  }
+  if (root.staticChildren === null) {
+    return null;
+  }
 
   const keys: string[] = [];
-  for (const k in root.staticChildren) {keys.push(k);}
-  if (keys.length < minSiblings) {return null;}
+  for (const k in root.staticChildren) {
+    keys.push(k);
+  }
+  if (keys.length < minSiblings) {
+    return null;
+  }
 
   const firstChild = root.staticChildren[keys[0]!]!;
   const baseStore = leafStoreOf(firstChild);
-  if (baseStore === null) {return null;}
+  if (baseStore === null) {
+    return null;
+  }
 
   const keyToTerminal = new Map<string, number>();
   keyToTerminal.set(keys[0]!, baseStore);
   for (let i = 1; i < keys.length; i++) {
     const k = keys[i]!;
     const child = root.staticChildren[k]!;
-    if (!subtreeShapesEqual(firstChild, child)) {return null;}
+    if (!subtreeShapesEqual(firstChild, child)) {
+      return null;
+    }
     const store = leafStoreOf(child);
-    if (store === null) {return null;}
+    if (store === null) {
+      return null;
+    }
     keyToTerminal.set(k, store);
   }
   return { keyToTerminal, sharedNext: firstChild };
@@ -84,28 +100,44 @@ function subtreeShapesEqual(a: SegmentNode, b: SegmentNode): boolean {
   // and override every leaf with the same handler index, miscompiling
   // matches at the differing position. The handler value itself differs
   // per sibling — only presence must match.
-  if ((a.store === null) !== (b.store === null)) {return false;}
+  if ((a.store === null) !== (b.store === null)) {
+    return false;
+  }
   // wildcardStore / staticPrefix / staticChildren Record fields are
   // ignored: leafStoreOf rejects every subtree carrying any of them
   // before this comparison runs (compaction does not touch factor
   // candidates, and Record/wildcard nodes never produce a unique
   // chain to a single store).
-  if ((a.singleChildKey === null) !== (b.singleChildKey === null)) {return false;}
+  if ((a.singleChildKey === null) !== (b.singleChildKey === null)) {
+    return false;
+  }
   if (a.singleChildKey !== null) {
-    if (a.singleChildKey !== b.singleChildKey) {return false;}
-    if (!subtreeShapesEqual(a.singleChildNext!, b.singleChildNext!)) {return false;}
+    if (a.singleChildKey !== b.singleChildKey) {
+      return false;
+    }
+    if (!subtreeShapesEqual(a.singleChildNext!, b.singleChildNext!)) {
+      return false;
+    }
   }
 
   let p1 = a.paramChild;
   let p2 = b.paramChild;
   while (p1 !== null && p2 !== null) {
-    if (p1.name !== p2.name) {return false;}
-    if (p1.patternSource !== p2.patternSource) {return false;}
-    if (!subtreeShapesEqual(p1.next, p2.next)) {return false;}
+    if (p1.name !== p2.name) {
+      return false;
+    }
+    if (p1.patternSource !== p2.patternSource) {
+      return false;
+    }
+    if (!subtreeShapesEqual(p1.next, p2.next)) {
+      return false;
+    }
     p1 = p1.nextSibling;
     p2 = p2.nextSibling;
   }
-  if (p1 !== null || p2 !== null) {return false;}
+  if (p1 !== null || p2 !== null) {
+    return false;
+  }
 
   return true;
 }

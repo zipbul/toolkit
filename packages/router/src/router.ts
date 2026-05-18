@@ -30,9 +30,15 @@ const EMPTY_METHODS: readonly string[] = Object.freeze([]);
  *  starts with that byte — the emitter reads this to skip walker
  *  dispatch on a guaranteed root miss. */
 function buildRootFirstCharMask(root: SegmentNode): Int32Array | null {
-  if (root.paramChild !== null) {return null;}
-  if (root.wildcardStore !== null) {return null;}
-  if (root.staticPrefix !== null) {return null;}
+  if (root.paramChild !== null) {
+    return null;
+  }
+  if (root.wildcardStore !== null) {
+    return null;
+  }
+  if (root.staticPrefix !== null) {
+    return null;
+  }
   const mask = new Int32Array(256);
   let hasAny = false;
   forEachStaticChild(root, key => {
@@ -120,7 +126,9 @@ class Router<T = unknown> implements RouterPublicApi<T> {
       registration.addAll(entries);
     };
     this.build = () => {
-      if (!registration.isSealed()) {performBuild();}
+      if (!registration.isSealed()) {
+        performBuild();
+      }
       // No post-build compactMemory call. The single `Bun.gc(true)` inside
       // performBuild collects the orphan heap synchronously; libpas's
       // scavenger runs every ~300ms on its own and decommits the freed
@@ -279,7 +287,9 @@ function buildMatchConfig<T>(
   // prelude reads this mask to skip walker dispatch entirely when the
   // first path byte is unknown.
   const rootFirstCharMaskByMethod: Array<Int32Array | null> = [];
-  for (let i = 0; i < 32; i++) {rootFirstCharMaskByMethod[i] = null;}
+  for (let i = 0; i < 32; i++) {
+    rootFirstCharMaskByMethod[i] = null;
+  }
   for (let i = 0; i < r.activeMethodCodes.length; i++) {
     const code = r.activeMethodCodes[i]![1];
     const root = snapshot.segmentTrees[code];

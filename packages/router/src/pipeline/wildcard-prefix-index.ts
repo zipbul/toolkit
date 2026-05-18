@@ -35,8 +35,11 @@ function getRegexParamChildren(node: PrefixTrieNode): PrefixTrieNode[] | null {
   return regexParamChildrenStore.get(node) ?? null;
 }
 function setRegexParamChildren(node: PrefixTrieNode, value: PrefixTrieNode[] | null): void {
-  if (value === null) {regexParamChildrenStore.delete(node);}
-  else {regexParamChildrenStore.set(node, value);}
+  if (value === null) {
+    regexParamChildrenStore.delete(node);
+  } else {
+    regexParamChildrenStore.set(node, value);
+  }
 }
 function getRegexAst(node: PrefixTrieNode): string | null {
   return regexAstStore.get(node) ?? null;
@@ -48,8 +51,11 @@ function getWildcardName(node: PrefixTrieNode): string | null {
   return wildcardNameStore.get(node) ?? null;
 }
 function setWildcardName(node: PrefixTrieNode, value: string | null): void {
-  if (value === null) {wildcardNameStore.delete(node);}
-  else {wildcardNameStore.set(node, value);}
+  if (value === null) {
+    wildcardNameStore.delete(node);
+  } else {
+    wildcardNameStore.set(node, value);
+  }
 }
 
 interface RouteMeta {
@@ -135,7 +141,9 @@ class WildcardPrefixIndex {
         const segs = part.segments;
         for (let si = 0; si < segs.length; si++) {
           const seg = segs[si]!;
-          if (seg.length === 0) {continue;}
+          if (seg.length === 0) {
+            continue;
+          }
           if (getWildcardName(node) !== null) {
             return abort(routeUnreachable('ancestor wildcard makes this route unreachable', routeMeta));
           }
@@ -151,7 +159,9 @@ class WildcardPrefixIndex {
             }
             child = createNode();
             children![seg] = child;
-            if (freshLiteralEdges === null) {freshLiteralEdges = [];}
+            if (freshLiteralEdges === null) {
+              freshLiteralEdges = [];
+            }
             freshLiteralEdges.push({ parent: node, key: seg, literalChildrenWasNull });
             node = child;
           }
@@ -195,7 +205,9 @@ class WildcardPrefixIndex {
               setRegexParamChildren(node, siblings);
             }
             siblings!.push(fresh);
-            if (freshRegexParents === null) {freshRegexParents = [];}
+            if (freshRegexParents === null) {
+              freshRegexParents = [];
+            }
             freshRegexParents.push({ parent: node, createdArray });
             node = fresh;
           }
@@ -214,7 +226,9 @@ class WildcardPrefixIndex {
             const fresh = createNode();
             node.paramName = part.name;
             node.paramChild = fresh;
-            if (freshParamParents === null) {freshParamParents = [];}
+            if (freshParamParents === null) {
+              freshParamParents = [];
+            }
             freshParamParents.push(node);
             node = fresh;
           }
@@ -235,7 +249,9 @@ class WildcardPrefixIndex {
       wildcardTailName !== null
         ? attachWildcardTail(node, wildcardTailName, visited, partial, routeMeta)
         : attachTerminal(node, visited, partial, routeMeta);
-    if (attachResult !== undefined) {return attachResult;}
+    if (attachResult !== undefined) {
+      return attachResult;
+    }
 
     return partial;
   }
@@ -273,14 +289,21 @@ function applyRevert(plan: CommitPlan, decrementCounters: boolean): void {
     }
   }
   const terminalNode = visited[visited.length - 1]!;
-  if (plan.hasWildcardTail) {setWildcardName(terminalNode, null);}
-  else {terminalNode.terminalMeta = null;}
+  if (plan.hasWildcardTail) {
+    setWildcardName(terminalNode, null);
+  } else {
+    terminalNode.terminalMeta = null;
+  }
   const fle = plan.freshLiteralEdges;
   if (fle !== null) {
     for (let i = fle.length - 1; i >= 0; i--) {
       const e = fle[i]!;
-      if (e.parent.literalChildren !== null) {delete e.parent.literalChildren[e.key];}
-      if (e.literalChildrenWasNull) {e.parent.literalChildren = null;}
+      if (e.parent.literalChildren !== null) {
+        delete e.parent.literalChildren[e.key];
+      }
+      if (e.literalChildrenWasNull) {
+        e.parent.literalChildren = null;
+      }
     }
   }
   const fpp = plan.freshParamParents;
@@ -298,7 +321,9 @@ function applyRevert(plan: CommitPlan, decrementCounters: boolean): void {
       const siblings = getRegexParamChildren(r.parent);
       if (siblings !== null) {
         siblings.pop();
-        if (r.createdArray) {setRegexParamChildren(r.parent, null);}
+        if (r.createdArray) {
+          setRegexParamChildren(r.parent, null);
+        }
       }
     }
   }
@@ -382,7 +407,9 @@ function attachWildcardTail(
     return err(routeUnreachable('a descendant terminal or wildcard already covers this prefix', routeMeta));
   }
   setWildcardName(node, name);
-  for (let i = 0; i < visited.length; i++) {visited[i]!.subtreeWildcardCount++;}
+  for (let i = 0; i < visited.length; i++) {
+    visited[i]!.subtreeWildcardCount++;
+  }
   return undefined;
 }
 
@@ -414,7 +441,9 @@ function attachTerminal(
     return err(routeUnreachable('a wildcard is registered at this exact prefix', routeMeta));
   }
   node.terminalMeta = routeMeta;
-  for (let i = 0; i < visited.length; i++) {visited[i]!.subtreeTerminalCount++;}
+  for (let i = 0; i < visited.length; i++) {
+    visited[i]!.subtreeTerminalCount++;
+  }
   return undefined;
 }
 

@@ -39,8 +39,11 @@ function settleSamples(samples: number, intervalMs = 5): Promise<number> {
       forceGc();
       last = rssMB();
       i++;
-      if (i >= samples) {resolve(last);}
-      else {setTimeout(tick, intervalMs);}
+      if (i >= samples) {
+        resolve(last);
+      } else {
+        setTimeout(tick, intervalMs);
+      }
     };
     tick();
   });

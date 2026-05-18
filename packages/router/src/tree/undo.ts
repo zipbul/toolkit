@@ -154,8 +154,11 @@ export function applyUndo(entry: UndoRecord): void {
       entry.n.singleChildNext = entry.next;
       return;
     case UndoKind.StaticPathMaskRestore:
-      if (entry.prevMask === 0) {delete entry.map[entry.key];}
-      else {entry.map[entry.key] = entry.prevMask;}
+      if (entry.prevMask === 0) {
+        delete entry.map[entry.key];
+      } else {
+        entry.map[entry.key] = entry.prevMask;
+      }
       return;
     default: {
       const _exhaustive: never = entry;

@@ -17,7 +17,9 @@ interface Pending {
 
 function makeRegistry(extraMethods: string[] = []): MethodRegistry {
   const registry = new MethodRegistry();
-  for (const m of extraMethods) {registry.getOrCreate(m);}
+  for (const m of extraMethods) {
+    registry.getOrCreate(m);
+  }
   return registry;
 }
 

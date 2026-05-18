@@ -25,7 +25,9 @@ function countOptionalSegments(parts: PathPart[]): number {
   let count = 0;
 
   for (const part of parts) {
-    if (part.type === 'param' && part.optional) {count++;}
+    if (part.type === 'param' && part.optional) {
+      count++;
+    }
   }
 
   return count;
@@ -39,11 +41,7 @@ function countOptionalSegments(parts: PathPart[]): number {
  * Records the omitted-param names against `optionalDefaults` so the matcher
  * can fill them with the configured optional-default value at match time.
  */
-function expandOptional(
-  parts: PathPart[],
-  handlerIndex: number,
-  optionalDefaults: OptionalParamDefaults,
-): ExpandedRoute[] {
+function expandOptional(parts: PathPart[], handlerIndex: number, optionalDefaults: OptionalParamDefaults): ExpandedRoute[] {
   // Fast path — overwhelmingly common: most paths carry no `?` optional.
   // Skip the OptionalCollection alloc entirely by scanning once and
   // bailing on the first hit.
@@ -142,7 +140,9 @@ function filterDroppedSegments(parts: PathPart[], optionalIndices: number[], dro
 /** Bit `j` set in `dropMask` ⇔ `optionalIndices[j]` is dropped. */
 function isDroppedAt(partIndex: number, optionalIndices: number[], dropMask: number): boolean {
   for (let j = 0; j < optionalIndices.length; j++) {
-    if (optionalIndices[j] === partIndex && dropMask & (1 << j)) {return true;}
+    if (optionalIndices[j] === partIndex && dropMask & (1 << j)) {
+      return true;
+    }
   }
   return false;
 }
@@ -155,9 +155,13 @@ function isDroppedAt(partIndex: number, optionalIndices: number[], dropMask: num
  * fixes single trailing slashes left by drops.
  */
 function trimTrailingSlashOnDrop(filtered: PathPart[]): void {
-  if (filtered.length === 0) {return;}
+  if (filtered.length === 0) {
+    return;
+  }
   const prev = filtered[filtered.length - 1]!;
-  if (prev.type !== 'static' || !prev.value.endsWith('/')) {return;}
+  if (prev.type !== 'static' || !prev.value.endsWith('/')) {
+    return;
+  }
   const trimmed = prev.value.slice(0, -1);
   if (trimmed.length > 0) {
     filtered[filtered.length - 1] = createStaticPart(trimmed);

@@ -43,7 +43,9 @@ export function catchRouterError(fn: () => void): RouterError {
 export function firstBuildIssue<T>(router: Router<T>): RouterErrorData {
   const err = catchRouterError(() => router.build());
   expect(err.data.kind).toBe('route-validation');
-  if (err.data.kind !== 'route-validation') {throw err;}
+  if (err.data.kind !== 'route-validation') {
+    throw err;
+  }
   return err.data.errors[0]!.error;
 }
 
@@ -70,6 +72,8 @@ export function getRegistrationSnapshot<T>(router: Router<T>): {
       } | null;
     }
   ).snapshot;
-  if (snap === null) {throw new Error('Router not built — snapshot unavailable');}
+  if (snap === null) {
+    throw new Error('Router not built — snapshot unavailable');
+  }
   return snap;
 }

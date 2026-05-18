@@ -36,7 +36,9 @@ describe('router is safe under concurrent async match() calls (cooperative)', ()
       tasks.push(
         (async () => {
           // Yield to the event loop so calls actually interleave.
-          if (i % 7 === 0) {await Promise.resolve();}
+          if (i % 7 === 0) {
+            await Promise.resolve();
+          }
           const which = i % 3;
           if (which === 0) {
             const m = r.match('GET', `/users/${i}`)!;
@@ -45,9 +47,8 @@ describe('router is safe under concurrent async match() calls (cooperative)', ()
             const m = r.match('GET', `/posts/slug-${i}`)!;
             return { value: m.value, param: m.params.slug! };
           }
-            const m = r.match('GET', `/files/${i}/tail`)!;
-            return { value: m.value, param: m.params.path! };
-          
+          const m = r.match('GET', `/files/${i}/tail`)!;
+          return { value: m.value, param: m.params.path! };
         })(),
       );
     }
@@ -74,7 +75,9 @@ describe('router is safe under concurrent async match() calls (cooperative)', ()
     for (let i = 0; i < N; i++) {
       tasks.push(
         (async () => {
-          if (i % 3 === 0) {await Promise.resolve();}
+          if (i % 3 === 0) {
+            await Promise.resolve();
+          }
           return i % 2 === 0 ? r.match('GET', '/health')!.value : r.match('GET', `/users/${i}`)!.value;
         })(),
       );

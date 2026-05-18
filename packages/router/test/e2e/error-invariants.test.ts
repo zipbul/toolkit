@@ -63,7 +63,9 @@ describe('every RouterError carries actionable kind + message + suggestion', () 
 
   it('method-limit', () => {
     const r = new Router<string>();
-    for (let i = 0; i < 26; i++) {r.add(`CUSTOM${i}`, `/x${i}`, `h${i}`);}
+    for (let i = 0; i < 26; i++) {
+      r.add(`CUSTOM${i}`, `/x${i}`, `h${i}`);
+    }
     assertActionable(firstBuildIssue(r), 'method-limit');
   });
 

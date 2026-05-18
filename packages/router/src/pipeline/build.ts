@@ -49,7 +49,9 @@ export function buildFromRegistration<T>(
   const staticByPath: Record<string, { mask: number; outputs: Array<MatchOutput<T> | undefined> }> = createNullProtoBucket();
   for (let mc = 0; mc < snapshot.staticByMethod.length; mc++) {
     const inputBucket = snapshot.staticByMethod[mc];
-    if (inputBucket === undefined) {continue;}
+    if (inputBucket === undefined) {
+      continue;
+    }
 
     const outBucket = createNullProtoBucket<MatchOutput<T>>();
     staticOutputsByMethod[mc] = outBucket;

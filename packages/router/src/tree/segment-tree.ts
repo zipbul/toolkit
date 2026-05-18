@@ -3,8 +3,8 @@ import type { Result } from '@zipbul/result';
 import { err } from '@zipbul/result';
 
 import type { RouterErrorData } from '../types';
-import type { PathPart } from './path-part';
 import type { ParamSegment, SegmentNode } from './node-types';
+import type { PathPart } from './path-part';
 import type { PatternTesterFn } from './pattern-tester';
 
 import { buildPatternTester } from './pattern-tester';
@@ -22,7 +22,9 @@ function forEachStaticChild(node: SegmentNode, fn: (key: string, child: SegmentN
     fn(node.singleChildKey, node.singleChildNext);
   }
   if (node.staticChildren !== null) {
-    for (const k in node.staticChildren) {fn(k, node.staticChildren[k]!);}
+    for (const k in node.staticChildren) {
+      fn(k, node.staticChildren[k]!);
+    }
   }
 }
 
@@ -41,7 +43,9 @@ function createSegmentNode(): SegmentNode {
 }
 
 function rollbackUndo(undo: SegmentTreeUndoLog, start: number): void {
-  for (let i = undo.length - 1; i >= start; i--) {applyUndo(undo[i]!);}
+  for (let i = undo.length - 1; i >= start; i--) {
+    applyUndo(undo[i]!);
+  }
   undo.length = start;
 }
 
@@ -201,7 +205,9 @@ function insertParamPart(
   }
 
   const testerOrErr = resolveOrCompileTester(part, testerCache, undoLog);
-  if (isResolvedTesterError(testerOrErr)) {return testerOrErr;}
+  if (isResolvedTesterError(testerOrErr)) {
+    return testerOrErr;
+  }
   const tester = testerOrErr;
 
   if (node.paramChild === null) {
@@ -252,7 +258,9 @@ function insertParamPart(
     p = p.nextSibling;
   }
 
-  if (matched !== null) {return { node: matched.next };}
+  if (matched !== null) {
+    return { node: matched.next };
+  }
 
   const fresh: ParamSegment = {
     name: part.name,
@@ -285,9 +293,13 @@ function resolveOrCompileTester(
   testerCache: Map<string, PatternTesterFn>,
   undoLog: SegmentTreeUndoLog,
 ): PatternTesterFn | null | RouterErrorData {
-  if (part.pattern === null) {return null;}
+  if (part.pattern === null) {
+    return null;
+  }
   const cached = testerCache.get(part.pattern);
-  if (cached !== undefined) {return cached;}
+  if (cached !== undefined) {
+    return cached;
+  }
   try {
     const compiled = new RegExp(`^(?:${part.pattern})$`);
     const tester = buildPatternTester(part.pattern, compiled);
@@ -352,11 +364,7 @@ function attachWildcardTerminal(
  * Attach a non-wildcard terminal store at `node`. Returns `undefined`
  * on success or a `RouterErrorData` on duplicate.
  */
-function attachStoreTerminal(
-  node: SegmentNode,
-  handlerIndex: number,
-  undoLog: SegmentTreeUndoLog,
-): RouterErrorData | undefined {
+function attachStoreTerminal(node: SegmentNode, handlerIndex: number, undoLog: SegmentTreeUndoLog): RouterErrorData | undefined {
   if (node.store !== null) {
     return {
       kind: 'route-duplicate',

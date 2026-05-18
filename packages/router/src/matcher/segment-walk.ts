@@ -32,7 +32,9 @@ import { createRecursiveWalker } from './walkers/recursive';
 function warmupCompiledWalker(walker: MatchFn, root: SegmentNode, state: MatchState): void {
   const paths = collectWarmupPaths(root);
   for (let it = 0; it < WARMUP_ITERATIONS; it++) {
-    for (const p of paths) {walker(p, state);}
+    for (const p of paths) {
+      walker(p, state);
+    }
   }
 }
 
