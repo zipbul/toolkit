@@ -6,7 +6,9 @@
  */
 import { describe, expect, it } from 'bun:test';
 
-import { createSegmentNode, type SegmentNode, setTenantFactor } from '../tree';
+import type { SegmentNode } from '../tree';
+
+import { WildcardOrigin, createSegmentNode, setTenantFactor } from '../tree';
 import { createMatchState } from './match-state';
 import { createSegmentWalker } from './segment-walk';
 
@@ -58,7 +60,7 @@ describe('createSegmentWalker — static-prefix wildcard codegen tier', () => {
     const child = createSegmentNode();
     child.wildcardStore = 7;
     child.wildcardName = 'path';
-    child.wildcardOrigin = 'star';
+    child.wildcardOrigin = WildcardOrigin.Star;
     root.staticChildren['files'] = child;
 
     const walker = createSegmentWalker(root, identityDecoder, createMatchState(2));

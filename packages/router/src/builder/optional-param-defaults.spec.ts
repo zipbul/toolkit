@@ -5,11 +5,12 @@
  */
 import { describe, expect, it } from 'bun:test';
 
+import { OptionalParamBehavior } from '../types';
 import { OptionalParamDefaults } from './optional-param-defaults';
 
 describe('OptionalParamDefaults — `omit` behavior', () => {
   it('record() is a no-op (the omit policy never materializes defaults)', () => {
-    const tracker = new OptionalParamDefaults('omit');
+    const tracker = new OptionalParamDefaults(OptionalParamBehavior.Omit);
     tracker.record(1, ['id']);
     const snap = tracker.snapshot();
     expect(snap.entries).toEqual([]);
@@ -18,13 +19,13 @@ describe('OptionalParamDefaults — `omit` behavior', () => {
 
 describe('OptionalParamDefaults — `set-undefined` behavior', () => {
   it('record() registers per-key defaults', () => {
-    const tracker = new OptionalParamDefaults('set-undefined');
+    const tracker = new OptionalParamDefaults(OptionalParamBehavior.SetUndefined);
     tracker.record(7, ['a', 'b']);
     expect(tracker.snapshot().entries).toEqual([[7, ['a', 'b']]]);
   });
 
   it('record() overwrites the entry for an existing key', () => {
-    const tracker = new OptionalParamDefaults('set-undefined');
+    const tracker = new OptionalParamDefaults(OptionalParamBehavior.SetUndefined);
     tracker.record(1, ['a']);
     tracker.record(1, ['a', 'b']);
     expect(tracker.snapshot().entries).toEqual([[1, ['a', 'b']]]);
@@ -33,13 +34,13 @@ describe('OptionalParamDefaults — `set-undefined` behavior', () => {
 
 describe('OptionalParamDefaults — snapshot/restore', () => {
   it('empty snapshot returns the singleton EMPTY_SNAPSHOT (object identity stable)', () => {
-    const a = new OptionalParamDefaults('set-undefined').snapshot();
-    const b = new OptionalParamDefaults('set-undefined').snapshot();
+    const a = new OptionalParamDefaults(OptionalParamBehavior.SetUndefined).snapshot();
+    const b = new OptionalParamDefaults(OptionalParamBehavior.SetUndefined).snapshot();
     expect(a).toBe(b);
   });
 
   it('restore() replaces the entire map with the snapshot contents', () => {
-    const tracker = new OptionalParamDefaults('set-undefined');
+    const tracker = new OptionalParamDefaults(OptionalParamBehavior.SetUndefined);
     tracker.record(1, ['a']);
     tracker.record(2, ['b']);
     const snap = tracker.snapshot();
@@ -54,7 +55,7 @@ describe('OptionalParamDefaults — snapshot/restore', () => {
   });
 
   it('restore(emptySnapshot) clears all entries', () => {
-    const tracker = new OptionalParamDefaults('set-undefined');
+    const tracker = new OptionalParamDefaults(OptionalParamBehavior.SetUndefined);
     tracker.record(1, ['a']);
     tracker.restore({ entries: [] });
     expect(tracker.snapshot().entries).toEqual([]);

@@ -10,15 +10,16 @@
  * miss — e.g. "decoding works" alone doesn't prove "decoding works in a
  * cached hit" or "decoding works after a trailing-slash trim".
  */
-import { describe, it, expect } from 'bun:test';
+import { describe, expect, it } from 'bun:test';
 
 import { Router } from '../../src/router';
+import { MatchSource, OptionalParamBehavior, TrailingSlash } from '../../src/types';
 
 // ── ignoreTrailingSlash × every route type ─────────────────────────────────
 
 describe('trailingSlash: "ignore" × route type', () => {
   it('static: trailing slash variant matches the no-slash route', () => {
-    const r = new Router<string>({ trailingSlash: 'ignore' });
+    const r = new Router<string>({ trailingSlash: TrailingSlash.Ignore });
     r.add('GET', '/health', 'h');
     r.build();
 
@@ -27,7 +28,7 @@ describe('trailingSlash: "ignore" × route type', () => {
   });
 
   it('single param: trailing slash trims before match', () => {
-    const r = new Router<string>({ trailingSlash: 'ignore' });
+    const r = new Router<string>({ trailingSlash: TrailingSlash.Ignore });
     r.add('GET', '/users/:id', 'u');
     r.build();
 
@@ -36,7 +37,7 @@ describe('trailingSlash: "ignore" × route type', () => {
   });
 
   it('param chain: trailing slash trims', () => {
-    const r = new Router<string>({ trailingSlash: 'ignore' });
+    const r = new Router<string>({ trailingSlash: TrailingSlash.Ignore });
     r.add('GET', '/users/:id/posts/:postId', 'p');
     r.build();
 
@@ -71,7 +72,7 @@ describe('trailingSlash: "ignore" × route type', () => {
   });
 
   it('star wildcard at terminal: trailing slash trim leaves empty capture intact', () => {
-    const r = new Router<string>({ trailingSlash: 'ignore' });
+    const r = new Router<string>({ trailingSlash: TrailingSlash.Ignore });
     r.add('GET', '/files/*', 'val');
     r.build();
     expect(r.match('GET', '/files/')!.params['*']).toBe('');
@@ -80,7 +81,7 @@ describe('trailingSlash: "ignore" × route type', () => {
 
 describe('trailingSlash: "strict" × route type', () => {
   it('static: trailing slash variant DOES NOT match', () => {
-    const r = new Router<string>({ trailingSlash: 'strict' });
+    const r = new Router<string>({ trailingSlash: TrailingSlash.Strict });
     r.add('GET', '/health', 'h');
     r.build();
 
@@ -89,7 +90,7 @@ describe('trailingSlash: "strict" × route type', () => {
   });
 
   it('single param (codegen path): trailing slash on terminal param fails', () => {
-    const r = new Router<string>({ trailingSlash: 'strict' });
+    const r = new Router<string>({ trailingSlash: TrailingSlash.Strict });
     r.add('GET', '/users/:id', 'u');
     r.build();
 
@@ -98,7 +99,7 @@ describe('trailingSlash: "strict" × route type', () => {
   });
 
   it('param chain: trailing slash on inner segment fails', () => {
-    const r = new Router<string>({ trailingSlash: 'strict' });
+    const r = new Router<string>({ trailingSlash: TrailingSlash.Strict });
     r.add('GET', '/users/:id/posts/:postId', 'p');
     r.build();
 
@@ -107,7 +108,7 @@ describe('trailingSlash: "strict" × route type', () => {
   });
 
   it('star wildcard: empty trailing-slash position captures empty', () => {
-    const r = new Router<string>({ trailingSlash: 'strict' });
+    const r = new Router<string>({ trailingSlash: TrailingSlash.Strict });
     r.add('GET', '/files/*p', 'f');
     r.build();
 
@@ -116,7 +117,7 @@ describe('trailingSlash: "strict" × route type', () => {
   });
 
   it('multi wildcard: trailing slash with no content fails', () => {
-    const r = new Router<string>({ trailingSlash: 'strict' });
+    const r = new Router<string>({ trailingSlash: TrailingSlash.Strict });
     r.add('GET', '/files/*p+', 'f');
     r.build();
 
@@ -193,7 +194,7 @@ describe('decoding × cache', () => {
 
     const b = r.match('GET', '/users/hello%20world')!;
 
-    expect(b.meta.source).toBe('cache');
+    expect(b.meta.source).toBe(MatchSource.Cache);
     expect(b.params.name).toBe('hello world');
   });
 
@@ -214,8 +215,8 @@ describe('cache × route type', () => {
     r.add('GET', '/health', 'h');
     r.build();
 
-    expect(r.match('GET', '/health')!.meta.source).toBe('static');
-    expect(r.match('GET', '/health')!.meta.source).toBe('static');
+    expect(r.match('GET', '/health')!.meta.source).toBe(MatchSource.Static);
+    expect(r.match('GET', '/health')!.meta.source).toBe(MatchSource.Static);
   });
 
   it('param: second hit comes from cache', () => {
@@ -223,8 +224,8 @@ describe('cache × route type', () => {
     r.add('GET', '/users/:id', 'u');
     r.build();
 
-    expect(r.match('GET', '/users/42')!.meta.source).toBe('dynamic');
-    expect(r.match('GET', '/users/42')!.meta.source).toBe('cache');
+    expect(r.match('GET', '/users/42')!.meta.source).toBe(MatchSource.Dynamic);
+    expect(r.match('GET', '/users/42')!.meta.source).toBe(MatchSource.Cache);
   });
 
   it('miss: re-asking the same missing URL is short-circuited', () => {
@@ -241,7 +242,7 @@ describe('cache × route type', () => {
 
 describe('optionalParamBehavior × cache', () => {
   it('omit + cache: missing optional remains absent on cached hit', () => {
-    const r = new Router<string>({ optionalParamBehavior: 'omit' });
+    const r = new Router<string>({ optionalParamBehavior: OptionalParamBehavior.Omit });
     r.add('GET', '/users/:id?', 'u');
     r.build();
 
@@ -251,12 +252,12 @@ describe('optionalParamBehavior × cache', () => {
 
     const b = r.match('GET', '/users')!;
 
-    expect(b.meta.source).toBe('cache');
+    expect(b.meta.source).toBe(MatchSource.Cache);
     expect('id' in b.params).toBe(false);
   });
 
   it('set-undefined + cache: id is undefined on cached hit', () => {
-    const r = new Router<string>({ optionalParamBehavior: 'set-undefined' });
+    const r = new Router<string>({ optionalParamBehavior: OptionalParamBehavior.SetUndefined });
     r.add('GET', '/users/:id?', 'u');
     r.build();
 
@@ -271,7 +272,7 @@ describe('optionalParamBehavior × cache', () => {
   });
 
   it('caches each optional variant separately — present and absent', () => {
-    const r = new Router<string>({ optionalParamBehavior: 'set-undefined' });
+    const r = new Router<string>({ optionalParamBehavior: OptionalParamBehavior.SetUndefined });
     r.add('GET', '/items/:id?', 'val');
     r.build();
 
@@ -281,18 +282,18 @@ describe('optionalParamBehavior × cache', () => {
     expect(absent1.params.id).toBeUndefined();
 
     const present2 = r.match('GET', '/items/42')!;
-    expect(present2.meta.source).toBe('cache');
+    expect(present2.meta.source).toBe(MatchSource.Cache);
     expect(present2.params.id).toBe('42');
 
     const absent2 = r.match('GET', '/items')!;
-    expect(absent2.meta.source).toBe('cache');
+    expect(absent2.meta.source).toBe(MatchSource.Cache);
     expect(absent2.params.id).toBeUndefined();
   });
 
   it('ignoreTrailingSlash + optional param: trimmed slash leaves optional absent', () => {
     const r = new Router<string>({
-      trailingSlash: 'ignore',
-      optionalParamBehavior: 'set-undefined',
+      trailingSlash: TrailingSlash.Ignore,
+      optionalParamBehavior: OptionalParamBehavior.SetUndefined,
     });
     r.add('GET', '/items/:id?', 'val');
     r.build();
@@ -335,7 +336,7 @@ describe('unbounded length', () => {
 describe('triple combinations', () => {
   it('trim slash + case fold + cache: all three apply consistently', () => {
     const r = new Router<string>({
-      trailingSlash: 'ignore',
+      trailingSlash: TrailingSlash.Ignore,
       pathCaseSensitive: false,
     });
     r.add('GET', '/Users/:id', 'u');
@@ -348,7 +349,7 @@ describe('triple combinations', () => {
 
     const b = r.match('GET', '/USERS/42/')!;
 
-    expect(b.meta.source).toBe('cache');
+    expect(b.meta.source).toBe(MatchSource.Cache);
   });
 
   it('decode + tester + cache: all three apply for percent-encoded numeric', () => {
@@ -363,16 +364,16 @@ describe('triple combinations', () => {
 
     const b = r.match('GET', '/users/%34%32')!;
 
-    expect(b.meta.source).toBe('cache');
+    expect(b.meta.source).toBe(MatchSource.Cache);
     expect(b.params.id).toBe('42');
   });
 
   it('all four flags simultaneously: caseSensitive=false + trailingSlash + cacheSize + optionalParamBehavior', () => {
     const r = new Router<string>({
       pathCaseSensitive: false,
-      trailingSlash: 'ignore',
+      trailingSlash: TrailingSlash.Ignore,
       cacheSize: 10,
-      optionalParamBehavior: 'set-undefined',
+      optionalParamBehavior: OptionalParamBehavior.SetUndefined,
     });
     r.add('GET', '/api/:category/:id?', 'val');
     r.build();
@@ -397,39 +398,39 @@ describe('cache-key normalization collapses normalized-equal inputs to one entry
     r.build();
 
     const first = r.match('GET', '/Users/123')!;
-    expect(first.meta.source).toBe('dynamic');
+    expect(first.meta.source).toBe(MatchSource.Dynamic);
 
     const second = r.match('GET', '/USERS/123')!;
-    expect(second.meta.source).toBe('cache');
+    expect(second.meta.source).toBe(MatchSource.Cache);
     expect(second.params.id).toBe('123');
   });
 
   it('trailingSlash="ignore": trailing-slash and bare paths collapse to the same cache key', () => {
-    const r = new Router<string>({ trailingSlash: 'ignore' });
+    const r = new Router<string>({ trailingSlash: TrailingSlash.Ignore });
     r.add('GET', '/api/:id', 'val');
     r.build();
 
     const first = r.match('GET', '/api/42/')!;
-    expect(first.meta.source).toBe('dynamic');
+    expect(first.meta.source).toBe(MatchSource.Dynamic);
 
     const second = r.match('GET', '/api/42')!;
-    expect(second.meta.source).toBe('cache');
+    expect(second.meta.source).toBe(MatchSource.Cache);
     expect(second.value).toBe('val');
   });
 
   it('case + trailingSlash combined: a different-case + different-slash second input still cache-hits', () => {
     const r = new Router<string>({
       pathCaseSensitive: false,
-      trailingSlash: 'ignore',
+      trailingSlash: TrailingSlash.Ignore,
     });
     r.add('GET', '/api/:id', 'val');
     r.build();
 
     const first = r.match('GET', '/API/42/')!;
-    expect(first.meta.source).toBe('dynamic');
+    expect(first.meta.source).toBe(MatchSource.Dynamic);
 
     const second = r.match('GET', '/Api/42')!;
-    expect(second.meta.source).toBe('cache');
+    expect(second.meta.source).toBe(MatchSource.Cache);
     expect(second.params.id).toBe('42');
   });
 });

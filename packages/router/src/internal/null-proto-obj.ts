@@ -1,5 +1,7 @@
 import type { MatchMeta, RouteParams } from '../types';
 
+import { MatchSource } from '../types';
+
 /**
  * Prototype-less object constructor — `new NullProtoObj()` produces an object
  * without `Object.prototype` lookups (~10-20% faster property access than
@@ -34,6 +36,6 @@ export function createNullProtoBucket<V>(): Record<string, V> {
 export const EMPTY_PARAMS: RouteParams = Object.freeze(new NullProtoObj()) as RouteParams;
 
 /** Match meta singletons — frozen so any stray mutation throws. */
-export const STATIC_META: MatchMeta = Object.freeze({ source: 'static' } as const);
-export const CACHE_META: MatchMeta = Object.freeze({ source: 'cache' } as const);
-export const DYNAMIC_META: MatchMeta = Object.freeze({ source: 'dynamic' } as const);
+export const STATIC_META: MatchMeta = Object.freeze({ source: MatchSource.Static } as const);
+export const CACHE_META: MatchMeta = Object.freeze({ source: MatchSource.Cache } as const);
+export const DYNAMIC_META: MatchMeta = Object.freeze({ source: MatchSource.Dynamic } as const);

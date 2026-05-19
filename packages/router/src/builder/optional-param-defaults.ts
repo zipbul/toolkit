@@ -1,4 +1,4 @@
-import type { OptionalParamBehavior } from '../types';
+import { OptionalParamBehavior } from '../types';
 
 interface OptionalParamDefaultsSnapshot {
   entries: Array<readonly [number, readonly string[]]>;
@@ -19,12 +19,12 @@ export class OptionalParamDefaults {
   private readonly behavior: OptionalParamBehavior;
   private readonly defaults = new Map<number, readonly string[]>();
 
-  constructor(behavior: OptionalParamBehavior = 'omit') {
+  constructor(behavior: OptionalParamBehavior = OptionalParamBehavior.Omit) {
     this.behavior = behavior;
   }
 
   record(key: number, names: readonly string[]): void {
-    if (this.behavior === 'omit') {
+    if (this.behavior === OptionalParamBehavior.Omit) {
       return;
     }
     this.defaults.set(key, names);

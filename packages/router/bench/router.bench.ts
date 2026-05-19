@@ -5,6 +5,7 @@ import { run, bench, boxplot, summary, do_not_optimize } from 'mitata';
 import type { RouterOptions } from '../src/types';
 
 import { Router } from '../src/router';
+import { TrailingSlash } from '../src/types';
 import { printEnv } from './helpers';
 
 printEnv();
@@ -80,7 +81,7 @@ const wildcardRouter = buildRouter([
 
 const mixedRouter100 = buildRouter(MIXED_ROUTES_100);
 
-// trailingSlash:'ignore' + pathCaseSensitive:false exercise the full option pipeline.
+// trailingSlash:TrailingSlash.Ignore + pathCaseSensitive:false exercise the full option pipeline.
 // No collapsed-slash option exists in RouterOptions, so that axis is not benched.
 const fullOptionsRouter = buildRouter(
   [
@@ -91,7 +92,7 @@ const fullOptionsRouter = buildRouter(
     ['GET', '/static/page', 5],
   ],
   {
-    trailingSlash: 'ignore',
+    trailingSlash: TrailingSlash.Ignore,
     pathCaseSensitive: false,
   },
 );

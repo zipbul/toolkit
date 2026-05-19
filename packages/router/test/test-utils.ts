@@ -21,6 +21,7 @@ import type { RouterErrorData } from '../src/types';
 
 import { getRouterInternals } from '../internal';
 import { RouterError } from '../src/error';
+import { RouterErrorKind } from '../src/types';
 
 /**
  * Run `fn` and return the `RouterError` it threw. Fails the surrounding
@@ -42,8 +43,8 @@ export function catchRouterError(fn: () => void): RouterError {
  */
 export function firstBuildIssue<T>(router: Router<T>): RouterErrorData {
   const err = catchRouterError(() => router.build());
-  expect(err.data.kind).toBe('route-validation');
-  if (err.data.kind !== 'route-validation') {
+  expect(err.data.kind).toBe(RouterErrorKind.RouteValidation);
+  if (err.data.kind !== RouterErrorKind.RouteValidation) {
     throw err;
   }
   return err.data.errors[0]!.error;

@@ -1,9 +1,11 @@
 /**
  * Path normalization + percent-decode behavior matrix.
  */
-import { describe, it, expect } from 'bun:test';
+import { describe, expect, it } from 'bun:test';
 
 import { Router } from '../../src/router';
+import { WildcardOrigin } from '../../src/tree';
+import { MatchSource, TrailingSlash } from '../../src/types';
 
 describe('percent-decoded param values', () => {
   it('decodes ASCII percent-encoded segment', () => {
@@ -58,10 +60,10 @@ describe('percent-decoded param values', () => {
     r.add('GET', '/users/:name', 'h');
     r.build();
     const first = r.match('GET', '/users/foo%20bar');
-    expect(first?.meta.source).toBe('dynamic');
+    expect(first?.meta.source).toBe(MatchSource.Dynamic);
     expect(first?.params['name']).toBe('foo bar');
     const second = r.match('GET', '/users/foo%20bar');
-    expect(second?.meta.source).toBe('cache');
+    expect(second?.meta.source).toBe(MatchSource.Cache);
     expect(second?.params['name']).toBe('foo bar');
     // Cache must not corrupt params on repeated hit
     const third = r.match('GET', '/users/foo%20bar');
@@ -98,7 +100,7 @@ describe('trailing slash normalization', () => {
   });
 
   it('preserves trailing slash distinction in match probe when trailingSlash=strict', () => {
-    const r = new Router<string>({ trailingSlash: 'strict' });
+    const r = new Router<string>({ trailingSlash: TrailingSlash.Strict });
     r.add('GET', '/x/y', 'h');
     r.build();
     expect(r.match('GET', '/x/y')?.value).toBe('h');
@@ -151,8 +153,8 @@ describe('integration — register/build/match end-to-end', () => {
     const r = new Router<string>();
     r.add(['GET', 'POST'], '/x', 'multi');
     r.build();
-    expect(r.match('GET', '/x')?.value).toBe('multi');
-    expect(r.match('POST', '/x')?.value).toBe('multi');
+    expect(r.match('GET', '/x')?.value).toBe(WildcardOrigin.Multi);
+    expect(r.match('POST', '/x')?.value).toBe(WildcardOrigin.Multi);
     expect(r.match('DELETE', '/x')).toBeNull();
   });
 
@@ -174,6 +176,6 @@ describe('integration — register/build/match end-to-end', () => {
     const second = r.match('GET', '/users/42');
     expect(first?.value).toBe('h');
     expect(second?.value).toBe('h');
-    expect(second?.meta.source).toBe('cache');
+    expect(second?.meta.source).toBe(MatchSource.Cache);
   });
 });

@@ -7,8 +7,11 @@
 import { describe, expect, it } from 'bun:test';
 
 import type { PatternTesterFn } from './pattern-tester';
+import type { SegmentNode } from './segment-tree';
 import type { SegmentTreeUndoLog } from './undo';
 
+import { PathPartType, WildcardOrigin } from '../tree';
+import { RouterErrorKind } from '../types';
 import {
   attachStoreTerminal,
   attachWildcardTerminal,
@@ -17,7 +20,6 @@ import {
   insertStaticSegments,
   isResolvedTesterError,
   resolveOrCompileTester,
-  type SegmentNode,
 } from './segment-tree';
 
 const newUndo = (): SegmentTreeUndoLog => [];
@@ -34,7 +36,7 @@ describe('isResolvedTesterError', () => {
   });
 
   it('returns true for an object carrying a `kind` field (RouterErrorData)', () => {
-    expect(isResolvedTesterError({ kind: 'route-parse', message: 'x', suggestion: 'fix' })).toBe(true);
+    expect(isResolvedTesterError({ kind: RouterErrorKind.RouteParse, message: 'x', suggestion: 'fix' })).toBe(true);
   });
 });
 
@@ -66,7 +68,7 @@ describe('resolveOrCompileTester', () => {
     const out = resolveOrCompileTester({ name: 'id', pattern: '[unclosed' }, newCache(), newUndo());
     expect(isResolvedTesterError(out)).toBe(true);
     if (isResolvedTesterError(out)) {
-      expect(out.kind).toBe('route-parse');
+      expect(out.kind).toBe(RouterErrorKind.RouteParse);
       expect(out.message).toContain('Invalid regex');
     }
   });
@@ -105,10 +107,10 @@ describe('insertStaticSegments', () => {
     const root = createSegmentNode();
     root.wildcardStore = 1;
     root.wildcardName = 'rest';
-    root.wildcardOrigin = 'star';
+    root.wildcardOrigin = WildcardOrigin.Star;
     const out = insertStaticSegments(root, ['users'], newUndo());
     expect(out).toHaveProperty('kind');
-    if ('kind' in out && out.kind === 'route-conflict') {
+    if ('kind' in out && out.kind === RouterErrorKind.RouteConflict) {
       expect(out.conflictsWith).toBe('*rest');
     }
   });
@@ -118,7 +120,13 @@ describe('insertParamPart', () => {
   it('creates a fresh paramChild on first insertion and returns the descended node', () => {
     const root = createSegmentNode();
     const undo = newUndo();
-    const out = insertParamPart(root, { type: 'param', name: 'id', pattern: null, optional: false }, newCache(), 0, undo);
+    const out = insertParamPart(
+      root,
+      { type: PathPartType.Param, name: 'id', pattern: null, optional: false },
+      newCache(),
+      0,
+      undo,
+    );
     expect(out).not.toHaveProperty('kind');
     expect(root.paramChild).not.toBeNull();
     expect(root.paramChild!.name).toBe('id');
@@ -129,7 +137,7 @@ describe('insertParamPart', () => {
     const root = createSegmentNode();
     const undo = newUndo();
     const cache = newCache();
-    const part = { type: 'param' as const, name: 'id', pattern: null, optional: false };
+    const part = { type: PathPartType.Param as const, name: 'id', pattern: null, optional: false };
     const a = insertParamPart(root, part, cache, 0, undo);
     const b = insertParamPart(root, part, cache, 0, undo);
     if ('node' in a && 'node' in b) {
@@ -142,10 +150,16 @@ describe('insertParamPart', () => {
     const root = createSegmentNode();
     root.wildcardStore = 1;
     root.wildcardName = 'rest';
-    root.wildcardOrigin = 'star';
-    const out = insertParamPart(root, { type: 'param', name: 'id', pattern: null, optional: false }, newCache(), 0, newUndo());
+    root.wildcardOrigin = WildcardOrigin.Star;
+    const out = insertParamPart(
+      root,
+      { type: PathPartType.Param, name: 'id', pattern: null, optional: false },
+      newCache(),
+      0,
+      newUndo(),
+    );
     expect(out).toHaveProperty('kind');
-    if ('kind' in out && out.kind === 'route-conflict') {
+    if ('kind' in out && out.kind === RouterErrorKind.RouteConflict) {
       expect(out.conflictsWith).toBe('*rest');
     }
   });
@@ -155,11 +169,11 @@ describe('attachWildcardTerminal', () => {
   it('writes the wildcard slot and pushes one undo entry on success', () => {
     const node = createSegmentNode();
     const undo = newUndo();
-    const out = attachWildcardTerminal(node, { type: 'wildcard', name: 'rest', origin: 'star' }, 7, undo);
+    const out = attachWildcardTerminal(node, { type: PathPartType.Wildcard, name: 'rest', origin: WildcardOrigin.Star }, 7, undo);
     expect(out).toBeUndefined();
     expect(node.wildcardStore).toBe(7);
     expect(node.wildcardName).toBe('rest');
-    expect(node.wildcardOrigin).toBe('star');
+    expect(node.wildcardOrigin).toBe(WildcardOrigin.Star);
     expect(undo).toHaveLength(1);
   });
 
@@ -167,11 +181,16 @@ describe('attachWildcardTerminal', () => {
     const node = createSegmentNode();
     node.wildcardStore = 1;
     node.wildcardName = 'first';
-    node.wildcardOrigin = 'star';
-    const out = attachWildcardTerminal(node, { type: 'wildcard', name: 'second', origin: 'star' }, 9, newUndo());
+    node.wildcardOrigin = WildcardOrigin.Star;
+    const out = attachWildcardTerminal(
+      node,
+      { type: PathPartType.Wildcard, name: 'second', origin: WildcardOrigin.Star },
+      9,
+      newUndo(),
+    );
     expect(out).toBeDefined();
     if (out) {
-      expect(out.kind).toBe('route-conflict');
+      expect(out.kind).toBe(RouterErrorKind.RouteConflict);
     }
   });
 
@@ -179,11 +198,16 @@ describe('attachWildcardTerminal', () => {
     const node = createSegmentNode();
     node.wildcardStore = 1;
     node.wildcardName = 'rest';
-    node.wildcardOrigin = 'star';
-    const out = attachWildcardTerminal(node, { type: 'wildcard', name: 'rest', origin: 'star' }, 9, newUndo());
+    node.wildcardOrigin = WildcardOrigin.Star;
+    const out = attachWildcardTerminal(
+      node,
+      { type: PathPartType.Wildcard, name: 'rest', origin: WildcardOrigin.Star },
+      9,
+      newUndo(),
+    );
     expect(out).toBeDefined();
     if (out) {
-      expect(out.kind).toBe('route-duplicate');
+      expect(out.kind).toBe(RouterErrorKind.RouteDuplicate);
     }
   });
 
@@ -197,10 +221,15 @@ describe('attachWildcardTerminal', () => {
       next: createSegmentNode(),
       nextSibling: null,
     };
-    const out = attachWildcardTerminal(node, { type: 'wildcard', name: 'rest', origin: 'star' }, 9, newUndo());
+    const out = attachWildcardTerminal(
+      node,
+      { type: PathPartType.Wildcard, name: 'rest', origin: WildcardOrigin.Star },
+      9,
+      newUndo(),
+    );
     expect(out).toBeDefined();
     if (out) {
-      expect(out.kind).toBe('route-conflict');
+      expect(out.kind).toBe(RouterErrorKind.RouteConflict);
     }
   });
 });
@@ -221,7 +250,7 @@ describe('attachStoreTerminal', () => {
     const out = attachStoreTerminal(node, 2, newUndo());
     expect(out).toBeDefined();
     if (out) {
-      expect(out.kind).toBe('route-duplicate');
+      expect(out.kind).toBe(RouterErrorKind.RouteDuplicate);
     }
   });
 });

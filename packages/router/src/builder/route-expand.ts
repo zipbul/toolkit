@@ -1,5 +1,6 @@
 import type { PathPart } from '../tree';
 
+import { PathPartType } from '../tree';
 import { OptionalParamDefaults } from './optional-param-defaults';
 
 const MAX_OPTIONAL_SEGMENTS_PER_ROUTE = 4;
@@ -25,7 +26,7 @@ function countOptionalSegments(parts: PathPart[]): number {
   let count = 0;
 
   for (const part of parts) {
-    if (part.type === 'param' && part.optional) {
+    if (part.type === PathPartType.Param && part.optional) {
       count++;
     }
   }
@@ -48,7 +49,7 @@ function expandOptional(parts: PathPart[], handlerIndex: number, optionalDefault
   let firstOptional = -1;
   for (let i = 0; i < parts.length; i++) {
     const p = parts[i]!;
-    if (p.type === 'param' && p.optional) {
+    if (p.type === PathPartType.Param && p.optional) {
       firstOptional = i;
       break;
     }
@@ -72,7 +73,7 @@ function collectOptionalIndices(parts: PathPart[], start: number): OptionalColle
   for (let i = start; i < parts.length; i++) {
     const part = parts[i]!;
 
-    if (part.type === 'param' && part.optional) {
+    if (part.type === PathPartType.Param && part.optional) {
       indices.push(i);
       names.push(part.name);
     }
@@ -87,7 +88,7 @@ function createStaticPart(value: string): PathPart {
   const body = value.length > 1 ? value.slice(1) : '';
   const segments = body === '' ? [] : body.split('/');
 
-  return { type: 'static', value, segments };
+  return { type: PathPartType.Static, value, segments };
 }
 
 /**
@@ -99,7 +100,7 @@ function enumerateExpansions(parts: PathPart[], handlerIndex: number, optionalIn
   const result: ExpandedRoute[] = [];
 
   // Full path (all optionals present, marked as required for insertion).
-  const fullParts = parts.map(p => (p.type === 'param' && p.optional ? { ...p, optional: false } : p));
+  const fullParts = parts.map(p => (p.type === PathPartType.Param && p.optional ? { ...p, optional: false } : p));
   result.push({ parts: fullParts, handlerIndex, isOptionalExpansion: false });
 
   // Iterate the 2^N - 1 non-empty subsets of "which optionals to drop".
@@ -132,7 +133,7 @@ function filterDroppedSegments(parts: PathPart[], optionalIndices: number[], dro
       continue;
     }
     const part = parts[i]!;
-    filtered.push(part.type === 'param' && part.optional ? { ...part, optional: false } : part);
+    filtered.push(part.type === PathPartType.Param && part.optional ? { ...part, optional: false } : part);
   }
   return filtered;
 }
@@ -159,7 +160,7 @@ function trimTrailingSlashOnDrop(filtered: PathPart[]): void {
     return;
   }
   const prev = filtered[filtered.length - 1]!;
-  if (prev.type !== 'static' || !prev.value.endsWith('/')) {
+  if (prev.type !== PathPartType.Static || !prev.value.endsWith('/')) {
     return;
   }
   const trimmed = prev.value.slice(0, -1);
@@ -185,10 +186,10 @@ function mergeStaticParts(parts: PathPart[]): PathPart[] {
   const result: PathPart[] = [];
 
   for (const part of parts) {
-    if (part.type === 'static' && result.length > 0) {
+    if (part.type === PathPartType.Static && result.length > 0) {
       const prev = result[result.length - 1]!;
 
-      if (prev.type === 'static') {
+      if (prev.type === PathPartType.Static) {
         let merged = prev.value + part.value;
 
         merged = merged.replace(/\/\//g, '/');

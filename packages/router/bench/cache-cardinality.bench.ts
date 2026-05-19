@@ -2,6 +2,7 @@ import { bench, do_not_optimize, run, summary } from 'mitata';
 
 import { Router } from '../src/router';
 import { printEnv, settleScavenger } from './helpers';
+import { MatchSource } from './src/types';
 
 const CACHE_SIZE = 128;
 const UNIQUE = 100_000;
@@ -50,10 +51,10 @@ console.log(`heap delta second pressure: ${((afterSecond - afterFirst) / 1024 / 
 console.log(`oldest source after pressure: ${oldest?.meta.source ?? 'null'}`);
 console.log(`newest source after pressure: ${newest?.meta.source ?? 'null'}`);
 
-if (oldest?.meta.source !== 'dynamic') {
+if (oldest?.meta.source !== MatchSource.Dynamic) {
   throw new Error(`cache cardinality regression: oldest hit should have been evicted, got ${oldest?.meta.source}`);
 }
-if (newest?.meta.source !== 'cache') {
+if (newest?.meta.source !== MatchSource.Cache) {
   throw new Error(`cache cardinality regression: newest hit should remain cached, got ${newest?.meta.source}`);
 }
 

@@ -6,7 +6,7 @@
  */
 import { describe, expect, it } from 'bun:test';
 
-import { createSegmentNode } from '../tree';
+import { WildcardOrigin, createSegmentNode } from '../tree';
 import { detectWildCodegenSpec } from './walker-strategy';
 
 describe('detectWildCodegenSpec', () => {
@@ -82,13 +82,13 @@ describe('detectWildCodegenSpec', () => {
     const child = createSegmentNode();
     child.wildcardStore = 7;
     child.wildcardName = 'path';
-    child.wildcardOrigin = 'star';
+    child.wildcardOrigin = WildcardOrigin.Star;
     const spec = detectWildCodegenSpec(rootWithStaticChild('files', child));
     expect(spec).not.toBeNull();
     expect(spec).toHaveLength(1);
     expect(spec![0]).toEqual({
       prefix: 'files',
-      wildcardOrigin: 'star',
+      wildcardOrigin: WildcardOrigin.Star,
       wildcardName: 'path',
       wildcardStore: 7,
     });
@@ -98,11 +98,11 @@ describe('detectWildCodegenSpec', () => {
     const a = createSegmentNode();
     a.wildcardStore = 1;
     a.wildcardName = 'p1';
-    a.wildcardOrigin = 'multi';
+    a.wildcardOrigin = WildcardOrigin.Multi;
     const b = createSegmentNode();
     b.wildcardStore = 2;
     b.wildcardName = 'p2';
-    b.wildcardOrigin = 'star';
+    b.wildcardOrigin = WildcardOrigin.Star;
     const root = createSegmentNode();
     root.staticChildren = Object.create(null) as Record<string, ReturnType<typeof createSegmentNode>>;
     root.staticChildren['static'] = a;

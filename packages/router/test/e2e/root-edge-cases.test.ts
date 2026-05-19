@@ -12,14 +12,15 @@
  *   We now reject router-metacharacters (':', '*', '?', '+', '/', '(', ')')
  *   inside param names so `/:a:b` errors at registration time.
  */
-import { describe, it, expect } from 'bun:test';
+import { describe, expect, it } from 'bun:test';
 
 import { RouterError } from '../../src/error';
 import { Router } from '../../src/router';
+import { MatchSource, OptionalParamBehavior } from '../../src/types';
 
 describe('optional param at root matches /', () => {
   it('/:id? matches / with id absent', () => {
-    const r = new Router<string>({ optionalParamBehavior: 'omit' });
+    const r = new Router<string>({ optionalParamBehavior: OptionalParamBehavior.Omit });
     r.add('GET', '/:id?', 'opt');
     r.build();
 
@@ -42,7 +43,7 @@ describe('optional param at root matches /', () => {
   });
 
   it('/:id? + set-undefined behavior at root', () => {
-    const r = new Router<string>({ optionalParamBehavior: 'set-undefined' });
+    const r = new Router<string>({ optionalParamBehavior: OptionalParamBehavior.SetUndefined });
     r.add('GET', '/:id?', 'opt');
     r.build();
 
@@ -195,7 +196,7 @@ describe('handler value with falsy/undefined values', () => {
 
     expect(m).not.toBeNull();
     expect(m!.value).toBeUndefined();
-    expect(m!.meta.source).toBe('static');
+    expect(m!.meta.source).toBe(MatchSource.Static);
   });
 
   it('static route with handler value === null returns MatchOutput', () => {

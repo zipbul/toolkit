@@ -1,8 +1,9 @@
 import type { RouterCache } from '../cache';
 import type { MatchFn, MatchOutput, MatchState, RouteParams } from '../types';
+import type { NormalizeCfg } from './path-normalize';
 
 import { CACHE_META, DYNAMIC_META, EMPTY_PARAMS } from '../internal';
-import { emitLowerCase, emitTrailingSlashTrim, type NormalizeCfg } from './path-normalize';
+import { emitLowerCase, emitTrailingSlashTrim } from './path-normalize';
 import { WARMUP_ITERATIONS } from './warmup';
 
 /**

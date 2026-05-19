@@ -5,6 +5,7 @@ import { describe, it, expect } from 'bun:test';
 
 import { RouterError } from '../../src/error';
 import { Router } from '../../src/router';
+import { RouterErrorKind } from '../../src/types';
 
 describe('Router lifecycle — re-seal idempotency', () => {
   it('build() called twice returns the same router (no re-execution)', () => {
@@ -32,7 +33,7 @@ describe('Router lifecycle — re-seal idempotency', () => {
         throw new Error('expected throw');
       } catch (e) {
         expect(e).toBeInstanceOf(RouterError);
-        expect((e as RouterError).data.kind).toBe('router-sealed');
+        expect((e as RouterError).data.kind).toBe(RouterErrorKind.RouterSealed);
       }
     }
   });

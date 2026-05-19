@@ -1,6 +1,7 @@
+import type { ParamSegment, SegmentNode } from '../../tree';
 import type { DecoderFn, MatchFn, MatchState } from '../../types';
 
-import { TESTER_PASS, type ParamSegment, type SegmentNode } from '../../tree';
+import { TESTER_PASS, WildcardOrigin } from '../../tree';
 
 /**
  * Recursive backtracking walker. Used when `hasAmbiguousNode(root)` is
@@ -119,7 +120,7 @@ function matchTerminalAtNode(node: SegmentNode, len: number, state: MatchState):
     state.handlerIndex = node.store;
     return true;
   }
-  if (node.wildcardStore !== null && node.wildcardOrigin === 'star') {
+  if (node.wildcardStore !== null && node.wildcardOrigin === WildcardOrigin.Star) {
     const pc = state.paramCount * 2;
     state.paramOffsets[pc] = len;
     state.paramOffsets[pc + 1] = len;
@@ -153,7 +154,7 @@ export function tryWildcardCapture(node: SegmentNode, pos: number, len: number, 
   if (node.wildcardStore === null) {
     return false;
   }
-  if (node.wildcardOrigin === 'multi' && pos >= len) {
+  if (node.wildcardOrigin === WildcardOrigin.Multi && pos >= len) {
     return false;
   }
   const pc = state.paramCount * 2;

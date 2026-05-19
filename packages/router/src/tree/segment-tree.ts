@@ -6,9 +6,12 @@ import type { RouterErrorData } from '../types';
 import type { ParamSegment, SegmentNode } from './node-types';
 import type { PathPart } from './path-part';
 import type { PatternTesterFn } from './pattern-tester';
+import type { SegmentTreeUndoLog } from './undo';
 
+import { RouterErrorKind } from '../types';
+import { PathPartType, WildcardOrigin } from './path-part';
 import { buildPatternTester } from './pattern-tester';
-import { UndoKind, applyUndo, type SegmentTreeUndoLog } from './undo';
+import { UndoKind, applyUndo } from './undo';
 
 /** True when the node holds at least one static child (inline or Record). */
 function hasAnyStaticChild(node: SegmentNode): boolean {
@@ -74,14 +77,14 @@ function insertIntoSegmentTree(
   for (let i = 0; i < parts.length; i++) {
     const part = parts[i]!;
 
-    if (part.type === 'static') {
+    if (part.type === PathPartType.Static) {
       const result = insertStaticSegments(node, part.segments, undoLog);
       if (typeof result === 'object' && 'kind' in result) {
         rollbackUndo(undoLog, undoStart);
         return err(result);
       }
       node = result;
-    } else if (part.type === 'param') {
+    } else if (part.type === PathPartType.Param) {
       const result = insertParamPart(node, part, testerCache, routeID, undoLog);
       if ('kind' in result) {
         rollbackUndo(undoLog, undoStart);
@@ -135,7 +138,7 @@ function insertStaticSegments(
 
     if (node.wildcardStore !== null) {
       return {
-        kind: 'route-conflict',
+        kind: RouterErrorKind.RouteConflict,
         message: `Static route conflicts with existing wildcard '*${node.wildcardName}' at the same position`,
         segment: seg,
         conflictsWith: `*${node.wildcardName}`,
@@ -189,14 +192,14 @@ function insertStaticSegments(
  */
 function insertParamPart(
   node: SegmentNode,
-  part: { type: 'param'; name: string; pattern: string | null; optional: boolean },
+  part: { type: PathPartType.Param; name: string; pattern: string | null; optional: boolean },
   testerCache: Map<string, PatternTesterFn>,
   routeID: number,
   undoLog: SegmentTreeUndoLog,
 ): { node: SegmentNode } | RouterErrorData {
   if (node.wildcardStore !== null) {
     return {
-      kind: 'route-conflict',
+      kind: RouterErrorKind.RouteConflict,
       message: `Parameter ':${part.name}' conflicts with existing wildcard '*${node.wildcardName}' at the same position`,
       segment: part.name,
       conflictsWith: `*${node.wildcardName}`,
@@ -236,7 +239,7 @@ function insertParamPart(
 
     if (p.name === part.name && p.patternSource !== part.pattern) {
       return {
-        kind: 'route-conflict',
+        kind: RouterErrorKind.RouteConflict,
         message: `Parameter ':${part.name}' has conflicting regex patterns`,
         segment: part.name,
         conflictsWith: `:${p.name}${p.patternSource !== null ? `(${p.patternSource})` : ''}`,
@@ -246,7 +249,7 @@ function insertParamPart(
 
     if (p.patternSource === null && p.ownerRouteID !== routeID) {
       return {
-        kind: 'route-conflict',
+        kind: RouterErrorKind.RouteConflict,
         message: `Parameter ':${part.name}' is unreachable — earlier sibling ':${p.name}' (registered by a different route) has no regex pattern and matches every value at this position.`,
         segment: part.name,
         conflictsWith: p.name,
@@ -308,7 +311,7 @@ function resolveOrCompileTester(
     return tester;
   } catch (e) {
     return {
-      kind: 'route-parse',
+      kind: RouterErrorKind.RouteParse,
       message: `Invalid regex pattern in parameter ':${part.name}': ${e instanceof Error ? e.message : String(e)}`,
       segment: part.name,
       suggestion: 'Fix the regex syntax. Anchors are stripped automatically; do not include ^ or $.',
@@ -322,14 +325,14 @@ function resolveOrCompileTester(
  */
 function attachWildcardTerminal(
   node: SegmentNode,
-  part: { type: 'wildcard'; name: string; origin: 'star' | 'multi' },
+  part: { type: PathPartType.Wildcard; name: string; origin: WildcardOrigin },
   handlerIndex: number,
   undoLog: SegmentTreeUndoLog,
 ): RouterErrorData | undefined {
   if (node.wildcardStore !== null) {
     if (node.wildcardName !== part.name) {
       return {
-        kind: 'route-conflict',
+        kind: RouterErrorKind.RouteConflict,
         message: `Wildcard '*${part.name}' conflicts with existing wildcard '*${node.wildcardName}'`,
         segment: part.name,
         conflictsWith: `*${node.wildcardName}`,
@@ -337,7 +340,7 @@ function attachWildcardTerminal(
       };
     }
     return {
-      kind: 'route-duplicate',
+      kind: RouterErrorKind.RouteDuplicate,
       message: 'Wildcard route already exists at this position',
       suggestion: 'Use a different path or HTTP method.',
     };
@@ -345,7 +348,7 @@ function attachWildcardTerminal(
 
   if (node.paramChild !== null) {
     return {
-      kind: 'route-conflict',
+      kind: RouterErrorKind.RouteConflict,
       message: `Wildcard '*${part.name}' conflicts with existing parameter at the same position`,
       segment: part.name,
       conflictsWith: `:${node.paramChild.name}`,
@@ -367,7 +370,7 @@ function attachWildcardTerminal(
 function attachStoreTerminal(node: SegmentNode, handlerIndex: number, undoLog: SegmentTreeUndoLog): RouterErrorData | undefined {
   if (node.store !== null) {
     return {
-      kind: 'route-duplicate',
+      kind: RouterErrorKind.RouteDuplicate,
       message: 'Terminal route already exists at this position',
       suggestion: 'Use a different path or HTTP method.',
     };

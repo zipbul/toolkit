@@ -12,13 +12,14 @@
 import { test, expect } from 'bun:test';
 
 import * as PublicAPI from '../../index';
+import { RouterErrorKind } from '../../src/types';
 
 test('public API surface (value side) — exactly Router + RouterError', () => {
   // Sort both sides so the assertion error doubles as a diff when the
   // surface drifts.
   const exports = Object.keys(PublicAPI).sort();
 
-  expect(exports).toEqual(['Router', 'RouterError']);
+  expect(exports).toEqual(['MatchSource', 'OptionalParamBehavior', 'Router', 'RouterError', 'RouterErrorKind', 'TrailingSlash']);
 });
 
 test('public API surface — Router is constructable', () => {
@@ -41,5 +42,5 @@ test('public API surface — RouterError is the thrown error type', () => {
   }
 
   expect(thrown).toBeInstanceOf(PublicAPI.RouterError);
-  expect((thrown as PublicAPI.RouterError).data.kind).toBe('router-sealed');
+  expect((thrown as PublicAPI.RouterError).data.kind).toBe(RouterErrorKind.RouterSealed);
 });

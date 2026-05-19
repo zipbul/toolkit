@@ -1,7 +1,8 @@
-import { describe, it, expect } from 'bun:test';
+import { describe, expect, it } from 'bun:test';
 
 import { RouterError } from '../../src/error';
 import { Router } from '../../src/router';
+import { MatchSource, OptionalParamBehavior, RouterErrorKind, TrailingSlash } from '../../src/types';
 import { catchRouterError } from '../test-utils';
 
 describe('Router<T>', () => {
@@ -72,7 +73,7 @@ describe('Router<T>', () => {
 
       const result = router.match('GET', '/static');
       expect(result).not.toBeNull();
-      expect(result!.meta.source).toBe('static');
+      expect(result!.meta.source).toBe(MatchSource.Static);
     });
 
     it('should extract params from dynamic :param route', () => {
@@ -147,7 +148,7 @@ describe('Router<T>', () => {
 
       const result = router.match('GET', '/users/1');
       expect(result).not.toBeNull();
-      expect(result!.meta.source).toBe('dynamic');
+      expect(result!.meta.source).toBe(MatchSource.Dynamic);
     });
 
     it('should not throw for valid add', () => {
@@ -193,7 +194,7 @@ describe('Router<T>', () => {
     });
 
     it('should omit optional param from params when absent with omit behavior', () => {
-      const router = new Router<string>({ optionalParamBehavior: 'omit' });
+      const router = new Router<string>({ optionalParamBehavior: OptionalParamBehavior.Omit });
       router.add('GET', '/users/:id?', 'user');
       router.build();
 
@@ -387,8 +388,8 @@ describe('Router<T>', () => {
       router.add('GET', '/c', 'c');
 
       const err = catchRouterError(() => router.build());
-      expect(err.data.kind).toBe('route-validation');
-      if (err.data.kind === 'route-validation') {
+      expect(err.data.kind).toBe(RouterErrorKind.RouteValidation);
+      if (err.data.kind === RouterErrorKind.RouteValidation) {
         expect(err.data.errors).toHaveLength(2);
       }
     });
@@ -428,7 +429,7 @@ describe('Router<T>', () => {
 
       // After build: cannot add
       const err = catchRouterError(() => router.add('GET', '/z', 'z'));
-      expect(err.data.kind).toBe('router-sealed');
+      expect(err.data.kind).toBe(RouterErrorKind.RouterSealed);
     });
 
     it('should return sealed err for add after build but allow match', () => {
@@ -437,7 +438,7 @@ describe('Router<T>', () => {
       router.build();
 
       const err = catchRouterError(() => router.add('POST', '/new', 'new'));
-      expect(err.data.kind).toBe('router-sealed');
+      expect(err.data.kind).toBe(RouterErrorKind.RouterSealed);
 
       const matchResult = router.match('GET', '/ok');
       expect(matchResult).not.toBeNull();
@@ -490,7 +491,7 @@ describe('Router<T>', () => {
       router.build();
 
       const err = catchRouterError(() => router.add('PATCH', '/x', 'patch'));
-      expect(err.data.kind).toBe('router-sealed');
+      expect(err.data.kind).toBe(RouterErrorKind.RouterSealed);
     });
   });
 
@@ -550,8 +551,8 @@ describe('Router<T>', () => {
       const e1 = catchRouterError(() => router.add('GET', '/a', 'a'));
       const e2 = catchRouterError(() => router.add('POST', '/b', 'b'));
 
-      expect(e1.data.kind).toBe('router-sealed');
-      expect(e2.data.kind).toBe('router-sealed');
+      expect(e1.data.kind).toBe(RouterErrorKind.RouterSealed);
+      expect(e2.data.kind).toBe(RouterErrorKind.RouterSealed);
     });
 
     it('should return consistent params across repeated dynamic matches', () => {
@@ -609,8 +610,8 @@ describe('Router<T>', () => {
       router.add('GET', '/a', 'dup2');
 
       const err = catchRouterError(() => router.build());
-      expect(err.data.kind).toBe('route-validation');
-      if (err.data.kind === 'route-validation') {
+      expect(err.data.kind).toBe(RouterErrorKind.RouteValidation);
+      if (err.data.kind === RouterErrorKind.RouteValidation) {
         expect(err.data.errors[0]?.error.kind).toBe(err.data.errors[1]?.error.kind);
       }
     });
@@ -639,15 +640,15 @@ describe('Router<T>', () => {
 
       // Static → source='static'
       const staticResult = router.match('GET', '/static');
-      expect(staticResult!.meta.source).toBe('static');
+      expect(staticResult!.meta.source).toBe(MatchSource.Static);
 
       // Dynamic first → source='dynamic'
       const dynamicResult = router.match('GET', '/users/1');
-      expect(dynamicResult!.meta.source).toBe('dynamic');
+      expect(dynamicResult!.meta.source).toBe(MatchSource.Dynamic);
 
       // Dynamic second → source='cache'
       const cachedResult = router.match('GET', '/users/1');
-      expect(cachedResult!.meta.source).toBe('cache');
+      expect(cachedResult!.meta.source).toBe(MatchSource.Cache);
     });
 
     it('should register both methods in array and not others', () => {
@@ -707,8 +708,8 @@ describe('Router<T>', () => {
       ]);
 
       const err = catchRouterError(() => router.build());
-      expect(err.data.kind).toBe('route-validation');
-      if (err.data.kind === 'route-validation') {
+      expect(err.data.kind).toBe(RouterErrorKind.RouteValidation);
+      if (err.data.kind === RouterErrorKind.RouteValidation) {
         expect(err.data.errors[0]?.index).toBe(3);
       }
       expect(router.match('DELETE', '/third')).toBeNull();
@@ -723,7 +724,7 @@ describe('Router<T>', () => {
       const admin = router.match('GET', '/users/admin');
       expect(admin).not.toBeNull();
       expect(admin!.value).toBe('admin-page');
-      expect(admin!.meta.source).toBe('static');
+      expect(admin!.meta.source).toBe(MatchSource.Static);
 
       const user = router.match('GET', '/users/123');
       expect(user).not.toBeNull();
@@ -774,7 +775,7 @@ describe('Router<T>', () => {
     });
 
     it('should not strip trailing slash on root path / when ignoreTrailingSlash=true', () => {
-      const router = new Router<string>({ trailingSlash: 'ignore' });
+      const router = new Router<string>({ trailingSlash: TrailingSlash.Ignore });
       router.add('GET', '/', 'root');
       router.build();
 
@@ -794,7 +795,7 @@ describe('Router<T>', () => {
     });
 
     it('should apply default to absent optional param', () => {
-      const router = new Router<string>({ optionalParamBehavior: 'set-undefined' });
+      const router = new Router<string>({ optionalParamBehavior: OptionalParamBehavior.SetUndefined });
       router.add('GET', '/items/:a?', 'handler');
       router.build();
 

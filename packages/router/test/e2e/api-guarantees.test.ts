@@ -9,11 +9,12 @@
  * codegen: forcing the radix-walk path by causing segment-tree insertion
  * to fail.
  */
-import { describe, it, expect } from 'bun:test';
+import { describe, expect, it } from 'bun:test';
 
 import { getRouterInternals } from '../../internal';
 import { RouterError } from '../../src/error';
 import { Router } from '../../src/router';
+import { MatchSource, OptionalParamBehavior } from '../../src/types';
 
 // ── API contract guarantees ─────────────────────────────────────────────────
 
@@ -62,8 +63,8 @@ describe('API guarantees', () => {
     expect(a.value).toBe(b.value);
     expect(a).toBe(b);
     expect(Object.isFrozen(a)).toBe(true);
-    expect(a.meta.source).toBe('static');
-    expect(b.meta.source).toBe('static');
+    expect(a.meta.source).toBe(MatchSource.Static);
+    expect(b.meta.source).toBe(MatchSource.Static);
   });
 
   it('static MatchOutput.params is frozen empty (no key writes possible)', () => {
@@ -114,9 +115,9 @@ describe('API guarantees', () => {
     r.add('GET', '/users/:id', 'd');
     r.build();
 
-    expect(r.match('GET', '/health')!.meta.source).toBe('static');
-    expect(r.match('GET', '/health')!.meta.source).toBe('static');
-    expect(r.match('GET', '/users/1')!.meta.source).toBe('dynamic');
+    expect(r.match('GET', '/health')!.meta.source).toBe(MatchSource.Static);
+    expect(r.match('GET', '/health')!.meta.source).toBe(MatchSource.Static);
+    expect(r.match('GET', '/users/1')!.meta.source).toBe(MatchSource.Dynamic);
   });
 
   it('reports meta.source = "cache" for cached hits', () => {
@@ -127,7 +128,7 @@ describe('API guarantees', () => {
     r.match('GET', '/users/1'); // populate cache
     const m = r.match('GET', '/users/1')!;
 
-    expect(m.meta.source).toBe('cache');
+    expect(m.meta.source).toBe(MatchSource.Cache);
   });
 
   it('cache returns frozen params; caller mutation throws and cache is preserved', () => {
@@ -152,7 +153,7 @@ describe('API guarantees', () => {
 
 describe('optional params', () => {
   it('omit: missing optional disappears from params object', () => {
-    const r = new Router<string>({ optionalParamBehavior: 'omit' });
+    const r = new Router<string>({ optionalParamBehavior: OptionalParamBehavior.Omit });
     r.add('GET', '/users/:id?', 'u');
     r.build();
 
@@ -166,7 +167,7 @@ describe('optional params', () => {
   });
 
   it('set-undefined: missing optional becomes undefined', () => {
-    const r = new Router<string>({ optionalParamBehavior: 'set-undefined' });
+    const r = new Router<string>({ optionalParamBehavior: OptionalParamBehavior.SetUndefined });
     r.add('GET', '/users/:id?', 'u');
     r.build();
 

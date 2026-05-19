@@ -15,9 +15,10 @@
  */
 import { describe, expect, it } from 'bun:test';
 
-import type { RouterErrorData, RouterErrorKind } from '../../src/types';
+import type { RouterErrorData } from '../../src/types';
 
 import { Router, RouterError } from '../../index';
+import { RouterErrorKind } from '../../src/types';
 import { catchRouterError, firstBuildIssue } from '../test-utils';
 
 function assertActionable(data: RouterErrorData, expectedKind: RouterErrorKind): void {
@@ -25,7 +26,7 @@ function assertActionable(data: RouterErrorData, expectedKind: RouterErrorKind):
   expect(typeof data.message).toBe('string');
   expect(data.message.length).toBeGreaterThan(0);
 
-  if (data.kind !== 'route-validation') {
+  if (data.kind !== RouterErrorKind.RouteValidation) {
     expect(typeof data.suggestion).toBe('string');
     expect(data.suggestion.length).toBeGreaterThan(0);
   }
@@ -37,135 +38,135 @@ describe('every RouterError carries actionable kind + message + suggestion', () 
     try {
       new Router({ cacheSize: -1 });
     } catch (e) {
-      assertActionable((e as RouterError).data, 'router-options-invalid');
+      assertActionable((e as RouterError).data, RouterErrorKind.RouterOptionsInvalid);
     }
   });
 
-  it('router-sealed', () => {
+  it(RouterErrorKind.RouterSealed, () => {
     const r = new Router<string>();
     r.add('GET', '/x', 'x');
     r.build();
     const err = catchRouterError(() => r.add('GET', '/y', 'y'));
-    assertActionable(err.data, 'router-sealed');
+    assertActionable(err.data, RouterErrorKind.RouterSealed);
   });
 
-  it('method-empty', () => {
+  it(RouterErrorKind.MethodEmpty, () => {
     const r = new Router<string>();
     r.add('', '/x', 'x');
-    assertActionable(firstBuildIssue(r), 'method-empty');
+    assertActionable(firstBuildIssue(r), RouterErrorKind.MethodEmpty);
   });
 
-  it('method-invalid-token', () => {
+  it(RouterErrorKind.MethodInvalidToken, () => {
     const r = new Router<string>();
     r.add('GET POST', '/x', 'x');
-    assertActionable(firstBuildIssue(r), 'method-invalid-token');
+    assertActionable(firstBuildIssue(r), RouterErrorKind.MethodInvalidToken);
   });
 
-  it('method-limit', () => {
+  it(RouterErrorKind.MethodLimit, () => {
     const r = new Router<string>();
     for (let i = 0; i < 26; i++) {
       r.add(`CUSTOM${i}`, `/x${i}`, `h${i}`);
     }
-    assertActionable(firstBuildIssue(r), 'method-limit');
+    assertActionable(firstBuildIssue(r), RouterErrorKind.MethodLimit);
   });
 
-  it('path-missing-leading-slash', () => {
+  it(RouterErrorKind.PathMissingLeadingSlash, () => {
     const r = new Router<string>();
     r.add('GET', 'users', 'x');
-    assertActionable(firstBuildIssue(r), 'path-missing-leading-slash');
+    assertActionable(firstBuildIssue(r), RouterErrorKind.PathMissingLeadingSlash);
   });
 
-  it('path-query', () => {
+  it(RouterErrorKind.PathQuery, () => {
     const r = new Router<string>();
     r.add('GET', '/a?b', 'x');
-    assertActionable(firstBuildIssue(r), 'path-query');
+    assertActionable(firstBuildIssue(r), RouterErrorKind.PathQuery);
   });
 
-  it('path-fragment', () => {
+  it(RouterErrorKind.PathFragment, () => {
     const r = new Router<string>();
     r.add('GET', '/a#b', 'x');
-    assertActionable(firstBuildIssue(r), 'path-fragment');
+    assertActionable(firstBuildIssue(r), RouterErrorKind.PathFragment);
   });
 
-  it('path-control-char', () => {
+  it(RouterErrorKind.PathControlChar, () => {
     const r = new Router<string>();
     r.add('GET', '/a\x01b', 'x');
-    assertActionable(firstBuildIssue(r), 'path-control-char');
+    assertActionable(firstBuildIssue(r), RouterErrorKind.PathControlChar);
   });
 
-  it('path-malformed-percent', () => {
+  it(RouterErrorKind.PathMalformedPercent, () => {
     const r = new Router<string>();
     r.add('GET', '/a/%ZZ', 'x');
-    assertActionable(firstBuildIssue(r), 'path-malformed-percent');
+    assertActionable(firstBuildIssue(r), RouterErrorKind.PathMalformedPercent);
   });
 
-  it('path-invalid-pchar', () => {
+  it(RouterErrorKind.PathInvalidPchar, () => {
     const r = new Router<string>();
     r.add('GET', '/a/<bad>', 'x');
-    assertActionable(firstBuildIssue(r), 'path-invalid-pchar');
+    assertActionable(firstBuildIssue(r), RouterErrorKind.PathInvalidPchar);
   });
 
-  it('path-encoded-slash', () => {
+  it(RouterErrorKind.PathEncodedSlash, () => {
     const r = new Router<string>();
     r.add('GET', '/a/%2F', 'x');
-    assertActionable(firstBuildIssue(r), 'path-encoded-slash');
+    assertActionable(firstBuildIssue(r), RouterErrorKind.PathEncodedSlash);
   });
 
-  it('path-invalid-utf8', () => {
+  it(RouterErrorKind.PathInvalidUtf8, () => {
     const r = new Router<string>();
     r.add('GET', '/a/%C0%80', 'x');
-    assertActionable(firstBuildIssue(r), 'path-invalid-utf8');
+    assertActionable(firstBuildIssue(r), RouterErrorKind.PathInvalidUtf8);
   });
 
-  it('path-dot-segment', () => {
+  it(RouterErrorKind.PathDotSegment, () => {
     const r = new Router<string>();
     r.add('GET', '/a/../b', 'x');
-    assertActionable(firstBuildIssue(r), 'path-dot-segment');
+    assertActionable(firstBuildIssue(r), RouterErrorKind.PathDotSegment);
   });
 
-  it('path-empty-segment', () => {
+  it(RouterErrorKind.PathEmptySegment, () => {
     const r = new Router<string>();
     r.add('GET', '/a//b', 'x');
-    assertActionable(firstBuildIssue(r), 'path-empty-segment');
+    assertActionable(firstBuildIssue(r), RouterErrorKind.PathEmptySegment);
   });
 
-  it('param-duplicate', () => {
+  it(RouterErrorKind.ParamDuplicate, () => {
     const r = new Router<string>();
     r.add('GET', '/users/:id/posts/:id', 'x');
-    assertActionable(firstBuildIssue(r), 'param-duplicate');
+    assertActionable(firstBuildIssue(r), RouterErrorKind.ParamDuplicate);
   });
 
   it('route-parse (unclosed regex)', () => {
     const r = new Router<string>();
     r.add('GET', '/users/:id(\\d+', 'x');
-    assertActionable(firstBuildIssue(r), 'route-parse');
+    assertActionable(firstBuildIssue(r), RouterErrorKind.RouteParse);
   });
 
   it('route-parse (invalid regex body — compile failure)', () => {
     const r = new Router<string>();
     r.add('GET', '/users/:id([z-a])', 'x');
-    assertActionable(firstBuildIssue(r), 'route-parse');
+    assertActionable(firstBuildIssue(r), RouterErrorKind.RouteParse);
   });
 
-  it('route-duplicate', () => {
+  it(RouterErrorKind.RouteDuplicate, () => {
     const r = new Router<string>();
     r.add('GET', '/x', 'a');
     r.add('GET', '/x', 'b');
-    assertActionable(firstBuildIssue(r), 'route-duplicate');
+    assertActionable(firstBuildIssue(r), RouterErrorKind.RouteDuplicate);
   });
 
   it('route-conflict (regex sibling overlap)', () => {
     const r = new Router<string>();
     r.add('GET', '/users/:id(\\d+)', 'numeric');
     r.add('GET', '/users/:id([a-z]+)', 'alpha');
-    assertActionable(firstBuildIssue(r), 'route-conflict');
+    assertActionable(firstBuildIssue(r), RouterErrorKind.RouteConflict);
   });
 
   it('route-unreachable (static under ancestor wildcard)', () => {
     const r = new Router<string>();
     r.add('GET', '/api/*', 'wildcard');
     r.add('GET', '/api/specific', 'specific');
-    assertActionable(firstBuildIssue(r), 'route-unreachable');
+    assertActionable(firstBuildIssue(r), RouterErrorKind.RouteUnreachable);
   });
 
   it('route-validation (umbrella) — message is non-empty, errors[] is populated', () => {
@@ -173,15 +174,15 @@ describe('every RouterError carries actionable kind + message + suggestion', () 
     r.add('GET', '/x', 'a');
     r.add('GET', '/x', 'b');
     const err = catchRouterError(() => r.build());
-    expect(err.data.kind).toBe('route-validation');
-    if (err.data.kind === 'route-validation') {
+    expect(err.data.kind).toBe(RouterErrorKind.RouteValidation);
+    if (err.data.kind === RouterErrorKind.RouteValidation) {
       expect(err.data.message.length).toBeGreaterThan(0);
       expect(err.data.errors.length).toBeGreaterThan(0);
       // Inner issues must also be actionable.
       for (const issue of err.data.errors) {
         expect(typeof issue.error.message).toBe('string');
         expect(issue.error.message.length).toBeGreaterThan(0);
-        if (issue.error.kind !== 'route-validation') {
+        if (issue.error.kind !== RouterErrorKind.RouteValidation) {
           expect(typeof issue.error.suggestion).toBe('string');
           expect(issue.error.suggestion.length).toBeGreaterThan(0);
         }
@@ -196,7 +197,7 @@ describe('every conflict-class RouterError carries segment + conflictsWith', () 
     r.add('GET', '/users/:id(\\d+)', 'numeric');
     r.add('GET', '/users/:id([a-z]+)', 'alpha');
     const issue = firstBuildIssue(r);
-    if (issue.kind === 'route-conflict') {
+    if (issue.kind === RouterErrorKind.RouteConflict) {
       expect(typeof issue.segment).toBe('string');
       expect(issue.segment.length).toBeGreaterThan(0);
       expect(typeof issue.conflictsWith).toBe('string');
@@ -209,7 +210,7 @@ describe('every conflict-class RouterError carries segment + conflictsWith', () 
     r.add('GET', '/api/*', 'wildcard');
     r.add('GET', '/api/specific', 'specific');
     const issue = firstBuildIssue(r);
-    if (issue.kind === 'route-unreachable') {
+    if (issue.kind === RouterErrorKind.RouteUnreachable) {
       expect(typeof issue.segment).toBe('string');
       expect(issue.segment.length).toBeGreaterThan(0);
       expect(typeof issue.conflictsWith).toBe('string');
@@ -221,7 +222,7 @@ describe('every conflict-class RouterError carries segment + conflictsWith', () 
     const r = new Router<string>();
     r.add('GET', '/users/:id/posts/:id', 'x');
     const issue = firstBuildIssue(r);
-    if (issue.kind === 'param-duplicate') {
+    if (issue.kind === RouterErrorKind.ParamDuplicate) {
       expect(issue.segment).toBe('id');
     }
   });
@@ -230,7 +231,7 @@ describe('every conflict-class RouterError carries segment + conflictsWith', () 
     const r = new Router<string>();
     r.add('GET', '/a/<bad>', 'x');
     const issue = firstBuildIssue(r);
-    if (issue.kind === 'path-invalid-pchar') {
+    if (issue.kind === RouterErrorKind.PathInvalidPchar) {
       expect(issue.segment.length).toBe(1);
     }
   });
@@ -250,7 +251,7 @@ describe('context fields (path + method) propagate to every emitted error', () =
     r.add('GET', '/users/:id', 'a');
     r.add('GET', '/users/:slug', 'b');
     const err = catchRouterError(() => r.build());
-    if (err.data.kind === 'route-validation') {
+    if (err.data.kind === RouterErrorKind.RouteValidation) {
       const first = err.data.errors[0]!;
       expect(first.method).toBe('GET');
       expect(first.path).toBe('/users/:slug');

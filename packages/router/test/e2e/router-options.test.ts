@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'bun:test';
 
 import { Router } from '../../src/router';
+import { OptionalParamBehavior, TrailingSlash } from '../../src/types';
 
 describe('Router<T> options', () => {
   it('should not match different case when caseSensitive=true', () => {
@@ -24,7 +25,7 @@ describe('Router<T> options', () => {
   });
 
   it('should match with trailing slash when ignoreTrailingSlash=true', () => {
-    const router = new Router<string>({ trailingSlash: 'ignore' });
+    const router = new Router<string>({ trailingSlash: TrailingSlash.Ignore });
     router.add('GET', '/path', 'val');
     router.build();
 
@@ -34,7 +35,7 @@ describe('Router<T> options', () => {
   });
 
   it('should not match trailing slash when ignoreTrailingSlash=false', () => {
-    const router = new Router<string>({ trailingSlash: 'strict' });
+    const router = new Router<string>({ trailingSlash: TrailingSlash.Strict });
     router.add('GET', '/path', 'val');
     router.build();
 
@@ -55,7 +56,7 @@ describe('Router<T> options', () => {
   it('should work with caseSensitive=false + ignoreTrailingSlash=true combined', () => {
     const router = new Router<string>({
       pathCaseSensitive: false,
-      trailingSlash: 'ignore',
+      trailingSlash: TrailingSlash.Ignore,
     });
     router.add('GET', '/Hello', 'hello');
     router.build();
@@ -92,8 +93,8 @@ describe('Router<T> options', () => {
     expect(() => router.match('GET', '/files/bad%GG')).toThrow();
   });
 
-  it("should handle optionalParamBehavior='set-undefined'", () => {
-    const router = new Router<string>({ optionalParamBehavior: 'set-undefined' });
+  it('should handle optionalParamBehavior=OptionalParamBehavior.SetUndefined', () => {
+    const router = new Router<string>({ optionalParamBehavior: OptionalParamBehavior.SetUndefined });
     router.add('GET', '/users/:id?', 'user');
     router.build();
 

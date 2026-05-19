@@ -1,6 +1,7 @@
+import type { SegmentNode } from '../../tree';
 import type { DecoderFn, MatchFn, MatchState } from '../../types';
 
-import { TESTER_PASS, type SegmentNode } from '../../tree';
+import { TESTER_PASS } from '../../tree';
 
 /**
  * Tenant-factored walker variant. Used when `getTenantFactor(root)` returned

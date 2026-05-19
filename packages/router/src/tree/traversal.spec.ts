@@ -5,7 +5,9 @@
  */
 import { describe, expect, it } from 'bun:test';
 
-import { createSegmentNode, type SegmentNode } from './segment-tree';
+import type { SegmentNode } from './segment-tree';
+
+import { createSegmentNode } from './segment-tree';
 import { extendStaticPrefix, foldStaticChain, peekSingleStaticChild, rewireStaticChild } from './traversal';
 
 function inlineChain(...keys: string[]): SegmentNode {

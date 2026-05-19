@@ -1,6 +1,7 @@
+import type { SegmentNode, TenantFactor } from '../../tree';
 import type { DecoderFn, MatchFn, MatchState } from '../../types';
 
-import { detectTenantFactor, setTenantFactor, type SegmentNode, type TenantFactor } from '../../tree';
+import { detectTenantFactor, setTenantFactor } from '../../tree';
 import { walkSharedSubtree } from './factored';
 
 /**

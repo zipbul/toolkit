@@ -1,5 +1,7 @@
 import type { PatternTesterFn } from './pattern-tester';
 
+import { WildcardOrigin } from './path-part';
+
 /**
  * Segment-based route tree. Each node corresponds to one URL segment
  * (no intra-segment splits). Built at Router.build() directly from
@@ -31,7 +33,7 @@ interface SegmentNode {
   /** Wildcard at this position. */
   wildcardStore: number | null;
   wildcardName: string | null;
-  wildcardOrigin: 'star' | 'multi' | null;
+  wildcardOrigin: WildcardOrigin | null;
   /**
    * Compacted single-static-chain prefix produced by post-seal compaction.
    * When set, the matcher must consume each segment in order against the

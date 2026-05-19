@@ -4,7 +4,19 @@
  * insert routes. Defining the shape here keeps the dependency direction
  * acyclic (builder → tree, tree ← pipeline; neither imports the other).
  */
+
+export enum PathPartType {
+  Static = 'static',
+  Param = 'param',
+  Wildcard = 'wildcard',
+}
+
+export enum WildcardOrigin {
+  Star = 'star',
+  Multi = 'multi',
+}
+
 export type PathPart =
-  | { type: 'static'; value: string; segments: string[] }
-  | { type: 'param'; name: string; pattern: string | null; optional: boolean }
-  | { type: 'wildcard'; name: string; origin: 'star' | 'multi' };
+  | { type: PathPartType.Static; value: string; segments: string[] }
+  | { type: PathPartType.Param; name: string; pattern: string | null; optional: boolean }
+  | { type: PathPartType.Wildcard; name: string; origin: WildcardOrigin };

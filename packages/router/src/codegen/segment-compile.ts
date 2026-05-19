@@ -1,13 +1,7 @@
-import type { MatchFn, DecoderFn } from '../types';
+import type { PatternTesterFn, SegmentNode } from '../tree';
+import type { DecoderFn, MatchFn } from '../types';
 
-import {
-  forEachStaticChild,
-  hasAmbiguousNode,
-  hasAnyStaticChild,
-  TESTER_PASS,
-  type PatternTesterFn,
-  type SegmentNode,
-} from '../tree';
+import { TESTER_PASS, WildcardOrigin, forEachStaticChild, hasAmbiguousNode, hasAnyStaticChild } from '../tree';
 
 /**
  * Codegen budget thresholds. Trees exceeding either of these fall back to
@@ -205,7 +199,7 @@ function emitRootSlashTerminal(root: SegmentNode): string {
     return `      state.handlerIndex = ${root.store};\n      return true;`;
   }
 
-  if (root.wildcardStore !== null && root.wildcardOrigin === 'star') {
+  if (root.wildcardStore !== null && root.wildcardOrigin === WildcardOrigin.Star) {
     return `      state.paramOffsets[0] = 1;\n      state.paramOffsets[1] = 1;\n      state.paramCount = 1;\n      state.handlerIndex = ${root.wildcardStore};\n      return true;`;
   }
 
@@ -382,7 +376,7 @@ function emitParamBranch(
     code += emitStrictTerminal(ctx, posVar, slashVar, testerCheck, next.store!);
     return code;
   }
-  if (wildcardTerminal && next.wildcardOrigin === 'multi') {
+  if (wildcardTerminal && next.wildcardOrigin === WildcardOrigin.Multi) {
     code += emitMultiWildcardTerminal(ctx, posVar, slashVar, testerCheck, next.wildcardStore!);
     return code;
   }
@@ -449,7 +443,7 @@ function emitMultiWildcardTerminal(
 }
 
 function emitWildcardStore(ctx: EmitContext, node: SegmentNode, posVar: string): string {
-  const guard = node.wildcardOrigin === 'star' ? `${posVar} <= len` : `${posVar} < len`;
+  const guard = node.wildcardOrigin === WildcardOrigin.Star ? `${posVar} <= len` : `${posVar} < len`;
   const flush = emitFlushPendingWrites(ctx.pendingParams, [[posVar, 'len']]);
   return `
     if (${guard}) {
@@ -464,7 +458,7 @@ function emitTerminalAt(ctx: EmitContext, node: SegmentNode): string {
     return `        ${flush}state.handlerIndex = ${node.store};\n        return true;`;
   }
 
-  if (node.wildcardStore !== null && node.wildcardOrigin === 'star') {
+  if (node.wildcardStore !== null && node.wildcardOrigin === WildcardOrigin.Star) {
     const flush = emitFlushPendingWrites(ctx.pendingParams, [['url.length', 'url.length']]);
     return `        ${flush}state.handlerIndex = ${node.wildcardStore};\n        return true;`;
   }

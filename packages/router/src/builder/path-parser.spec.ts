@@ -4,6 +4,8 @@ import { describe, it, expect } from 'bun:test';
 import type { PathPart } from '../tree';
 import type { PathParserConfig } from './path-parser';
 
+import { PathPartType, WildcardOrigin } from '../tree';
+import { RouterErrorKind } from '../types';
 import { extractNameAndPattern, PathParser, rejectColonWildcardSugar, stripOptionalDecorator } from './path-parser';
 
 function defaultConfig(overrides: Partial<PathParserConfig> = {}): PathParserConfig {
@@ -25,7 +27,7 @@ describe('PathParser', () => {
       const result = parse('');
       expect(isErr(result)).toBe(true);
       if (isErr(result)) {
-        expect(result.data.kind).toBe('path-missing-leading-slash');
+        expect(result.data.kind).toBe(RouterErrorKind.PathMissingLeadingSlash);
       }
     });
 
@@ -33,7 +35,7 @@ describe('PathParser', () => {
       const result = parse('users');
       expect(isErr(result)).toBe(true);
       if (isErr(result)) {
-        expect(result.data.kind).toBe('path-missing-leading-slash');
+        expect(result.data.kind).toBe(RouterErrorKind.PathMissingLeadingSlash);
       }
     });
 
@@ -43,7 +45,7 @@ describe('PathParser', () => {
       if (!isErr(result)) {
         expect(result.normalized).toBe('/');
         expect(result.isDynamic).toBe(false);
-        expect(result.parts).toEqual([{ type: 'static', value: '/', segments: [] }]);
+        expect(result.parts).toEqual([{ type: PathPartType.Static, value: '/', segments: [] }]);
       }
     });
   });
@@ -55,7 +57,7 @@ describe('PathParser', () => {
       if (!isErr(result)) {
         expect(result.normalized).toBe('/users');
         expect(result.isDynamic).toBe(false);
-        expect(result.parts).toEqual([{ type: 'static', value: '/users', segments: ['users'] }]);
+        expect(result.parts).toEqual([{ type: PathPartType.Static, value: '/users', segments: ['users'] }]);
       }
     });
 
@@ -64,7 +66,7 @@ describe('PathParser', () => {
       expect(isErr(result)).toBe(false);
       if (!isErr(result)) {
         expect(result.normalized).toBe('/api/v1/users');
-        expect(result.parts).toEqual([{ type: 'static', value: '/api/v1/users', segments: ['api', 'v1', 'users'] }]);
+        expect(result.parts).toEqual([{ type: PathPartType.Static, value: '/api/v1/users', segments: ['api', 'v1', 'users'] }]);
       }
     });
 
@@ -73,7 +75,7 @@ describe('PathParser', () => {
         const result = parse(path);
         expect(isErr(result)).toBe(true);
         if (isErr(result)) {
-          expect(result.data.kind).toBe('path-empty-segment');
+          expect(result.data.kind).toBe(RouterErrorKind.PathEmptySegment);
         }
       }
     });
@@ -86,8 +88,8 @@ describe('PathParser', () => {
       if (!isErr(result)) {
         expect(result.isDynamic).toBe(true);
         expect(result.parts).toEqual([
-          { type: 'static', value: '/users/', segments: ['users'] },
-          { type: 'param', name: 'id', pattern: null, optional: false },
+          { type: PathPartType.Static, value: '/users/', segments: ['users'] },
+          { type: PathPartType.Param, name: 'id', pattern: null, optional: false },
         ]);
       }
     });
@@ -98,8 +100,8 @@ describe('PathParser', () => {
       if (!isErr(result)) {
         expect(result.isDynamic).toBe(true);
         expect(result.parts.length).toBe(4);
-        expect(result.parts[1]).toEqual({ type: 'param', name: 'userId', pattern: null, optional: false });
-        expect(result.parts[3]).toEqual({ type: 'param', name: 'postId', pattern: null, optional: false });
+        expect(result.parts[1]).toEqual({ type: PathPartType.Param, name: 'userId', pattern: null, optional: false });
+        expect(result.parts[3]).toEqual({ type: PathPartType.Param, name: 'postId', pattern: null, optional: false });
       }
     });
 
@@ -108,7 +110,10 @@ describe('PathParser', () => {
       expect(isErr(result)).toBe(false);
       if (!isErr(result)) {
         expect(result.isDynamic).toBe(true);
-        const paramPart = result.parts.find(p => p.type === 'param') as Extract<PathPart, { type: 'param' }>;
+        const paramPart = result.parts.find(p => p.type === PathPartType.Param) as Extract<
+          PathPart,
+          { type: PathPartType.Param }
+        >;
         expect(paramPart.name).toBe('id');
         expect(paramPart.pattern).toBe('\\d+');
       }
@@ -118,7 +123,7 @@ describe('PathParser', () => {
       const result = parse('/users/:id(^\\d+$)');
       expect(isErr(result)).toBe(true);
       if (isErr(result)) {
-        expect(result.data.kind).toBe('route-parse');
+        expect(result.data.kind).toBe(RouterErrorKind.RouteParse);
       }
     });
 
@@ -126,7 +131,10 @@ describe('PathParser', () => {
       const result = parse('/users/:id?');
       expect(isErr(result)).toBe(false);
       if (!isErr(result)) {
-        const paramPart = result.parts.find(p => p.type === 'param') as Extract<PathPart, { type: 'param' }>;
+        const paramPart = result.parts.find(p => p.type === PathPartType.Param) as Extract<
+          PathPart,
+          { type: PathPartType.Param }
+        >;
         expect(paramPart.optional).toBe(true);
       }
     });
@@ -135,7 +143,7 @@ describe('PathParser', () => {
       const result = parse('/users/:id/posts/:id');
       expect(isErr(result)).toBe(true);
       if (isErr(result)) {
-        expect(result.data.kind).toBe('param-duplicate');
+        expect(result.data.kind).toBe(RouterErrorKind.ParamDuplicate);
       }
     });
 
@@ -143,7 +151,7 @@ describe('PathParser', () => {
       const result = parse('/users/:');
       expect(isErr(result)).toBe(true);
       if (isErr(result)) {
-        expect(result.data.kind).toBe('route-parse');
+        expect(result.data.kind).toBe(RouterErrorKind.RouteParse);
       }
     });
 
@@ -151,7 +159,7 @@ describe('PathParser', () => {
       const result = parse('/users/:id(\\d+');
       expect(isErr(result)).toBe(true);
       if (isErr(result)) {
-        expect(result.data.kind).toBe('route-parse');
+        expect(result.data.kind).toBe(RouterErrorKind.RouteParse);
       }
     });
 
@@ -162,7 +170,7 @@ describe('PathParser', () => {
       const result = parse('/users/:id(   )');
       expect(isErr(result)).toBe(true);
       if (isErr(result)) {
-        expect(result.data.kind).toBe('route-parse');
+        expect(result.data.kind).toBe(RouterErrorKind.RouteParse);
       }
     });
   });
@@ -174,9 +182,9 @@ describe('PathParser', () => {
       if (!isErr(result)) {
         expect(result.isDynamic).toBe(true);
         expect(result.parts[result.parts.length - 1]).toEqual({
-          type: 'wildcard',
+          type: PathPartType.Wildcard,
           name: 'path',
-          origin: 'star',
+          origin: WildcardOrigin.Star,
         });
       }
     });
@@ -186,9 +194,9 @@ describe('PathParser', () => {
       expect(isErr(result)).toBe(false);
       if (!isErr(result)) {
         expect(result.parts[result.parts.length - 1]).toEqual({
-          type: 'wildcard',
+          type: PathPartType.Wildcard,
           name: 'path',
-          origin: 'multi',
+          origin: WildcardOrigin.Multi,
         });
       }
     });
@@ -198,9 +206,9 @@ describe('PathParser', () => {
       expect(isErr(result)).toBe(false);
       if (!isErr(result)) {
         expect(result.parts[result.parts.length - 1]).toEqual({
-          type: 'wildcard',
+          type: PathPartType.Wildcard,
           name: '*',
-          origin: 'star',
+          origin: WildcardOrigin.Star,
         });
       }
     });
@@ -209,7 +217,7 @@ describe('PathParser', () => {
       const result = parse('/files/*path/extra');
       expect(isErr(result)).toBe(true);
       if (isErr(result)) {
-        expect(result.data.kind).toBe('route-parse');
+        expect(result.data.kind).toBe(RouterErrorKind.RouteParse);
       }
     });
 
@@ -217,7 +225,7 @@ describe('PathParser', () => {
       const result = parse('/files/:path+');
       expect(isErr(result)).toBe(true);
       if (isErr(result)) {
-        expect(result.data.kind).toBe('route-parse');
+        expect(result.data.kind).toBe(RouterErrorKind.RouteParse);
       }
     });
 
@@ -225,7 +233,7 @@ describe('PathParser', () => {
       const result = parse('/files/:path*');
       expect(isErr(result)).toBe(true);
       if (isErr(result)) {
-        expect(result.data.kind).toBe('route-parse');
+        expect(result.data.kind).toBe(RouterErrorKind.RouteParse);
       }
     });
 
@@ -233,7 +241,7 @@ describe('PathParser', () => {
       const result = parse('/files/:path+/extra');
       expect(isErr(result)).toBe(true);
       if (isErr(result)) {
-        expect(result.data.kind).toBe('route-parse');
+        expect(result.data.kind).toBe(RouterErrorKind.RouteParse);
       }
     });
 
@@ -242,7 +250,7 @@ describe('PathParser', () => {
         const result = parse(path);
         expect(isErr(result)).toBe(true);
         if (isErr(result)) {
-          expect(['route-parse', 'path-query']).toContain(result.data.kind);
+          expect([RouterErrorKind.RouteParse, RouterErrorKind.PathQuery]).toContain(result.data.kind);
         }
       }
     });
@@ -261,7 +269,10 @@ describe('PathParser', () => {
       const result = parse('/users/:UserId', { caseSensitive: false });
       expect(isErr(result)).toBe(false);
       if (!isErr(result)) {
-        const paramPart = result.parts.find(p => p.type === 'param') as Extract<PathPart, { type: 'param' }>;
+        const paramPart = result.parts.find(p => p.type === PathPartType.Param) as Extract<
+          PathPart,
+          { type: PathPartType.Param }
+        >;
         expect(paramPart.name).toBe('UserId');
       }
     });
@@ -311,7 +322,7 @@ describe('stripOptionalDecorator', () => {
     const result = stripOptionalDecorator(':id+?', ':id+?', '/users/:id+?');
     expect('kind' in result).toBe(true);
     if ('kind' in result) {
-      expect(result.kind).toBe('route-parse');
+      expect(result.kind).toBe(RouterErrorKind.RouteParse);
     }
   });
 
@@ -334,7 +345,7 @@ describe('rejectColonWildcardSugar', () => {
     const result = rejectColonWildcardSugar(':rest+', ':rest+', '/files/:rest+');
     expect(result).toBeDefined();
     if (result) {
-      expect(result.kind).toBe('route-parse');
+      expect(result.kind).toBe(RouterErrorKind.RouteParse);
       expect(result.message).toContain('*rest+');
     }
   });
@@ -343,7 +354,7 @@ describe('rejectColonWildcardSugar', () => {
     const result = rejectColonWildcardSugar(':rest*', ':rest*', '/files/:rest*');
     expect(result).toBeDefined();
     if (result) {
-      expect(result.kind).toBe('route-parse');
+      expect(result.kind).toBe(RouterErrorKind.RouteParse);
       expect(result.message).toContain('*rest');
     }
   });
@@ -362,7 +373,7 @@ describe('extractNameAndPattern', () => {
     const result = extractNameAndPattern(':id(\\d+', '/users/:id(\\d+');
     expect('kind' in result).toBe(true);
     if ('kind' in result) {
-      expect(result.kind).toBe('route-parse');
+      expect(result.kind).toBe(RouterErrorKind.RouteParse);
       expect(result.message).toContain('Unclosed');
     }
   });
@@ -371,7 +382,7 @@ describe('extractNameAndPattern', () => {
     const result = extractNameAndPattern(':id(   )', '/users/:id(   )');
     expect('kind' in result).toBe(true);
     if ('kind' in result) {
-      expect(result.kind).toBe('route-parse');
+      expect(result.kind).toBe(RouterErrorKind.RouteParse);
       expect(result.message).toContain('Empty regex');
     }
   });
@@ -380,7 +391,7 @@ describe('extractNameAndPattern', () => {
     const result = extractNameAndPattern(':id(^\\d+$)', '/users/:id(^\\d+$)');
     expect('kind' in result).toBe(true);
     if ('kind' in result) {
-      expect(result.kind).toBe('route-parse');
+      expect(result.kind).toBe(RouterErrorKind.RouteParse);
       expect(result.message).toContain('Anchored');
     }
   });

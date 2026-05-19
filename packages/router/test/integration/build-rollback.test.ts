@@ -15,6 +15,7 @@ import { describe, expect, it } from 'bun:test';
 import { getRouterInternals } from '../../internal';
 import { RouterError } from '../../src/error';
 import { Router } from '../../src/router';
+import { RouterErrorKind } from '../../src/types';
 
 const peekHandlers = (r: Router<string>): unknown[] =>
   (getRouterInternals(r).registration as unknown as { handlers?: unknown[] }).handlers ?? [];
@@ -47,7 +48,7 @@ describe('rollback semantic equivalence', () => {
       }
     })();
     expect(error).not.toBeNull();
-    expect(error!.data.kind).toBe('route-validation');
+    expect(error!.data.kind).toBe(RouterErrorKind.RouteValidation);
 
     const r2 = new Router<string>();
     r2.add('GET', '/zone/sector/leaf-a', 'a');
@@ -145,9 +146,9 @@ describe('handler-snapshot publication after a failed build', () => {
 
     expect(threw).toBeInstanceOf(RouterError);
     const re = threw as RouterError;
-    expect(re.data.kind).toBe('route-validation');
-    if (re.data.kind === 'route-validation') {
-      expect(re.data.errors[0]?.error.kind).toBe('route-conflict');
+    expect(re.data.kind).toBe(RouterErrorKind.RouteValidation);
+    if (re.data.kind === RouterErrorKind.RouteValidation) {
+      expect(re.data.errors[0]?.error.kind).toBe(RouterErrorKind.RouteConflict);
     }
 
     const handlers = peekHandlers(r);

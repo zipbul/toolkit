@@ -1,14 +1,17 @@
 import { optimizeNextInvocation } from 'bun:jsc';
 
+import type { MatchCacheEntry, MatchConfig } from './codegen';
+import type { SegmentNode } from './tree';
 import type { MatchOutput, RouterOptions, RouterPublicApi } from './types';
 
 import { OptionalParamDefaults, PathParser } from './builder';
 import { RouterCache } from './cache';
-import { compileMatchFn, type MatchCacheEntry, type MatchConfig } from './codegen';
+import { compileMatchFn } from './codegen';
 import { RouterError } from './error';
 import { MethodRegistry } from './method-registry';
 import { buildFromRegistration, MatchLayer, Registration } from './pipeline';
-import { forEachStaticChild, type SegmentNode } from './tree';
+import { forEachStaticChild } from './tree';
+import { RouterErrorKind, TrailingSlash } from './types';
 
 /**
  * Symbol-keyed slot for the internal-inspection hatch. Symbol identity
@@ -89,7 +92,7 @@ class Router<T = unknown> implements RouterPublicApi<T> {
       methodRegistry,
       new PathParser({
         caseSensitive: routerOptions.pathCaseSensitive ?? true,
-        ignoreTrailingSlash: routerOptions.trailingSlash !== 'strict',
+        ignoreTrailingSlash: routerOptions.trailingSlash !== TrailingSlash.Strict,
       }),
       new OptionalParamDefaults(routerOptions.optionalParamBehavior),
     );
@@ -166,7 +169,7 @@ function validateCacheSize(rawCacheSize: number | undefined): number {
   const requested = rawCacheSize ?? 1000;
   if (!Number.isInteger(requested) || requested < 1 || requested > 0x4000_0000) {
     throw new RouterError({
-      kind: 'router-options-invalid',
+      kind: RouterErrorKind.RouterOptionsInvalid,
       message: `cacheSize must be a positive integer (received: ${String(requested)})`,
       suggestion: 'Pass a positive integer between 1 and 2^30.',
     });

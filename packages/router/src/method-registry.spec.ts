@@ -2,6 +2,7 @@ import { isErr } from '@zipbul/result';
 import { describe, it, expect } from 'bun:test';
 
 import { MethodRegistry } from './method-registry';
+import { RouterErrorKind } from './types';
 
 describe('MethodRegistry', () => {
   // ── HP: Happy Path ──
@@ -71,7 +72,7 @@ describe('MethodRegistry', () => {
 
       expect(isErr(result)).toBe(true);
       if (isErr(result)) {
-        expect(['method-empty', 'method-too-long', 'method-invalid-token']).toContain(result.data.kind);
+        expect([RouterErrorKind.MethodEmpty, 'method-too-long', RouterErrorKind.MethodInvalidToken]).toContain(result.data.kind);
       }
     });
 
@@ -142,7 +143,7 @@ describe('MethodRegistry', () => {
       }
     }
 
-    it("should return err with kind='method-limit' when exceeding 32 methods", () => {
+    it('should return err with kind=RouterErrorKind.MethodLimit when exceeding 32 methods', () => {
       const reg = new MethodRegistry();
       fillToMax(reg);
 
@@ -150,7 +151,7 @@ describe('MethodRegistry', () => {
 
       expect(isErr(result)).toBe(true);
       if (isErr(result)) {
-        expect(result.data.kind).toBe('method-limit');
+        expect(result.data.kind).toBe(RouterErrorKind.MethodLimit);
       }
     });
 
@@ -389,8 +390,8 @@ describe('MethodRegistry', () => {
       expect(isErr(r2)).toBe(true);
 
       if (isErr(r1) && isErr(r2)) {
-        expect(r1.data.kind).toBe('method-limit');
-        expect(r2.data.kind).toBe('method-limit');
+        expect(r1.data.kind).toBe(RouterErrorKind.MethodLimit);
+        expect(r2.data.kind).toBe(RouterErrorKind.MethodLimit);
       }
     });
   });

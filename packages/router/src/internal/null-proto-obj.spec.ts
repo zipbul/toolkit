@@ -6,6 +6,7 @@
  */
 import { describe, expect, it } from 'bun:test';
 
+import { MatchSource } from '../types';
 import { CACHE_META, DYNAMIC_META, EMPTY_PARAMS, NullProtoObj, STATIC_META, createNullProtoBucket } from './null-proto-obj';
 
 describe('NullProtoObj', () => {
@@ -51,17 +52,17 @@ describe('frozen singletons', () => {
   });
 
   it('STATIC_META has source: "static" and is frozen', () => {
-    expect(STATIC_META.source).toBe('static');
+    expect(STATIC_META.source).toBe(MatchSource.Static);
     expect(Object.isFrozen(STATIC_META)).toBe(true);
   });
 
   it('CACHE_META has source: "cache" and is frozen', () => {
-    expect(CACHE_META.source).toBe('cache');
+    expect(CACHE_META.source).toBe(MatchSource.Cache);
     expect(Object.isFrozen(CACHE_META)).toBe(true);
   });
 
   it('DYNAMIC_META has source: "dynamic" and is frozen', () => {
-    expect(DYNAMIC_META.source).toBe('dynamic');
+    expect(DYNAMIC_META.source).toBe(MatchSource.Dynamic);
     expect(Object.isFrozen(DYNAMIC_META)).toBe(true);
   });
 

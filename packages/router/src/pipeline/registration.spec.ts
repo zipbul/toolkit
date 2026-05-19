@@ -9,12 +9,14 @@ import { describe, expect, it } from 'bun:test';
 import type { PathPart } from '../tree';
 
 import { MAX_OPTIONAL_SEGMENTS_PER_ROUTE } from '../builder';
+import { PathPartType, WildcardOrigin } from '../tree';
+import { RouterErrorKind } from '../types';
 import { checkDynamicRouteCaps, collectRouteShape } from './registration';
 
-const STATIC_USERS: PathPart = { type: 'static', value: '/users', segments: ['users'] };
-const PARAM_ID: PathPart = { type: 'param', name: 'id', pattern: null, optional: false };
-const OPT_LANG: PathPart = { type: 'param', name: 'lang', pattern: null, optional: true };
-const WILD_REST: PathPart = { type: 'wildcard', name: 'rest', origin: 'star' };
+const STATIC_USERS: PathPart = { type: PathPartType.Static, value: '/users', segments: ['users'] };
+const PARAM_ID: PathPart = { type: PathPartType.Param, name: 'id', pattern: null, optional: false };
+const OPT_LANG: PathPart = { type: PathPartType.Param, name: 'lang', pattern: null, optional: true };
+const WILD_REST: PathPart = { type: PathPartType.Wildcard, name: 'rest', origin: WildcardOrigin.Star };
 
 describe('collectRouteShape', () => {
   it('returns empty arrays and zero count for a fully static route', () => {
@@ -64,7 +66,7 @@ describe('checkDynamicRouteCaps', () => {
     const out = checkDynamicRouteCaps({ path: '/x' }, shape);
     expect(out).toBeDefined();
     if (out) {
-      expect(out.kind).toBe('route-parse');
+      expect(out.kind).toBe(RouterErrorKind.RouteParse);
       expect(out.message).toContain(String(shape.optionalCount));
       expect(out.message).toContain(String(MAX_OPTIONAL_SEGMENTS_PER_ROUTE));
     }
@@ -80,7 +82,7 @@ describe('checkDynamicRouteCaps', () => {
     const out = checkDynamicRouteCaps({ path: '/x' }, shape);
     expect(out).toBeDefined();
     if (out) {
-      expect(out.kind).toBe('route-parse');
+      expect(out.kind).toBe(RouterErrorKind.RouteParse);
       expect(out.message).toContain('32');
       expect(out.message).toContain('31');
     }

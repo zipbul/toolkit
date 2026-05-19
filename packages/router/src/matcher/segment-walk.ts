@@ -1,7 +1,8 @@
+import type { SegmentNode } from '../tree';
 import type { DecoderFn, MatchFn, MatchState } from '../types';
 
 import { collectWarmupPaths, compileSegmentTree, tryCodegenStaticPrefixWildcard, WARMUP_ITERATIONS } from '../codegen';
-import { compactSegmentTree, getTenantFactor, hasAmbiguousNode, TESTER_PASS, type SegmentNode } from '../tree';
+import { compactSegmentTree, getTenantFactor, hasAmbiguousNode, TESTER_PASS } from '../tree';
 import { createFactoredWalker } from './walkers/factored';
 import { createIterativeWalker } from './walkers/iterative';
 import {

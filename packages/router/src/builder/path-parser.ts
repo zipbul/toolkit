@@ -5,6 +5,8 @@ import { err, isErr } from '@zipbul/result';
 import type { PathPart } from '../tree';
 import type { RouterErrorData } from '../types';
 
+import { PathPartType, WildcardOrigin } from '../tree';
+import { RouterErrorKind } from '../types';
 import { CC_COLON, CC_PLUS, CC_STAR } from './constants';
 import { validatePathChars } from './path-policy';
 // ── Types ──
@@ -112,7 +114,7 @@ class PathParser {
 
       if (seg === '') {
         return err({
-          kind: 'path-empty-segment',
+          kind: RouterErrorKind.PathEmptySegment,
           message: `Path must not contain empty segments: ${path}`,
           path,
           suggestion: 'Collapse repeated slashes or register a single canonical path.',
@@ -219,7 +221,7 @@ class PathParser {
     // Root path `/` with no segments produces an empty parts list — emit
     // an explicit static `/` so insertIntoSegmentTree sees a real terminal.
     if (parts.length === 0) {
-      parts.push({ type: 'static', value: '/', segments: [] });
+      parts.push({ type: PathPartType.Static, value: '/', segments: [] });
     }
     return { parts, normalized, isDynamic };
   }
@@ -265,16 +267,16 @@ class PathParser {
     // belongs in a normalizer plug-in (e.g. `re2` / `recheck`) layered
     // ahead of the router. Build-time `new RegExp(...)` compile failure
     // is still surfaced as `route-parse` by segment-tree.ts.
-    return { type: 'param', name, pattern, optional: isOptional };
+    return { type: PathPartType.Param, name, pattern, optional: isOptional };
   }
 
   private parseWildcard(seg: string, index: number, totalSegments: number, path: string): Result<PathPart, RouterErrorData> {
     // Determine origin
     let core = seg.slice(1); // skip '*'
-    let origin: 'star' | 'multi' = 'star';
+    let origin: WildcardOrigin = WildcardOrigin.Star;
 
     if (core.endsWith('+')) {
-      origin = 'multi';
+      origin = WildcardOrigin.Multi;
       core = core.slice(0, -1);
     }
 
@@ -291,7 +293,7 @@ class PathParser {
     // Wildcard must be the last segment
     if (index !== totalSegments - 1) {
       return err({
-        kind: 'route-parse',
+        kind: RouterErrorKind.RouteParse,
         message: `Wildcard '*${name}' must be the last segment: ${path}`,
         path,
         suggestion: 'Move the wildcard segment to the end of the path.',
@@ -304,7 +306,7 @@ class PathParser {
       return dup;
     }
 
-    return { type: 'wildcard', name, origin };
+    return { type: PathPartType.Wildcard, name, origin };
   }
 
   /**
@@ -316,7 +318,7 @@ class PathParser {
   private registerParam(name: string, prefix: ':' | '*', path: string): Result<never, RouterErrorData> | null {
     if (this.activeParams.has(name)) {
       return err({
-        kind: 'param-duplicate',
+        kind: RouterErrorKind.ParamDuplicate,
         message: `Duplicate parameter name '${prefix}${name}' in path: ${path}`,
         path,
         segment: name,
@@ -344,7 +346,7 @@ class PathParser {
 function validateParamName(name: string, prefix: ':' | '*', path: string): Result<never, RouterErrorData> | null {
   if (name === '') {
     return err({
-      kind: 'route-parse',
+      kind: RouterErrorKind.RouteParse,
       message: `Empty parameter name in path: ${path}`,
       path,
       suggestion: 'Provide a name after the : or * decorator (e.g. :id, *path).',
@@ -358,7 +360,7 @@ function validateParamName(name: string, prefix: ':' | '*', path: string): Resul
 
   if (!isFirstLetter) {
     return err({
-      kind: 'route-parse',
+      kind: RouterErrorKind.RouteParse,
       message: `Invalid parameter name '${prefix}${name}' in path: ${path}. Parameter names must start with a letter.`,
       path,
       segment: name,
@@ -374,7 +376,7 @@ function validateParamName(name: string, prefix: ':' | '*', path: string): Resul
 
     if (!isLetter && !isDigit && !isUnderscore) {
       return err({
-        kind: 'route-parse',
+        kind: RouterErrorKind.RouteParse,
         message: `Invalid character '${name.charAt(i)}' in parameter name '${prefix}${name}'. Only alphanumeric characters and underscores are allowed (snake_case or camelCase).`,
         path,
         segment: name,
@@ -403,7 +405,7 @@ function rejectColonWildcardSugar(core: string, seg: string, path: string): Rout
   }
   const canonical = tail === '+' ? `*${core.slice(1, -1)}+` : `*${core.slice(1, -1)}`;
   return {
-    kind: 'route-parse',
+    kind: RouterErrorKind.RouteParse,
     message: `Colon-form wildcard '${seg}' is not supported. Use '${canonical}' instead.`,
     path,
     segment: seg,
@@ -434,7 +436,7 @@ function stripOptionalDecorator(
   const before = core.charCodeAt(core.length - 2);
   if (before === CC_PLUS || before === CC_STAR) {
     return {
-      kind: 'route-parse',
+      kind: RouterErrorKind.RouteParse,
       message: `Invalid decorator combination in parameter '${seg}': ${path}`,
       path,
       segment: seg,
@@ -457,7 +459,7 @@ function extractNameAndPattern(core: string, path: string): { name: string; patt
   const name = core.slice(1, parenIdx);
   if (!core.endsWith(')')) {
     return {
-      kind: 'route-parse',
+      kind: RouterErrorKind.RouteParse,
       message: `Unclosed regex pattern in parameter ':${name}': ${path}`,
       path,
       suggestion: 'Close the regex group with a matching ).',
@@ -466,7 +468,7 @@ function extractNameAndPattern(core: string, path: string): { name: string; patt
   const rawPattern = core.slice(parenIdx + 1, -1);
   if (rawPattern.trim() === '') {
     return {
-      kind: 'route-parse',
+      kind: RouterErrorKind.RouteParse,
       message: `Empty regex pattern in parameter ':${name}': ${path}`,
       path,
       segment: name,
@@ -476,7 +478,7 @@ function extractNameAndPattern(core: string, path: string): { name: string; patt
   const normalizeResult = normalizeParamPatternSource(rawPattern);
   if (typeof normalizeResult !== 'string') {
     return {
-      kind: 'route-parse',
+      kind: RouterErrorKind.RouteParse,
       message: `Anchored regex pattern in parameter ':${name}': ${path}`,
       path,
       segment: name,
@@ -499,7 +501,7 @@ function flushStaticBuffer(acc: StaticAccumulator, parts: PathPart[]): void {
   if (acc.buf.length === 0) {
     return;
   }
-  parts.push({ type: 'static', value: acc.buf, segments: acc.segments });
+  parts.push({ type: PathPartType.Static, value: acc.buf, segments: acc.segments });
   acc.buf = '';
   acc.segments = [];
 }

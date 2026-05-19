@@ -4,6 +4,8 @@ import { err } from '@zipbul/result';
 
 import type { RouterErrorData } from '../types';
 
+import { RouterErrorKind } from '../types';
+
 // HTTP method token grammar (RFC 9110 §5.6.2 + §9.1, RFC 9112 §3.1):
 //   method = token = 1*tchar
 //   tchar  = ALPHA / DIGIT / "!" / "#" / "$" / "%" / "&" / "'" / "*"
@@ -57,14 +59,14 @@ function isValidMethodToken(method: string): boolean {
 export function validateMethodToken(method: string): Result<void, RouterErrorData> {
   if (method.length === 0) {
     return err({
-      kind: 'method-empty',
+      kind: RouterErrorKind.MethodEmpty,
       message: 'HTTP method must not be empty.',
       suggestion: 'Provide a non-empty method token (e.g., GET, POST, custom token).',
     });
   }
   if (!isValidMethodToken(method)) {
     return err({
-      kind: 'method-invalid-token',
+      kind: RouterErrorKind.MethodInvalidToken,
       message: `HTTP method contains a character outside the token grammar: '${method}'`,
       method,
       suggestion: "Use only HTTP token characters: alphanumerics + ! # $ % & ' * + - . ^ _ ` | ~.",

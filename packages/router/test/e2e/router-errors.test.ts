@@ -3,6 +3,7 @@ import { describe, it, expect } from 'bun:test';
 import { MAX_OPTIONAL_SEGMENTS_PER_ROUTE } from '../../src/builder/route-expand';
 import { RouterError } from '../../src/error';
 import { Router } from '../../src/router';
+import { RouterErrorKind } from '../../src/types';
 import { catchRouterError, firstBuildIssue } from '../test-utils';
 
 function fillMethodsToLimit(router: Router<string>): void {
@@ -12,13 +13,13 @@ function fillMethodsToLimit(router: Router<string>): void {
 }
 
 describe('Router<T> errors', () => {
-  it("should throw RouterError kind='router-sealed' when add called after build", () => {
+  it('should throw RouterError kind=RouterErrorKind.RouterSealed when add called after build', () => {
     const router = new Router<string>();
     router.add('GET', '/x', 'x');
     router.build();
 
     const err = catchRouterError(() => router.add('GET', '/y', 'y'));
-    expect(err.data.kind).toBe('router-sealed');
+    expect(err.data.kind).toBe(RouterErrorKind.RouterSealed);
     expect(err.data.path).toBe('/y');
     expect(err.data.method).toBe('GET');
   });
@@ -36,7 +37,7 @@ describe('Router<T> errors', () => {
     router.add('GET', '/x', 'second');
 
     const issue = firstBuildIssue(router);
-    expect(issue.kind).toBe('route-duplicate');
+    expect(issue.kind).toBe(RouterErrorKind.RouteDuplicate);
   });
 
   it('should throw for wildcard whose prefix already has a descendant terminal', () => {
@@ -45,7 +46,7 @@ describe('Router<T> errors', () => {
     router.add('GET', '/users/*', 'by-wildcard');
 
     const issue = firstBuildIssue(router);
-    expect(issue.kind).toBe('route-unreachable');
+    expect(issue.kind).toBe(RouterErrorKind.RouteUnreachable);
   });
 
   it('should report addAll duplicate during build validation', () => {
@@ -57,10 +58,10 @@ describe('Router<T> errors', () => {
     ]);
 
     const err = catchRouterError(() => router.build());
-    expect(err.data.kind).toBe('route-validation');
-    if (err.data.kind === 'route-validation') {
+    expect(err.data.kind).toBe(RouterErrorKind.RouteValidation);
+    if (err.data.kind === RouterErrorKind.RouteValidation) {
       expect(err.data.errors[0]?.index).toBe(2);
-      expect(err.data.errors[0]?.error.kind).toBe('route-duplicate');
+      expect(err.data.errors[0]?.error.kind).toBe(RouterErrorKind.RouteDuplicate);
     }
   });
 
@@ -73,30 +74,30 @@ describe('Router<T> errors', () => {
     ]);
 
     const err = catchRouterError(() => router.build());
-    expect(err.data.kind).toBe('route-validation');
-    if (err.data.kind === 'route-validation') {
+    expect(err.data.kind).toBe(RouterErrorKind.RouteValidation);
+    if (err.data.kind === RouterErrorKind.RouteValidation) {
       expect(err.data.errors[0]?.index).toBe(1);
-      expect(err.data.errors[0]?.error.kind).toBe('route-duplicate');
+      expect(err.data.errors[0]?.error.kind).toBe(RouterErrorKind.RouteDuplicate);
     }
   });
 
-  it("should throw kind='router-sealed' when addAll called after build", () => {
+  it('should throw kind=RouterErrorKind.RouterSealed when addAll called after build', () => {
     const router = new Router<string>();
     router.add('GET', '/x', 'x');
     router.build();
 
     const err = catchRouterError(() => router.addAll([['POST', '/y', 'y']]));
-    expect(err.data.kind).toBe('router-sealed');
+    expect(err.data.kind).toBe(RouterErrorKind.RouterSealed);
     expect(err.data.registeredCount).toBe(0);
   });
 
-  it("should throw kind='method-limit' when exceeding 32 methods", () => {
+  it('should throw kind=RouterErrorKind.MethodLimit when exceeding 32 methods', () => {
     const router = new Router<string>();
     fillMethodsToLimit(router);
     router.add('OVERFLOW_METHOD', '/overflow', 'overflow');
 
     const issue = firstBuildIssue(router);
-    expect(issue.kind).toBe('method-limit');
+    expect(issue.kind).toBe(RouterErrorKind.MethodLimit);
   });
 
   it('should still match existing routes after sealed add-error', () => {
@@ -116,7 +117,7 @@ describe('Router<T> errors', () => {
 
     router.add('GET', '/users/:id(\\d+', 'invalid-regex');
     const issue = firstBuildIssue(router);
-    expect(issue.kind).toBe('route-parse');
+    expect(issue.kind).toBe(RouterErrorKind.RouteParse);
   });
 
   it('should reject optional segment expansion above the per-route cap before expansion', () => {
@@ -126,7 +127,7 @@ describe('Router<T> errors', () => {
     router.add('GET', path, 'too-many-optionals');
     const issue = firstBuildIssue(router);
 
-    expect(issue.kind).toBe('route-parse');
+    expect(issue.kind).toBe(RouterErrorKind.RouteParse);
     expect(issue.message).toContain(`maximum is ${MAX_OPTIONAL_SEGMENTS_PER_ROUTE}`);
   });
 
@@ -135,7 +136,7 @@ describe('Router<T> errors', () => {
     router.build();
 
     const err = catchRouterError(() => router.add('GET', '/after-seal', 'v'));
-    expect(err.data.kind).toBe('router-sealed');
+    expect(err.data.kind).toBe(RouterErrorKind.RouterSealed);
     expect(typeof err.data.message).toBe('string');
     expect(err.data.path).toBe('/after-seal');
     expect(err.data.method).toBe('GET');
@@ -146,29 +147,29 @@ describe('Router<T> errors', () => {
     router.build();
 
     const err = catchRouterError(() => router.add(['GET', 'POST'], '/z', 'z'));
-    expect(err.data.kind).toBe('router-sealed');
+    expect(err.data.kind).toBe(RouterErrorKind.RouterSealed);
   });
 
   it('should throw for param-duplicate in same path', () => {
     const router = new Router<string>();
 
     router.add('GET', '/users/:id/posts/:id', 'dup-param');
-    expect(firstBuildIssue(router).kind).toBe('param-duplicate');
+    expect(firstBuildIssue(router).kind).toBe(RouterErrorKind.ParamDuplicate);
   });
 
   it('should throw for wildcard not in last position (route-parse)', () => {
     const router = new Router<string>();
 
     router.add('GET', '/files/*/extra', 'bad');
-    expect(firstBuildIssue(router).kind).toBe('route-parse');
+    expect(firstBuildIssue(router).kind).toBe(RouterErrorKind.RouteParse);
   });
 
   it('should include suggestion field for mutation error kinds', () => {
     const r1 = new Router<string>();
     r1.build();
     const sealed = catchRouterError(() => r1.add('GET', '/x', 'x'));
-    expect(sealed.data.kind).toBe('router-sealed');
-    if (sealed.data.kind === 'router-sealed') {
+    expect(sealed.data.kind).toBe(RouterErrorKind.RouterSealed);
+    if (sealed.data.kind === RouterErrorKind.RouterSealed) {
       expect(typeof sealed.data.suggestion).toBe('string');
     }
 
@@ -176,8 +177,8 @@ describe('Router<T> errors', () => {
     r3.add('GET', '/x', 'x');
     r3.add('GET', '/x', 'x2');
     const dup = firstBuildIssue(r3);
-    expect(dup.kind).toBe('route-duplicate');
-    if (dup.kind === 'route-duplicate') {
+    expect(dup.kind).toBe(RouterErrorKind.RouteDuplicate);
+    if (dup.kind === RouterErrorKind.RouteDuplicate) {
       expect(typeof dup.suggestion).toBe('string');
     }
   });
@@ -188,7 +189,7 @@ describe('Router<T> errors', () => {
     router.add('GET', '/files/*other', 'files-get-2');
 
     const issue = firstBuildIssue(router);
-    expect(issue.kind).toBe('route-unreachable');
+    expect(issue.kind).toBe(RouterErrorKind.RouteUnreachable);
   });
 
   it('should allow the same wildcard prefix with different names across distinct methods (F9 — cross-method coexistence)', () => {
@@ -224,7 +225,7 @@ describe('Router<T> errors', () => {
         ['PUT', '/b', 'b'],
       ]),
     );
-    expect(err.data.kind).toBe('router-sealed');
+    expect(err.data.kind).toBe(RouterErrorKind.RouterSealed);
     expect(err.data.registeredCount).toBe(0);
   });
 
@@ -234,7 +235,7 @@ describe('Router<T> errors', () => {
     router.add('GET', '/api/specific', 'specific');
 
     const issue = firstBuildIssue(router);
-    expect(issue.kind).toBe('route-unreachable');
+    expect(issue.kind).toBe(RouterErrorKind.RouteUnreachable);
   });
 
   it('should include method field in add error data', () => {
@@ -272,10 +273,10 @@ describe('register-time rejections (former regression fixtures)', () => {
     router.add('GET', '/users/:id(^\\d+$)', 'anchored');
 
     const error = catchRouterError(() => router.build());
-    expect(error.data.kind).toBe('route-validation');
-    if (error.data.kind === 'route-validation') {
+    expect(error.data.kind).toBe(RouterErrorKind.RouteValidation);
+    if (error.data.kind === RouterErrorKind.RouteValidation) {
       expect(error.data.errors).toHaveLength(1);
-      expect(error.data.errors[0]?.error.kind).toBe('route-parse');
+      expect(error.data.errors[0]?.error.kind).toBe(RouterErrorKind.RouteParse);
     }
   });
 
@@ -285,9 +286,9 @@ describe('register-time rejections (former regression fixtures)', () => {
     router.add('GET', '/api//users/:id', 'handler');
 
     const error = catchRouterError(() => router.build());
-    expect(error.data.kind).toBe('route-validation');
-    if (error.data.kind === 'route-validation') {
-      expect(error.data.errors[0]?.error.kind).toBe('path-empty-segment');
+    expect(error.data.kind).toBe(RouterErrorKind.RouteValidation);
+    if (error.data.kind === RouterErrorKind.RouteValidation) {
+      expect(error.data.errors[0]?.error.kind).toBe(RouterErrorKind.PathEmptySegment);
     }
   });
 
@@ -298,9 +299,11 @@ describe('register-time rejections (former regression fixtures)', () => {
     router.add('*', '/files/*path', 'star');
 
     const error = catchRouterError(() => router.build());
-    expect(error.data.kind).toBe('route-validation');
-    if (error.data.kind === 'route-validation') {
-      expect(error.data.errors.some(issue => issue.method === 'PUT' && issue.error.kind === 'route-unreachable')).toBe(true);
+    expect(error.data.kind).toBe(RouterErrorKind.RouteValidation);
+    if (error.data.kind === RouterErrorKind.RouteValidation) {
+      expect(
+        error.data.errors.some(issue => issue.method === 'PUT' && issue.error.kind === RouterErrorKind.RouteUnreachable),
+      ).toBe(true);
     }
 
     const valid = new Router<string>();
@@ -315,9 +318,9 @@ describe('register-time rejections (former regression fixtures)', () => {
     router.add('GET', '/leak/path/:id([z-a])', 'bad');
 
     const error = catchRouterError(() => router.build());
-    expect(error.data.kind).toBe('route-validation');
-    if (error.data.kind === 'route-validation') {
-      expect(error.data.errors[0]?.error.kind).toBe('route-parse');
+    expect(error.data.kind).toBe(RouterErrorKind.RouteValidation);
+    if (error.data.kind === RouterErrorKind.RouteValidation) {
+      expect(error.data.errors[0]?.error.kind).toBe(RouterErrorKind.RouteParse);
     }
     expect(router.match('GET', '/leak/path/value')).toBeNull();
   });
@@ -341,9 +344,9 @@ describe('register-time rejections (former regression fixtures)', () => {
     router.add('GET', '/a/:y', 'good');
 
     const error = catchRouterError(() => router.build());
-    expect(error.data.kind).toBe('route-validation');
-    if (error.data.kind === 'route-validation') {
-      expect(error.data.errors[0]?.error.kind).toBe('route-parse');
+    expect(error.data.kind).toBe(RouterErrorKind.RouteValidation);
+    if (error.data.kind === RouterErrorKind.RouteValidation) {
+      expect(error.data.errors[0]?.error.kind).toBe(RouterErrorKind.RouteParse);
     }
     expect(router.match('GET', '/a/value')).toBeNull();
 
@@ -359,7 +362,7 @@ describe('route-parse error suggestions include actionable text', () => {
     const r = new Router<string>();
     r.add('GET', '/users/:id(\\d+', 'h');
     const issue = firstBuildIssue(r);
-    expect(issue.kind).toBe('route-parse');
+    expect(issue.kind).toBe(RouterErrorKind.RouteParse);
     expect((issue as { suggestion?: string }).suggestion).toBeDefined();
   });
 
@@ -367,7 +370,7 @@ describe('route-parse error suggestions include actionable text', () => {
     const r = new Router<string>();
     r.add('GET', '/files/*tail/extra', 'h');
     const issue = firstBuildIssue(r);
-    expect(issue.kind).toBe('route-parse');
+    expect(issue.kind).toBe(RouterErrorKind.RouteParse);
     expect((issue as { suggestion?: string }).suggestion).toBeDefined();
   });
 
@@ -375,7 +378,7 @@ describe('route-parse error suggestions include actionable text', () => {
     const r = new Router<string>();
     r.add('GET', '/users/:', 'h');
     const issue = firstBuildIssue(r);
-    expect(issue.kind).toBe('route-parse');
+    expect(issue.kind).toBe(RouterErrorKind.RouteParse);
     expect((issue as { suggestion?: string }).suggestion).toBeDefined();
   });
 
@@ -383,7 +386,7 @@ describe('route-parse error suggestions include actionable text', () => {
     const r = new Router<string>();
     r.add('GET', '/users/:1id', 'h');
     const issue = firstBuildIssue(r);
-    expect(issue.kind).toBe('route-parse');
+    expect(issue.kind).toBe(RouterErrorKind.RouteParse);
     expect((issue as { suggestion?: string }).suggestion).toBeDefined();
   });
 
@@ -391,7 +394,7 @@ describe('route-parse error suggestions include actionable text', () => {
     const r = new Router<string>();
     r.add('GET', '/users/:id-x', 'h');
     const issue = firstBuildIssue(r);
-    expect(issue.kind).toBe('route-parse');
+    expect(issue.kind).toBe(RouterErrorKind.RouteParse);
     expect((issue as { suggestion?: string }).suggestion).toBeDefined();
   });
 });

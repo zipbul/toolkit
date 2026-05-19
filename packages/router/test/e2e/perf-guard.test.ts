@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'bun:test';
 
 import { Router } from '../../src/router';
+import { MatchSource } from '../../src/types';
 import { getRegistrationSnapshot } from '../test-utils';
 
 describe('performance guard invariants', () => {
@@ -29,13 +30,13 @@ describe('performance guard invariants', () => {
     r.build();
 
     const first = r.match('GET', '/users/0');
-    expect(first?.meta.source).toBe('dynamic');
+    expect(first?.meta.source).toBe(MatchSource.Dynamic);
 
     for (let i = 1; i <= 32; i++) {
       expect(r.match('GET', `/users/${i}`)?.value).toBe('user');
     }
 
-    expect(r.match('GET', '/users/32')?.meta.source).toBe('cache');
-    expect(r.match('GET', '/users/0')?.meta.source).toBe('dynamic');
+    expect(r.match('GET', '/users/32')?.meta.source).toBe(MatchSource.Cache);
+    expect(r.match('GET', '/users/0')?.meta.source).toBe(MatchSource.Dynamic);
   });
 });

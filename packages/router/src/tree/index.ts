@@ -6,6 +6,7 @@
  */
 
 export type { PathPart } from './path-part';
+export { PathPartType, WildcardOrigin } from './path-part';
 
 export type { SegmentNode, ParamSegment } from './segment-tree';
 export { createSegmentNode, forEachStaticChild, hasAnyStaticChild, insertIntoSegmentTree } from './segment-tree';

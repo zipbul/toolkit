@@ -9,6 +9,7 @@ import type { RouterOptions } from '../types';
 import type { RegistrationSnapshot } from './registration';
 
 import { MethodRegistry } from '../method-registry';
+import { MatchSource, TrailingSlash } from '../types';
 import { buildFromRegistration } from './build';
 
 function emptySnapshot<T>(overrides: Partial<RegistrationSnapshot<T>> = {}): RegistrationSnapshot<T> {
@@ -38,7 +39,7 @@ describe('buildFromRegistration — staticOutputsByMethod', () => {
     const outBucket = result.staticOutputsByMethod[getCode]!;
     const out = outBucket['/health']!;
     expect(out.value).toBe('h');
-    expect(out.meta.source).toBe('static');
+    expect(out.meta.source).toBe(MatchSource.Static);
     expect(Object.isFrozen(out)).toBe(true);
   });
 
@@ -83,7 +84,7 @@ describe('buildFromRegistration — options wiring', () => {
 
   it('honors trailingSlash="strict" by setting ignoreTrailingSlash=false', () => {
     const registry = new MethodRegistry();
-    const opts: RouterOptions = { trailingSlash: 'strict' };
+    const opts: RouterOptions = { trailingSlash: TrailingSlash.Strict };
     const result = buildFromRegistration(emptySnapshot<string>(), opts, registry);
     expect(result.ignoreTrailingSlash).toBe(false);
   });
@@ -105,13 +106,13 @@ describe('buildFromRegistration — options wiring', () => {
 describe('buildFromRegistration — normalizePath', () => {
   it('trims trailing slash when ignoreTrailingSlash is on', () => {
     const registry = new MethodRegistry();
-    const result = buildFromRegistration(emptySnapshot<string>(), { trailingSlash: 'ignore' }, registry);
+    const result = buildFromRegistration(emptySnapshot<string>(), { trailingSlash: TrailingSlash.Ignore }, registry);
     expect(result.normalizePath('/x/')).toBe('/x');
   });
 
   it('preserves trailing slash when trailingSlash="strict"', () => {
     const registry = new MethodRegistry();
-    const result = buildFromRegistration(emptySnapshot<string>(), { trailingSlash: 'strict' }, registry);
+    const result = buildFromRegistration(emptySnapshot<string>(), { trailingSlash: TrailingSlash.Strict }, registry);
     expect(result.normalizePath('/x/')).toBe('/x/');
   });
 
@@ -123,7 +124,7 @@ describe('buildFromRegistration — normalizePath', () => {
 
   it('preserves the root slash even with trimSlash on', () => {
     const registry = new MethodRegistry();
-    const result = buildFromRegistration(emptySnapshot<string>(), { trailingSlash: 'ignore' }, registry);
+    const result = buildFromRegistration(emptySnapshot<string>(), { trailingSlash: TrailingSlash.Ignore }, registry);
     expect(result.normalizePath('/')).toBe('/');
   });
 });

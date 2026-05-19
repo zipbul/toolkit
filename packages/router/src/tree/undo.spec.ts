@@ -6,9 +6,12 @@
 import { describe, expect, it } from 'bun:test';
 
 import type { PatternTesterFn } from './pattern-tester';
+import type { ParamSegment } from './segment-tree';
+import type { SegmentTreeUndoLog } from './undo';
 
-import { createSegmentNode, type ParamSegment } from './segment-tree';
-import { UndoKind, applyUndo, pushStaticBucketResetUndo, pushStaticMapDeleteUndo, type SegmentTreeUndoLog } from './undo';
+import { WildcardOrigin } from '../tree';
+import { createSegmentNode } from './segment-tree';
+import { UndoKind, applyUndo, pushStaticBucketResetUndo, pushStaticMapDeleteUndo } from './undo';
 
 describe('applyUndo — segment-tree mutations', () => {
   it('StaticChildrenInit clears the staticChildren slot', () => {
@@ -65,7 +68,7 @@ describe('applyUndo — segment-tree mutations', () => {
     const n = createSegmentNode();
     n.wildcardStore = 5;
     n.wildcardName = 'rest';
-    n.wildcardOrigin = 'star';
+    n.wildcardOrigin = WildcardOrigin.Star;
     applyUndo({ k: UndoKind.WildcardSet, n });
     expect(n.wildcardStore).toBeNull();
     expect(n.wildcardName).toBeNull();

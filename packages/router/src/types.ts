@@ -1,10 +1,61 @@
+// ── Public enums ──
+
+export enum TrailingSlash {
+  Strict = 'strict',
+  Ignore = 'ignore',
+}
+
+export enum OptionalParamBehavior {
+  Omit = 'omit',
+  SetUndefined = 'set-undefined',
+}
+
+export enum MatchSource {
+  Static = 'static',
+  Cache = 'cache',
+  Dynamic = 'dynamic',
+}
+
+/**
+ * 라우터 에러 종류 (discriminant).
+ * 상태 전이 1 + 빌드 타임 28 + 옵션/일괄검증 2. match() 는 throw 하지 않으므로
+ * 매치 타임 kind 는 없다.
+ */
+export enum RouterErrorKind {
+  // 상태 전이
+  RouterSealed = 'router-sealed',
+  // 빌드타임 — 등록
+  RouteDuplicate = 'route-duplicate',
+  RouteConflict = 'route-conflict',
+  RouteUnreachable = 'route-unreachable',
+  RouteParse = 'route-parse',
+  ParamDuplicate = 'param-duplicate',
+  MethodLimit = 'method-limit',
+  MethodEmpty = 'method-empty',
+  MethodInvalidToken = 'method-invalid-token',
+  PathMissingLeadingSlash = 'path-missing-leading-slash',
+  PathQuery = 'path-query',
+  PathFragment = 'path-fragment',
+  PathControlChar = 'path-control-char',
+  PathInvalidPchar = 'path-invalid-pchar',
+  PathMalformedPercent = 'path-malformed-percent',
+  PathInvalidUtf8 = 'path-invalid-utf8',
+  PathEncodedSlash = 'path-encoded-slash',
+  PathDotSegment = 'path-dot-segment',
+  PathEmptySegment = 'path-empty-segment',
+  RouterOptionsInvalid = 'router-options-invalid',
+  RouteValidation = 'route-validation',
+}
+
+// ── RouterOptions ──
+
 export interface RouterOptions {
   /**
-   * Trailing-slash policy. `'strict'` keeps `/a` and `/a/` distinct.
-   * `'ignore'` collapses one trailing slash on registration and at match
+   * Trailing-slash policy. `Strict` keeps `/a` and `/a/` distinct.
+   * `Ignore` collapses one trailing slash on registration and at match
    * time.
    */
-  trailingSlash?: 'strict' | 'ignore';
+  trailingSlash?: TrailingSlash;
   /** Path case-sensitivity. Default true. */
   pathCaseSensitive?: boolean;
   /**
@@ -16,41 +67,9 @@ export interface RouterOptions {
   optionalParamBehavior?: OptionalParamBehavior;
 }
 
-export type OptionalParamBehavior = 'omit' | 'set-undefined';
-
 export type RouteParams = Record<string, string | undefined>;
 
 // ── Error types ──
-
-/**
- * 라우터 에러 종류 (discriminant).
- * 상태 전이 1 + 빌드 타임 28 + 옵션/일괄검증 2. match() 는 throw 하지 않으므로
- * 매치 타임 kind 는 없다.
- */
-export type RouterErrorKind =
-  // 상태 전이
-  | 'router-sealed' // build() 후 add() 시도
-  // 빌드타임 — 등록
-  | 'route-duplicate' // 동일 method+path 이미 존재
-  | 'route-conflict' // wildcard/param/static 구조적 충돌
-  | 'route-unreachable' // 선행 wildcard/terminal 때문에 도달 불가능한 등록
-  | 'route-parse' // 패턴 문법 오류
-  | 'param-duplicate' // 같은 경로 내 동일 이름 파라미터
-  | 'method-limit' // 32개 메서드 초과 (MethodRegistry)
-  | 'method-empty' // 빈 method 토큰
-  | 'method-invalid-token' // method 가 HTTP token 문법을 위반
-  | 'path-missing-leading-slash'
-  | 'path-query' // 등록 path에 raw `?`
-  | 'path-fragment' // 등록 path에 raw `#`
-  | 'path-control-char' // 등록 path에 C0/DEL
-  | 'path-invalid-pchar' // 라우터 grammar token 외 pchar 위반
-  | 'path-malformed-percent' // `%` 뒤 hex 2자리 미충족
-  | 'path-invalid-utf8' // 디코딩 후 UTF-8 invalid (overlong 등)
-  | 'path-encoded-slash' // `%2F` — 라우터 grammar (segment separator)
-  | 'path-dot-segment' // 디코드 시 `.` 또는 `..` — 라우터 grammar
-  | 'path-empty-segment' // interior empty `/a//b`
-  | 'router-options-invalid' // RouterOptions 입력값 검증 실패 (cacheSize 등)
-  | 'route-validation'; // build()/seal() 일괄 검증 실패
 
 export interface RouteValidationIssue {
   index: number;
@@ -63,56 +82,47 @@ export interface RouteValidationIssue {
  * `RouterError.data` 에 첨부되는 데이터 — kind 별 discriminated union.
  *
  * 각 `kind` 마다 *해당 케이스에서만 의미가 있는* 필드를 required 로 선언.
- * 유저는 `if (e.kind === 'route-conflict')` 로 좁힌 후 `e.conflictsWith` 를
- * 안전 접근. required/optional 분류는 모든 에러 생성 사이트의 *실제 채움
- * 패턴* 을 audit 하여 결정한다 — required 필드는 *모든* 호출 사이트가
- * 채우고 있음을 TypeScript 가 강제하는 보장이다.
+ * 유저는 `if (e.kind === RouterErrorKind.RouteConflict)` 로 좁힌 후
+ * `e.conflictsWith` 를 안전 접근.
  *
- * `path` / `method` / `registeredCount` 는 라우터 상위 레이어 (addOne,
- * addAll) 가 다운스트림 에러에 컨텍스트로 덧붙이는 값이라 모든 kind 에서
- * optional 로 접근 가능.
+ * `path` / `method` / `registeredCount` 는 라우터 상위 레이어가 다운스트림
+ * 에러에 컨텍스트로 덧붙이는 값이라 모든 kind 에서 optional.
  */
 export type RouterErrorData = {
   path?: string;
   method?: string;
-  /** addAll() fail-fast 시 에러 전까지 성공한 등록 수 */
   registeredCount?: number;
 } &
   // ── State / options ─────────────────────────────────────────────────
   (
-    | { kind: 'router-sealed'; message: string; suggestion: string }
-    | { kind: 'router-options-invalid'; message: string; suggestion: string }
+    | { kind: RouterErrorKind.RouterSealed; message: string; suggestion: string }
+    | { kind: RouterErrorKind.RouterOptionsInvalid; message: string; suggestion: string }
     // ── Routes interaction (build) ──────────────────────────────────────
-    | { kind: 'route-validation'; message: string; errors: RouteValidationIssue[] }
-    | { kind: 'route-duplicate'; message: string; suggestion: string }
-    | { kind: 'route-conflict'; message: string; segment: string; conflictsWith: string; suggestion: string }
-    | { kind: 'route-unreachable'; message: string; segment: string; conflictsWith: string; suggestion: string }
-    | { kind: 'route-parse'; message: string; segment?: string; suggestion: string }
-    // ── add() — param / path grammar (G) ────────────────────────────────
-    | { kind: 'param-duplicate'; message: string; segment: string; suggestion: string }
-    | { kind: 'path-query'; message: string; suggestion: string }
-    | { kind: 'path-fragment'; message: string; suggestion: string }
-    | { kind: 'path-encoded-slash'; message: string; suggestion: string }
-    | { kind: 'path-dot-segment'; message: string; suggestion: string }
-    | { kind: 'path-empty-segment'; message: string; suggestion: string }
-    // ── add() — method / path RFC conformance (R) ───────────────────────
-    | { kind: 'method-limit'; message: string; method: string; suggestion: string }
-    | { kind: 'method-empty'; message: string; suggestion: string }
-    | { kind: 'method-invalid-token'; message: string; method: string; suggestion: string }
-    | { kind: 'path-missing-leading-slash'; message: string; suggestion: string }
-    | { kind: 'path-malformed-percent'; message: string; suggestion: string }
-    | { kind: 'path-invalid-pchar'; message: string; segment: string; suggestion: string }
-    | { kind: 'path-control-char'; message: string; suggestion: string }
-    | { kind: 'path-invalid-utf8'; message: string; suggestion: string }
+    | { kind: RouterErrorKind.RouteValidation; message: string; errors: RouteValidationIssue[] }
+    | { kind: RouterErrorKind.RouteDuplicate; message: string; suggestion: string }
+    | { kind: RouterErrorKind.RouteConflict; message: string; segment: string; conflictsWith: string; suggestion: string }
+    | { kind: RouterErrorKind.RouteUnreachable; message: string; segment: string; conflictsWith: string; suggestion: string }
+    | { kind: RouterErrorKind.RouteParse; message: string; segment?: string; suggestion: string }
+    // ── add() — param / path grammar ────────────────────────────────────
+    | { kind: RouterErrorKind.ParamDuplicate; message: string; segment: string; suggestion: string }
+    | { kind: RouterErrorKind.PathQuery; message: string; suggestion: string }
+    | { kind: RouterErrorKind.PathFragment; message: string; suggestion: string }
+    | { kind: RouterErrorKind.PathEncodedSlash; message: string; suggestion: string }
+    | { kind: RouterErrorKind.PathDotSegment; message: string; suggestion: string }
+    | { kind: RouterErrorKind.PathEmptySegment; message: string; suggestion: string }
+    // ── add() — method / path RFC conformance ───────────────────────────
+    | { kind: RouterErrorKind.MethodLimit; message: string; method: string; suggestion: string }
+    | { kind: RouterErrorKind.MethodEmpty; message: string; suggestion: string }
+    | { kind: RouterErrorKind.MethodInvalidToken; message: string; method: string; suggestion: string }
+    | { kind: RouterErrorKind.PathMissingLeadingSlash; message: string; suggestion: string }
+    | { kind: RouterErrorKind.PathMalformedPercent; message: string; suggestion: string }
+    | { kind: RouterErrorKind.PathInvalidPchar; message: string; segment: string; suggestion: string }
+    | { kind: RouterErrorKind.PathControlChar; message: string; suggestion: string }
+    | { kind: RouterErrorKind.PathInvalidUtf8; message: string; suggestion: string }
   );
 
-// ── Match output types ──
+// ── Match output ──
 
-// Public API surface a built router exposes. Match/allowedMethods accept any
-// HTTP method token as the method argument; the runtime token gate handles
-// validation. `build()` runs one synchronous `Bun.gc(true)` to drop the
-// transient build heap and lets libpas's scavenger return the freed pages
-// to the OS asynchronously — no `compactMemory` lever is exposed.
 export interface RouterPublicApi<T> {
   add(method: string | readonly string[], path: string, value: T): void;
   addAll(entries: ReadonlyArray<readonly [string, string, T]>): void;
@@ -121,49 +131,21 @@ export interface RouterPublicApi<T> {
   allowedMethods(path: string): readonly string[];
 }
 
-/**
- * 매칭 메타 정보.
- * 디버깅/모니터링 용도로 매칭 소스를 알려준다.
- */
 export interface MatchMeta {
-  readonly source: 'static' | 'cache' | 'dynamic';
+  readonly source: MatchSource;
 }
 
-/**
- * match() 성공 시 반환되는 결과.
- * add() 시 등록한 값(T)과 파라미터, 메타 정보를 포함한다.
- */
 export interface MatchOutput<T> {
-  /** add() 시 등록한 값 그대로 */
   value: T;
-  /** 추출된 경로 파라미터 */
   params: RouteParams;
-  /** 매칭 메타 정보 */
   meta: MatchMeta;
 }
 
-/**
- * Hot-path match state. Shared across `allowedMethods()` lookups,
- * pre-allocated per Router instance for the match() hot path.
- */
 export interface MatchState {
-  /** Index of the matched handler. -1 if no match. */
   handlerIndex: number;
-  /** Current count of matched parameters. */
   paramCount: number;
-  /** Flat buffer for [start, end] index pairs of matched parameters. */
   paramOffsets: Int32Array;
 }
 
-/**
- * Hot-path match function: writes paramOffsets/handlerIndex into `state`.
- * Returns true on match, false otherwise.
- */
 export type MatchFn = (url: string, state: MatchState) => boolean;
-
-/**
- * URL-segment decoder. Throws when `decodeURIComponent` would throw —
- * malformed percent escapes are the caller's (HTTP server boundary)
- * responsibility, not the router's.
- */
 export type DecoderFn = (raw: string) => string;

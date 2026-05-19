@@ -7,8 +7,11 @@ import { isErr } from '@zipbul/result';
 import { describe, expect, it } from 'bun:test';
 
 import type { PathPart } from '../tree';
+import type { CommitPlan, RouteMeta } from './wildcard-prefix-index';
 
-import { WildcardPrefixIndex, rollbackPlan, type CommitPlan, type RouteMeta } from './wildcard-prefix-index';
+import { PathPartType, WildcardOrigin } from '../tree';
+import { RouterErrorKind } from '../types';
+import { WildcardPrefixIndex, rollbackPlan } from './wildcard-prefix-index';
 
 let nextHandlerId = 0;
 
@@ -22,14 +25,14 @@ function meta(method: string, path: string, isOptionalExpansion = false): RouteM
   };
 }
 
-const STATIC_USERS: PathPart = { type: 'static', value: '/users', segments: ['users'] };
-const STATIC_X: PathPart = { type: 'static', value: '/x', segments: ['x'] };
-const STATIC_FILES: PathPart = { type: 'static', value: '/files', segments: ['files'] };
-const PARAM_ID: PathPart = { type: 'param', name: 'id', pattern: null, optional: false };
-const PARAM_SLUG: PathPart = { type: 'param', name: 'slug', pattern: null, optional: false };
-const PARAM_DIGITS: PathPart = { type: 'param', name: 'id', pattern: '\\d+', optional: false };
-const PARAM_LETTERS: PathPart = { type: 'param', name: 'id', pattern: '[a-z]+', optional: false };
-const WILDCARD_TAIL: PathPart = { type: 'wildcard', name: 'rest', origin: 'star' };
+const STATIC_USERS: PathPart = { type: PathPartType.Static, value: '/users', segments: ['users'] };
+const STATIC_X: PathPart = { type: PathPartType.Static, value: '/x', segments: ['x'] };
+const STATIC_FILES: PathPart = { type: PathPartType.Static, value: '/files', segments: ['files'] };
+const PARAM_ID: PathPart = { type: PathPartType.Param, name: 'id', pattern: null, optional: false };
+const PARAM_SLUG: PathPart = { type: PathPartType.Param, name: 'slug', pattern: null, optional: false };
+const PARAM_DIGITS: PathPart = { type: PathPartType.Param, name: 'id', pattern: '\\d+', optional: false };
+const PARAM_LETTERS: PathPart = { type: PathPartType.Param, name: 'id', pattern: '[a-z]+', optional: false };
+const WILDCARD_TAIL: PathPart = { type: PathPartType.Wildcard, name: 'rest', origin: WildcardOrigin.Star };
 
 describe('planAndCommit — successful commits', () => {
   it('commits a single static route and returns a CommitPlan', () => {
@@ -76,7 +79,7 @@ describe('planAndCommit — conflict rejections', () => {
     const result = idx.planAndCommit(0, [STATIC_FILES, STATIC_X], meta('GET', '/files/x'));
     expect(isErr(result)).toBe(true);
     if (isErr(result)) {
-      expect(result.data.kind).toBe('route-unreachable');
+      expect(result.data.kind).toBe(RouterErrorKind.RouteUnreachable);
     }
   });
 
@@ -86,7 +89,7 @@ describe('planAndCommit — conflict rejections', () => {
     const result = idx.planAndCommit(0, [STATIC_USERS, PARAM_SLUG], meta('GET', '/users/:slug'));
     expect(isErr(result)).toBe(true);
     if (isErr(result)) {
-      expect(result.data.kind).toBe('route-duplicate');
+      expect(result.data.kind).toBe(RouterErrorKind.RouteDuplicate);
     }
   });
 
@@ -96,7 +99,7 @@ describe('planAndCommit — conflict rejections', () => {
     const result = idx.planAndCommit(0, [STATIC_USERS, PARAM_SLUG], meta('GET', '/users/:slug'));
     expect(isErr(result)).toBe(true);
     if (isErr(result)) {
-      expect(result.data.kind).toBe('route-conflict');
+      expect(result.data.kind).toBe(RouterErrorKind.RouteConflict);
     }
   });
 
@@ -106,7 +109,7 @@ describe('planAndCommit — conflict rejections', () => {
     const result = idx.planAndCommit(0, [STATIC_USERS, PARAM_LETTERS], meta('GET', '/users/:id([a-z]+)'));
     expect(isErr(result)).toBe(true);
     if (isErr(result)) {
-      expect(result.data.kind).toBe('route-conflict');
+      expect(result.data.kind).toBe(RouterErrorKind.RouteConflict);
     }
   });
 
@@ -116,7 +119,7 @@ describe('planAndCommit — conflict rejections', () => {
     const result = idx.planAndCommit(0, [STATIC_USERS], meta('GET', '/users'));
     expect(isErr(result)).toBe(true);
     if (isErr(result)) {
-      expect(result.data.kind).toBe('route-duplicate');
+      expect(result.data.kind).toBe(RouterErrorKind.RouteDuplicate);
     }
   });
 
@@ -126,7 +129,7 @@ describe('planAndCommit — conflict rejections', () => {
     const result = idx.planAndCommit(0, [STATIC_FILES, WILDCARD_TAIL], meta('GET', '/files/*rest'));
     expect(isErr(result)).toBe(true);
     if (isErr(result)) {
-      expect(result.data.kind).toBe('route-unreachable');
+      expect(result.data.kind).toBe(RouterErrorKind.RouteUnreachable);
     }
   });
 });

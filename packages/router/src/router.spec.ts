@@ -5,6 +5,7 @@ import type { RouterOptions } from './types';
 import { catchRouterError } from '../test/test-utils';
 import { RouterError } from './error';
 import { Router, validateCacheSize } from './router';
+import { MatchSource, RouterErrorKind, TrailingSlash } from './types';
 
 // ── Fixtures ──
 
@@ -90,7 +91,7 @@ describe('Router', () => {
       expect(result).not.toBeNull();
       expect(result!.value).toBe(42);
       expect(result!.params).toEqual({});
-      expect(result!.meta.source).toBe('static');
+      expect(result!.meta.source).toBe(MatchSource.Static);
     });
 
     it('should match a dynamic param route after build', () => {
@@ -100,7 +101,7 @@ describe('Router', () => {
       expect(result).not.toBeNull();
       expect(result!.value).toBe(10);
       expect(result!.params.id).toBe('123');
-      expect(result!.meta.source).toBe('dynamic');
+      expect(result!.meta.source).toBe(MatchSource.Dynamic);
     });
 
     it('should return null for unregistered path', () => {
@@ -129,7 +130,7 @@ describe('Router', () => {
       const cached = r.match('GET', '/users/1'); // second → cache
 
       expect(cached).not.toBeNull();
-      expect(cached!.meta.source).toBe('cache');
+      expect(cached!.meta.source).toBe(MatchSource.Cache);
     });
 
     it('should return null consistently for dynamic miss with cache', () => {
@@ -150,14 +151,14 @@ describe('Router', () => {
       const r = buildWith([['GET', '/x', 1]]);
       const e = catchRouterError(() => r.add('GET', '/y', 2));
 
-      expect(e.data.kind).toBe('router-sealed');
+      expect(e.data.kind).toBe(RouterErrorKind.RouterSealed);
     });
 
     it('should throw RouterError(router-sealed) when addAll() after build', () => {
       const r = buildWith([['GET', '/x', 1]]);
       const e = catchRouterError(() => r.addAll([['GET', '/y', 2]]));
 
-      expect(e.data.kind).toBe('router-sealed');
+      expect(e.data.kind).toBe(RouterErrorKind.RouterSealed);
     });
 
     it('should return null when match() called before build', () => {
@@ -183,10 +184,10 @@ describe('Router', () => {
       ]);
 
       const e = catchRouterError(() => r.build());
-      expect(e.data.kind).toBe('route-validation');
-      if (e.data.kind === 'route-validation') {
+      expect(e.data.kind).toBe(RouterErrorKind.RouteValidation);
+      if (e.data.kind === RouterErrorKind.RouteValidation) {
         expect(e.data.errors[0]?.index).toBe(2);
-        expect(e.data.errors[0]?.error.kind).toBe('route-duplicate');
+        expect(e.data.errors[0]?.error.kind).toBe(RouterErrorKind.RouteDuplicate);
       }
     });
 
@@ -196,9 +197,11 @@ describe('Router', () => {
       r.add(['GET', 'POST'], '/x', 2);
 
       const e = catchRouterError(() => r.build());
-      expect(e.data.kind).toBe('route-validation');
-      if (e.data.kind === 'route-validation') {
-        expect(e.data.errors.some(issue => issue.method === 'GET' && issue.error.kind === 'route-duplicate')).toBe(true);
+      expect(e.data.kind).toBe(RouterErrorKind.RouteValidation);
+      if (e.data.kind === RouterErrorKind.RouteValidation) {
+        expect(e.data.errors.some(issue => issue.method === 'GET' && issue.error.kind === RouterErrorKind.RouteDuplicate)).toBe(
+          true,
+        );
       }
     });
   });
@@ -240,7 +243,7 @@ describe('Router', () => {
       // add should throw
       const e = catchRouterError(() => r.add('POST', '/b', 2));
 
-      expect(e.data.kind).toBe('router-sealed');
+      expect(e.data.kind).toBe(RouterErrorKind.RouterSealed);
 
       // match should work
       const matchResult = r.match('GET', '/a');
@@ -250,7 +253,7 @@ describe('Router', () => {
     });
 
     it('should apply combined preNormalize (caseSensitive:false + ignoreTrailingSlash)', () => {
-      const r = buildWith([['GET', '/users', 1]], { pathCaseSensitive: false, trailingSlash: 'ignore' });
+      const r = buildWith([['GET', '/users', 1]], { pathCaseSensitive: false, trailingSlash: TrailingSlash.Ignore });
 
       // Trailing slash + uppercase → both normalized
       const result = r.match('GET', '/Users/');
@@ -313,7 +316,7 @@ describe('Router', () => {
       const cached = r.match('GET', '/items/42'); // reads from cache
 
       expect(cached).not.toBeNull();
-      expect(cached!.meta.source).toBe('cache');
+      expect(cached!.meta.source).toBe(MatchSource.Cache);
     });
 
     it('should return null consistently on dynamic miss', () => {
@@ -379,8 +382,8 @@ describe('Router', () => {
       expect(first).not.toBeNull();
       expect(second).not.toBeNull();
       expect(first!.value).toBe(second!.value);
-      expect(first!.meta.source).toBe('static');
-      expect(second!.meta.source).toBe('static');
+      expect(first!.meta.source).toBe(MatchSource.Static);
+      expect(second!.meta.source).toBe(MatchSource.Static);
     });
   });
 
@@ -397,7 +400,7 @@ describe('Router', () => {
 
       expect(result).not.toBeNull();
       expect(result!.value).toBe('static-me');
-      expect(result!.meta.source).toBe('static');
+      expect(result!.meta.source).toBe(MatchSource.Static);
     });
 
     it('should follow match pipeline: static → cache → normalize → dynamic', () => {
@@ -409,23 +412,23 @@ describe('Router', () => {
         {},
       );
 
-      // Static route → source: 'static'
+      // Static route → source: MatchSource.Static
       const staticResult = r.match('GET', '/static');
 
       expect(staticResult).not.toBeNull();
-      expect(staticResult!.meta.source).toBe('static');
+      expect(staticResult!.meta.source).toBe(MatchSource.Static);
 
-      // Dynamic first hit → source: 'dynamic'
+      // Dynamic first hit → source: MatchSource.Dynamic
       const dynamicResult = r.match('GET', '/dynamic/1');
 
       expect(dynamicResult).not.toBeNull();
-      expect(dynamicResult!.meta.source).toBe('dynamic');
+      expect(dynamicResult!.meta.source).toBe(MatchSource.Dynamic);
 
-      // Dynamic second hit → source: 'cache'
+      // Dynamic second hit → source: MatchSource.Cache
       const cachedResult = r.match('GET', '/dynamic/1');
 
       expect(cachedResult).not.toBeNull();
-      expect(cachedResult!.meta.source).toBe('cache');
+      expect(cachedResult!.meta.source).toBe(MatchSource.Cache);
     });
 
     it('should validate all expanded method array entries at build time', () => {
@@ -434,8 +437,8 @@ describe('Router', () => {
       r.add(['GET', 'POST'], '/x', 2);
 
       const e = catchRouterError(() => r.build());
-      expect(e.data.kind).toBe('route-validation');
-      if (e.data.kind === 'route-validation') {
+      expect(e.data.kind).toBe(RouterErrorKind.RouteValidation);
+      if (e.data.kind === RouterErrorKind.RouteValidation) {
         expect(e.data.errors).toHaveLength(1);
         expect(e.data.errors[0]?.method).toBe('GET');
       }
@@ -477,6 +480,6 @@ describe('validateCacheSize', () => {
 
   it('attaches kind=router-options-invalid to the thrown error', () => {
     const err = catchRouterError(() => validateCacheSize(-1));
-    expect(err.data.kind).toBe('router-options-invalid');
+    expect(err.data.kind).toBe(RouterErrorKind.RouterOptionsInvalid);
   });
 });

@@ -1,6 +1,7 @@
+import type { SegmentNode } from '../../tree';
 import type { DecoderFn, MatchFn, MatchState } from '../../types';
 
-import { TESTER_PASS, type SegmentNode } from '../../tree';
+import { TESTER_PASS, WildcardOrigin } from '../../tree';
 
 /**
  * Single-pass, allocation-free walker for trees without ambiguous nodes
@@ -73,7 +74,7 @@ export function createIterativeWalker(root: SegmentNode, decoder: DecoderFn): Ma
       }
 
       if (node.wildcardStore !== null) {
-        if (node.wildcardOrigin === 'multi' && pos >= len) {
+        if (node.wildcardOrigin === WildcardOrigin.Multi && pos >= len) {
           return false;
         }
         const pc = state.paramCount * 2;
@@ -119,7 +120,7 @@ export function matchTerminalAtNode(node: SegmentNode, len: number, state: Match
     state.handlerIndex = node.store;
     return true;
   }
-  if (node.wildcardStore !== null && node.wildcardOrigin === 'star') {
+  if (node.wildcardStore !== null && node.wildcardOrigin === WildcardOrigin.Star) {
     const pc = state.paramCount * 2;
     state.paramOffsets[pc] = len;
     state.paramOffsets[pc + 1] = len;

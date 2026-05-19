@@ -8,7 +8,7 @@ import { describe, expect, it } from 'bun:test';
 
 import type { SegmentNode } from '../tree';
 
-import { createSegmentNode } from '../tree';
+import { WildcardOrigin, createSegmentNode } from '../tree';
 import {
   emitMultiWildcardTerminal,
   emitRootSlashTerminal,
@@ -68,14 +68,14 @@ describe('emitMultiWildcardTerminal', () => {
 
 describe('emitWildcardStore', () => {
   it('emits the inclusive `<= len` guard for star-origin wildcards', () => {
-    const node: SegmentNode = { ...createSegmentNode(), wildcardStore: 4, wildcardOrigin: 'star' };
+    const node: SegmentNode = { ...createSegmentNode(), wildcardStore: 4, wildcardOrigin: WildcardOrigin.Star };
     const out = emitWildcardStore(emptyCtx(), node, 'pos0');
     expect(out).toContain('pos0 <= len');
     expect(out).toContain('state.handlerIndex = 4');
   });
 
   it('emits the exclusive `< len` guard for multi-origin wildcards', () => {
-    const node: SegmentNode = { ...createSegmentNode(), wildcardStore: 8, wildcardOrigin: 'multi' };
+    const node: SegmentNode = { ...createSegmentNode(), wildcardStore: 8, wildcardOrigin: WildcardOrigin.Multi };
     const out = emitWildcardStore(emptyCtx(), node, 'pos0');
     expect(out).toContain('pos0 < len');
     expect(out).not.toContain('pos0 <= len');
@@ -94,7 +94,7 @@ describe('emitRootSlashTerminal', () => {
   it('emits a star-wildcard capture when root has only a wildcard star', () => {
     const root = createSegmentNode();
     root.wildcardStore = 9;
-    root.wildcardOrigin = 'star';
+    root.wildcardOrigin = WildcardOrigin.Star;
     const out = emitRootSlashTerminal(root);
     expect(out).toContain('state.paramOffsets[0] = 1');
     expect(out).toContain('state.paramOffsets[1] = 1');

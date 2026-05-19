@@ -5,8 +5,10 @@
  */
 import { describe, expect, it } from 'bun:test';
 
+import type { SegmentNode } from './segment-tree';
+
 import { detectTenantFactor, getTenantFactor, setTenantFactor } from './factor-detect';
-import { createSegmentNode, type SegmentNode } from './segment-tree';
+import { createSegmentNode } from './segment-tree';
 
 function leafWithStore(store: number): SegmentNode {
   const node = createSegmentNode();

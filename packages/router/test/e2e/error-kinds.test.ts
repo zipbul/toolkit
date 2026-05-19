@@ -4,10 +4,11 @@
  */
 import { describe, it, expect } from 'bun:test';
 
-import type { RouterErrorData, RouterErrorKind } from '../../src/types';
+import type { RouterErrorData } from '../../src/types';
 
 import { RouterError } from '../../src/error';
 import { Router } from '../../src/router';
+import { RouterErrorKind } from '../../src/types';
 
 function expectKindOnAdd(fn: () => void, kind: RouterErrorKind): void {
   try {
@@ -28,7 +29,7 @@ function expectKindOnBuild(register: (r: Router<string>) => void, kind: RouterEr
   } catch (e) {
     expect(e).toBeInstanceOf(RouterError);
     const err = e as RouterError;
-    if (err.data.kind === 'route-validation') {
+    if (err.data.kind === RouterErrorKind.RouteValidation) {
       const inner = err.data.errors[0]!.error;
       expect(inner.kind as string).toBe(kind);
       return inner;
@@ -40,108 +41,108 @@ function expectKindOnBuild(register: (r: Router<string>) => void, kind: RouterEr
 }
 
 describe('RouterErrorKind reproducers (full coverage of 22 kinds)', () => {
-  it('router-sealed', () => {
+  it(RouterErrorKind.RouterSealed, () => {
     const r = new Router<string>();
     r.build();
-    expectKindOnAdd(() => r.add('GET', '/x', 'v'), 'router-sealed');
+    expectKindOnAdd(() => r.add('GET', '/x', 'v'), RouterErrorKind.RouterSealed);
   });
 
-  it('method-empty', () => {
-    expectKindOnBuild(r => r.add('', '/x', 'v'), 'method-empty');
+  it(RouterErrorKind.MethodEmpty, () => {
+    expectKindOnBuild(r => r.add('', '/x', 'v'), RouterErrorKind.MethodEmpty);
   });
 
-  it('method-invalid-token', () => {
-    expectKindOnBuild(r => r.add('GET ', '/x', 'v'), 'method-invalid-token');
+  it(RouterErrorKind.MethodInvalidToken, () => {
+    expectKindOnBuild(r => r.add('GET ', '/x', 'v'), RouterErrorKind.MethodInvalidToken);
   });
 
-  it('method-limit', () => {
+  it(RouterErrorKind.MethodLimit, () => {
     expectKindOnBuild(r => {
       for (let i = 0; i < 40; i++) {
         r.add(`M${i.toString().padStart(2, '0')}`, '/x', `v-${i}`);
       }
-    }, 'method-limit');
+    }, RouterErrorKind.MethodLimit);
   });
 
-  it('path-missing-leading-slash', () => {
-    expectKindOnBuild(r => r.add('GET', 'no-slash', 'v'), 'path-missing-leading-slash');
+  it(RouterErrorKind.PathMissingLeadingSlash, () => {
+    expectKindOnBuild(r => r.add('GET', 'no-slash', 'v'), RouterErrorKind.PathMissingLeadingSlash);
   });
 
-  it('path-query', () => {
-    expectKindOnBuild(r => r.add('GET', '/foo?bar', 'v'), 'path-query');
+  it(RouterErrorKind.PathQuery, () => {
+    expectKindOnBuild(r => r.add('GET', '/foo?bar', 'v'), RouterErrorKind.PathQuery);
   });
 
-  it('path-fragment', () => {
-    expectKindOnBuild(r => r.add('GET', '/foo#frag', 'v'), 'path-fragment');
+  it(RouterErrorKind.PathFragment, () => {
+    expectKindOnBuild(r => r.add('GET', '/foo#frag', 'v'), RouterErrorKind.PathFragment);
   });
 
-  it('path-control-char', () => {
-    expectKindOnBuild(r => r.add('GET', '/foobar', 'v'), 'path-control-char');
+  it(RouterErrorKind.PathControlChar, () => {
+    expectKindOnBuild(r => r.add('GET', '/foobar', 'v'), RouterErrorKind.PathControlChar);
   });
 
-  it('path-invalid-pchar', () => {
+  it(RouterErrorKind.PathInvalidPchar, () => {
     // backslash is outside the pchar table
-    expectKindOnBuild(r => r.add('GET', '/foo\\bar', 'v'), 'path-invalid-pchar');
+    expectKindOnBuild(r => r.add('GET', '/foo\\bar', 'v'), RouterErrorKind.PathInvalidPchar);
   });
 
-  it('path-malformed-percent', () => {
-    expectKindOnBuild(r => r.add('GET', '/foo%G0bar', 'v'), 'path-malformed-percent');
+  it(RouterErrorKind.PathMalformedPercent, () => {
+    expectKindOnBuild(r => r.add('GET', '/foo%G0bar', 'v'), RouterErrorKind.PathMalformedPercent);
   });
 
-  it('path-encoded-slash', () => {
-    expectKindOnBuild(r => r.add('GET', '/foo/%2F/bar', 'v'), 'path-encoded-slash');
+  it(RouterErrorKind.PathEncodedSlash, () => {
+    expectKindOnBuild(r => r.add('GET', '/foo/%2F/bar', 'v'), RouterErrorKind.PathEncodedSlash);
   });
 
-  it('path-dot-segment', () => {
-    expectKindOnBuild(r => r.add('GET', '/foo/../bar', 'v'), 'path-dot-segment');
+  it(RouterErrorKind.PathDotSegment, () => {
+    expectKindOnBuild(r => r.add('GET', '/foo/../bar', 'v'), RouterErrorKind.PathDotSegment);
   });
 
-  it('path-empty-segment', () => {
-    expectKindOnBuild(r => r.add('GET', '/foo//bar', 'v'), 'path-empty-segment');
+  it(RouterErrorKind.PathEmptySegment, () => {
+    expectKindOnBuild(r => r.add('GET', '/foo//bar', 'v'), RouterErrorKind.PathEmptySegment);
   });
 
   it('route-parse (unclosed regex)', () => {
-    expectKindOnBuild(r => r.add('GET', '/users/:id(\\d+', 'v'), 'route-parse');
+    expectKindOnBuild(r => r.add('GET', '/users/:id(\\d+', 'v'), RouterErrorKind.RouteParse);
   });
 
   it('route-parse (optional cap)', () => {
     expectKindOnBuild(r => {
       const path = '/' + Array.from({ length: 5 }, (_, i) => `:p${i}?`).join('/');
       r.add('GET', path, 'v');
-    }, 'route-parse');
+    }, RouterErrorKind.RouteParse);
   });
 
   it('route-parse (31-capture cap)', () => {
     expectKindOnBuild(r => {
       const path = '/' + Array.from({ length: 32 }, (_, i) => `:p${i}`).join('/');
       r.add('GET', path, 'v');
-    }, 'route-parse');
+    }, RouterErrorKind.RouteParse);
   });
 
-  it('param-duplicate', () => {
-    expectKindOnBuild(r => r.add('GET', '/users/:id/:id', 'v'), 'param-duplicate');
+  it(RouterErrorKind.ParamDuplicate, () => {
+    expectKindOnBuild(r => r.add('GET', '/users/:id/:id', 'v'), RouterErrorKind.ParamDuplicate);
   });
 
-  it('route-duplicate', () => {
+  it(RouterErrorKind.RouteDuplicate, () => {
     expectKindOnBuild(r => {
       r.add('GET', '/x', 'a');
       r.add('GET', '/x', 'b');
-    }, 'route-duplicate');
+    }, RouterErrorKind.RouteDuplicate);
   });
 
-  it('route-conflict', () => {
+  it(RouterErrorKind.RouteConflict, () => {
     // Sibling regex constraints conflict at the same position
     expectKindOnBuild(r => {
       r.add('GET', '/users/:id(\\d+)', 'a');
       r.add('GET', '/users/:slug([a-z]+)', 'b');
-    }, 'route-conflict');
+    }, RouterErrorKind.RouteConflict);
   });
 
-  it('route-unreachable', () => {
+  it(RouterErrorKind.RouteUnreachable, () => {
     // Wildcard already accepts everything beneath /users — adding a
     // descendant is unreachable.
     expectKindOnBuild(r => {
       r.add('GET', '/users/*tail', 'a');
       r.add('GET', '/users/me', 'b');
-    }, 'route-unreachable');
+    }, RouterErrorKind.RouteUnreachable);
   });
 });

@@ -2,6 +2,8 @@ import { describe, it, expect } from 'bun:test';
 
 import type { PathPart } from '../tree';
 
+import { PathPartType } from '../tree';
+import { OptionalParamBehavior } from '../types';
 import { OptionalParamDefaults } from './optional-param-defaults';
 import {
   countOptionalSegments,
@@ -13,7 +15,7 @@ import {
 } from './route-expand';
 
 const param = (name: string, optional = false): PathPart => ({
-  type: 'param',
+  type: PathPartType.Param,
   name,
   pattern: null,
   optional,
@@ -22,14 +24,14 @@ const param = (name: string, optional = false): PathPart => ({
 const staticPart = (value: string): PathPart => {
   const body = value.length > 1 ? value.slice(1) : '';
   const segments = body === '' ? [] : body.split('/');
-  return { type: 'static', value, segments };
+  return { type: PathPartType.Static, value, segments };
 };
 
 describe('expandOptional', () => {
   describe('collectOptionalIndices (path with no optionals)', () => {
     it('should pass parts through unchanged', () => {
       const parts: PathPart[] = [staticPart('/users/'), param('id')];
-      const defaults = new OptionalParamDefaults('set-undefined');
+      const defaults = new OptionalParamDefaults(OptionalParamBehavior.SetUndefined);
 
       const result = expandOptional(parts, 7, defaults);
 
@@ -41,7 +43,7 @@ describe('expandOptional', () => {
   describe('enumerateExpansions', () => {
     it('should produce 2^N variants for N optionals', () => {
       const parts: PathPart[] = [staticPart('/'), param('a', true), staticPart('/'), param('b', true)];
-      const defaults = new OptionalParamDefaults('set-undefined');
+      const defaults = new OptionalParamDefaults(OptionalParamBehavior.SetUndefined);
 
       const result = expandOptional(parts, 0, defaults);
 
@@ -50,7 +52,7 @@ describe('expandOptional', () => {
 
     it('should keep the mid-position N=1 i18n shape to exactly 2 variants', () => {
       const parts: PathPart[] = [staticPart('/'), param('lang', true), staticPart('/posts')];
-      const defaults = new OptionalParamDefaults('set-undefined');
+      const defaults = new OptionalParamDefaults(OptionalParamBehavior.SetUndefined);
 
       const result = expandOptional(parts, 0, defaults);
 
@@ -75,7 +77,7 @@ describe('expandOptional', () => {
 
     it('should record omitted-param names against defaults for matcher fill-in', () => {
       const parts: PathPart[] = [staticPart('/'), param('lang', true), staticPart('/'), param('region', true)];
-      const defaults = new OptionalParamDefaults('set-undefined');
+      const defaults = new OptionalParamDefaults(OptionalParamBehavior.SetUndefined);
 
       expandOptional(parts, 42, defaults);
 
@@ -84,12 +86,12 @@ describe('expandOptional', () => {
 
     it('should mark optionals as required (optional=false) inside each variant for insertion', () => {
       const parts: PathPart[] = [staticPart('/'), param('id', true)];
-      const defaults = new OptionalParamDefaults('set-undefined');
+      const defaults = new OptionalParamDefaults(OptionalParamBehavior.SetUndefined);
 
       const result = expandOptional(parts, 0, defaults);
 
       const fullVariant = result[0]!;
-      const idPart = fullVariant.parts.find((p: PathPart) => p.type === 'param' && p.name === 'id');
+      const idPart = fullVariant.parts.find((p: PathPart) => p.type === PathPartType.Param && p.name === 'id');
       expect(idPart).toBeDefined();
       expect((idPart as { optional: boolean }).optional).toBe(false);
     });
@@ -99,24 +101,24 @@ describe('expandOptional', () => {
     it('should trim trailing slash of preceding static when optional is dropped', () => {
       // `/users/:id?` with `:id` dropped should yield `/users`, not `/users/`.
       const parts: PathPart[] = [staticPart('/users/'), param('id', true)];
-      const defaults = new OptionalParamDefaults('set-undefined');
+      const defaults = new OptionalParamDefaults(OptionalParamBehavior.SetUndefined);
 
       const result = expandOptional(parts, 0, defaults);
 
       // Variant 0: full path. Variant 1: dropped optional.
       const dropped = result[1]!.parts;
-      expect(dropped).toEqual([{ type: 'static', value: '/users', segments: ['users'] }]);
+      expect(dropped).toEqual([{ type: PathPartType.Static, value: '/users', segments: ['users'] }]);
     });
 
     it('should pop the static entirely when trim leaves an empty value', () => {
       // `/:id?` with `:id` dropped — preceding static is `/` which trims to ''.
       const parts: PathPart[] = [staticPart('/'), param('id', true)];
-      const defaults = new OptionalParamDefaults('set-undefined');
+      const defaults = new OptionalParamDefaults(OptionalParamBehavior.SetUndefined);
 
       const result = expandOptional(parts, 0, defaults);
 
       // Falls back to the empty-result `/` recovery path.
-      expect(result[1]!.parts).toEqual([{ type: 'static', value: '/', segments: [] }]);
+      expect(result[1]!.parts).toEqual([{ type: PathPartType.Static, value: '/', segments: [] }]);
     });
   });
 
@@ -124,12 +126,12 @@ describe('expandOptional', () => {
     it('should collapse `//` produced by joining two static parts', () => {
       // `/a/:x?/b` with `:x` dropped: parts become `/a/` + `/b` → `/a//b` → `/a/b`.
       const parts: PathPart[] = [staticPart('/a/'), param('x', true), staticPart('/b')];
-      const defaults = new OptionalParamDefaults('set-undefined');
+      const defaults = new OptionalParamDefaults(OptionalParamBehavior.SetUndefined);
 
       const result = expandOptional(parts, 0, defaults);
 
       const dropped = result[1]!.parts;
-      expect(dropped).toEqual([{ type: 'static', value: '/a/b', segments: ['a', 'b'] }]);
+      expect(dropped).toEqual([{ type: PathPartType.Static, value: '/a/b', segments: ['a', 'b'] }]);
     });
   });
 });
@@ -160,48 +162,48 @@ describe('trimTrailingSlashOnDrop', () => {
   });
 
   it('peels a single trailing slash from the last static segment', () => {
-    const xs: PathPart[] = [{ type: 'static', value: '/users/', segments: ['users', ''] }];
+    const xs: PathPart[] = [{ type: PathPartType.Static, value: '/users/', segments: ['users', ''] }];
     trimTrailingSlashOnDrop(xs);
-    expect(xs[0]).toMatchObject({ type: 'static', value: '/users' });
+    expect(xs[0]).toMatchObject({ type: PathPartType.Static, value: '/users' });
   });
 
   it('removes the segment entirely when trimming would leave only the leading slash', () => {
-    const xs: PathPart[] = [{ type: 'static', value: '/', segments: [''] }];
+    const xs: PathPart[] = [{ type: PathPartType.Static, value: '/', segments: [''] }];
     trimTrailingSlashOnDrop(xs);
     expect(xs).toEqual([]);
   });
 
   it('leaves non-trailing-slash statics alone', () => {
-    const xs: PathPart[] = [{ type: 'static', value: '/users', segments: ['users'] }];
+    const xs: PathPart[] = [{ type: PathPartType.Static, value: '/users', segments: ['users'] }];
     trimTrailingSlashOnDrop(xs);
-    expect(xs[0]).toMatchObject({ type: 'static', value: '/users' });
+    expect(xs[0]).toMatchObject({ type: PathPartType.Static, value: '/users' });
   });
 
   it('does not touch a non-static last entry', () => {
-    const xs: PathPart[] = [{ type: 'param', name: 'id', pattern: null, optional: false }];
+    const xs: PathPart[] = [{ type: PathPartType.Param, name: 'id', pattern: null, optional: false }];
     trimTrailingSlashOnDrop(xs);
-    expect(xs[0]).toMatchObject({ type: 'param', name: 'id' });
+    expect(xs[0]).toMatchObject({ type: PathPartType.Param, name: 'id' });
   });
 });
 
 describe('filterDroppedSegments', () => {
   it('returns the input shape with optional flags flipped to required when no drops', () => {
     const parts: PathPart[] = [
-      { type: 'static', value: '/users', segments: ['users'] },
-      { type: 'param', name: 'id', pattern: null, optional: true },
+      { type: PathPartType.Static, value: '/users', segments: ['users'] },
+      { type: PathPartType.Param, name: 'id', pattern: null, optional: true },
     ];
     const filtered = filterDroppedSegments(parts, [1], 0);
     expect(filtered).toHaveLength(2);
-    expect(filtered[1]).toMatchObject({ type: 'param', name: 'id', optional: false });
+    expect(filtered[1]).toMatchObject({ type: PathPartType.Param, name: 'id', optional: false });
   });
 
   it('drops the indicated optional and trims trailing slash on the prior static', () => {
     const parts: PathPart[] = [
-      { type: 'static', value: '/users/', segments: ['users', ''] },
-      { type: 'param', name: 'id', pattern: null, optional: true },
+      { type: PathPartType.Static, value: '/users/', segments: ['users', ''] },
+      { type: PathPartType.Param, name: 'id', pattern: null, optional: true },
     ];
     const filtered = filterDroppedSegments(parts, [1], 0b1);
     expect(filtered).toHaveLength(1);
-    expect(filtered[0]).toMatchObject({ type: 'static', value: '/users' });
+    expect(filtered[0]).toMatchObject({ type: PathPartType.Static, value: '/users' });
   });
 });

@@ -2,10 +2,13 @@ import type { Result } from '@zipbul/result';
 
 import { err, isErr } from '@zipbul/result';
 
-import type { RouterErrorData, RouteParams, RouteValidationIssue } from '../types';
+import type { FactoryCache } from '../codegen';
+import type { PathPart, PatternTesterFn, SegmentNode, SegmentTreeUndoLog } from '../tree';
+import type { RouteParams, RouteValidationIssue, RouterErrorData } from '../types';
+import type { RouteMeta, CommitPlan } from './wildcard-prefix-index';
 
 import { OptionalParamDefaults, PathParser, expandOptional, MAX_OPTIONAL_SEGMENTS_PER_ROUTE } from '../builder';
-import { computePresentBitmask, createFactoryCache, getOrCreateSuperFactory, type FactoryCache } from '../codegen';
+import { computePresentBitmask, createFactoryCache, getOrCreateSuperFactory } from '../codegen';
 import { RouterError } from '../error';
 import { decoder } from '../matcher';
 import { MethodRegistry } from '../method-registry';
@@ -14,19 +17,17 @@ import {
   createSegmentNode,
   detectTenantFactor,
   insertIntoSegmentTree,
+  PathPartType,
   pushStaticBucketResetUndo,
   pushStaticMapDeleteUndo,
   setTenantFactor,
   UndoKind,
-  type PathPart,
-  type PatternTesterFn,
-  type SegmentNode,
-  type SegmentTreeUndoLog,
 } from '../tree';
+import { OptionalParamBehavior, RouterErrorKind } from '../types';
 import { IdentityRegistry } from './identity-registry';
 import { packTerminalSlab } from './terminal-slab';
 import { WILDCARD_METHOD, expandWildcardMethodRoutes } from './wildcard-method-expand';
-import { WildcardPrefixIndex, rollbackPlan, type RouteMeta, type CommitPlan } from './wildcard-prefix-index';
+import { WildcardPrefixIndex, rollbackPlan } from './wildcard-prefix-index';
 
 /**
  * How many routes to process between full GC + libpas scavenge cycles
@@ -167,7 +168,7 @@ class Registration<T> {
 
   seal(
     options: {
-      optionalParamBehavior?: 'omit' | 'set-undefined';
+      optionalParamBehavior?: 'omit' | OptionalParamBehavior.SetUndefined;
     } = {},
   ): RegistrationSnapshot<T> {
     if (this.snapshot !== null) {
@@ -297,7 +298,7 @@ class Registration<T> {
     this.identityRegistry = null;
 
     throw new RouterError({
-      kind: 'route-validation',
+      kind: RouterErrorKind.RouteValidation,
       message: `${issues.length} route(s) failed validation during build().`,
       errors: issues,
     });
@@ -328,7 +329,7 @@ class Registration<T> {
     }
 
     throw new RouterError({
-      kind: 'router-sealed',
+      kind: RouterErrorKind.RouterSealed,
       message: 'Cannot add routes after build(). The router is sealed.',
       suggestion: 'Create a new Router instance to add more routes',
       ...ctx,
@@ -396,7 +397,7 @@ class Registration<T> {
 
     if (normalized in bucket) {
       return err<RouterErrorData>({
-        kind: 'route-duplicate',
+        kind: RouterErrorKind.RouteDuplicate,
         message: `Route already exists: ${route.method} ${normalized}`,
         path: route.path,
         method: route.method,
@@ -452,7 +453,7 @@ class Registration<T> {
       const insertResult = insertIntoSegmentTree(root, expanded.parts, tIdx, state.testerCache, routeID, undo);
       if (isErr(insertResult)) {
         const data = insertResult.data;
-        if (data.kind === 'route-duplicate') {
+        if (data.kind === RouterErrorKind.RouteDuplicate) {
           data.message = `Route already exists: ${route.method} ${route.path}`;
         }
         return err<RouterErrorData>({ ...data, path: route.path, method: route.method });
@@ -574,13 +575,13 @@ function collectRouteShape(parts: ReadonlyArray<PathPart>): RouteShape {
   const originalTypes: Array<'param' | 'wildcard'> = [];
   let optionalCount = 0;
   for (const p of parts) {
-    if (p.type === 'param') {
+    if (p.type === PathPartType.Param) {
       originalNames.push(p.name);
       originalTypes.push('param');
       if (p.optional) {
         optionalCount++;
       }
-    } else if (p.type === 'wildcard') {
+    } else if (p.type === PathPartType.Wildcard) {
       originalNames.push(p.name);
       originalTypes.push('wildcard');
     }
@@ -594,7 +595,7 @@ function collectRouteShape(parts: ReadonlyArray<PathPart>): RouteShape {
 function checkDynamicRouteCaps(route: { path: string }, shape: RouteShape): RouterErrorData | undefined {
   if (shape.optionalCount > MAX_OPTIONAL_SEGMENTS_PER_ROUTE) {
     return {
-      kind: 'route-parse',
+      kind: RouterErrorKind.RouteParse,
       message: `Route has ${shape.optionalCount} optional segments; maximum is ${MAX_OPTIONAL_SEGMENTS_PER_ROUTE} to cap expansion variants before 2^N growth.`,
       path: route.path,
       suggestion: `Reduce optional segments to ${MAX_OPTIONAL_SEGMENTS_PER_ROUTE} or fewer, or register explicit routes for the rare combinations.`,
@@ -606,7 +607,7 @@ function checkDynamicRouteCaps(route: { path: string }, shape: RouteShape): Rout
   // miscompile, so reject at registration time.
   if (shape.originalNames.length > 31) {
     return {
-      kind: 'route-parse',
+      kind: RouterErrorKind.RouteParse,
       message: `Route has ${shape.originalNames.length} capturing segments; maximum is 31 (Int32 bitmask ceiling).`,
       path: route.path,
       suggestion: 'Reduce the number of :param/*wildcard segments per route.',
@@ -649,9 +650,9 @@ function recordExpansionTerminal<T>(
   decoder: (s: string) => string,
   undo: SegmentTreeUndoLog,
 ): number {
-  const present: Array<{ name: string; type: 'param' | 'wildcard' }> = [];
+  const present: Array<{ name: string; type: PathPartType.Param | 'wildcard' }> = [];
   for (const p of expParts) {
-    if (p.type === 'param' || p.type === 'wildcard') {
+    if (p.type === PathPartType.Param || p.type === PathPartType.Wildcard) {
       present.push({ name: p.name, type: p.type });
     }
   }
@@ -660,7 +661,7 @@ function recordExpansionTerminal<T>(
   }
 
   const tIdx = state.terminalHandlers.length;
-  const isWildcard = expParts.length > 0 && expParts[expParts.length - 1]!.type === 'wildcard';
+  const isWildcard = expParts.length > 0 && expParts[expParts.length - 1]!.type === PathPartType.Wildcard;
   const presentBitmask = computePresentBitmask(shape.originalNames, present);
   const factory =
     present.length > 0 || (!omitBehavior && shape.originalNames.length > 0)

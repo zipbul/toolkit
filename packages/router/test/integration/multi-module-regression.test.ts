@@ -8,6 +8,7 @@ import { describe, it, expect } from 'bun:test';
 
 import { RouterError } from '../../src/error';
 import { Router } from '../../src/router';
+import { RouterErrorKind } from '../../src/types';
 import { firstBuildIssue } from '../test-utils';
 
 describe('subtreeShapesEqual: terminal-store presence (C-03/04/05/06)', () => {
@@ -101,7 +102,7 @@ describe('super-factory presentBitmask boundary (C-01/02)', () => {
     const segs = Array.from({ length: 32 }, (_, i) => `:p${i}`).join('/');
     r.add('GET', `/${segs}`, 'too-wide');
     const issue = firstBuildIssue(r);
-    expect(issue.kind).toBe('route-parse');
+    expect(issue.kind).toBe(RouterErrorKind.RouteParse);
     expect(issue.message).toContain('31');
   });
 });
@@ -227,7 +228,7 @@ describe('cacheSize validation (AUDIT2-009)', () => {
       new Router<string>({ cacheSize: -1 });
     } catch (e) {
       expect(e).toBeInstanceOf(RouterError);
-      expect((e as RouterError).data.kind).toBe('router-options-invalid');
+      expect((e as RouterError).data.kind).toBe(RouterErrorKind.RouterOptionsInvalid);
       return;
     }
     throw new Error('expected throw');
@@ -253,7 +254,7 @@ describe('rollback after route validation failure (R1)', () => {
     };
     const e1 = buildOnce();
     const e2 = buildOnce();
-    if (e1.data.kind !== 'route-validation' || e2.data.kind !== 'route-validation') {
+    if (e1.data.kind !== RouterErrorKind.RouteValidation || e2.data.kind !== RouterErrorKind.RouteValidation) {
       throw new Error('expected route-validation kind');
     }
     expect(e1.data.errors.length).toBe(e2.data.errors.length);

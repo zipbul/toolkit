@@ -6,11 +6,13 @@
 import { describe, expect, it } from 'bun:test';
 
 import type { MatchFn, MatchOutput, RouteParams } from '../types';
+import type { MatchCacheEntry, MatchConfig } from './emitter';
 
 import { RouterCache } from '../cache';
 import { EMPTY_PARAMS, STATIC_META } from '../internal';
 import { createMatchState } from '../matcher/match-state';
-import { compileMatchFn, type MatchCacheEntry, type MatchConfig } from './emitter';
+import { MatchSource } from '../types';
+import { compileMatchFn } from './emitter';
 
 type Cfg<T> = MatchConfig<T>;
 
@@ -96,7 +98,7 @@ describe('compileMatchFn — static-only, single active method', () => {
     const out = match('GET', '/health');
     expect(out).not.toBeNull();
     expect(out!.value).toBe('h');
-    expect(out!.meta.source).toBe('static');
+    expect(out!.meta.source).toBe(MatchSource.Static);
   });
 
   it('returns null on the literal method-compare branch for a different method', () => {
@@ -221,13 +223,13 @@ describe('compileMatchFn — mixed (dynamic walker + cache + slab unpack)', () =
     expect(out).not.toBeNull();
     expect(out!.value).toBe('user');
     expect(out!.params.id).toBe('42');
-    expect(out!.meta.source).toBe('dynamic');
+    expect(out!.meta.source).toBe(MatchSource.Dynamic);
   });
 
   it('returns a cache hit on the second call with the same path', () => {
     const match = compileMatchFn(dynamicCfg());
-    expect(match('GET', '/x/42')!.meta.source).toBe('dynamic');
-    expect(match('GET', '/x/42')!.meta.source).toBe('cache');
+    expect(match('GET', '/x/42')!.meta.source).toBe(MatchSource.Dynamic);
+    expect(match('GET', '/x/42')!.meta.source).toBe(MatchSource.Cache);
   });
 
   it('applies trim-slash normalization before the walker dispatch', () => {

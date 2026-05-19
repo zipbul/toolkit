@@ -16,6 +16,7 @@
 import { describe, it, expect } from 'bun:test';
 
 import { Router, RouterError } from '../../index';
+import { RouterErrorKind } from '../../src/types';
 
 // ── match() tolerates structurally odd but well-formed input ──────────────
 
@@ -203,7 +204,7 @@ describe('state transition errors', () => {
     }
 
     expect(err).toBeInstanceOf(RouterError);
-    expect(err!.data.kind).toBe('router-sealed');
+    expect(err!.data.kind).toBe(RouterErrorKind.RouterSealed);
   });
 
   it('match() before build() returns null (does not throw)', () => {

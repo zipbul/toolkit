@@ -18,6 +18,7 @@ import { describe, it, expect } from 'bun:test';
 
 import { getRouterInternals } from '../../internal';
 import { Router } from '../../src/router';
+import { MatchSource, TrailingSlash } from '../../src/types';
 
 // ── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -77,7 +78,7 @@ describe('iterative walker (wide fanout exceeding codegen size budget)', () => {
   });
 
   it('returns null for trailing-slash on terminal param when trailingSlash="strict"', () => {
-    const r = new Router<string>({ trailingSlash: 'strict' });
+    const r = new Router<string>({ trailingSlash: TrailingSlash.Strict });
     for (let i = 0; i < 25; i++) {
       r.add('GET', `/zone${i}/:slug`, `r${i}`);
       r.add('GET', `/zone${i}/:slug/sub/:sub`, `r${i}sub`);
@@ -283,12 +284,12 @@ describe('shape-specialized wildcard matchImpl', () => {
     expect(r.match('GET', '/static/js/app.bundle.js')).toEqual({
       value: 1,
       params: { path: 'js/app.bundle.js' },
-      meta: { source: 'dynamic' },
+      meta: { source: MatchSource.Dynamic },
     });
     expect(r.match('GET', '/files/img/logo.png')).toEqual({
       value: 2,
       params: { filepath: 'img/logo.png' },
-      meta: { source: 'dynamic' },
+      meta: { source: MatchSource.Dynamic },
     });
   });
 

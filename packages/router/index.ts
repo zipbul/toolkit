@@ -3,13 +3,6 @@
 export { Router } from './src/router';
 export { RouterError } from './src/error';
 
-export type {
-  RouterOptions,
-  OptionalParamBehavior,
-  RouteParams,
-  RouterErrorKind,
-  RouterErrorData,
-  RouterPublicApi,
-  MatchMeta,
-  MatchOutput,
-} from './src/types';
+export { MatchSource, OptionalParamBehavior, RouterErrorKind, TrailingSlash } from './src/types';
+
+export type { MatchMeta, MatchOutput, RouteParams, RouterErrorData, RouterOptions, RouterPublicApi } from './src/types';

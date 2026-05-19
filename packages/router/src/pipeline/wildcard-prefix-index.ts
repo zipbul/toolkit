@@ -5,6 +5,9 @@ import { err } from '@zipbul/result';
 import type { PathPart } from '../tree';
 import type { RouterErrorData } from '../types';
 
+import { PathPartType } from '../tree';
+import { RouterErrorKind } from '../types';
+
 interface PrefixTrieNode {
   literalChildren: Record<string, PrefixTrieNode> | null;
   paramChild: PrefixTrieNode | null;
@@ -137,7 +140,7 @@ class WildcardPrefixIndex {
 
     for (let pi = 0; pi < parts.length; pi++) {
       const part = parts[pi]!;
-      if (part.type === 'static') {
+      if (part.type === PathPartType.Static) {
         const segs = part.segments;
         for (let si = 0; si < segs.length; si++) {
           const seg = segs[si]!;
@@ -167,7 +170,7 @@ class WildcardPrefixIndex {
           }
           visited.push(node);
         }
-      } else if (part.type === 'param') {
+      } else if (part.type === PathPartType.Param) {
         if (getWildcardName(node) !== null) {
           return abort(routeUnreachable('ancestor wildcard makes this route unreachable', routeMeta));
         }
@@ -363,7 +366,7 @@ function sameTerminalIdentity(a: RouteMeta, b: RouteMeta): boolean {
 
 function routeDuplicate(meta: RouteMeta): RouterErrorData {
   return {
-    kind: 'route-duplicate',
+    kind: RouterErrorKind.RouteDuplicate,
     message: `Route already exists: ${meta.method} ${meta.path}`,
     path: meta.path,
     method: meta.method,
@@ -380,7 +383,7 @@ function routeConflict(why: string, meta: RouteMeta): RouterErrorData {
   // the caller can echo it without losing context — they are not
   // a pointer to the colliding sibling.
   return {
-    kind: 'route-conflict',
+    kind: RouterErrorKind.RouteConflict,
     message: `${meta.method} ${meta.path}: ${why}`,
     segment: meta.path,
     conflictsWith: 'sibling at the same position',
@@ -449,7 +452,7 @@ function attachTerminal(
 
 function routeUnreachable(why: string, meta: RouteMeta): RouterErrorData {
   return {
-    kind: 'route-unreachable',
+    kind: RouterErrorKind.RouteUnreachable,
     message: `${meta.method} ${meta.path}: ${why}`,
     path: meta.path,
     method: meta.method,

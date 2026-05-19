@@ -9,7 +9,7 @@ import type { PatternTesterFn } from './pattern-tester';
  * memory shape stable (one hidden class per kind) and lets the rollback
  * loop dispatch via a tag instead of a function call.
  */
-export const enum UndoKind {
+export enum UndoKind {
   StaticChildrenInit = 1,
   StaticChildAdd = 2,
   ParamChildSet = 3,

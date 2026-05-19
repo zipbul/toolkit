@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'bun:test';
 
 import { Router } from '../../src/router';
+import { MatchSource } from '../../src/types';
 
 describe('Router<T> cache', () => {
   it("should use cache on second match when cache enabled (source='cache')", () => {
@@ -10,11 +11,11 @@ describe('Router<T> cache', () => {
 
     const first = router.match('GET', '/users/42');
     expect(first).not.toBeNull();
-    expect(first!.meta.source).toBe('dynamic');
+    expect(first!.meta.source).toBe(MatchSource.Dynamic);
 
     const second = router.match('GET', '/users/42');
     expect(second).not.toBeNull();
-    expect(second!.meta.source).toBe('cache');
+    expect(second!.meta.source).toBe(MatchSource.Cache);
     expect(second!.value).toBe('user');
     expect(second!.params.id).toBe('42');
   });
@@ -29,7 +30,7 @@ describe('Router<T> cache', () => {
 
     const third = router.match('GET', '/users/1');
     expect(third).not.toBeNull();
-    expect(third!.meta.source).toBe('dynamic');
+    expect(third!.meta.source).toBe(MatchSource.Dynamic);
   });
 
   it('should cache null on miss and return null from cache on next match', () => {
@@ -76,9 +77,9 @@ describe('Router<T> cache', () => {
 
     expect(get).not.toBeNull();
     expect(post).not.toBeNull();
-    expect(get!.meta.source).toBe('cache');
+    expect(get!.meta.source).toBe(MatchSource.Cache);
     expect(get!.value).toBe('get-user');
-    expect(post!.meta.source).toBe('cache');
+    expect(post!.meta.source).toBe(MatchSource.Cache);
     expect(post!.value).toBe('post-user');
   });
 
@@ -93,8 +94,8 @@ describe('Router<T> cache', () => {
     const cached1 = router.match('GET', '/users/1');
     const cached2 = router.match('GET', '/users/2');
 
-    expect(cached1!.meta.source).toBe('cache');
-    expect(cached2!.meta.source).toBe('cache');
+    expect(cached1!.meta.source).toBe(MatchSource.Cache);
+    expect(cached2!.meta.source).toBe(MatchSource.Cache);
   });
 
   it('should always cache dynamic matches (no toggle option)', () => {
@@ -103,10 +104,10 @@ describe('Router<T> cache', () => {
     router.build();
 
     const first = router.match('GET', '/users/42');
-    expect(first!.meta.source).toBe('dynamic');
+    expect(first!.meta.source).toBe(MatchSource.Dynamic);
 
     const second = router.match('GET', '/users/42');
-    expect(second!.meta.source).toBe('cache');
+    expect(second!.meta.source).toBe(MatchSource.Cache);
   });
 
   it('should never route static lookups through the dynamic cache (static fast-path)', () => {
@@ -120,8 +121,8 @@ describe('Router<T> cache', () => {
     const first = router.match('GET', '/static');
     const second = router.match('GET', '/static');
 
-    expect(first!.meta.source).toBe('static');
-    expect(second!.meta.source).toBe('static');
+    expect(first!.meta.source).toBe(MatchSource.Static);
+    expect(second!.meta.source).toBe(MatchSource.Static);
   });
 
   it('should evict entries via clock-sweep when cache is full', () => {
@@ -134,13 +135,13 @@ describe('Router<T> cache', () => {
     router.match('GET', '/users/3');
 
     const r3 = router.match('GET', '/users/3');
-    expect(r3!.meta.source).toBe('cache');
+    expect(r3!.meta.source).toBe(MatchSource.Cache);
     expect(r3!.params.id).toBe('3');
 
     router.match('GET', '/users/4');
 
     const r4 = router.match('GET', '/users/4');
-    expect(r4!.meta.source).toBe('cache');
+    expect(r4!.meta.source).toBe(MatchSource.Cache);
     expect(r4!.params.id).toBe('4');
   });
 
@@ -157,9 +158,9 @@ describe('Router<T> cache', () => {
     const purgeCached = router.match('PURGE', '/users/1');
 
     expect(getCached!.value).toBe('get-user');
-    expect(getCached!.meta.source).toBe('cache');
+    expect(getCached!.meta.source).toBe(MatchSource.Cache);
     expect(purgeCached!.value).toBe('purge-user');
-    expect(purgeCached!.meta.source).toBe('cache');
+    expect(purgeCached!.meta.source).toBe(MatchSource.Cache);
   });
 
   it('should cache null miss entries independently per method', () => {
@@ -193,7 +194,7 @@ describe('Router<T> cache', () => {
     }
 
     const last = router.match('GET', '/users/9');
-    expect(last!.meta.source).toBe('cache');
+    expect(last!.meta.source).toBe(MatchSource.Cache);
     expect(last!.params.id).toBe('9');
   });
 

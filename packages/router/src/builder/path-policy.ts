@@ -4,6 +4,7 @@ import { err } from '@zipbul/result';
 
 import type { RouterErrorData } from '../types';
 
+import { RouterErrorKind } from '../types';
 import { CC_SLASH } from './constants';
 
 /**
@@ -26,7 +27,7 @@ import { CC_SLASH } from './constants';
 function validatePathChars(path: string): Result<void, RouterErrorData> {
   if (path.length === 0 || path.charCodeAt(0) !== CC_SLASH) {
     return err({
-      kind: 'path-missing-leading-slash',
+      kind: RouterErrorKind.PathMissingLeadingSlash,
       message: `Path must start with '/': ${path}`,
       path,
       suggestion: 'Prefix the route pattern with `/` (e.g. `users` → `/users`).',
@@ -48,7 +49,7 @@ function validatePathChars(path: string): Result<void, RouterErrorData> {
     // Universal byte rules — apply both inside and outside regex groups.
     if ((c >= 0x00 && c <= 0x1f) || c === 0x7f) {
       return err({
-        kind: 'path-control-char',
+        kind: RouterErrorKind.PathControlChar,
         message: `Path must not contain control characters (charCode 0x${c.toString(16).padStart(2, '0')}): ${path}`,
         path,
         suggestion: 'Remove control characters from the route pattern.',
@@ -67,7 +68,7 @@ function validatePathChars(path: string): Result<void, RouterErrorData> {
     if (c === 0x25) {
       if (i + 2 >= len || !isHex(path.charCodeAt(i + 1)) || !isHex(path.charCodeAt(i + 2))) {
         return err({
-          kind: 'path-malformed-percent',
+          kind: RouterErrorKind.PathMalformedPercent,
           message: `Path contains malformed percent-escape: ${path}`,
           path,
           suggestion: 'Every `%` must be followed by exactly two hex digits (0-9, A-F, a-f).',
@@ -87,7 +88,7 @@ function validatePathChars(path: string): Result<void, RouterErrorData> {
         const segEnd = c === CC_SLASH ? i : i + 1;
         if (segEnd > segStart && isDotSegment(path, segStart, segEnd)) {
           return err({
-            kind: 'path-dot-segment',
+            kind: RouterErrorKind.PathDotSegment,
             message: `Path must not contain dot segments '.' or '..' (literal or percent-encoded): ${path}`,
             path,
             suggestion: 'Remove dot segments. Encoded forms `%2e`, `%2E`, `%2e%2e` are also rejected.',
@@ -100,7 +101,7 @@ function validatePathChars(path: string): Result<void, RouterErrorData> {
 
     if (c === 0x23) {
       return err({
-        kind: 'path-fragment',
+        kind: RouterErrorKind.PathFragment,
         message: `Path must not contain raw fragment '#': ${path}`,
         path,
         suggestion: 'Use percent-encoded form `%23` for literal `#`.',
@@ -115,7 +116,7 @@ function validatePathChars(path: string): Result<void, RouterErrorData> {
       const isSegEnd = next === 0 || next === CC_SLASH;
       if (!isIdentChar || !isSegEnd) {
         return err({
-          kind: 'path-query',
+          kind: RouterErrorKind.PathQuery,
           message: `Path must not contain raw query '?' (use \`:name?\` decorator only): ${path}`,
           path,
           suggestion: 'Optional param decorator `?` must follow a param name and end the segment.',
@@ -128,7 +129,7 @@ function validatePathChars(path: string): Result<void, RouterErrorData> {
       if (segEnd > segStart) {
         if (isDotSegment(path, segStart, segEnd)) {
           return err({
-            kind: 'path-dot-segment',
+            kind: RouterErrorKind.PathDotSegment,
             message: `Path must not contain dot segments '.' or '..' (literal or percent-encoded): ${path}`,
             path,
             suggestion: 'Remove dot segments. Encoded forms `%2e`, `%2E`, `%2e%2e` are also rejected.',
@@ -140,7 +141,7 @@ function validatePathChars(path: string): Result<void, RouterErrorData> {
 
     if (!isAcceptablePathChar(c)) {
       return err({
-        kind: 'path-invalid-pchar',
+        kind: RouterErrorKind.PathInvalidPchar,
         message: `Path contains invalid character '${path[i]}' (charCode 0x${c.toString(16)}): ${path}`,
         path,
         segment: path[i]!,
@@ -158,7 +159,7 @@ function isHex(c: number): boolean {
   return (c >= 0x30 && c <= 0x39) || (c >= 0x41 && c <= 0x46) || (c >= 0x61 && c <= 0x66);
 }
 
-type DecodeFailKind = 'path-encoded-slash' | 'path-invalid-utf8';
+type DecodeFailKind = RouterErrorKind.PathEncodedSlash | RouterErrorKind.PathInvalidUtf8;
 
 function failDecode(kind: DecodeFailKind, msg: string, suggestion: string, path: string): Result<never, RouterErrorData> {
   return err({ kind, message: `${msg}: ${path}`, path, suggestion });
@@ -234,7 +235,7 @@ function validateDecodedBytes(path: string): Result<void, RouterErrorData> {
       // sequence is incomplete (a non-continuation byte appeared).
       if (expect !== 0) {
         return failDecode(
-          'path-invalid-utf8',
+          RouterErrorKind.PathInvalidUtf8,
           'Path percent-encoding decodes to a truncated UTF-8 sequence',
           'Each `%xx` continuation byte must complete the surrounding UTF-8 codepoint.',
           path,
@@ -255,7 +256,7 @@ function validateDecodedBytes(path: string): Result<void, RouterErrorData> {
       // would create two ways to spell the same path.
       if (b === 0x2f) {
         return failDecode(
-          'path-encoded-slash',
+          RouterErrorKind.PathEncodedSlash,
           'Path contains percent-encoded `/` (%2F)',
           'Encoded slashes are not allowed; the path grammar reserves `/` as the segment separator.',
           path,
@@ -269,7 +270,7 @@ function validateDecodedBytes(path: string): Result<void, RouterErrorData> {
       if (b < 0xc2) {
         // 0x80-0xbf: stray continuation. 0xc0-0xc1: overlong 2-byte.
         return failDecode(
-          'path-invalid-utf8',
+          RouterErrorKind.PathInvalidUtf8,
           `Path percent-encoding produced invalid UTF-8 lead byte %${b.toString(16).toUpperCase()}`,
           'Lead bytes 0x80-0xbf and 0xc0-0xc1 are not valid in well-formed UTF-8.',
           path,
@@ -289,7 +290,7 @@ function validateDecodedBytes(path: string): Result<void, RouterErrorData> {
         seqMin = 0x10000;
       } else {
         return failDecode(
-          'path-invalid-utf8',
+          RouterErrorKind.PathInvalidUtf8,
           `Path percent-encoding produced invalid UTF-8 lead byte %${b.toString(16).toUpperCase()}`,
           'Lead bytes 0xf5-0xff are outside the Unicode range.',
           path,
@@ -301,7 +302,7 @@ function validateDecodedBytes(path: string): Result<void, RouterErrorData> {
     // Continuation byte expected.
     if ((b & 0xc0) !== 0x80) {
       return failDecode(
-        'path-invalid-utf8',
+        RouterErrorKind.PathInvalidUtf8,
         `Path percent-encoding produced invalid UTF-8 continuation byte %${b.toString(16).toUpperCase()}`,
         'Continuation bytes must match `0b10xxxxxx`.',
         path,
@@ -312,7 +313,7 @@ function validateDecodedBytes(path: string): Result<void, RouterErrorData> {
     if (expect === 0) {
       if (seqVal < seqMin) {
         return failDecode(
-          'path-invalid-utf8',
+          RouterErrorKind.PathInvalidUtf8,
           `Path percent-encoding produced an overlong UTF-8 sequence (codepoint U+${seqVal.toString(16).toUpperCase()})`,
           'Overlong encodings are forbidden by RFC 3629 §3.',
           path,
@@ -320,7 +321,7 @@ function validateDecodedBytes(path: string): Result<void, RouterErrorData> {
       }
       if (seqVal >= 0xd800 && seqVal <= 0xdfff) {
         return failDecode(
-          'path-invalid-utf8',
+          RouterErrorKind.PathInvalidUtf8,
           `Path percent-encoding produced a surrogate codepoint U+${seqVal.toString(16).toUpperCase()}`,
           'UTF-16 surrogate halves are not valid Unicode scalars.',
           path,
@@ -328,7 +329,7 @@ function validateDecodedBytes(path: string): Result<void, RouterErrorData> {
       }
       if (seqVal > 0x10ffff) {
         return failDecode(
-          'path-invalid-utf8',
+          RouterErrorKind.PathInvalidUtf8,
           `Path percent-encoding produced a codepoint above U+10FFFF`,
           'The Unicode range tops out at U+10FFFF.',
           path,
@@ -339,7 +340,7 @@ function validateDecodedBytes(path: string): Result<void, RouterErrorData> {
 
   if (expect !== 0) {
     return failDecode(
-      'path-invalid-utf8',
+      RouterErrorKind.PathInvalidUtf8,
       'Path ends with an incomplete UTF-8 sequence',
       'Provide all continuation bytes for the trailing UTF-8 codepoint.',
       path,

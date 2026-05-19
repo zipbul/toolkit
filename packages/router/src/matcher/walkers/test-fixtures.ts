@@ -8,6 +8,8 @@
  */
 import type { SegmentNode } from '../../tree';
 
+import { WildcardOrigin } from '../../tree';
+
 export const STORE_NODE: SegmentNode = {
   store: 7,
   staticChildren: null,
@@ -28,12 +30,12 @@ export const STAR_WILDCARD_NODE: SegmentNode = {
   paramChild: null,
   wildcardStore: 9,
   wildcardName: 'rest',
-  wildcardOrigin: 'star',
+  wildcardOrigin: WildcardOrigin.Star,
   staticPrefix: null,
 };
 
 export const MULTI_WILDCARD_NODE: SegmentNode = {
   ...STAR_WILDCARD_NODE,
-  wildcardOrigin: 'multi',
+  wildcardOrigin: WildcardOrigin.Multi,
   wildcardStore: 11,
 };

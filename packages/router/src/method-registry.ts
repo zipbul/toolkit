@@ -5,6 +5,7 @@ import { err, isErr } from '@zipbul/result';
 import type { RouterErrorData } from './types';
 
 import { validateMethodToken } from './builder';
+import { RouterErrorKind } from './types';
 
 const DEFAULT_METHODS: ReadonlyArray<readonly [string, number]> = [
   ['GET', 0],
@@ -80,7 +81,7 @@ export class MethodRegistry {
 
     if (this.nextOffset >= MAX_METHODS) {
       return err({
-        kind: 'method-limit',
+        kind: RouterErrorKind.MethodLimit,
         message: `Maximum of ${MAX_METHODS} HTTP methods exceeded. Cannot register method '${method}'.`,
         method,
         suggestion: `Reduce the number of distinct HTTP methods in this router (limit is ${MAX_METHODS}) or split routes across multiple Router instances.`,

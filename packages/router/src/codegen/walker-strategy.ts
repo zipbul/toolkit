@@ -1,5 +1,7 @@
 import type { SegmentNode } from '../tree';
 
+import { WildcardOrigin } from '../tree';
+
 /*
  * ─── Walker-strategy decisions ──────────────────────────────────────
  *
@@ -29,7 +31,7 @@ import type { SegmentNode } from '../tree';
  */
 export interface WildCodegenEntry {
   prefix: string;
-  wildcardOrigin: 'star' | 'multi';
+  wildcardOrigin: WildcardOrigin;
   wildcardName: string;
   wildcardStore: number;
 }

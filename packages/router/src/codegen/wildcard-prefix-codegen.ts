@@ -1,6 +1,7 @@
 import type { SegmentNode } from '../tree';
 import type { MatchFn } from '../types';
 
+import { WildcardOrigin } from '../tree';
 import { detectWildCodegenSpec } from './walker-strategy';
 
 /**
@@ -27,7 +28,7 @@ export function tryCodegenStaticPrefixWildcard(root: SegmentNode): MatchFn | nul
   for (const e of entries) {
     const prefixWithSlash = e.prefix + '/';
     const prefixLen = prefixWithSlash.length;
-    const minLen = e.wildcardOrigin === 'multi' ? prefixLen + 1 : prefixLen;
+    const minLen = e.wildcardOrigin === WildcardOrigin.Multi ? prefixLen + 1 : prefixLen;
     const sliceStart = prefixLen + 1;
 
     body += `
@@ -39,7 +40,7 @@ export function tryCodegenStaticPrefixWildcard(root: SegmentNode): MatchFn | nul
         return true;
       }`;
 
-    if (e.wildcardOrigin === 'star') {
+    if (e.wildcardOrigin === WildcardOrigin.Star) {
       body += `
       if (len === ${e.prefix.length + 1} && url.startsWith(${JSON.stringify(e.prefix)}, 1)) {
         state.paramOffsets[0] = len;
