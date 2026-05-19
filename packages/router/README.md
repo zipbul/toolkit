@@ -250,20 +250,27 @@ router.add('GET', '/assets/*file+', handler);
 ## ⚙️ Options
 
 ```typescript
+import { Router, TrailingSlash, OptionalParamBehavior } from '@zipbul/router';
+
 interface RouterOptions {
-  trailingSlash?: 'strict' | 'ignore';
+  trailingSlash?: TrailingSlash; // TrailingSlash.Strict | TrailingSlash.Ignore
   pathCaseSensitive?: boolean;
   cacheSize?: number;
-  optionalParamBehavior?: 'omit' | 'set-undefined';
+  optionalParamBehavior?: OptionalParamBehavior; // OptionalParamBehavior.Omit | OptionalParamBehavior.SetUndefined
 }
+
+new Router<string>({
+  trailingSlash: TrailingSlash.Strict,
+  optionalParamBehavior: OptionalParamBehavior.SetUndefined,
+});
 ```
 
-| Option                  | Default    | Description                                                                                                                       |
-| :---------------------- | :--------- | :-------------------------------------------------------------------------------------------------------------------------------- |
-| `trailingSlash`         | `'ignore'` | `'strict'` keeps `/a` and `/a/` distinct; `'ignore'` collapses one trailing slash on registration and at match time               |
-| `pathCaseSensitive`     | `true`     | `/Users` and `/users` are different routes                                                                                        |
-| `cacheSize`             | `1000`     | Per-method hit-cache capacity (rounded up to next power of two; bounded approximate-LRU eviction). Positive integer in `[1, 2³⁰]` |
-| `optionalParamBehavior` | `'omit'`   | Shape of `params` when an optional param is missing — `'omit'` drops the key, `'set-undefined'` writes `undefined`                |
+| Option                  | Default                      | Description                                                                                                                                               |
+| :---------------------- | :--------------------------- | :-------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `trailingSlash`         | `TrailingSlash.Ignore`       | `TrailingSlash.Strict` keeps `/a` and `/a/` distinct; `TrailingSlash.Ignore` collapses one trailing slash on registration and at match time               |
+| `pathCaseSensitive`     | `true`                       | `/Users` and `/users` are different routes                                                                                                                |
+| `cacheSize`             | `1000`                       | Per-method hit-cache capacity (rounded up to next power of two; bounded approximate-LRU eviction). Positive integer in `[1, 2³⁰]`                         |
+| `optionalParamBehavior` | `OptionalParamBehavior.Omit` | Shape of `params` when an optional param is missing — `OptionalParamBehavior.Omit` drops the key, `OptionalParamBehavior.SetUndefined` writes `undefined` |
 
 Notes:
 

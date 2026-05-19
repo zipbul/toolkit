@@ -18,8 +18,8 @@ export enum MatchSource {
 
 /**
  * 라우터 에러 종류 (discriminant).
- * 상태 전이 1 + 빌드 타임 28 + 옵션/일괄검증 2. match() 는 throw 하지 않으므로
- * 매치 타임 kind 는 없다.
+ * 상태 전이 1 + 등록/검증 18 + 옵션/일괄검증 2 = 21. match() 는 throw 하지
+ * 않으므로 매치 타임 kind 는 없다.
  */
 export enum RouterErrorKind {
   // 상태 전이

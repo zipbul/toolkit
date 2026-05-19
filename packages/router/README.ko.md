@@ -250,20 +250,27 @@ router.add('GET', '/assets/*file+', handler);
 ## ⚙️ 옵션
 
 ```typescript
+import { Router, TrailingSlash, OptionalParamBehavior } from '@zipbul/router';
+
 interface RouterOptions {
-  trailingSlash?: 'strict' | 'ignore';
+  trailingSlash?: TrailingSlash; // TrailingSlash.Strict | TrailingSlash.Ignore
   pathCaseSensitive?: boolean;
   cacheSize?: number;
-  optionalParamBehavior?: 'omit' | 'set-undefined';
+  optionalParamBehavior?: OptionalParamBehavior; // OptionalParamBehavior.Omit | OptionalParamBehavior.SetUndefined
 }
+
+new Router<string>({
+  trailingSlash: TrailingSlash.Strict,
+  optionalParamBehavior: OptionalParamBehavior.SetUndefined,
+});
 ```
 
-| 옵션                    | 기본값     | 설명                                                                                                           |
-| :---------------------- | :--------- | :------------------------------------------------------------------------------------------------------------- |
-| `trailingSlash`         | `'ignore'` | `'strict'` 면 `/a`와 `/a/`가 다름; `'ignore'` 면 등록/매치 시점에 trailing slash 1개 collapse                  |
-| `pathCaseSensitive`     | `true`     | `/Users`와 `/users`가 다른 라우트                                                                              |
-| `cacheSize`             | `1000`     | 메서드당 hit 캐시 용량 (다음 2의 거듭제곱으로 올림; bounded approximate-LRU 축출). `[1, 2³⁰]` 범위의 양의 정수 |
-| `optionalParamBehavior` | `'omit'`   | 누락된 선택적 파라미터의 `params` 형태 — `'omit'`은 키 자체 생략, `'set-undefined'`는 `undefined` 기록         |
+| 옵션                    | 기본값                       | 설명                                                                                                                                          |
+| :---------------------- | :--------------------------- | :-------------------------------------------------------------------------------------------------------------------------------------------- |
+| `trailingSlash`         | `TrailingSlash.Ignore`       | `TrailingSlash.Strict` 면 `/a`와 `/a/`가 다름; `TrailingSlash.Ignore` 면 등록/매치 시점에 trailing slash 1개 collapse                         |
+| `pathCaseSensitive`     | `true`                       | `/Users`와 `/users`가 다른 라우트                                                                                                             |
+| `cacheSize`             | `1000`                       | 메서드당 hit 캐시 용량 (다음 2의 거듭제곱으로 올림; bounded approximate-LRU 축출). `[1, 2³⁰]` 범위의 양의 정수                                |
+| `optionalParamBehavior` | `OptionalParamBehavior.Omit` | 누락된 선택적 파라미터의 `params` 형태 — `OptionalParamBehavior.Omit`은 키 자체 생략, `OptionalParamBehavior.SetUndefined`는 `undefined` 기록 |
 
 참고:
 
