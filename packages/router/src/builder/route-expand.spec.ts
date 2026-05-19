@@ -52,7 +52,7 @@ describe('expandOptional — 2^N expansion', () => {
     expect(result[1]!.parts).toEqual([staticPart('/posts')]);
   });
 
-  it('should cap honor MAX_OPTIONAL_SEGMENTS_PER_ROUTE at the boundary', () => {
+  it('should honor MAX_OPTIONAL_SEGMENTS_PER_ROUTE at the boundary (exactly 2^N variants)', () => {
     const parts: PathPart[] = [
       staticPart('/'),
       ...Array.from({ length: MAX_OPTIONAL_SEGMENTS_PER_ROUTE }, (_, i) => param(`p${i}`, true)),
