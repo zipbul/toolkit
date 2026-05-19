@@ -77,7 +77,7 @@ describe('iterative walker (wide fanout exceeding codegen size budget)', () => {
     expect(r.match('GET', '/unknown/path')).toBeNull();
   });
 
-  it('returns null for trailing-slash on terminal param when trailingSlash="strict"', () => {
+  it('returns null for trailing-slash on terminal param when ignoreTrailingSlash=false', () => {
     const r = new Router<string>({ ignoreTrailingSlash: false });
     for (let i = 0; i < 25; i++) {
       r.add('GET', `/zone${i}/:slug`, `r${i}`);

@@ -17,7 +17,7 @@ import { MatchSource } from '../../src/types';
 
 // ── ignoreTrailingSlash × every route type ─────────────────────────────────
 
-describe('trailingSlash: "ignore" × route type', () => {
+describe('ignoreTrailingSlash: true × route type', () => {
   it('static: trailing slash variant matches the no-slash route', () => {
     const r = new Router<string>({ ignoreTrailingSlash: true });
     r.add('GET', '/health', 'h');
@@ -79,7 +79,7 @@ describe('trailingSlash: "ignore" × route type', () => {
   });
 });
 
-describe('trailingSlash: "strict" × route type', () => {
+describe('ignoreTrailingSlash: false × route type', () => {
   it('static: trailing slash variant DOES NOT match', () => {
     const r = new Router<string>({ ignoreTrailingSlash: false });
     r.add('GET', '/health', 'h');
@@ -238,9 +238,9 @@ describe('cache × route type', () => {
   });
 });
 
-// ── optionalParamBehavior × cache ────────────────────────────────────────
+// ── omitMissingOptional × cache ────────────────────────────────────────
 
-describe('optionalParamBehavior × cache', () => {
+describe('omitMissingOptional × cache', () => {
   it('omit + cache: missing optional remains absent on cached hit', () => {
     const r = new Router<string>({ omitMissingOptional: true });
     r.add('GET', '/users/:id?', 'u');
@@ -368,7 +368,7 @@ describe('triple combinations', () => {
     expect(b.params.id).toBe('42');
   });
 
-  it('all four flags simultaneously: caseSensitive=false + trailingSlash + cacheSize + optionalParamBehavior', () => {
+  it('all four flags simultaneously: caseSensitive=false + ignoreTrailingSlash + cacheSize + omitMissingOptional', () => {
     const r = new Router<string>({
       pathCaseSensitive: false,
       ignoreTrailingSlash: true,
@@ -405,7 +405,7 @@ describe('cache-key normalization collapses normalized-equal inputs to one entry
     expect(second.params.id).toBe('123');
   });
 
-  it('trailingSlash="ignore": trailing-slash and bare paths collapse to the same cache key', () => {
+  it('ignoreTrailingSlash=true: trailing-slash and bare paths collapse to the same cache key', () => {
     const r = new Router<string>({ ignoreTrailingSlash: true });
     r.add('GET', '/api/:id', 'val');
     r.build();
@@ -418,7 +418,7 @@ describe('cache-key normalization collapses normalized-equal inputs to one entry
     expect(second.value).toBe('val');
   });
 
-  it('case + trailingSlash combined: a different-case + different-slash second input still cache-hits', () => {
+  it('case + ignoreTrailingSlash combined: a different-case + different-slash second input still cache-hits', () => {
     const r = new Router<string>({
       pathCaseSensitive: false,
       ignoreTrailingSlash: true,

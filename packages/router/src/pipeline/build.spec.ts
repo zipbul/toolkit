@@ -82,7 +82,7 @@ describe('buildFromRegistration — options wiring', () => {
     expect(result.ignoreTrailingSlash).toBe(true);
   });
 
-  it('honors trailingSlash="strict" by setting ignoreTrailingSlash=false', () => {
+  it('honors ignoreTrailingSlash=false by setting ignoreTrailingSlash=false', () => {
     const registry = new MethodRegistry();
     const opts: RouterOptions = { ignoreTrailingSlash: false };
     const result = buildFromRegistration(emptySnapshot<string>(), opts, registry);
@@ -110,7 +110,7 @@ describe('buildFromRegistration — normalizePath', () => {
     expect(result.normalizePath('/x/')).toBe('/x');
   });
 
-  it('preserves trailing slash when trailingSlash="strict"', () => {
+  it('preserves trailing slash when ignoreTrailingSlash=false', () => {
     const registry = new MethodRegistry();
     const result = buildFromRegistration(emptySnapshot<string>(), { ignoreTrailingSlash: false }, registry);
     expect(result.normalizePath('/x/')).toBe('/x/');

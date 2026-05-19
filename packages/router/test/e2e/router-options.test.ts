@@ -92,7 +92,7 @@ describe('Router<T> options', () => {
     expect(() => router.match('GET', '/files/bad%GG')).toThrow();
   });
 
-  it('should handle optionalParamBehavior=false', () => {
+  it('should handle omitMissingOptional=false', () => {
     const router = new Router<string>({ omitMissingOptional: false });
     router.add('GET', '/users/:id?', 'user');
     router.build();

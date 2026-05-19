@@ -91,7 +91,7 @@ describe('case folding (caseSensitive=false)', () => {
 });
 
 describe('trailing slash normalization', () => {
-  it('trims trailing slash by default (trailingSlash=undefined → ignore)', () => {
+  it('trims trailing slash by default (ignoreTrailingSlash=undefined (defaults true))', () => {
     const r = new Router<string>();
     r.add('GET', '/x/y', 'h');
     r.build();
@@ -99,7 +99,7 @@ describe('trailing slash normalization', () => {
     expect(r.match('GET', '/x/y/')?.value).toBe('h');
   });
 
-  it('preserves trailing slash distinction in match probe when trailingSlash=strict', () => {
+  it('preserves trailing slash distinction in match probe when ignoreTrailingSlash=strict', () => {
     const r = new Router<string>({ ignoreTrailingSlash: false });
     r.add('GET', '/x/y', 'h');
     r.build();
