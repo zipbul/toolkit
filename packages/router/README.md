@@ -215,16 +215,16 @@ router.add('GET', '/users/:id(\\d+)', handler);
 
 ### Optional parameters
 
-A trailing `?` makes a param optional. Both with-param and without-param URLs match. The shape of `params` for the missing case is controlled by `optionalParamBehavior`:
+A trailing `?` makes a param optional. Both with-param and without-param URLs match. The shape of `params` for the missing case is controlled by `omitMissingOptional`:
 
 ```typescript
 router.add('GET', '/:lang?/docs', handler);
 ```
 
-| `optionalParamBehavior` | `/en/docs`       | `/docs`                             |
-| :---------------------- | :--------------- | :---------------------------------- |
-| `'omit'` (default)      | `{ lang: 'en' }` | `{}` (key absent)                   |
-| `'set-undefined'`       | `{ lang: 'en' }` | `{ lang: undefined }` (key present) |
+| `omitMissingOptional` | `/en/docs`       | `/docs`                             |
+| :-------------------- | :--------------- | :---------------------------------- |
+| `true` (default)      | `{ lang: 'en' }` | `{}` (key absent)                   |
+| `false`               | `{ lang: 'en' }` | `{ lang: undefined }` (key present) |
 
 ### Wildcards
 
@@ -250,27 +250,25 @@ router.add('GET', '/assets/*file+', handler);
 ## ⚙️ Options
 
 ```typescript
-import { Router, TrailingSlash, OptionalParamBehavior } from '@zipbul/router';
-
 interface RouterOptions {
-  trailingSlash?: TrailingSlash; // TrailingSlash.Strict | TrailingSlash.Ignore
+  ignoreTrailingSlash?: boolean;
   pathCaseSensitive?: boolean;
   cacheSize?: number;
-  optionalParamBehavior?: OptionalParamBehavior; // OptionalParamBehavior.Omit | OptionalParamBehavior.SetUndefined
+  omitMissingOptional?: boolean;
 }
 
 new Router<string>({
-  trailingSlash: TrailingSlash.Strict,
-  optionalParamBehavior: OptionalParamBehavior.SetUndefined,
+  ignoreTrailingSlash: false,
+  omitMissingOptional: false,
 });
 ```
 
-| Option                  | Default                      | Description                                                                                                                                               |
-| :---------------------- | :--------------------------- | :-------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `trailingSlash`         | `TrailingSlash.Ignore`       | `TrailingSlash.Strict` keeps `/a` and `/a/` distinct; `TrailingSlash.Ignore` collapses one trailing slash on registration and at match time               |
-| `pathCaseSensitive`     | `true`                       | `/Users` and `/users` are different routes                                                                                                                |
-| `cacheSize`             | `1000`                       | Per-method hit-cache capacity (rounded up to next power of two; bounded approximate-LRU eviction). Positive integer in `[1, 2³⁰]`                         |
-| `optionalParamBehavior` | `OptionalParamBehavior.Omit` | Shape of `params` when an optional param is missing — `OptionalParamBehavior.Omit` drops the key, `OptionalParamBehavior.SetUndefined` writes `undefined` |
+| Option                | Default | Description                                                                                                                                  |
+| :-------------------- | :------ | :------------------------------------------------------------------------------------------------------------------------------------------- |
+| `ignoreTrailingSlash` | `true`  | Collapses one trailing slash on registration and at match time, so `/a` and `/a/` resolve to the same route. Set `false` for strict matching |
+| `pathCaseSensitive`   | `true`  | `/Users` and `/users` are different routes                                                                                                   |
+| `cacheSize`           | `1000`  | Per-method hit-cache capacity (rounded up to next power of two; bounded approximate-LRU eviction). Positive integer in `[1, 2³⁰]`            |
+| `omitMissingOptional` | `true`  | Shape of `params` when an optional `:name?` segment is missing — `true` drops the key, `false` writes `params[name] = undefined`             |
 
 Notes:
 

@@ -10,7 +10,6 @@
 import { describe, it, expect } from 'bun:test';
 
 import { Router } from '../../src/router';
-import { TrailingSlash } from '../../src/types';
 
 describe('allowedMethods', () => {
   it('returns empty for completely unknown paths (404 territory)', () => {
@@ -52,7 +51,7 @@ describe('allowedMethods', () => {
   });
 
   it('strict trailing-slash with ignoreTrailingSlash=false', () => {
-    const r = new Router<number>({ trailingSlash: TrailingSlash.Strict });
+    const r = new Router<number>({ ignoreTrailingSlash: false });
     r.add('GET', '/users', 1);
     r.build();
 

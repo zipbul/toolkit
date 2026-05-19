@@ -11,7 +11,7 @@ import { RouterError } from './error';
 import { MethodRegistry } from './method-registry';
 import { buildFromRegistration, MatchLayer, Registration } from './pipeline';
 import { forEachStaticChild } from './tree';
-import { RouterErrorKind, TrailingSlash } from './types';
+import { RouterErrorKind } from './types';
 
 /**
  * Symbol-keyed slot for the internal-inspection hatch. Symbol identity
@@ -92,9 +92,9 @@ class Router<T = unknown> implements RouterPublicApi<T> {
       methodRegistry,
       new PathParser({
         caseSensitive: routerOptions.pathCaseSensitive ?? true,
-        ignoreTrailingSlash: routerOptions.trailingSlash !== TrailingSlash.Strict,
+        ignoreTrailingSlash: routerOptions.ignoreTrailingSlash ?? true,
       }),
-      new OptionalParamDefaults(routerOptions.optionalParamBehavior),
+      new OptionalParamDefaults(routerOptions.omitMissingOptional ?? true),
     );
     const cache: CacheContainers<T> = {
       hit: [],
@@ -212,7 +212,7 @@ function runBuildPipeline<T>(
   cache: CacheContainers<T>,
 ): BuildPipelineResult<T> {
   const snapshot = registration.seal({
-    optionalParamBehavior: routerOptions.optionalParamBehavior,
+    omitMissingOptional: routerOptions.omitMissingOptional,
   });
   const r = buildFromRegistration<T>(snapshot, routerOptions, methodRegistry);
 

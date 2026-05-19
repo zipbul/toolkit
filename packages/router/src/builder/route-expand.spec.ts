@@ -3,7 +3,6 @@ import { describe, it, expect } from 'bun:test';
 import type { PathPart } from '../tree';
 
 import { PathPartType } from '../tree';
-import { OptionalParamBehavior } from '../types';
 import { OptionalParamDefaults } from './optional-param-defaults';
 import {
   countOptionalSegments,
@@ -31,7 +30,7 @@ describe('expandOptional', () => {
   describe('collectOptionalIndices (path with no optionals)', () => {
     it('should pass parts through unchanged', () => {
       const parts: PathPart[] = [staticPart('/users/'), param('id')];
-      const defaults = new OptionalParamDefaults(OptionalParamBehavior.SetUndefined);
+      const defaults = new OptionalParamDefaults(false);
 
       const result = expandOptional(parts, 7, defaults);
 
@@ -43,7 +42,7 @@ describe('expandOptional', () => {
   describe('enumerateExpansions', () => {
     it('should produce 2^N variants for N optionals', () => {
       const parts: PathPart[] = [staticPart('/'), param('a', true), staticPart('/'), param('b', true)];
-      const defaults = new OptionalParamDefaults(OptionalParamBehavior.SetUndefined);
+      const defaults = new OptionalParamDefaults(false);
 
       const result = expandOptional(parts, 0, defaults);
 
@@ -52,7 +51,7 @@ describe('expandOptional', () => {
 
     it('should keep the mid-position N=1 i18n shape to exactly 2 variants', () => {
       const parts: PathPart[] = [staticPart('/'), param('lang', true), staticPart('/posts')];
-      const defaults = new OptionalParamDefaults(OptionalParamBehavior.SetUndefined);
+      const defaults = new OptionalParamDefaults(false);
 
       const result = expandOptional(parts, 0, defaults);
 
@@ -77,7 +76,7 @@ describe('expandOptional', () => {
 
     it('should record omitted-param names against defaults for matcher fill-in', () => {
       const parts: PathPart[] = [staticPart('/'), param('lang', true), staticPart('/'), param('region', true)];
-      const defaults = new OptionalParamDefaults(OptionalParamBehavior.SetUndefined);
+      const defaults = new OptionalParamDefaults(false);
 
       expandOptional(parts, 42, defaults);
 
@@ -86,7 +85,7 @@ describe('expandOptional', () => {
 
     it('should mark optionals as required (optional=false) inside each variant for insertion', () => {
       const parts: PathPart[] = [staticPart('/'), param('id', true)];
-      const defaults = new OptionalParamDefaults(OptionalParamBehavior.SetUndefined);
+      const defaults = new OptionalParamDefaults(false);
 
       const result = expandOptional(parts, 0, defaults);
 
@@ -101,7 +100,7 @@ describe('expandOptional', () => {
     it('should trim trailing slash of preceding static when optional is dropped', () => {
       // `/users/:id?` with `:id` dropped should yield `/users`, not `/users/`.
       const parts: PathPart[] = [staticPart('/users/'), param('id', true)];
-      const defaults = new OptionalParamDefaults(OptionalParamBehavior.SetUndefined);
+      const defaults = new OptionalParamDefaults(false);
 
       const result = expandOptional(parts, 0, defaults);
 
@@ -113,7 +112,7 @@ describe('expandOptional', () => {
     it('should pop the static entirely when trim leaves an empty value', () => {
       // `/:id?` with `:id` dropped — preceding static is `/` which trims to ''.
       const parts: PathPart[] = [staticPart('/'), param('id', true)];
-      const defaults = new OptionalParamDefaults(OptionalParamBehavior.SetUndefined);
+      const defaults = new OptionalParamDefaults(false);
 
       const result = expandOptional(parts, 0, defaults);
 
@@ -126,7 +125,7 @@ describe('expandOptional', () => {
     it('should collapse `//` produced by joining two static parts', () => {
       // `/a/:x?/b` with `:x` dropped: parts become `/a/` + `/b` → `/a//b` → `/a/b`.
       const parts: PathPart[] = [staticPart('/a/'), param('x', true), staticPart('/b')];
-      const defaults = new OptionalParamDefaults(OptionalParamBehavior.SetUndefined);
+      const defaults = new OptionalParamDefaults(false);
 
       const result = expandOptional(parts, 0, defaults);
 

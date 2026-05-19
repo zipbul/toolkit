@@ -1,15 +1,5 @@
 // ── Public enums ──
 
-export enum TrailingSlash {
-  Strict = 'strict',
-  Ignore = 'ignore',
-}
-
-export enum OptionalParamBehavior {
-  Omit = 'omit',
-  SetUndefined = 'set-undefined',
-}
-
 export enum MatchSource {
   Static = 'static',
   Cache = 'cache',
@@ -51,11 +41,12 @@ export enum RouterErrorKind {
 
 export interface RouterOptions {
   /**
-   * Trailing-slash policy. `Strict` keeps `/a` and `/a/` distinct.
-   * `Ignore` collapses one trailing slash on registration and at match
-   * time.
+   * Trailing-slash policy. Default `true` — collapses one trailing
+   * slash on registration and at match time, so `/a` and `/a/` resolve
+   * to the same route. Set `false` for strict matching where `/a` and
+   * `/a/` are distinct.
    */
-  trailingSlash?: TrailingSlash;
+  ignoreTrailingSlash?: boolean;
   /** Path case-sensitivity. Default true. */
   pathCaseSensitive?: boolean;
   /**
@@ -64,7 +55,12 @@ export interface RouterOptions {
    * 토글의 가치가 없다. 1000 이 모자란 고-카디널리티 워크로드는 늘리면 된다.
    */
   cacheSize?: number;
-  optionalParamBehavior?: OptionalParamBehavior;
+  /**
+   * Shape of `params` when an optional `:name?` segment is missing.
+   * Default `true` — the key is omitted from `params`. Set `false` to
+   * write `params[name] = undefined` instead.
+   */
+  omitMissingOptional?: boolean;
 }
 
 export type RouteParams = Record<string, string | undefined>;

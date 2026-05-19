@@ -19,7 +19,7 @@ test('public API surface (value side) — exactly Router + RouterError', () => {
   // surface drifts.
   const exports = Object.keys(PublicAPI).sort();
 
-  expect(exports).toEqual(['MatchSource', 'OptionalParamBehavior', 'Router', 'RouterError', 'RouterErrorKind', 'TrailingSlash']);
+  expect(exports).toEqual(['MatchSource', 'Router', 'RouterError', 'RouterErrorKind']);
 });
 
 test('public API surface — Router is constructable', () => {

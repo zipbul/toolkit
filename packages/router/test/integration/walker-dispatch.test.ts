@@ -18,7 +18,7 @@ import { describe, it, expect } from 'bun:test';
 
 import { getRouterInternals } from '../../internal';
 import { Router } from '../../src/router';
-import { MatchSource, TrailingSlash } from '../../src/types';
+import { MatchSource } from '../../src/types';
 
 // ── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -78,7 +78,7 @@ describe('iterative walker (wide fanout exceeding codegen size budget)', () => {
   });
 
   it('returns null for trailing-slash on terminal param when trailingSlash="strict"', () => {
-    const r = new Router<string>({ trailingSlash: TrailingSlash.Strict });
+    const r = new Router<string>({ ignoreTrailingSlash: false });
     for (let i = 0; i < 25; i++) {
       r.add('GET', `/zone${i}/:slug`, `r${i}`);
       r.add('GET', `/zone${i}/:slug/sub/:sub`, `r${i}sub`);

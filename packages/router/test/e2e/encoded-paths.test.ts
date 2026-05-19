@@ -5,7 +5,7 @@ import { describe, expect, it } from 'bun:test';
 
 import { Router } from '../../src/router';
 import { WildcardOrigin } from '../../src/tree';
-import { MatchSource, TrailingSlash } from '../../src/types';
+import { MatchSource } from '../../src/types';
 
 describe('percent-decoded param values', () => {
   it('decodes ASCII percent-encoded segment', () => {
@@ -100,7 +100,7 @@ describe('trailing slash normalization', () => {
   });
 
   it('preserves trailing slash distinction in match probe when trailingSlash=strict', () => {
-    const r = new Router<string>({ trailingSlash: TrailingSlash.Strict });
+    const r = new Router<string>({ ignoreTrailingSlash: false });
     r.add('GET', '/x/y', 'h');
     r.build();
     expect(r.match('GET', '/x/y')?.value).toBe('h');

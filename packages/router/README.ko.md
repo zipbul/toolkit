@@ -215,16 +215,16 @@ router.add('GET', '/users/:id(\\d+)', handler);
 
 ### 선택적 파라미터
 
-뒤에 `?`를 붙이면 파라미터가 선택적이 됩니다. 있는 경로와 없는 경로 모두 매칭되며, 누락 시 `params`의 형태는 `optionalParamBehavior`로 결정됩니다:
+뒤에 `?`를 붙이면 파라미터가 선택적이 됩니다. 있는 경로와 없는 경로 모두 매칭되며, 누락 시 `params`의 형태는 `omitMissingOptional`로 결정됩니다:
 
 ```typescript
 router.add('GET', '/:lang?/docs', handler);
 ```
 
-| `optionalParamBehavior` | `/en/docs`       | `/docs`                         |
-| :---------------------- | :--------------- | :------------------------------ |
-| `'omit'` (기본값)       | `{ lang: 'en' }` | `{}` (키 부재)                  |
-| `'set-undefined'`       | `{ lang: 'en' }` | `{ lang: undefined }` (키 존재) |
+| `omitMissingOptional` | `/en/docs`       | `/docs`                         |
+| :-------------------- | :--------------- | :------------------------------ |
+| `true` (기본값)       | `{ lang: 'en' }` | `{}` (키 부재)                  |
+| `false`               | `{ lang: 'en' }` | `{ lang: undefined }` (키 존재) |
 
 ### 와일드카드
 
@@ -250,27 +250,25 @@ router.add('GET', '/assets/*file+', handler);
 ## ⚙️ 옵션
 
 ```typescript
-import { Router, TrailingSlash, OptionalParamBehavior } from '@zipbul/router';
-
 interface RouterOptions {
-  trailingSlash?: TrailingSlash; // TrailingSlash.Strict | TrailingSlash.Ignore
+  ignoreTrailingSlash?: boolean;
   pathCaseSensitive?: boolean;
   cacheSize?: number;
-  optionalParamBehavior?: OptionalParamBehavior; // OptionalParamBehavior.Omit | OptionalParamBehavior.SetUndefined
+  omitMissingOptional?: boolean;
 }
 
 new Router<string>({
-  trailingSlash: TrailingSlash.Strict,
-  optionalParamBehavior: OptionalParamBehavior.SetUndefined,
+  ignoreTrailingSlash: false,
+  omitMissingOptional: false,
 });
 ```
 
-| 옵션                    | 기본값                       | 설명                                                                                                                                          |
-| :---------------------- | :--------------------------- | :-------------------------------------------------------------------------------------------------------------------------------------------- |
-| `trailingSlash`         | `TrailingSlash.Ignore`       | `TrailingSlash.Strict` 면 `/a`와 `/a/`가 다름; `TrailingSlash.Ignore` 면 등록/매치 시점에 trailing slash 1개 collapse                         |
-| `pathCaseSensitive`     | `true`                       | `/Users`와 `/users`가 다른 라우트                                                                                                             |
-| `cacheSize`             | `1000`                       | 메서드당 hit 캐시 용량 (다음 2의 거듭제곱으로 올림; bounded approximate-LRU 축출). `[1, 2³⁰]` 범위의 양의 정수                                |
-| `optionalParamBehavior` | `OptionalParamBehavior.Omit` | 누락된 선택적 파라미터의 `params` 형태 — `OptionalParamBehavior.Omit`은 키 자체 생략, `OptionalParamBehavior.SetUndefined`는 `undefined` 기록 |
+| 옵션                  | 기본값 | 설명                                                                                                                 |
+| :-------------------- | :----- | :------------------------------------------------------------------------------------------------------------------- |
+| `ignoreTrailingSlash` | `true` | 등록/매치 시점에 trailing slash 1개 collapse — `/a`와 `/a/`가 같은 라우트로 해소. `false` 면 strict 매칭             |
+| `pathCaseSensitive`   | `true` | `/Users`와 `/users`가 다른 라우트                                                                                    |
+| `cacheSize`           | `1000` | 메서드당 hit 캐시 용량 (다음 2의 거듭제곱으로 올림; bounded approximate-LRU 축출). `[1, 2³⁰]` 범위의 양의 정수       |
+| `omitMissingOptional` | `true` | 누락된 선택적 `:name?` 세그먼트의 `params` 형태 — `true` 면 키 자체 생략, `false` 면 `params[name] = undefined` 기록 |
 
 참고:
 

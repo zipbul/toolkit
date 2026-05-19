@@ -14,7 +14,7 @@ import { describe, expect, it } from 'bun:test';
 import { getRouterInternals } from '../../internal';
 import { RouterError } from '../../src/error';
 import { Router } from '../../src/router';
-import { MatchSource, OptionalParamBehavior } from '../../src/types';
+import { MatchSource } from '../../src/types';
 
 // ── API contract guarantees ─────────────────────────────────────────────────
 
@@ -153,7 +153,7 @@ describe('API guarantees', () => {
 
 describe('optional params', () => {
   it('omit: missing optional disappears from params object', () => {
-    const r = new Router<string>({ optionalParamBehavior: OptionalParamBehavior.Omit });
+    const r = new Router<string>({ omitMissingOptional: true });
     r.add('GET', '/users/:id?', 'u');
     r.build();
 
@@ -167,7 +167,7 @@ describe('optional params', () => {
   });
 
   it('set-undefined: missing optional becomes undefined', () => {
-    const r = new Router<string>({ optionalParamBehavior: OptionalParamBehavior.SetUndefined });
+    const r = new Router<string>({ omitMissingOptional: false });
     r.add('GET', '/users/:id?', 'u');
     r.build();
 

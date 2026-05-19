@@ -5,7 +5,7 @@ import type { RouterOptions } from './types';
 import { catchRouterError } from '../test/test-utils';
 import { RouterError } from './error';
 import { Router, validateCacheSize } from './router';
-import { MatchSource, RouterErrorKind, TrailingSlash } from './types';
+import { MatchSource, RouterErrorKind } from './types';
 
 // ── Fixtures ──
 
@@ -253,7 +253,7 @@ describe('Router', () => {
     });
 
     it('should apply combined preNormalize (caseSensitive:false + ignoreTrailingSlash)', () => {
-      const r = buildWith([['GET', '/users', 1]], { pathCaseSensitive: false, trailingSlash: TrailingSlash.Ignore });
+      const r = buildWith([['GET', '/users', 1]], { pathCaseSensitive: false, ignoreTrailingSlash: true });
 
       // Trailing slash + uppercase → both normalized
       const result = r.match('GET', '/Users/');

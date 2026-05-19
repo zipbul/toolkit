@@ -6,7 +6,6 @@ import { buildPathNormalizer } from '../codegen';
 import { EMPTY_PARAMS, STATIC_META, createNullProtoBucket } from '../internal';
 import { createMatchState, createSegmentWalker, decoder } from '../matcher';
 import { MethodRegistry } from '../method-registry';
-import { TrailingSlash } from '../types';
 
 /**
  * Configuration for compiled match implementation.
@@ -103,7 +102,7 @@ export function buildFromRegistration<T>(
     }
   }
 
-  const ignoreTrailingSlash = options.trailingSlash !== TrailingSlash.Strict;
+  const ignoreTrailingSlash = options.ignoreTrailingSlash ?? true;
   const caseSensitive = options.pathCaseSensitive ?? true;
 
   const normalizePath = buildPathNormalizer({

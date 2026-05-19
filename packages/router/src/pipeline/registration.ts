@@ -23,7 +23,7 @@ import {
   setTenantFactor,
   UndoKind,
 } from '../tree';
-import { OptionalParamBehavior, RouterErrorKind } from '../types';
+import { RouterErrorKind } from '../types';
 import { IdentityRegistry } from './identity-registry';
 import { packTerminalSlab } from './terminal-slab';
 import { WILDCARD_METHOD, expandWildcardMethodRoutes } from './wildcard-method-expand';
@@ -168,7 +168,7 @@ class Registration<T> {
 
   seal(
     options: {
-      optionalParamBehavior?: OptionalParamBehavior;
+      omitMissingOptional?: boolean;
     } = {},
   ): RegistrationSnapshot<T> {
     if (this.snapshot !== null) {
@@ -179,7 +179,7 @@ class Registration<T> {
     const optionalDefaultsSnapshot = this.optionalParamDefaults.snapshot();
     const state = createBuildState<T>();
     const undo: SegmentTreeUndoLog = [];
-    const omitBehavior = (options.optionalParamBehavior ?? OptionalParamBehavior.Omit) === OptionalParamBehavior.Omit;
+    const omitBehavior = options.omitMissingOptional ?? true;
 
     this.prefixIndex = new WildcardPrefixIndex();
     this.identityRegistry = new IdentityRegistry();

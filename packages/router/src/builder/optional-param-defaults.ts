@@ -1,30 +1,29 @@
-import { OptionalParamBehavior } from '../types';
-
 interface OptionalParamDefaultsSnapshot {
   entries: Array<readonly [number, readonly string[]]>;
 }
 
 /**
- * Build-time tracker for `:name?`-style optional parameters. The router's
- * `set-undefined` policy is implemented entirely inside the params factory
- * codegen (registration.ts emits `p[name] = undefined` for omitted
- * optionals when `omitBehavior === false`), so this class is purely a
- * snapshot/restore carrier for the seal-failure rollback path. The
- * `record()` calls from route-expand.ts populate the map only for
- * symmetry with that rollback — `apply()` was previously consumed at
- * runtime but the codegen path has supplanted it (verified by removing
- * `apply` / `has` / `isEmpty` and watching 616/616 stay green).
+ * Build-time tracker for `:name?`-style optional parameters. The
+ * set-undefined policy (omitMissingOptional=false) is implemented
+ * entirely inside the params factory codegen (registration.ts emits
+ * `p[name] = undefined` for omitted optionals when omitBehavior=false),
+ * so this class is purely a snapshot/restore carrier for the
+ * seal-failure rollback path. The `record()` calls from route-expand.ts
+ * populate the map only for symmetry with that rollback — `apply()`
+ * was previously consumed at runtime but the codegen path has supplanted
+ * it (verified by removing `apply` / `has` / `isEmpty` and watching
+ * 616/616 stay green).
  */
 export class OptionalParamDefaults {
-  private readonly behavior: OptionalParamBehavior;
+  private readonly omit: boolean;
   private readonly defaults = new Map<number, readonly string[]>();
 
-  constructor(behavior: OptionalParamBehavior = OptionalParamBehavior.Omit) {
-    this.behavior = behavior;
+  constructor(omit: boolean = true) {
+    this.omit = omit;
   }
 
   record(key: number, names: readonly string[]): void {
-    if (this.behavior === OptionalParamBehavior.Omit) {
+    if (this.omit) {
       return;
     }
     this.defaults.set(key, names);

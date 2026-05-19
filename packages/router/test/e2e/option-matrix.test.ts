@@ -13,13 +13,13 @@
 import { describe, expect, it } from 'bun:test';
 
 import { Router } from '../../src/router';
-import { MatchSource, OptionalParamBehavior, TrailingSlash } from '../../src/types';
+import { MatchSource } from '../../src/types';
 
 // ── ignoreTrailingSlash × every route type ─────────────────────────────────
 
 describe('trailingSlash: "ignore" × route type', () => {
   it('static: trailing slash variant matches the no-slash route', () => {
-    const r = new Router<string>({ trailingSlash: TrailingSlash.Ignore });
+    const r = new Router<string>({ ignoreTrailingSlash: true });
     r.add('GET', '/health', 'h');
     r.build();
 
@@ -28,7 +28,7 @@ describe('trailingSlash: "ignore" × route type', () => {
   });
 
   it('single param: trailing slash trims before match', () => {
-    const r = new Router<string>({ trailingSlash: TrailingSlash.Ignore });
+    const r = new Router<string>({ ignoreTrailingSlash: true });
     r.add('GET', '/users/:id', 'u');
     r.build();
 
@@ -37,7 +37,7 @@ describe('trailingSlash: "ignore" × route type', () => {
   });
 
   it('param chain: trailing slash trims', () => {
-    const r = new Router<string>({ trailingSlash: TrailingSlash.Ignore });
+    const r = new Router<string>({ ignoreTrailingSlash: true });
     r.add('GET', '/users/:id/posts/:postId', 'p');
     r.build();
 
@@ -72,7 +72,7 @@ describe('trailingSlash: "ignore" × route type', () => {
   });
 
   it('star wildcard at terminal: trailing slash trim leaves empty capture intact', () => {
-    const r = new Router<string>({ trailingSlash: TrailingSlash.Ignore });
+    const r = new Router<string>({ ignoreTrailingSlash: true });
     r.add('GET', '/files/*', 'val');
     r.build();
     expect(r.match('GET', '/files/')!.params['*']).toBe('');
@@ -81,7 +81,7 @@ describe('trailingSlash: "ignore" × route type', () => {
 
 describe('trailingSlash: "strict" × route type', () => {
   it('static: trailing slash variant DOES NOT match', () => {
-    const r = new Router<string>({ trailingSlash: TrailingSlash.Strict });
+    const r = new Router<string>({ ignoreTrailingSlash: false });
     r.add('GET', '/health', 'h');
     r.build();
 
@@ -90,7 +90,7 @@ describe('trailingSlash: "strict" × route type', () => {
   });
 
   it('single param (codegen path): trailing slash on terminal param fails', () => {
-    const r = new Router<string>({ trailingSlash: TrailingSlash.Strict });
+    const r = new Router<string>({ ignoreTrailingSlash: false });
     r.add('GET', '/users/:id', 'u');
     r.build();
 
@@ -99,7 +99,7 @@ describe('trailingSlash: "strict" × route type', () => {
   });
 
   it('param chain: trailing slash on inner segment fails', () => {
-    const r = new Router<string>({ trailingSlash: TrailingSlash.Strict });
+    const r = new Router<string>({ ignoreTrailingSlash: false });
     r.add('GET', '/users/:id/posts/:postId', 'p');
     r.build();
 
@@ -108,7 +108,7 @@ describe('trailingSlash: "strict" × route type', () => {
   });
 
   it('star wildcard: empty trailing-slash position captures empty', () => {
-    const r = new Router<string>({ trailingSlash: TrailingSlash.Strict });
+    const r = new Router<string>({ ignoreTrailingSlash: false });
     r.add('GET', '/files/*p', 'f');
     r.build();
 
@@ -117,7 +117,7 @@ describe('trailingSlash: "strict" × route type', () => {
   });
 
   it('multi wildcard: trailing slash with no content fails', () => {
-    const r = new Router<string>({ trailingSlash: TrailingSlash.Strict });
+    const r = new Router<string>({ ignoreTrailingSlash: false });
     r.add('GET', '/files/*p+', 'f');
     r.build();
 
@@ -242,7 +242,7 @@ describe('cache × route type', () => {
 
 describe('optionalParamBehavior × cache', () => {
   it('omit + cache: missing optional remains absent on cached hit', () => {
-    const r = new Router<string>({ optionalParamBehavior: OptionalParamBehavior.Omit });
+    const r = new Router<string>({ omitMissingOptional: true });
     r.add('GET', '/users/:id?', 'u');
     r.build();
 
@@ -257,7 +257,7 @@ describe('optionalParamBehavior × cache', () => {
   });
 
   it('set-undefined + cache: id is undefined on cached hit', () => {
-    const r = new Router<string>({ optionalParamBehavior: OptionalParamBehavior.SetUndefined });
+    const r = new Router<string>({ omitMissingOptional: false });
     r.add('GET', '/users/:id?', 'u');
     r.build();
 
@@ -272,7 +272,7 @@ describe('optionalParamBehavior × cache', () => {
   });
 
   it('caches each optional variant separately — present and absent', () => {
-    const r = new Router<string>({ optionalParamBehavior: OptionalParamBehavior.SetUndefined });
+    const r = new Router<string>({ omitMissingOptional: false });
     r.add('GET', '/items/:id?', 'val');
     r.build();
 
@@ -292,8 +292,8 @@ describe('optionalParamBehavior × cache', () => {
 
   it('ignoreTrailingSlash + optional param: trimmed slash leaves optional absent', () => {
     const r = new Router<string>({
-      trailingSlash: TrailingSlash.Ignore,
-      optionalParamBehavior: OptionalParamBehavior.SetUndefined,
+      ignoreTrailingSlash: true,
+      omitMissingOptional: false,
     });
     r.add('GET', '/items/:id?', 'val');
     r.build();
@@ -336,7 +336,7 @@ describe('unbounded length', () => {
 describe('triple combinations', () => {
   it('trim slash + case fold + cache: all three apply consistently', () => {
     const r = new Router<string>({
-      trailingSlash: TrailingSlash.Ignore,
+      ignoreTrailingSlash: true,
       pathCaseSensitive: false,
     });
     r.add('GET', '/Users/:id', 'u');
@@ -371,9 +371,9 @@ describe('triple combinations', () => {
   it('all four flags simultaneously: caseSensitive=false + trailingSlash + cacheSize + optionalParamBehavior', () => {
     const r = new Router<string>({
       pathCaseSensitive: false,
-      trailingSlash: TrailingSlash.Ignore,
+      ignoreTrailingSlash: true,
       cacheSize: 10,
-      optionalParamBehavior: OptionalParamBehavior.SetUndefined,
+      omitMissingOptional: false,
     });
     r.add('GET', '/api/:category/:id?', 'val');
     r.build();
@@ -406,7 +406,7 @@ describe('cache-key normalization collapses normalized-equal inputs to one entry
   });
 
   it('trailingSlash="ignore": trailing-slash and bare paths collapse to the same cache key', () => {
-    const r = new Router<string>({ trailingSlash: TrailingSlash.Ignore });
+    const r = new Router<string>({ ignoreTrailingSlash: true });
     r.add('GET', '/api/:id', 'val');
     r.build();
 
@@ -421,7 +421,7 @@ describe('cache-key normalization collapses normalized-equal inputs to one entry
   it('case + trailingSlash combined: a different-case + different-slash second input still cache-hits', () => {
     const r = new Router<string>({
       pathCaseSensitive: false,
-      trailingSlash: TrailingSlash.Ignore,
+      ignoreTrailingSlash: true,
     });
     r.add('GET', '/api/:id', 'val');
     r.build();

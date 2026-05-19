@@ -2,7 +2,7 @@ import { describe, expect, it } from 'bun:test';
 
 import { RouterError } from '../../src/error';
 import { Router } from '../../src/router';
-import { MatchSource, OptionalParamBehavior, RouterErrorKind, TrailingSlash } from '../../src/types';
+import { MatchSource, RouterErrorKind } from '../../src/types';
 import { catchRouterError } from '../test-utils';
 
 describe('Router<T>', () => {
@@ -194,7 +194,7 @@ describe('Router<T>', () => {
     });
 
     it('should omit optional param from params when absent with omit behavior', () => {
-      const router = new Router<string>({ optionalParamBehavior: OptionalParamBehavior.Omit });
+      const router = new Router<string>({ omitMissingOptional: true });
       router.add('GET', '/users/:id?', 'user');
       router.build();
 
@@ -775,7 +775,7 @@ describe('Router<T>', () => {
     });
 
     it('should not strip trailing slash on root path / when ignoreTrailingSlash=true', () => {
-      const router = new Router<string>({ trailingSlash: TrailingSlash.Ignore });
+      const router = new Router<string>({ ignoreTrailingSlash: true });
       router.add('GET', '/', 'root');
       router.build();
 
@@ -795,7 +795,7 @@ describe('Router<T>', () => {
     });
 
     it('should apply default to absent optional param', () => {
-      const router = new Router<string>({ optionalParamBehavior: OptionalParamBehavior.SetUndefined });
+      const router = new Router<string>({ omitMissingOptional: false });
       router.add('GET', '/items/:a?', 'handler');
       router.build();
 

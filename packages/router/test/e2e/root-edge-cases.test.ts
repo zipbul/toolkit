@@ -16,11 +16,11 @@ import { describe, expect, it } from 'bun:test';
 
 import { RouterError } from '../../src/error';
 import { Router } from '../../src/router';
-import { MatchSource, OptionalParamBehavior } from '../../src/types';
+import { MatchSource } from '../../src/types';
 
 describe('optional param at root matches /', () => {
   it('/:id? matches / with id absent', () => {
-    const r = new Router<string>({ optionalParamBehavior: OptionalParamBehavior.Omit });
+    const r = new Router<string>({ omitMissingOptional: true });
     r.add('GET', '/:id?', 'opt');
     r.build();
 
@@ -43,7 +43,7 @@ describe('optional param at root matches /', () => {
   });
 
   it('/:id? + set-undefined behavior at root', () => {
-    const r = new Router<string>({ optionalParamBehavior: OptionalParamBehavior.SetUndefined });
+    const r = new Router<string>({ omitMissingOptional: false });
     r.add('GET', '/:id?', 'opt');
     r.build();
 
