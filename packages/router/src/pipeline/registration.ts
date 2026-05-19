@@ -168,7 +168,7 @@ class Registration<T> {
 
   seal(
     options: {
-      optionalParamBehavior?: 'omit' | OptionalParamBehavior.SetUndefined;
+      optionalParamBehavior?: OptionalParamBehavior;
     } = {},
   ): RegistrationSnapshot<T> {
     if (this.snapshot !== null) {
@@ -179,7 +179,7 @@ class Registration<T> {
     const optionalDefaultsSnapshot = this.optionalParamDefaults.snapshot();
     const state = createBuildState<T>();
     const undo: SegmentTreeUndoLog = [];
-    const omitBehavior = (options.optionalParamBehavior ?? 'omit') === 'omit';
+    const omitBehavior = (options.optionalParamBehavior ?? OptionalParamBehavior.Omit) === OptionalParamBehavior.Omit;
 
     this.prefixIndex = new WildcardPrefixIndex();
     this.identityRegistry = new IdentityRegistry();
@@ -563,7 +563,7 @@ interface RouteShape {
   /** Names of every capturing segment in registration order. */
   originalNames: ReadonlyArray<string>;
   /** Param/wildcard discriminator for each `originalNames` entry. */
-  originalTypes: ReadonlyArray<'param' | 'wildcard'>;
+  originalTypes: ReadonlyArray<PathPartType.Param | PathPartType.Wildcard>;
   /** Count of `:name?` optional segments — drives expansion fanout. */
   optionalCount: number;
 }
@@ -572,18 +572,18 @@ interface RouteShape {
  *  optional count needed for cap validation. */
 function collectRouteShape(parts: ReadonlyArray<PathPart>): RouteShape {
   const originalNames: string[] = [];
-  const originalTypes: Array<'param' | 'wildcard'> = [];
+  const originalTypes: Array<PathPartType.Param | PathPartType.Wildcard> = [];
   let optionalCount = 0;
   for (const p of parts) {
     if (p.type === PathPartType.Param) {
       originalNames.push(p.name);
-      originalTypes.push('param');
+      originalTypes.push(PathPartType.Param);
       if (p.optional) {
         optionalCount++;
       }
     } else if (p.type === PathPartType.Wildcard) {
       originalNames.push(p.name);
-      originalTypes.push('wildcard');
+      originalTypes.push(PathPartType.Wildcard);
     }
   }
   return { originalNames, originalTypes, optionalCount };
@@ -650,7 +650,7 @@ function recordExpansionTerminal<T>(
   decoder: (s: string) => string,
   undo: SegmentTreeUndoLog,
 ): number {
-  const present: Array<{ name: string; type: PathPartType.Param | 'wildcard' }> = [];
+  const present: Array<{ name: string; type: PathPartType.Param | PathPartType.Wildcard }> = [];
   for (const p of expParts) {
     if (p.type === PathPartType.Param || p.type === PathPartType.Wildcard) {
       present.push({ name: p.name, type: p.type });

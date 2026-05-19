@@ -1,6 +1,7 @@
 import type { RouteParams } from '../types';
 
 import { NullProtoObj } from '../internal';
+import { PathPartType } from '../tree';
 
 /**
  * Super-factory cache: one compiled `(presentBitmask, u, v) => RouteParams`
@@ -32,7 +33,7 @@ export function createFactoryCache(): FactoryCache {
 export function getOrCreateSuperFactory(
   cache: FactoryCache,
   originalNames: ReadonlyArray<string>,
-  originalTypes: ReadonlyArray<'param' | 'wildcard'>,
+  originalTypes: ReadonlyArray<PathPartType.Param | PathPartType.Wildcard>,
   omitBehavior: boolean,
   decoder: (s: string) => string,
 ): SuperFactoryFn {
@@ -42,7 +43,7 @@ export function getOrCreateSuperFactory(
       cacheKey += ',';
     }
     cacheKey += originalNames[n]!;
-    cacheKey += originalTypes[n] === 'wildcard' ? '#w' : '#p';
+    cacheKey += originalTypes[n] === PathPartType.Wildcard ? '#w' : '#p';
   }
   const cached = cache.get(cacheKey);
   if (cached !== undefined) {
@@ -56,7 +57,7 @@ export function getOrCreateSuperFactory(
   let body = 'var p = new NullProtoObj();\nvar s = 0;\n';
   for (let n = 0; n < originalNames.length; n++) {
     const name = originalNames[n]!;
-    const isWild = originalTypes[n] === 'wildcard';
+    const isWild = originalTypes[n] === PathPartType.Wildcard;
     const val = `u.substring(v[s*2], v[s*2+1])`;
     const assign = isWild ? val : `decoder(${val})`;
     body += `if (m & ${1 << n}) { p[${JSON.stringify(name)}] = ${assign}; s++; }`;

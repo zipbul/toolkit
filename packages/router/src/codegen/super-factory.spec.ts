@@ -1,11 +1,12 @@
+import { describe, expect, it } from 'bun:test';
+
 /**
  * Unit specs for `super-factory.ts` — the per-shape params factory cache
  * + the present-bitmask projection. Both are pure; the factory cache
  * collapses 2^N variant closures into one compiled function so its
  * correctness is load-bearing for memory savings.
  */
-import { describe, expect, it } from 'bun:test';
-
+import { PathPartType } from '../tree';
 import { computePresentBitmask, createFactoryCache, getOrCreateSuperFactory } from './super-factory';
 
 const identityDecoder = (s: string) => s;
@@ -29,7 +30,7 @@ describe('createFactoryCache', () => {
 describe('getOrCreateSuperFactory', () => {
   it('produces a factory that assigns each present name to the decoded slice', () => {
     const cache = createFactoryCache();
-    const fn = getOrCreateSuperFactory(cache, ['id', 'kind'], ['param', 'param'], true, identityDecoder);
+    const fn = getOrCreateSuperFactory(cache, ['id', 'kind'], [PathPartType.Param, PathPartType.Param], true, identityDecoder);
     const url = '/users/42/admin';
     const v = offsetsFromCaptures([
       [7, 9],
@@ -42,7 +43,7 @@ describe('getOrCreateSuperFactory', () => {
 
   it('skips absent names entirely when omitBehavior=true', () => {
     const cache = createFactoryCache();
-    const fn = getOrCreateSuperFactory(cache, ['id', 'tail'], ['param', 'param'], true, identityDecoder);
+    const fn = getOrCreateSuperFactory(cache, ['id', 'tail'], [PathPartType.Param, PathPartType.Param], true, identityDecoder);
     const url = '/users/42';
     const v = offsetsFromCaptures([[7, 9]]);
     const params = fn(0b01, url, v);
@@ -52,7 +53,7 @@ describe('getOrCreateSuperFactory', () => {
 
   it('writes undefined for absent names when omitBehavior=false', () => {
     const cache = createFactoryCache();
-    const fn = getOrCreateSuperFactory(cache, ['id', 'tail'], ['param', 'param'], false, identityDecoder);
+    const fn = getOrCreateSuperFactory(cache, ['id', 'tail'], [PathPartType.Param, PathPartType.Param], false, identityDecoder);
     const url = '/users/42';
     const v = offsetsFromCaptures([[7, 9]]);
     const params = fn(0b01, url, v);
@@ -63,7 +64,7 @@ describe('getOrCreateSuperFactory', () => {
 
   it('does NOT decode wildcard slices (origin: wildcard skips decoder)', () => {
     const cache = createFactoryCache();
-    const fn = getOrCreateSuperFactory(cache, ['rest'], ['wildcard'], true, () => 'should-not-be-called');
+    const fn = getOrCreateSuperFactory(cache, ['rest'], [PathPartType.Wildcard], true, () => 'should-not-be-called');
     const url = '/files/raw%20tail';
     const v = offsetsFromCaptures([[7, 17]]);
     const params = fn(0b1, url, v);
@@ -72,24 +73,24 @@ describe('getOrCreateSuperFactory', () => {
 
   it('returns the cached factory on a second call with the same shape', () => {
     const cache = createFactoryCache();
-    const a = getOrCreateSuperFactory(cache, ['id'], ['param'], true, identityDecoder);
-    const b = getOrCreateSuperFactory(cache, ['id'], ['param'], true, identityDecoder);
+    const a = getOrCreateSuperFactory(cache, ['id'], [PathPartType.Param], true, identityDecoder);
+    const b = getOrCreateSuperFactory(cache, ['id'], [PathPartType.Param], true, identityDecoder);
     expect(a).toBe(b);
     expect(cache.size).toBe(1);
   });
 
   it('caches separately for omit vs set-undefined behavior', () => {
     const cache = createFactoryCache();
-    const omit = getOrCreateSuperFactory(cache, ['id'], ['param'], true, identityDecoder);
-    const setUndef = getOrCreateSuperFactory(cache, ['id'], ['param'], false, identityDecoder);
+    const omit = getOrCreateSuperFactory(cache, ['id'], [PathPartType.Param], true, identityDecoder);
+    const setUndef = getOrCreateSuperFactory(cache, ['id'], [PathPartType.Param], false, identityDecoder);
     expect(omit).not.toBe(setUndef);
     expect(cache.size).toBe(2);
   });
 
   it('caches separately for param vs wildcard at the same name', () => {
     const cache = createFactoryCache();
-    const asParam = getOrCreateSuperFactory(cache, ['x'], ['param'], true, identityDecoder);
-    const asWild = getOrCreateSuperFactory(cache, ['x'], ['wildcard'], true, identityDecoder);
+    const asParam = getOrCreateSuperFactory(cache, ['x'], [PathPartType.Param], true, identityDecoder);
+    const asWild = getOrCreateSuperFactory(cache, ['x'], [PathPartType.Wildcard], true, identityDecoder);
     expect(asParam).not.toBe(asWild);
     expect(cache.size).toBe(2);
   });

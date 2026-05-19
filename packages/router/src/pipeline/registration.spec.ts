@@ -29,7 +29,7 @@ describe('collectRouteShape', () => {
   it('captures param names + types and counts the required param as non-optional', () => {
     const shape = collectRouteShape([STATIC_USERS, PARAM_ID]);
     expect(shape.originalNames).toEqual(['id']);
-    expect(shape.originalTypes).toEqual(['param']);
+    expect(shape.originalTypes).toEqual([PathPartType.Param]);
     expect(shape.optionalCount).toBe(0);
   });
 
@@ -42,7 +42,7 @@ describe('collectRouteShape', () => {
   it('records wildcard segments alongside params with the right type tag', () => {
     const shape = collectRouteShape([STATIC_USERS, PARAM_ID, WILD_REST]);
     expect(shape.originalNames).toEqual(['id', 'rest']);
-    expect(shape.originalTypes).toEqual(['param', 'wildcard']);
+    expect(shape.originalTypes).toEqual([PathPartType.Param, PathPartType.Wildcard]);
   });
 
   it('does not count wildcard segments as optional', () => {
@@ -60,7 +60,13 @@ describe('checkDynamicRouteCaps', () => {
   it('rejects when optional segments exceed MAX_OPTIONAL_SEGMENTS_PER_ROUTE', () => {
     const shape = {
       originalNames: ['a', 'b', 'c', 'd', 'e'],
-      originalTypes: ['param', 'param', 'param', 'param', 'param'] as const,
+      originalTypes: [
+        PathPartType.Param,
+        PathPartType.Param,
+        PathPartType.Param,
+        PathPartType.Param,
+        PathPartType.Param,
+      ] as const,
       optionalCount: MAX_OPTIONAL_SEGMENTS_PER_ROUTE + 1,
     };
     const out = checkDynamicRouteCaps({ path: '/x' }, shape);
@@ -76,7 +82,7 @@ describe('checkDynamicRouteCaps', () => {
     const names = Array.from({ length: 32 }, (_, i) => `p${i}`);
     const shape = {
       originalNames: names,
-      originalTypes: names.map(() => 'param' as const),
+      originalTypes: names.map(() => PathPartType.Param as const),
       optionalCount: 0,
     };
     const out = checkDynamicRouteCaps({ path: '/x' }, shape);
@@ -92,7 +98,7 @@ describe('checkDynamicRouteCaps', () => {
     const names = Array.from({ length: 31 }, (_, i) => `p${i}`);
     const shape = {
       originalNames: names,
-      originalTypes: names.map(() => 'param' as const),
+      originalTypes: names.map(() => PathPartType.Param as const),
       optionalCount: 0,
     };
     expect(checkDynamicRouteCaps({ path: '/x' }, shape)).toBeUndefined();

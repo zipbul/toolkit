@@ -1,8 +1,8 @@
 import { bench, do_not_optimize, run, summary } from 'mitata';
 
 import { Router } from '../src/router';
+import { MatchSource } from '../src/types';
 import { printEnv, settleScavenger } from './helpers';
-import { MatchSource } from './src/types';
 
 const CACHE_SIZE = 128;
 const UNIQUE = 100_000;
