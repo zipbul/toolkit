@@ -13,7 +13,7 @@ export enum UndoKind {
   TerminalArraysTruncate = 9,
   HandlersTruncate = 10,
   SegmentTreeReset = 11,
-  StaticBucketReset = 17,
+  StaticBucketReset = 12,
   StaticMapDelete = 13,
   SingleChildClear = 14,
   SingleChildRestore = 15,

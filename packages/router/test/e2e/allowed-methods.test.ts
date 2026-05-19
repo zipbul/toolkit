@@ -50,12 +50,20 @@ describe('allowedMethods', () => {
     expect(r.allowedMethods('/users/')).toEqual([]);
   });
 
-  it('strips query string before matching', () => {
+  it('does not strip query string — raw `?...` is captured into an unconstrained :param value', () => {
     const r = new Router<number>();
     r.add('GET', '/users/:id', 1);
     r.build();
 
     expect(r.allowedMethods('/users/42?token=abc')).toEqual(['GET']);
+  });
+
+  it('regex-constrained :param rejects raw query string in the slot', () => {
+    const r = new Router<number>();
+    r.add('GET', '/users/:id(\\d+)', 1);
+    r.build();
+
+    expect(r.allowedMethods('/users/42?token=abc')).toEqual([]);
   });
 
   it('case-insensitive matching with caseSensitive=false', () => {

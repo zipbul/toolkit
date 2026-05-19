@@ -1,7 +1,6 @@
 import { describe, expect, it } from 'bun:test';
 
 import { Router } from '../../src/router';
-import { WildcardOrigin } from '../../src/tree';
 import { MatchSource } from '../../src/types';
 
 describe('percent-decoded param values', () => {
@@ -79,7 +78,7 @@ describe('case folding (caseSensitive=false)', () => {
 });
 
 describe('trailing slash normalization', () => {
-  it('trims trailing slash by default (ignoreTrailingSlash=undefined (defaults true))', () => {
+  it('trims trailing slash by default (ignoreTrailingSlash unset defaults to true)', () => {
     const r = new Router<string>();
     r.add('GET', '/x/y', 'h');
     r.build();
@@ -87,7 +86,7 @@ describe('trailing slash normalization', () => {
     expect(r.match('GET', '/x/y/')?.value).toBe('h');
   });
 
-  it('preserves trailing slash distinction in match probe when ignoreTrailingSlash=strict', () => {
+  it('preserves trailing slash distinction in match probe when ignoreTrailingSlash=false', () => {
     const r = new Router<string>({ ignoreTrailingSlash: false });
     r.add('GET', '/x/y', 'h');
     r.build();
@@ -141,8 +140,8 @@ describe('integration — register/build/match end-to-end', () => {
     const r = new Router<string>();
     r.add(['GET', 'POST'], '/x', 'multi');
     r.build();
-    expect(r.match('GET', '/x')?.value).toBe(WildcardOrigin.Multi);
-    expect(r.match('POST', '/x')?.value).toBe(WildcardOrigin.Multi);
+    expect(r.match('GET', '/x')?.value).toBe('multi');
+    expect(r.match('POST', '/x')?.value).toBe('multi');
     expect(r.match('DELETE', '/x')).toBeNull();
   });
 

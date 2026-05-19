@@ -2,7 +2,9 @@ import type { RouterErrorData } from './types';
 
 /**
  * Error thrown by the router for every registration / build / option
- * failure. `match()` never throws; misses return `null`.
+ * failure. `match()` does not throw `RouterError` — misses return `null`
+ * — but `decodeURIComponent` may still propagate a built-in `URIError`
+ * when a captured `:param` slot contains a malformed `%xx` byte.
  *
  * The structured payload lives on {@link RouterError.data} as a
  * {@link RouterErrorData} discriminated union — narrow on `data.kind`

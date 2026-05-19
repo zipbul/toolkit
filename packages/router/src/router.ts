@@ -78,7 +78,8 @@ class Router<T = unknown> implements RouterPublicApi<T> {
    * @param method - HTTP method, an array of methods to register the
    *   same route under, or `'*'` to expand at seal time to every
    *   method present at build time (the seven HTTP defaults plus any
-   *   custom method introduced by earlier `add()` calls).
+   *   custom method introduced by any other route registered before
+   *   `build()` — registration order does not matter).
    * @param path - Origin-form pathname starting with `/`. May contain
    *   `:name`, `:name?`, `:name(regex)`, `*name`, and `*name+` syntax;
    *   see the README for full pattern reference.
@@ -114,13 +115,19 @@ class Router<T = unknown> implements RouterPublicApi<T> {
    * Match a URL against the registered routes.
    *
    * @param method - HTTP method.
-   * @param path - Origin-form pathname (RFC 7230 §5.3.1).
-   *   `match()` does not normalize the input — pass the form
-   *   produced by `new URL(request.url).pathname`. Param values are
-   *   percent-decoded; wildcard captures are returned raw. Malformed
-   *   `%xx` inside a captured param slot propagates a `URIError`.
+   * @param path - Origin-form pathname (RFC 7230 §5.3.1). `match()`
+   *   does not perform IRI / percent-encoding normalization on input
+   *   — pass the form produced by `new URL(request.url).pathname`.
+   *   Trailing-slash and case normalization _are_ applied at match
+   *   time when {@link RouterOptions.ignoreTrailingSlash} (default
+   *   `true`) and {@link RouterOptions.pathCaseSensitive} (default
+   *   `true`) opt in. Param values are percent-decoded; wildcard
+   *   captures are returned raw.
    * @returns A {@link MatchOutput} on a hit, or `null` on a miss
    *   (no route, wrong method, or `build()` not yet called).
+   * @throws {URIError} If a captured param slot contains malformed
+   *   `%xx` percent-encoding (propagated from `decodeURIComponent`).
+   *   {@link RouterError} is never thrown from `match()`.
    */
   match: (method: string, path: string) => MatchOutput<T> | null;
   /**

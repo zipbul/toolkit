@@ -26,8 +26,11 @@ export enum MatchSource {
 /**
  * Discriminant for {@link RouterErrorData}. One value per failure mode
  * the router can throw: 1 state-transition kind, 18 registration /
- * validation kinds, and 2 options / batch kinds. `match()` never throws,
- * so there are no match-time kinds.
+ * validation kinds, and 2 options / batch kinds. There are no
+ * match-time kinds because `match()` does not throw `RouterError` —
+ * it returns `null` on misses. A built-in `URIError` from
+ * `decodeURIComponent` may still propagate on a captured `:param`
+ * slot that contains malformed percent-encoding.
  */
 export enum RouterErrorKind {
   /** `add()` / `addAll()` called after `build()`. */

@@ -90,7 +90,7 @@ describe('memory bounds — repeated builds do not leak', () => {
       try {
         r.build();
       } catch {
-        /* expected */
+        void 0;
       }
     }
 
@@ -105,7 +105,7 @@ describe('memory bounds — repeated builds do not leak', () => {
       try {
         r.build();
       } catch {
-        /* expected route-duplicate */
+        void 0;
       }
     }
 

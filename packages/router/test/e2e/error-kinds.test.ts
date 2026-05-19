@@ -36,7 +36,7 @@ function expectKindOnBuild(register: (r: Router<string>) => void, kind: RouterEr
   throw new Error(`expected RouterError(${kind}) on build()`);
 }
 
-describe('RouterErrorKind reproducers (full coverage of 22 kinds)', () => {
+describe('RouterErrorKind reproducers (full coverage of 21 kinds)', () => {
   it(RouterErrorKind.RouterSealed, () => {
     const r = new Router<string>();
     r.build();
@@ -136,5 +136,34 @@ describe('RouterErrorKind reproducers (full coverage of 22 kinds)', () => {
       r.add('GET', '/users/*tail', 'a');
       r.add('GET', '/users/me', 'b');
     }, RouterErrorKind.RouteUnreachable);
+  });
+
+  it(RouterErrorKind.PathInvalidUtf8, () => {
+    expectKindOnBuild(r => r.add('GET', '/a/%C0%80', 'v'), RouterErrorKind.PathInvalidUtf8);
+  });
+
+  it(RouterErrorKind.RouterOptionsInvalid, () => {
+    try {
+      new Router<string>({ cacheSize: -1 });
+    } catch (e) {
+      expect(e).toBeInstanceOf(RouterError);
+      expect((e as RouterError).data.kind).toBe(RouterErrorKind.RouterOptionsInvalid);
+      return;
+    }
+    throw new Error(`expected RouterError(${RouterErrorKind.RouterOptionsInvalid}) on construct`);
+  });
+
+  it(RouterErrorKind.RouteValidation, () => {
+    const r = new Router<string>();
+    r.add('GET', '/x', 'a');
+    r.add('GET', '/x', 'b');
+    try {
+      r.build();
+    } catch (e) {
+      expect(e).toBeInstanceOf(RouterError);
+      expect((e as RouterError).data.kind).toBe(RouterErrorKind.RouteValidation);
+      return;
+    }
+    throw new Error(`expected RouterError(${RouterErrorKind.RouteValidation}) on build()`);
   });
 });
