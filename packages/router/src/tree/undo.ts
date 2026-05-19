@@ -2,22 +2,22 @@ import type { ParamSegment, SegmentNode } from './node-types';
 import type { PatternTesterFn } from './pattern-tester';
 
 export enum UndoKind {
-  StaticChildrenInit = 1,
-  StaticChildAdd = 2,
-  ParamChildSet = 3,
-  ParamSiblingAdd = 4,
-  WildcardSet = 5,
-  StoreSet = 6,
-  TesterAdd = 7,
-  PrefixIndexPlan = 8,
-  TerminalArraysTruncate = 9,
-  HandlersTruncate = 10,
-  SegmentTreeReset = 11,
-  StaticBucketReset = 12,
-  StaticMapDelete = 13,
-  SingleChildClear = 14,
-  SingleChildRestore = 15,
-  StaticPathMaskRestore = 16,
+  StaticChildrenInit,
+  StaticChildAdd,
+  ParamChildSet,
+  ParamSiblingAdd,
+  WildcardSet,
+  StoreSet,
+  TesterAdd,
+  PrefixIndexPlan,
+  TerminalArraysTruncate,
+  HandlersTruncate,
+  SegmentTreeReset,
+  StaticBucketReset,
+  StaticMapDelete,
+  SingleChildClear,
+  SingleChildRestore,
+  StaticPathMaskRestore,
 }
 
 export type UndoRecord =
