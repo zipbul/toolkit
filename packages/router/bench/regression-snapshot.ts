@@ -1,16 +1,4 @@
-/**
- * Regression-snapshot bench. Captures the canonical match/build/RSS
- * surface as JSON. The numbers don't claim absolute repeatability —
- * JIT warmup, IC tier-up and libpas scavenging vary across runs.
- * They serve as a sanity checkpoint: if a number moves by >20% from
- * the recorded baseline in bench-results.md, that's a regression
- * worth investigating.
- */
 import { Router } from '../src/router';
-// printEnv is intentionally NOT imported here: this bench emits pure
-// JSON to stdout for CI consumption, and a free-form env line would
-// break the JSON parse. Env fields are captured inline below
-// (bun/node/platform/arch) inside the JSON object instead.
 import { gc as forceGc, settleScavenger as settleRss } from './helpers';
 
 interface Sample {
@@ -20,8 +8,6 @@ interface Sample {
   minNsPerOp: number;
   medianNsPerOp: number;
   meanNsPerOp: number;
-  // With TRIALS=11 the nearest-rank p99 index collapses to the max sample;
-  // this is reported as `maxNsPerOp` instead of a misleading `p99NsPerOp`.
   maxNsPerOp: number;
   stddevPct: number;
 }
@@ -31,9 +17,6 @@ function nowNs(): bigint {
 }
 
 function timeIt(name: string, iters: number, fn: () => unknown): Sample {
-  // Warmup pass. Accumulate the returned value so JSC can't dead-code
-  // eliminate the call. `unknown` return + checksum loop prevents the
-  // optimizer from concluding the body is side-effect-free.
   let checksum = 0;
   for (let i = 0; i < Math.min(iters, 1000); i++) {
     const r = fn();
@@ -42,10 +25,6 @@ function timeIt(name: string, iters: number, fn: () => unknown): Sample {
     }
   }
 
-  // 11 trials so the median lands on a real sample. min + p99 highlight
-  // the noise floor / tail. stddevPct (relative to mean) is the noise
-  // signal — anything > 10% means the measurement isn't stable enough
-  // to feed a regression alarm; the formatter flags those rows with ⚠.
   const TRIALS = 11;
   const samples: number[] = [];
   for (let t = 0; t < TRIALS; t++) {
@@ -59,7 +38,6 @@ function timeIt(name: string, iters: number, fn: () => unknown): Sample {
     const end = nowNs();
     samples.push(Number(end - start) / iters);
   }
-  // Force checksum to live past the loop so DCE can't strip it.
   if (checksum < 0) {
     console.log(checksum);
   }
@@ -68,10 +46,6 @@ function timeIt(name: string, iters: number, fn: () => unknown): Sample {
   const median = samples[Math.floor(TRIALS / 2)]!;
   const max = samples[TRIALS - 1]!;
   const mean = samples.reduce((a, b) => a + b, 0) / TRIALS;
-  // Sample stddev (Bessel's correction). With TRIALS=11 the divisor is
-  // 10 rather than 11; the resulting σ is ~5% larger than population σ.
-  // Using sample σ because the 11 trials are observations of a wider
-  // population (every JIT/IC state that could fire during a real run).
   const variance = samples.reduce((acc, s) => acc + (s - mean) ** 2, 0) / (TRIALS - 1);
   const stddev = Math.sqrt(variance);
   const stddevPct = (stddev / mean) * 100;
@@ -91,8 +65,6 @@ function timeIt(name: string, iters: number, fn: () => unknown): Sample {
 function rssMB(): number {
   return process.memoryUsage().rss / (1024 * 1024);
 }
-
-// ── Fixtures ──────────────────────────────────────────────────────────────
 
 function buildStaticRouter(count: number): Router<string> {
   const r = new Router<string>();
@@ -124,8 +96,6 @@ function buildMixedRouter(count: number): Router<string> {
   return r;
 }
 
-// ── Build-time bench ──────────────────────────────────────────────────────
-
 function buildSamples(): Sample[] {
   const samples: Sample[] = [];
 
@@ -144,9 +114,6 @@ function buildSamples(): Sample[] {
           r.add(m, p, v);
         }
         r.build();
-        // Return the built router so timeIt's checksum consumer can prove
-        // the build had side effects; without a return the entire build
-        // body would be a candidate for DCE.
         return r;
       }),
     );
@@ -155,37 +122,30 @@ function buildSamples(): Sample[] {
   return samples;
 }
 
-// ── Match-time bench ──────────────────────────────────────────────────────
-
 function matchSamples(): Sample[] {
   const samples: Sample[] = [];
 
-  // hit/static — pre-built MatchOutput reuse path.
   {
     const r = buildStaticRouter(100);
     samples.push(timeIt('match-hit/static', 200_000, () => r.match('GET', '/static/42')));
   }
 
-  // hit/dynamic (first call per URL == 'dynamic', then cached).
   {
     const r = buildDynamicRouter(100);
     samples.push(timeIt('match-hit/dynamic-cache-warm', 200_000, () => r.match('GET', '/api/v1/group-42/items/9999')));
   }
 
-  // hit/dynamic-cold (rotating URLs, defeats the cache).
   {
     const r = buildDynamicRouter(100);
     let n = 0;
     samples.push(timeIt('match-hit/dynamic-cache-cold', 100_000, () => r.match('GET', `/api/v1/group-42/items/${n++}`)));
   }
 
-  // miss/unknown-path.
   {
     const r = buildMixedRouter(100);
     samples.push(timeIt('match-miss/unknown-path', 200_000, () => r.match('GET', '/no/such/route')));
   }
 
-  // miss/wrong-method.
   {
     const r = buildMixedRouter(100);
     samples.push(timeIt('match-miss/wrong-method', 200_000, () => r.match('POST', '/static/42')));
@@ -193,8 +153,6 @@ function matchSamples(): Sample[] {
 
   return samples;
 }
-
-// ── RSS snapshot ──────────────────────────────────────────────────────────
 
 interface RssSnap {
   scenario: string;
@@ -214,7 +172,6 @@ function rssSnaps(): RssSnap[] {
     settleRss();
     const before = rssMB();
     const r = builder();
-    // Touch it so JIT/codegen runs.
     r.match('GET', '/api/v1/group-0/items/x');
     settleRss();
     const after = rssMB();

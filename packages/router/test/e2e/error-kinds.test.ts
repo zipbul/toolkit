@@ -1,7 +1,3 @@
-/**
- * Reproducer for every RouterErrorKind. Each test triggers exactly one
- * kind to lock the error pipeline against silent regressions.
- */
 import { describe, it, expect } from 'bun:test';
 
 import type { RouterErrorData } from '../../src/types';
@@ -80,7 +76,6 @@ describe('RouterErrorKind reproducers (full coverage of 22 kinds)', () => {
   });
 
   it(RouterErrorKind.PathInvalidPchar, () => {
-    // backslash is outside the pchar table
     expectKindOnBuild(r => r.add('GET', '/foo\\bar', 'v'), RouterErrorKind.PathInvalidPchar);
   });
 
@@ -130,7 +125,6 @@ describe('RouterErrorKind reproducers (full coverage of 22 kinds)', () => {
   });
 
   it(RouterErrorKind.RouteConflict, () => {
-    // Sibling regex constraints conflict at the same position
     expectKindOnBuild(r => {
       r.add('GET', '/users/:id(\\d+)', 'a');
       r.add('GET', '/users/:slug([a-z]+)', 'b');
@@ -138,8 +132,6 @@ describe('RouterErrorKind reproducers (full coverage of 22 kinds)', () => {
   });
 
   it(RouterErrorKind.RouteUnreachable, () => {
-    // Wildcard already accepts everything beneath /users — adding a
-    // descendant is unreachable.
     expectKindOnBuild(r => {
       r.add('GET', '/users/*tail', 'a');
       r.add('GET', '/users/me', 'b');

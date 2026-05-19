@@ -13,25 +13,10 @@ import { buildFromRegistration, MatchLayer, Registration } from './pipeline';
 import { forEachStaticChild } from './tree';
 import { RouterErrorKind } from './types';
 
-/**
- * Symbol-keyed slot for the internal-inspection hatch. Symbol identity
- * means external code cannot recreate the key by name, and the slot is
- * non-enumerable. The `@zipbul/router/internal` subpath re-exports this
- * symbol along with `getRouterInternals()` for regression-test access.
- */
 const ROUTER_INTERNALS_KEY: unique symbol = Symbol.for('@zipbul/router/internals');
 
-/** Frozen empty-string array returned by `allowedMethods()` before build().
- *  Single shared instance — avoids per-call allocation on the pre-build
- *  stub path. */
 const EMPTY_METHODS: readonly string[] = Object.freeze([]);
 
-/** Build the root-fast-miss mask for one method's segment-tree root.
- *  Returns null when the root could route a path the mask cannot prove
- *  absent (param-child / wildcard-store / compacted prefix chain). When
- *  non-null, `mask[byte] === 1` iff at least one root-level static child
- *  starts with that byte — the emitter reads this to skip walker
- *  dispatch on a guaranteed root miss. */
 function buildRootFirstCharMask(root: SegmentNode): Int32Array | null {
   if (root.paramChild !== null) {
     return null;
@@ -60,31 +45,103 @@ interface RouterInternals<T> {
 }
 
 interface CacheContainers<T> {
-  /**
-   * Per-method-code sparse array of hit caches. Indexing by `mc` (a small
-   * SMI 0-31) gives the JIT a typed array load instead of the polymorphic
-   * `Map<number, …>.get` it would otherwise compile.
-   */
   hit: Array<RouterCache<MatchCacheEntry<T>> | undefined>;
   maxSize: number;
 }
 
 /**
- * HTTP router with build-once / match-many semantics. Methods are
- * declared as arrow-function fields rather than prototype methods so
- * detached calls (`const m = router.match; m(...)`) work without
- * `bind()` — every method closes over the constructor's locals and
- * never reads `this`. The instance is `Object.freeze`d at the end of
- * the constructor; the caches and other build-time state live in the
- * closure scope where external code cannot reach them.
+ * High-performance URL router. Build-once / match-many.
+ *
+ * Lifecycle:
+ * 1. `new Router(options?)` — instantiate.
+ * 2. `add(method, path, value)` / `addAll(entries)` — queue routes.
+ *    Path syntax, conflict, and duplicate validation is deferred to
+ *    `build()`.
+ * 3. `build()` — seal the router and emit the specialized match
+ *    function. Required before `match()` returns anything but `null`.
+ * 4. `match(method, path)` / `allowedMethods(path)` — query at runtime.
+ *
+ * Once `build()` returns, the instance is frozen and further `add()` /
+ * `addAll()` calls throw `RouterError({ kind: 'router-sealed' })`. To
+ * register more routes, construct a new `Router`.
+ *
+ * All instance methods are detachable (`const m = router.match;
+ * m('GET', '/x')`) — they do not read `this`.
+ *
+ * @template T - Type of the value stored with each route.
  */
 class Router<T = unknown> implements RouterPublicApi<T> {
+  /**
+   * Queue a route for registration. Validation is deferred to
+   * `build()`; this call only throws if invoked after `build()`.
+   *
+   * @param method - HTTP method, an array of methods to register the
+   *   same route under, or `'*'` to expand at seal time to every
+   *   method present at build time (the seven HTTP defaults plus any
+   *   custom method introduced by earlier `add()` calls).
+   * @param path - Origin-form pathname starting with `/`. May contain
+   *   `:name`, `:name?`, `:name(regex)`, `*name`, and `*name+` syntax;
+   *   see the README for full pattern reference.
+   * @param value - Value to associate with the route. Surfaced as
+   *   {@link MatchOutput.value} on a match.
+   * @throws {RouterError} `kind: 'router-sealed'` if called after `build()`.
+   */
   readonly add: (method: string | readonly string[], path: string, value: T) => void;
+  /**
+   * Queue multiple routes at once. Behaves like a loop of `add()`
+   * calls with shared error context. Validation is deferred to
+   * `build()`.
+   *
+   * @param entries - Array of `[method, path, value]` triples.
+   * @throws {RouterError} `kind: 'router-sealed'` if called after `build()`.
+   */
   readonly addAll: (entries: ReadonlyArray<readonly [string, string, T]>) => void;
+  /**
+   * Seal the router and emit the specialized match function. Required
+   * before `match()` can return anything but `null`. Returns `this`.
+   * The second and subsequent calls are no-ops.
+   *
+   * Build-time failures across multiple routes are aggregated into a
+   * single `RouterError({ kind: 'route-validation', errors: [...] })`
+   * rather than thrown one by one.
+   *
+   * @throws {RouterError} On the first per-route failure encountered,
+   *   or `kind: 'route-validation'` for aggregated failures, or any
+   *   options-validation error surfaced during sealing.
+   */
   readonly build: () => RouterPublicApi<T>;
+  /**
+   * Match a URL against the registered routes.
+   *
+   * @param method - HTTP method.
+   * @param path - Origin-form pathname (RFC 7230 §5.3.1).
+   *   `match()` does not normalize the input — pass the form
+   *   produced by `new URL(request.url).pathname`. Param values are
+   *   percent-decoded; wildcard captures are returned raw. Malformed
+   *   `%xx` inside a captured param slot propagates a `URIError`.
+   * @returns A {@link MatchOutput} on a hit, or `null` on a miss
+   *   (no route, wrong method, or `build()` not yet called).
+   */
   match: (method: string, path: string) => MatchOutput<T> | null;
+  /**
+   * List the HTTP methods registered for `path`. Used by HTTP
+   * adapters to disambiguate `404` (no routes for the path) from
+   * `405` (the path exists but not for this method).
+   *
+   * Walks every registered method's tree, so it is meaningfully
+   * slower than `match()` — only call it after `match()` returns
+   * `null`. Never call on a hot match path.
+   *
+   * @param path - Origin-form pathname.
+   * @returns A frozen array of method names, possibly empty.
+   */
   allowedMethods: (path: string) => readonly string[];
 
+  /**
+   * @param options - Optional configuration; see {@link RouterOptions}.
+   * @throws {RouterError} `kind: 'router-options-invalid'` if a value
+   *   in `options` is out of range (e.g. negative `cacheSize`).
+   */
   constructor(options: RouterOptions = {}) {
     const routerOptions: RouterOptions = { ...options };
     const methodRegistry = new MethodRegistry();
@@ -111,14 +168,8 @@ class Router<T = unknown> implements RouterPublicApi<T> {
       const built = runBuildPipeline<T>(registration, methodRegistry, routerOptions, cache);
       internals.matchImpl = built.matchImpl;
       internals.matchLayer = built.matchLayer;
-      // Hot-path: rebind this.match directly to the compiled implementation.
-      // The earlier `(m, p) => internals.matchImpl(m, p)` arrow added a
-      // closure-call hop on every dispatch; rebinding skips the hop and
-      // exposes matchImpl as a monomorphic call site to JSC. The layer
-      // facade keeps allowedMethods cold-path correct.
       this.match = built.matchImpl;
       this.allowedMethods = path => built.matchLayer.allowedMethods(path);
-      // Re-freeze after rebind so the post-build surface stays immutable.
       Object.freeze(this);
     };
 
@@ -132,39 +183,14 @@ class Router<T = unknown> implements RouterPublicApi<T> {
       if (!registration.isSealed()) {
         performBuild();
       }
-      // No post-build compactMemory call. The single `Bun.gc(true)` inside
-      // performBuild collects the orphan heap synchronously; libpas's
-      // scavenger runs every ~300ms on its own and decommits the freed
-      // pages back to the OS without us having to poll. Empirical (100k
-      // tenant param + factor): RSS settles to 53 MB within 500 ms of
-      // build() returning, identical to the prior fire-and-forget polling
-      // path, but without the GC-during-traffic race that polled 100ms
-      // intervals introduced (p50 first-200 async matches: 218 → 157 ns).
       return this;
     };
 
-    // Pre-build stubs. match() before build() returns null; allowedMethods
-    // returns []. Both are replaced in performBuild() with direct closure
-    // captures of the compiled implementation.
-    //
-    // No leading-slash guard. Standard HTTP server boundaries
-    // (Node `req.url`, Bun `URL(...).pathname`, Express/Fastify/Hono
-    // request handlers) all guarantee origin-form pathnames per RFC 7230
-    // §5.3.1, and our peer routers (find-my-way, hono, rou3) skip the
-    // check for the same reason. Callers handing the router a non-`/`
-    // input is undefined behavior.
     this.match = () => null;
     this.allowedMethods = () => EMPTY_METHODS;
   }
 }
 
-/**
- * Validate `cacheSize` before handing it to `RouterCache`. nextPow2 silently
- * converts garbage (negative/NaN/non-integer) into a 1-slot cache and rounds
- * 1000 → 1024; this guard surfaces actionable errors instead.
- *
- * @internal exported for unit tests.
- */
 function validateCacheSize(rawCacheSize: number | undefined): number {
   const requested = rawCacheSize ?? 1000;
   if (!Number.isInteger(requested) || requested < 1 || requested > 0x4000_0000) {
@@ -177,13 +203,6 @@ function validateCacheSize(rawCacheSize: number | undefined): number {
   return requested;
 }
 
-/**
- * Internal-inspection hatch wiring. Symbol-keyed slot, non-enumerable +
- * non-configurable so external code cannot recreate the key by name and
- * `Object.keys(router)` does not surface it. The `internals` wrapper
- * itself stays unfrozen so build() can populate matchImpl/matchLayer
- * after the Router instance is frozen.
- */
 function installInternalsSlot<T>(target: object, internals: RouterInternals<T>): void {
   Object.defineProperty(target, ROUTER_INTERNALS_KEY, {
     value: internals,
@@ -198,13 +217,6 @@ interface BuildPipelineResult<T> {
   matchLayer: MatchLayer;
 }
 
-/**
- * Drive one build cycle: seal registration → produce runtime tables →
- * pre-allocate per-method caches → compile matchImpl → freeze read-only
- * partitions → run the single mimalloc/JSC GC drain. Returns the freshly
- * built matchImpl/matchLayer pair so the caller can publish them into
- * the internals slot.
- */
 function runBuildPipeline<T>(
   registration: Registration<T>,
   methodRegistry: MethodRegistry,
@@ -224,9 +236,6 @@ function runBuildPipeline<T>(
     }
   }
 
-  // Pre-allocate per-method hit caches so the hot path can drop its
-  // `if (hc === undefined)` lazy-init branch — every active method gets
-  // a slot and the matchImpl always sees a non-null hc.
   for (let i = 0; i < r.activeMethodCodes.length; i++) {
     const code = r.activeMethodCodes[i]![1];
     if (cache.hit[code] === undefined) {
@@ -235,10 +244,6 @@ function runBuildPipeline<T>(
   }
 
   const matchImpl = compileMatchFn<T>(buildMatchConfig(snapshot, r, cache, hasAnyStatic));
-  // Force JSC tier-up on the next match() call. Empirical (100k tenant):
-  // first-call ~110µs → ~63µs (-43%), p50 ~3µs → ~2µs (-30%). No hot-path
-  // regression — JSC re-tiers regardless; this just front-loads the cost
-  // into build().
   optimizeNextInvocation(matchImpl);
   const matchLayer = new MatchLayer({
     normalizePath: r.normalizePath,
@@ -248,47 +253,26 @@ function runBuildPipeline<T>(
     staticPathMethodMask: r.staticPathMethodMask,
   });
 
-  // Build-only tables are frozen as a partition.
   Object.freeze(snapshot.segmentTrees);
   Object.freeze(snapshot.staticByMethod);
   Object.freeze(r.activeMethodCodes);
 
-  // Build pushes the JSC heap commit to a high-water mark (transient
-  // parser/expand/prefix-index/insertion allocations on the order of 100s
-  // of MB at 100k routes). `Bun.gc(true)` runs JSC's full collect AND
-  // mimalloc's fragmented-memory cleanup in one call; libpas's scavenger
-  // tick then returns the empty pages to the OS asynchronously. Hot path
-  // is unaffected — the JIT lazily re-tiers on the next match.
   Bun.gc(true);
 
   return { matchImpl, matchLayer };
 }
 
-/** Pure projection: snapshot + BuildResult + cache → MatchConfig. */
 function buildMatchConfig<T>(
   snapshot: ReturnType<Registration<T>['seal']>,
   r: ReturnType<typeof buildFromRegistration<T>>,
   cache: CacheContainers<T>,
   hasAnyStatic: boolean,
 ): MatchConfig<T> {
-  // Per-method active-flag table for the emitter's wrong-method fast path.
-  // `methodCodes` carries 7 default HTTP method codes on every router, so
-  // `methodCodes[method] !== undefined` is necessary but not sufficient —
-  // the emitted prelude reads activeMethodMask[mc] to short-circuit a
-  // wrong-method dispatch in one branch instead of falling through pre-probe,
-  // cache get, and walker dispatch. Sized to MAX_METHODS (32) so a typed-array
-  // index never goes out of bounds.
   const activeMethodMask = new Int32Array(32);
   for (let i = 0; i < r.activeMethodCodes.length; i++) {
     activeMethodMask[r.activeMethodCodes[i]![1]] = 1;
   }
 
-  // Root-fast-miss mask: per-method byte-keyed presence table of the root
-  // segment-tree's static children. Null when the root carries a param,
-  // wildcard, or compacted prefix that could route an unknown byte (the
-  // mask cannot prove a miss in those cases). The emitter's walker
-  // prelude reads this mask to skip walker dispatch entirely when the
-  // first path byte is unknown.
   const rootFirstCharMaskByMethod: Array<Int32Array | null> = [];
   for (let i = 0; i < 32; i++) {
     rootFirstCharMaskByMethod[i] = null;

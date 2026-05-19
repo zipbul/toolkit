@@ -1,12 +1,3 @@
-/**
- * `allowedMethods(path)` — cold-path companion to `match()`.
- *
- * HTTP adapters call this only when `match()` returns null, to distinguish
- * "no route" (404) from "path matches under different method" (405). The
- * router stays domain-neutral — the function returns the registered HTTP
- * methods as data; adapters decide how to translate that into HTTP status
- * codes and headers.
- */
 import { describe, it, expect } from 'bun:test';
 
 import { Router } from '../../src/router';
@@ -100,11 +91,8 @@ describe('allowedMethods', () => {
     r.add('POST', '/users/:id', 2);
     r.build();
 
-    // Run allowedMethods first — fills state with dynamic walker output
     r.allowedMethods('/users/42');
 
-    // Subsequent match() returns its own fresh state, regardless of what
-    // allowedMethods left behind
     const m = r.match('GET', '/users/99')!;
 
     expect(m.value).toBe(1);
@@ -118,7 +106,7 @@ describe('allowedMethods', () => {
     r.build();
 
     expect([...r.allowedMethods('/files/dir/file.txt')].sort()).toEqual(['GET', 'PUT']);
-    expect(r.allowedMethods('/files')).toEqual(['GET', 'PUT'].sort()); // star captures empty
+    expect(r.allowedMethods('/files')).toEqual(['GET', 'PUT'].sort());
   });
 
   it('handles optional-param expansion paths', () => {
@@ -126,7 +114,6 @@ describe('allowedMethods', () => {
     r.add('GET', '/users/:id?', 1);
     r.build();
 
-    // Both /users and /users/X are matched by the same registered route
     expect(r.allowedMethods('/users')).toEqual(['GET']);
     expect(r.allowedMethods('/users/42')).toEqual(['GET']);
   });
@@ -136,7 +123,6 @@ describe('allowedMethods', () => {
     r.add('GET', '/api/users/:id', 1);
     r.build();
 
-    // Adapter pattern under test
     function classify(method: string, path: string): '200' | '405' | '404' {
       const out = r.match(method as 'GET', path);
 

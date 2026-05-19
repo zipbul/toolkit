@@ -1,8 +1,3 @@
-/**
- * Unit spec for `emitter.ts`. Drives `compileMatchFn` directly with
- * hand-built `MatchConfig` fixtures so each emitted branch is exercised
- * in isolation — no Router, no toString() string-matching.
- */
 import { describe, expect, it } from 'bun:test';
 
 import type { MatchFn, MatchOutput, RouteParams } from '../types';
@@ -48,8 +43,6 @@ function baseConfig<T>(overrides: Partial<Cfg<T>> = {}): Cfg<T> {
     paramsFactories: [],
     ...overrides,
   } as Cfg<T>;
-  // Auto-fill activeMethodMask from activeMethodCodes when caller did not
-  // supply one — keeps existing test fixtures concise.
   if (overrides.activeMethodMask === undefined) {
     const mask = new Int32Array(32);
     for (let i = 0; i < merged.activeMethodCodes.length; i++) {
@@ -57,9 +50,6 @@ function baseConfig<T>(overrides: Partial<Cfg<T>> = {}): Cfg<T> {
     }
     (merged as { activeMethodMask: Int32Array }).activeMethodMask = mask;
   }
-  // Auto-fill staticByPath from staticOutputsByMethod when caller did not
-  // supply one — emitter's path-first probe reads staticByPath instead of
-  // the per-method bucket array.
   if (overrides.staticByPath === undefined && merged.staticOutputsByMethod.length > 0) {
     const byPath: Record<string, { mask: number; outputs: Array<MatchOutput<T> | undefined> }> = Object.create(null);
     for (let mc = 0; mc < merged.staticOutputsByMethod.length; mc++) {
@@ -168,8 +158,6 @@ describe('compileMatchFn — mixed (dynamic walker + cache + slab unpack)', () =
     methodCodes['GET'] = code;
     const matchState = createMatchState(4);
 
-    // The walker is a hand-written MatchFn that always succeeds for `/x/<id>`
-    // shapes by writing one [start, end] pair into paramOffsets.
     const walker: MatchFn = (url, state) => {
       const prefix = '/x/';
       if (!url.startsWith(prefix)) {
@@ -182,7 +170,6 @@ describe('compileMatchFn — mixed (dynamic walker + cache + slab unpack)', () =
       return true;
     };
 
-    // Terminal #0 → handler index 0, not a wildcard, bitmask 0b1 (param `id` present).
     const slab = new Int32Array(3);
     slab[0] = 0;
     slab[1] = 0;

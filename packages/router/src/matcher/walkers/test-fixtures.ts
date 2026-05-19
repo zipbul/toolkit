@@ -1,11 +1,3 @@
-/**
- * Shared SegmentNode fixtures for the walker unit specs. Hoisted here so
- * the four per-walker specs (iterative / recursive / factored /
- * prefix-factor) don't redefine the same literal four times — a change
- * to the SegmentNode shape surfaces in one location instead of four.
- *
- * Test-only — not exported from any production index module.
- */
 import type { SegmentNode } from '../../tree';
 
 import { WildcardOrigin } from '../../tree';

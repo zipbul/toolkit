@@ -3,8 +3,6 @@ import { describe, it, expect } from 'bun:test';
 import { buildPatternTester, TESTER_FAIL, TESTER_PASS } from './pattern-tester';
 
 describe('buildPatternTester', () => {
-  // ── Shortcut patterns (digit) ──
-
   it('should return PASS for digit string with digit shortcut', () => {
     const tester = buildPatternTester('\\d+', /^\d+$/);
 
@@ -44,8 +42,6 @@ describe('buildPatternTester', () => {
     expect(tester('')).toBe(TESTER_FAIL);
   });
 
-  // ── Shortcut patterns (alpha) ──
-
   it('should return PASS for alpha string with alpha shortcut', () => {
     const tester = buildPatternTester('[a-zA-Z]+', /^[a-zA-Z]+$/);
 
@@ -70,8 +66,6 @@ describe('buildPatternTester', () => {
     expect(tester('Hello')).toBe(TESTER_PASS);
     expect(tester('123')).toBe(TESTER_FAIL);
   });
-
-  // ── Shortcut patterns (alphanumeric) ──
 
   it('should return PASS for alphanumeric with \\w+ shortcut', () => {
     const tester = buildPatternTester('\\w+', /^\w+$/);
@@ -104,8 +98,6 @@ describe('buildPatternTester', () => {
     expect(tester('')).toBe(TESTER_FAIL);
   });
 
-  // ── [^/]+ shortcut ──
-
   it('should return PASS for non-slash string with [^/]+ shortcut', () => {
     const tester = buildPatternTester('[^/]+', /^[^/]+$/);
 
@@ -124,19 +116,12 @@ describe('buildPatternTester', () => {
     expect(tester('a/b')).toBe(TESTER_FAIL);
   });
 
-  // ── Custom patterns (compiled.test()) ──
-
   it('should use compiled.test() for unknown custom pattern', () => {
     const tester = buildPatternTester('\\d{4}-\\d{2}-\\d{2}', /^\d{4}-\d{2}-\d{2}$/);
 
     expect(tester('2024-01-15')).toBe(TESTER_PASS);
     expect(tester('not-a-date')).toBe(TESTER_FAIL);
   });
-
-  // (Dropped a unit test that exercised `buildPatternTester(undefined, …)`.
-  // The production signature is `(source: string, compiled)` — callers
-  // never pass undefined, so the prior shape was widening the type for a
-  // case that didn't exist.)
 
   it('should use compiled.test() when source is empty string', () => {
     const tester = buildPatternTester('', /^.*$/);

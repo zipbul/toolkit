@@ -1,8 +1,3 @@
-/**
- * Unit specs for `traversal.ts` — pure helpers that walk and rewire
- * segment-tree chains. Exercised indirectly by segment-tree insert and
- * the prefix-factor codegen; these specs pin each helper's contract.
- */
 import { describe, expect, it } from 'bun:test';
 
 import type { SegmentNode } from './segment-tree';
@@ -11,7 +6,6 @@ import { createSegmentNode } from './segment-tree';
 import { extendStaticPrefix, foldStaticChain, peekSingleStaticChild, rewireStaticChild } from './traversal';
 
 function inlineChain(...keys: string[]): SegmentNode {
-  // Build a singleChildKey chain `keys[0]` → `keys[1]` → ... → store=0.
   const root = createSegmentNode();
   let cur = root;
   for (const k of keys) {
@@ -88,9 +82,6 @@ describe('foldStaticChain', () => {
 
   it('walks the chain when each link has exactly one inline child', () => {
     const root = inlineChain('a', 'b', 'c');
-    // root → a (no store) → b (no store) → c (store=0). foldStaticChain
-    // walks while there's a single static child with no store; it stops
-    // at the first node carrying a store.
     const out = foldStaticChain(root.singleChildNext!);
     expect(out.folded).toEqual(['b', 'c']);
     expect(out.target.store).toBe(0);
@@ -101,10 +92,6 @@ describe('foldStaticChain', () => {
     const mid = createSegmentNode();
     root.singleChildKey = 'a';
     root.singleChildNext = mid;
-    // mid carries a paramChild. foldStaticChain consumes the `a` link
-    // (mid is reachable via a single static child of root) but stops at
-    // mid because mid itself can't continue folding — it carries a
-    // paramChild which disqualifies further chain compression.
     mid.paramChild = {
       name: 'id',
       tester: null,

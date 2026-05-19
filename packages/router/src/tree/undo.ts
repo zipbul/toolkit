@@ -1,14 +1,6 @@
 import type { ParamSegment, SegmentNode } from './node-types';
 import type { PatternTesterFn } from './pattern-tester';
 
-/**
- * Tagged-record undo log entries. Hot insertions on `100k wildcard-heavy`
- * historically allocated one closure per mutation (~300k closures per build);
- * each new closure freshly captured the surrounding scope and dominated GC.
- * Replacing the closures with monomorphic plain-object records keeps the
- * memory shape stable (one hidden class per kind) and lets the rollback
- * loop dispatch via a tag instead of a function call.
- */
 export enum UndoKind {
   StaticChildrenInit = 1,
   StaticChildAdd = 2,
@@ -17,27 +9,14 @@ export enum UndoKind {
   WildcardSet = 5,
   StoreSet = 6,
   TesterAdd = 7,
-  /**
-   * Inverse of WildcardPrefixIndex.commit(). Stored as a tagged record
-   * carrying the `CommitPlan` so the registration rollback path does not
-   * have to allocate a closure per route during high-volume builds.
-   */
   PrefixIndexPlan = 8,
-  /** Truncate three parallel state arrays back to a recorded length (terminalHandlers, isWildcardByTerminal, paramsFactories). */
   TerminalArraysTruncate = 9,
-  /** Truncate handlers array back to a recorded length. */
   HandlersTruncate = 10,
-  /** Truncate state.segmentTrees[mc] back to undefined. */
   SegmentTreeReset = 11,
-  /** Truncate state.staticByMethod[mc] back to undefined. */
   StaticBucketReset = 17,
-  /** Static-map slot delete (was undefined before). */
   StaticMapDelete = 13,
-  /** Inverse of inline single-static-child set: clear key + next on the parent. */
   SingleChildClear = 14,
-  /** Inverse of single-static-child promotion to Record: re-set key + next. */
   SingleChildRestore = 15,
-  /** Restore a `staticPathMethodMask` entry — set to prevMask (0 means delete). */
   StaticPathMaskRestore = 16,
 }
 
@@ -59,18 +38,8 @@ export type UndoRecord =
   | { k: UndoKind.SingleChildRestore; n: SegmentNode; key: string; next: SegmentNode }
   | { k: UndoKind.StaticPathMaskRestore; map: Record<string, number>; key: string; prevMask: number };
 
-// All undo entries are tagged records — closures were eliminated to
-// keep the entry shape monomorphic and avoid per-entry scope alloc.
 export type SegmentTreeUndoLog = UndoRecord[];
 
-/**
- * Type-safe push for `UndoKind.StaticBucketReset`. The undo log stores
- * buckets as `Array<Record<string, unknown>>` because it is shape-only
- * carrier (it never reads the values) — call sites with a typed
- * `Array<Record<string, T>>` would otherwise need a `as unknown as`
- * widening cast at every push. This helper performs the widening once
- * inside the undo module.
- */
 export function pushStaticBucketResetUndo<T>(
   undoLog: SegmentTreeUndoLog,
   buckets: Array<Record<string, T> | undefined>,
@@ -83,11 +52,6 @@ export function pushStaticBucketResetUndo<T>(
   });
 }
 
-/**
- * Type-safe push for `UndoKind.StaticMapDelete`. Same rationale as
- * `pushStaticBucketResetUndo` — collapses the `T → unknown` boundary
- * cast into one location.
- */
 export function pushStaticMapDeleteUndo<T>(undoLog: SegmentTreeUndoLog, map: Record<string, T>, key: string): void {
   undoLog.push({
     k: UndoKind.StaticMapDelete,
@@ -122,9 +86,6 @@ export function applyUndo(entry: UndoRecord): void {
       entry.cache.delete(entry.key);
       return;
     case UndoKind.PrefixIndexPlan:
-      // Each entry carries its own rollback dispatcher reference, so the
-      // matcher layer never imports the prefix-index module. Caller
-      // (registration.ts) bakes `rollbackPlan` into the entry at push time.
       entry.rollback(entry.plan);
       return;
     case UndoKind.TerminalArraysTruncate:

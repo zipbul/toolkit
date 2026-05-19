@@ -3,22 +3,10 @@ const TESTER_PASS = 1 as const;
 
 type TesterResult = typeof TESTER_FAIL | typeof TESTER_PASS;
 
-/**
- * Pattern tester closure. Hot-path matcher invokes this to validate a
- * captured param against its compiled regex. Lives in tree/ alongside
- * `ParamSegment` (which holds a `tester: PatternTesterFn | null` field)
- * so the data model owns its own value-type, and codegen/matcher import
- * the type from the tree barrel without an upward edge to a dedicated
- * types module.
- */
 type PatternTesterFn = (value: string) => TesterResult;
 
 const DIGIT_PATTERNS = new Set(['\\d+', '\\d{1,}', '[0-9]+', '[0-9]{1,}']);
 const ALPHA_PATTERNS = new Set(['[a-zA-Z]+', '[A-Za-z]+']);
-// `\w` is `[A-Za-z0-9_]`. `[\w-]+` and `[A-Za-z0-9_-]+` describe the same
-// set — keep both source forms here so the user's chosen syntax doesn't
-// fall through to the slow `compiled.test` path. Same for the escaped
-// variants the path-parser may emit after normalization.
 const ALPHANUM_PATTERNS = new Set(['[A-Za-z0-9_\\-]+', '[A-Za-z0-9_-]+', '\\w+', '\\w{1,}', '[\\w-]+', '[\\w\\-]+']);
 
 function buildPatternTester(source: string, compiled: RegExp): PatternTesterFn {

@@ -4,13 +4,6 @@ import type { MatchFn } from '../types';
 import { WildcardOrigin } from '../tree';
 import { detectWildCodegenSpec } from './walker-strategy';
 
-/**
- * Generate a walker function via `new Function()` for the static-prefix
- * wildcard pattern. Each prefix gets a `startsWith(prefix + '/', 1)` probe.
- * Returns null when the spec disqualifies (no wildcard subtree, or more
- * than 8 prefixes — beyond which the linear probe chain is no longer
- * cheaper than the iterative walker).
- */
 export function tryCodegenStaticPrefixWildcard(root: SegmentNode): MatchFn | null {
   const entries = detectWildCodegenSpec(root);
 

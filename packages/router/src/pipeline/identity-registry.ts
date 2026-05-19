@@ -1,15 +1,3 @@
-/**
- * Build-scoped identity registry. Issues a stable numeric id for each
- * distinct route value within one build pass.
- *
- *  - non-null object/function values are interned via WeakMap so equal
- *    references yield the same id without preventing GC after build.
- *  - primitive values are interned via tagged keys in a Map, so semantically
- *    equal primitives (`1` and `1`, `'x'` and `'x'`) collapse onto one id.
- *
- * The registry is per-`seal()` and is discarded together with the rest of
- * the build-only state once the snapshot is published.
- */
 export class IdentityRegistry {
   private readonly objectIds = new WeakMap<object, number>();
   private readonly primitiveIds = new Map<string, number>();

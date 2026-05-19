@@ -98,32 +98,27 @@ describe('expandOptional', () => {
 
   describe('Invariant A — drop-time slash trim', () => {
     it('should trim trailing slash of preceding static when optional is dropped', () => {
-      // `/users/:id?` with `:id` dropped should yield `/users`, not `/users/`.
       const parts: PathPart[] = [staticPart('/users/'), param('id', true)];
       const defaults = new OptionalParamDefaults(false);
 
       const result = expandOptional(parts, 0, defaults);
 
-      // Variant 0: full path. Variant 1: dropped optional.
       const dropped = result[1]!.parts;
       expect(dropped).toEqual([{ type: PathPartType.Static, value: '/users', segments: ['users'] }]);
     });
 
     it('should pop the static entirely when trim leaves an empty value', () => {
-      // `/:id?` with `:id` dropped — preceding static is `/` which trims to ''.
       const parts: PathPart[] = [staticPart('/'), param('id', true)];
       const defaults = new OptionalParamDefaults(false);
 
       const result = expandOptional(parts, 0, defaults);
 
-      // Falls back to the empty-result `/` recovery path.
       expect(result[1]!.parts).toEqual([{ type: PathPartType.Static, value: '/', segments: [] }]);
     });
   });
 
   describe('Invariant B — post-merge `//` collapse', () => {
     it('should collapse `//` produced by joining two static parts', () => {
-      // `/a/:x?/b` with `:x` dropped: parts become `/a/` + `/b` → `/a//b` → `/a/b`.
       const parts: PathPart[] = [staticPart('/a/'), param('x', true), staticPart('/b')];
       const defaults = new OptionalParamDefaults(false);
 

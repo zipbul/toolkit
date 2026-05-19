@@ -1,7 +1,3 @@
-/**
- * Unit specs for the prefix-factor walker helpers. Each helper is pure
- * (no closure state) and exercised with raw arrays / URL strings.
- */
 import { describe, expect, it } from 'bun:test';
 
 import { consumeFixedPrefix, scanSegmentEnd } from './prefix-factor';

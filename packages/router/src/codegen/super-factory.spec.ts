@@ -1,11 +1,5 @@
 import { describe, expect, it } from 'bun:test';
 
-/**
- * Unit specs for `super-factory.ts` — the per-shape params factory cache
- * + the present-bitmask projection. Both are pure; the factory cache
- * collapses 2^N variant closures into one compiled function so its
- * correctness is load-bearing for memory savings.
- */
 import { PathPartType } from '../tree';
 import { computePresentBitmask, createFactoryCache, getOrCreateSuperFactory } from './super-factory';
 

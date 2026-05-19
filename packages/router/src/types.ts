@@ -1,44 +1,80 @@
-// ── Public enums ──
-
+/**
+ * How a successful {@link MatchOutput} was resolved. Surfaced via
+ * {@link MatchMeta.source} so the caller can reason about object
+ * identity and cache semantics.
+ */
 export enum MatchSource {
+  /**
+   * Literal-path route (no params). The returned {@link MatchOutput}
+   * is shared across calls and frozen — do not mutate. `===` identity
+   * holds across identical hits.
+   */
   Static = 'static',
+  /**
+   * Dynamic match served from the per-method hit cache. The cached
+   * `params` object is frozen and reused across hits — do not mutate,
+   * and do not rely on per-call identity.
+   */
   Cache = 'cache',
+  /**
+   * First-time resolution for a dynamic route. Each call returns a
+   * fresh {@link MatchOutput} with its own `params` object.
+   */
   Dynamic = 'dynamic',
 }
 
 /**
- * 라우터 에러 종류 (discriminant).
- * 상태 전이 1 + 등록/검증 18 + 옵션/일괄검증 2 = 21. match() 는 throw 하지
- * 않으므로 매치 타임 kind 는 없다.
+ * Discriminant for {@link RouterErrorData}. One value per failure mode
+ * the router can throw: 1 state-transition kind, 18 registration /
+ * validation kinds, and 2 options / batch kinds. `match()` never throws,
+ * so there are no match-time kinds.
  */
 export enum RouterErrorKind {
-  // 상태 전이
+  /** `add()` / `addAll()` called after `build()`. */
   RouterSealed = 'router-sealed',
-  // 빌드타임 — 등록
+  /** Two routes register the same `(method, normalized-path)` pair. */
   RouteDuplicate = 'route-duplicate',
+  /** Two routes collide at the same tree position with different shapes. */
   RouteConflict = 'route-conflict',
+  /** A route is shadowed and can never be reached at match time. */
   RouteUnreachable = 'route-unreachable',
+  /** Path or inline regex body failed to parse. */
   RouteParse = 'route-parse',
+  /** Same `:name` appears twice in one route path. */
   ParamDuplicate = 'param-duplicate',
+  /** More than 32 distinct HTTP methods registered. */
   MethodLimit = 'method-limit',
+  /** Method string is empty. */
   MethodEmpty = 'method-empty',
+  /** Method contains characters outside the RFC 7230 `token` grammar. */
   MethodInvalidToken = 'method-invalid-token',
+  /** Path does not start with `/`. */
   PathMissingLeadingSlash = 'path-missing-leading-slash',
+  /** Path contains `?` (query is the boundary's responsibility, not the router's). */
   PathQuery = 'path-query',
+  /** Path contains `#` (fragment is client-side). */
   PathFragment = 'path-fragment',
+  /** Path contains an ASCII control character. */
   PathControlChar = 'path-control-char',
+  /** Path segment contains a character outside the RFC 3986 `pchar` set. */
   PathInvalidPchar = 'path-invalid-pchar',
+  /** Path contains a malformed `%xx` percent-encoding. */
   PathMalformedPercent = 'path-malformed-percent',
+  /** Path's percent-encoded bytes are not valid UTF-8. */
   PathInvalidUtf8 = 'path-invalid-utf8',
+  /** Path contains `%2F` / `%2f` (encoded slash inside a segment). */
   PathEncodedSlash = 'path-encoded-slash',
+  /** Path contains a `.` or `..` segment. */
   PathDotSegment = 'path-dot-segment',
+  /** Path contains an empty segment (`//`), excluding the leading slash. */
   PathEmptySegment = 'path-empty-segment',
+  /** A {@link RouterOptions} value was invalid (e.g. negative `cacheSize`). */
   RouterOptionsInvalid = 'router-options-invalid',
+  /** `build()` aggregated multiple per-route failures; see `.errors`. */
   RouteValidation = 'route-validation',
 }
 
-// ── RouterOptions ──
-
+/** Options accepted by the `Router` constructor. All optional. */
 export interface RouterOptions {
   /**
    * Trailing-slash policy. Default `true` — collapses one trailing
@@ -47,12 +83,17 @@ export interface RouterOptions {
    * `/a/` are distinct.
    */
   ignoreTrailingSlash?: boolean;
-  /** Path case-sensitivity. Default true. */
+  /**
+   * Path case-sensitivity. Default `true` — `/Users` and `/users`
+   * are different routes. Set `false` to lowercase both registered
+   * paths and incoming match inputs before comparison.
+   */
   pathCaseSensitive?: boolean;
   /**
-   * 메서드별 매치 캐시 최대 엔트리 수. 기본값 1000. 캐시는 항상 켜져 있고
-   * 비활성화 옵션은 없다 — 빈 라우터는 빈 캐시(메모리 0)이며 lazy 할당이라
-   * 토글의 가치가 없다. 1000 이 모자란 고-카디널리티 워크로드는 늘리면 된다.
+   * Per-method hit-cache capacity. Default `1000`. Rounded up to the
+   * next power of two; bounded approximate-LRU eviction. Must be a
+   * positive integer in `[1, 2^30]`. Empty routers allocate no cache
+   * memory; caches are lazy per active method.
    */
   cacheSize?: number;
   /**
@@ -63,10 +104,14 @@ export interface RouterOptions {
   omitMissingOptional?: boolean;
 }
 
+/** Captured path parameters keyed by name. Decoded `string` values. */
 export type RouteParams = Record<string, string | undefined>;
 
-// ── Error types ──
-
+/**
+ * One failing route inside a {@link RouterErrorKind.RouteValidation}
+ * aggregate. `index` is the position in the original `addAll()` batch
+ * (or `add()` call sequence).
+ */
 export interface RouteValidationIssue {
   index: number;
   method: string;
@@ -75,65 +120,79 @@ export interface RouteValidationIssue {
 }
 
 /**
- * `RouterError.data` 에 첨부되는 데이터 — kind 별 discriminated union.
- *
- * 각 `kind` 마다 *해당 케이스에서만 의미가 있는* 필드를 required 로 선언.
- * 유저는 `if (e.kind === RouterErrorKind.RouteConflict)` 로 좁힌 후
- * `e.conflictsWith` 를 안전 접근.
- *
- * `path` / `method` / `registeredCount` 는 라우터 상위 레이어가 다운스트림
- * 에러에 컨텍스트로 덧붙이는 값이라 모든 kind 에서 optional.
+ * Structured payload carried by `RouterError.data`. Discriminated union
+ * over {@link RouterErrorKind} — narrow on `kind` to access
+ * kind-specific fields. `path`, `method`, and `registeredCount` are
+ * context fields the router attaches on a best-effort basis and are
+ * optional on every variant.
  */
 export type RouterErrorData = {
   path?: string;
   method?: string;
   registeredCount?: number;
-} &
-  // ── State / options ─────────────────────────────────────────────────
-  (
-    | { kind: RouterErrorKind.RouterSealed; message: string; suggestion: string }
-    | { kind: RouterErrorKind.RouterOptionsInvalid; message: string; suggestion: string }
-    // ── Routes interaction (build) ──────────────────────────────────────
-    | { kind: RouterErrorKind.RouteValidation; message: string; errors: RouteValidationIssue[] }
-    | { kind: RouterErrorKind.RouteDuplicate; message: string; suggestion: string }
-    | { kind: RouterErrorKind.RouteConflict; message: string; segment: string; conflictsWith: string; suggestion: string }
-    | { kind: RouterErrorKind.RouteUnreachable; message: string; segment: string; conflictsWith: string; suggestion: string }
-    | { kind: RouterErrorKind.RouteParse; message: string; segment?: string; suggestion: string }
-    // ── add() — param / path grammar ────────────────────────────────────
-    | { kind: RouterErrorKind.ParamDuplicate; message: string; segment: string; suggestion: string }
-    | { kind: RouterErrorKind.PathQuery; message: string; suggestion: string }
-    | { kind: RouterErrorKind.PathFragment; message: string; suggestion: string }
-    | { kind: RouterErrorKind.PathEncodedSlash; message: string; suggestion: string }
-    | { kind: RouterErrorKind.PathDotSegment; message: string; suggestion: string }
-    | { kind: RouterErrorKind.PathEmptySegment; message: string; suggestion: string }
-    // ── add() — method / path RFC conformance ───────────────────────────
-    | { kind: RouterErrorKind.MethodLimit; message: string; method: string; suggestion: string }
-    | { kind: RouterErrorKind.MethodEmpty; message: string; suggestion: string }
-    | { kind: RouterErrorKind.MethodInvalidToken; message: string; method: string; suggestion: string }
-    | { kind: RouterErrorKind.PathMissingLeadingSlash; message: string; suggestion: string }
-    | { kind: RouterErrorKind.PathMalformedPercent; message: string; suggestion: string }
-    | { kind: RouterErrorKind.PathInvalidPchar; message: string; segment: string; suggestion: string }
-    | { kind: RouterErrorKind.PathControlChar; message: string; suggestion: string }
-    | { kind: RouterErrorKind.PathInvalidUtf8; message: string; suggestion: string }
-  );
+} & (
+  | { kind: RouterErrorKind.RouterSealed; message: string; suggestion: string }
+  | { kind: RouterErrorKind.RouterOptionsInvalid; message: string; suggestion: string }
+  | { kind: RouterErrorKind.RouteValidation; message: string; errors: RouteValidationIssue[] }
+  | { kind: RouterErrorKind.RouteDuplicate; message: string; suggestion: string }
+  | { kind: RouterErrorKind.RouteConflict; message: string; segment: string; conflictsWith: string; suggestion: string }
+  | { kind: RouterErrorKind.RouteUnreachable; message: string; segment: string; conflictsWith: string; suggestion: string }
+  | { kind: RouterErrorKind.RouteParse; message: string; segment?: string; suggestion: string }
+  | { kind: RouterErrorKind.ParamDuplicate; message: string; segment: string; suggestion: string }
+  | { kind: RouterErrorKind.PathQuery; message: string; suggestion: string }
+  | { kind: RouterErrorKind.PathFragment; message: string; suggestion: string }
+  | { kind: RouterErrorKind.PathEncodedSlash; message: string; suggestion: string }
+  | { kind: RouterErrorKind.PathDotSegment; message: string; suggestion: string }
+  | { kind: RouterErrorKind.PathEmptySegment; message: string; suggestion: string }
+  | { kind: RouterErrorKind.MethodLimit; message: string; method: string; suggestion: string }
+  | { kind: RouterErrorKind.MethodEmpty; message: string; suggestion: string }
+  | { kind: RouterErrorKind.MethodInvalidToken; message: string; method: string; suggestion: string }
+  | { kind: RouterErrorKind.PathMissingLeadingSlash; message: string; suggestion: string }
+  | { kind: RouterErrorKind.PathMalformedPercent; message: string; suggestion: string }
+  | { kind: RouterErrorKind.PathInvalidPchar; message: string; segment: string; suggestion: string }
+  | { kind: RouterErrorKind.PathControlChar; message: string; suggestion: string }
+  | { kind: RouterErrorKind.PathInvalidUtf8; message: string; suggestion: string }
+);
 
-// ── Match output ──
-
+/**
+ * Structural surface of a built router. `Router` implements this
+ * interface, and the type is exported so consumers can hold a router
+ * reference without nailing down the concrete class.
+ */
 export interface RouterPublicApi<T> {
+  /** See `Router.add`. */
   add(method: string | readonly string[], path: string, value: T): void;
+  /** See `Router.addAll`. */
   addAll(entries: ReadonlyArray<readonly [string, string, T]>): void;
+  /** See `Router.build`. */
   build(): RouterPublicApi<T>;
+  /** See `Router.match`. */
   match(method: string, path: string): MatchOutput<T> | null;
+  /** See `Router.allowedMethods`. */
   allowedMethods(path: string): readonly string[];
 }
 
+/** Metadata attached to every {@link MatchOutput}. */
 export interface MatchMeta {
+  /** How the match was resolved; see {@link MatchSource}. */
   readonly source: MatchSource;
 }
 
+/** Successful match result returned by {@link RouterPublicApi.match}. */
 export interface MatchOutput<T> {
+  /** Value the matched route was registered with. */
   value: T;
+  /**
+   * Captured path parameters. Param values are percent-decoded;
+   * wildcard captures are returned raw (slash-preserving). The object
+   * has a `null` prototype.
+   *
+   * For {@link MatchSource.Static} and {@link MatchSource.Cache}
+   * results, this object is frozen and shared across calls — do not
+   * mutate.
+   */
   params: RouteParams;
+  /** How the match was resolved; see {@link MatchMeta}. */
   meta: MatchMeta;
 }
 

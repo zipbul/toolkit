@@ -1,9 +1,3 @@
-/**
- * Unit specs for `segment-compile.ts` — the per-branch emit helpers
- * each return a plain JS string fragment. These specs assert the exact
- * substrings so a regression in any one fragment surfaces here instead
- * of through a downstream walker mismatch.
- */
 import { describe, expect, it } from 'bun:test';
 
 import type { SegmentNode } from '../tree';

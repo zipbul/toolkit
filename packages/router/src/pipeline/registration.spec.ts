@@ -1,9 +1,3 @@
-/**
- * Unit specs for `registration.ts` — the per-stage helpers used by
- * `Registration.compileDynamicRoute`. Pure projection / validation
- * helpers (collectRouteShape, checkDynamicRouteCaps) are exercised
- * here in isolation; orchestration is covered by the integration tests.
- */
 import { describe, expect, it } from 'bun:test';
 
 import type { PathPart } from '../tree';

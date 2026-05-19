@@ -1,8 +1,3 @@
-/**
- * Unit spec for `build.ts`. Drives `buildFromRegistration` directly with
- * hand-built `RegistrationSnapshot` fixtures so each runtime table the
- * matcher consumes is exercised in isolation — no Router.
- */
 import { describe, expect, it } from 'bun:test';
 
 import type { RouterOptions } from '../types';

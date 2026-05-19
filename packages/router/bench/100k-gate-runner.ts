@@ -1,5 +1,3 @@
-/* eslint-disable no-console */
-
 import { spawnSync } from 'node:child_process';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -85,9 +83,6 @@ for (const scenario of scenarios) {
   const hits = results.flatMap(result => result.hitNs);
   const misses = results.flatMap(result => result.missNs);
 
-  // builds/rss/heap/buffers are 1 sample per run (runs=3) → only median+max
-  // are distinct; p75/p99 would collapse to max. first/hits/misses are
-  // flatMapped over runs×scenario-paths so percentiles carry signal.
   console.log(
     `summary scenario="${scenario}" runs=${runs} ` +
       `buildMedian=${fmt(median(builds))}ms buildMax=${fmt(Math.max(...builds))}ms ` +

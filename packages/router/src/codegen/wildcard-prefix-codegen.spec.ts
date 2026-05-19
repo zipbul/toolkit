@@ -1,9 +1,3 @@
-/**
- * Unit spec for `wildcard-prefix-codegen.ts`. The compiled walker is a
- * single `new Function()` per qualifying root shape; the spec verifies
- * the walker correctly captures the wildcard tail and rejects the
- * disqualifiers (no slash, multi origin at exact prefix, >8 entries).
- */
 import { describe, expect, it } from 'bun:test';
 
 import { createMatchState } from '../matcher/match-state';

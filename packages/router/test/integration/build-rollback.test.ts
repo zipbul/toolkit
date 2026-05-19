@@ -1,15 +1,3 @@
-/**
- * Build rollback contract.
- *
- * When `build()` fails mid-batch, every mutation made by the failed routes
- * must reverse cleanly so:
- *   - a fresh Router with the same routes minus the failing one succeeds, and
- *   - the failed router never publishes partial compiled state to match().
- *
- * Both surfaces are exercised here: typed-UndoRecord rollback (prefix-index,
- * segment-tree, handler arrays, static-map slot) plus the public-facing
- * "no handlers visible after a validation failure" guarantee.
- */
 import { describe, expect, it } from 'bun:test';
 
 import { getRouterInternals } from '../../internal';

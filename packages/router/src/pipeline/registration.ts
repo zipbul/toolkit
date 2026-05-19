@@ -29,17 +29,6 @@ import { packTerminalSlab } from './terminal-slab';
 import { WILDCARD_METHOD, expandWildcardMethodRoutes } from './wildcard-method-expand';
 import { WildcardPrefixIndex, rollbackPlan } from './wildcard-prefix-index';
 
-/**
- * How many routes to process between full GC + libpas scavenge cycles
- * during the seal route loop. JSC's `proportionalHeapSize` heuristic
- * locks the GC arena capacity to whatever the heap peaks at — letting
- * 100k routes go uninterrupted causes the arena to settle far higher
- * than necessary because transient parser/expand/prefix-index data
- * briefly co-exists with the retained tree. Draining every 10k routes
- * gives back ~17 MB of steady-state RSS at 100k for ~230 ms of build
- * time. The threshold trades build latency for memory; below ~5k the
- * scavenge overhead dominates and below ~1k it explodes the build.
- */
 const BUILD_CHUNK_SIZE = 10_000;
 
 interface PendingRoute<T> {
@@ -48,33 +37,6 @@ interface PendingRoute<T> {
   value: T;
 }
 
-/**
- * Snapshot of build-time products.
- *
- * Static-route storage is method-major (`staticByMethod[methodCode][path]`)
- * rather than path-major. The previous shape was
- * `staticMap[path]: Array<T | undefined>` plus a parallel `boolean[]`
- * registered table; that allocated two 1-entry arrays per path and ran
- * ~160ms over a 100k high-fanout build. Method-major keeps allocation to
- * one Record per active method (plus the terminal value entries themselves).
- *
- * `staticPathMethodMask` accumulates a 32-bit bitmask of method codes
- * registered for each static path. `allowedMethods()` reads it as a
- * single property + popcount + bit-iteration via `Math.clz32`, avoiding
- * the per-active-method bucket probe loop.
- */
-/**
- * Per-terminal metadata slab packed as `Int32Array`. Three slots per
- * terminal index `t`:
- *   - `slab[t*3]` — handler index into `handlers[]`
- *   - `slab[t*3 + 1]` — `1` if the terminal corresponds to a wildcard
- *     match, `0` otherwise
- *   - `slab[t*3 + 2]` — present-param bitmask. Bit `i` set ⇔ originalNames[i]
- *     is present in this expansion variant. The compiled super-factory uses
- *     this mask to select which originalName receives a captured value vs.
- *     undefined, eliminating the need for a per-variant factory function
- *     (factoryCache size goes from O(2^N) variants to O(1) per route shape).
- */
 interface RegistrationSnapshot<T> {
   staticByMethod: Array<Record<string, T> | undefined>;
   staticPathMethodMask: Record<string, number>;
@@ -82,9 +44,6 @@ interface RegistrationSnapshot<T> {
   handlers: T[];
   terminalSlab: Int32Array;
   paramsFactories: Array<((presentBitmask: number, u: string, v: Int32Array) => RouteParams) | null>;
-  /** Maximum param count observed across every expanded route. Used at
-   *  build-time to size the runtime `MatchState.paramOffsets` Int32Array
-   *  exactly — no user option, no arbitrary fallback. */
   maxParamsObserved: number;
 }
 
@@ -93,29 +52,15 @@ interface BuildState<T> {
   staticPathMethodMask: Record<string, number>;
   segmentTrees: Array<SegmentNode | null>;
   handlers: T[];
-  /** Build-time growable parallel arrays — converted to a packed
-   *  Int32Array slab at seal time. Kept as plain JS arrays during build
-   *  so per-route insertion stays O(1) without resizing TypedArrays. */
   terminalHandlers: number[];
   isWildcardByTerminal: boolean[];
   paramsFactories: Array<((presentBitmask: number, u: string, v: Int32Array) => RouteParams) | null>;
-  /** Per-terminal presentBitmask (build-time growable, packed into
-   *  terminalSlab at seal). Bit i set ⇔ originalNames[i] is captured. */
   presentBitmaskByTerminal: number[];
-  /** Build-only tester cache (deduped by pattern source). Not retained
-   *  on the snapshot — runtime only needs the resulting per-route
-   *  testers attached to ParamSegment. */
   testerCache: Map<string, PatternTesterFn>;
   routeCounter: number;
-  /** Tracks max present-param count across every expanded route so the
-   *  runtime paramOffsets buffer is sized exactly. */
   maxParamsObserved: number;
 }
 
-/**
- * `add()` records user intent only. `seal()` performs the authoritative
- * validation pass.
- */
 class Registration<T> {
   private readonly methodRegistry: MethodRegistry;
   private readonly pathParser: PathParser;
@@ -149,8 +94,6 @@ class Registration<T> {
     }
 
     if (method === '*') {
-      // Defer expansion to seal() so methods registered after this call
-      // (but before seal) are included.
       this.pendingRoutes.push({ method: WILDCARD_METHOD, path, value });
       return;
     }
@@ -198,8 +141,6 @@ class Registration<T> {
 
     const snapshot = this.packSnapshot(state);
     this.snapshot = snapshot;
-    // Build-only structures (prefix index, identity registry) are discarded
-    // here so they do not retain memory past snapshot publication.
     this.prefixIndex = null;
     this.identityRegistry = null;
 
@@ -208,20 +149,10 @@ class Registration<T> {
     return snapshot;
   }
 
-  /**
-   * Run the per-route compile loop with periodic GC drains. Returns the
-   * accumulated validation issues; an empty array means every pending
-   * route compiled cleanly.
-   */
   private compileAllRoutes(state: BuildState<T>, undo: SegmentTreeUndoLog, omitBehavior: boolean): RouteValidationIssue[] {
     const issues: RouteValidationIssue[] = [];
     const factoryCache: FactoryCache = createFactoryCache();
 
-    // Drain transient build allocations every BUILD_CHUNK_SIZE routes
-    // so the JSC heap doesn't peak proportionally to the full route
-    // count. The heap-capacity heuristic locks in the high-water mark,
-    // so a controlled-growth loop settles to a smaller capacity than
-    // a single uninterrupted insert burst.
     for (let i = 0; i < this.pendingRoutes.length; i++) {
       const route = this.pendingRoutes[i]!;
       const mark = undo.length;
@@ -250,25 +181,10 @@ class Registration<T> {
         });
       }
 
-      // Periodic drain: keep the JSC heap below the proportionalHeapSize
-      // threshold so the GC arena settles small. Skip the last batch
-      // (the snapshot/walker phases will allocate again immediately).
       if ((i + 1) % BUILD_CHUNK_SIZE === 0 && i + 1 < this.pendingRoutes.length) {
-        // If every route in this batch (and every batch before it)
-        // succeeded, the accumulated undo log is dead weight: a later
-        // batch failure throws RouterError and abandons the whole
-        // build state anyway (the local `state` goes out of scope, the
-        // next build() call constructs a fresh prefix index). Drop it
-        // before the GC so the closure-captured PrefixIndex CommitPlan
-        // entries become eligible for collection.
         if (issues.length === 0) {
           undo.length = 0;
         }
-        // Bun.gc(true) runs JSC's full collect AND mimalloc's fragmented-
-        // memory cleanup in one call. Bun.shrink() saved an extra ~8 MB
-        // historically but is `@deprecated` in bun-types 1.3.13 and may
-        // disappear in a future release; we accept the marginal RSS cost
-        // in exchange for forward compatibility.
         Bun.gc(true);
       }
     }
@@ -276,10 +192,6 @@ class Registration<T> {
     return issues;
   }
 
-  /**
-   * Failure path: roll back every build mutation, drop build-only state,
-   * and throw a RouterError carrying every collected issue. Never returns.
-   */
   private abortBuild(
     undo: SegmentTreeUndoLog,
     methodRegistrySnapshot: ReturnType<MethodRegistry['snapshot']>,
@@ -289,11 +201,6 @@ class Registration<T> {
     rollback(undo, 0);
     this.methodRegistry.restore(methodRegistrySnapshot);
     this.optionalParamDefaults.restore(optionalDefaultsSnapshot);
-    // Discard build-only state on the throw path too — the success path
-    // drops these in seal() after publishing the snapshot. Without
-    // symmetrical cleanup a failed build kept the prefix index and
-    // identity registry alive on the surviving Registration instance
-    // until the next seal attempt (avoidable retention).
     this.prefixIndex = null;
     this.identityRegistry = null;
 
@@ -304,11 +211,6 @@ class Registration<T> {
     });
   }
 
-  /**
-   * Pack the build state into the read-only snapshot that the runtime
-   * consumes. Per-terminal parallel arrays collapse into one Int32Array
-   * slab so the matcher reads contiguous memory.
-   */
   private packSnapshot(state: BuildState<T>): RegistrationSnapshot<T> {
     const terminalSlab = packTerminalSlab(state.terminalHandlers, state.isWildcardByTerminal, state.presentBitmaskByTerminal);
 
@@ -363,9 +265,6 @@ class Registration<T> {
 
     const { parts, normalized, isDynamic } = parseResult;
     const methodCode = offsetResult;
-    // Same-prefix wildcard-name collisions are detected by the prefix index
-    // walk (descendant terminal/wildcard => route-unreachable), so the
-    // legacy per-route prefix-regex check is no longer needed.
 
     if (!isDynamic) {
       return this.compileStaticRoute(route, parts, normalized, methodCode, state, undo);
@@ -409,10 +308,6 @@ class Registration<T> {
     const prevMask = state.staticPathMethodMask[normalized] ?? 0;
     state.staticPathMethodMask[normalized] = prevMask | (1 << methodCode);
     pushStaticMapDeleteUndo(undo, bucket, normalized);
-    // Restore the path's method-mask bit on rollback. Tagged record keeps
-    // the prior mask in a monomorphic shape so 100k static-route builds
-    // don't allocate 100k distinct closures (each freshly capturing
-    // `maskMap`/`maskKey`/`prevMask` in its own scope chain).
     undo.push({
       k: UndoKind.StaticPathMaskRestore,
       map: state.staticPathMethodMask,
@@ -470,14 +365,6 @@ class Registration<T> {
     handlerSlotId: number = -1,
     isOptionalExpansion: boolean = false,
   ): Result<void, RouterErrorData> {
-    // Only callers are `compileStaticRoute` and `compileDynamicRoute`,
-    // both invoked from `seal()`'s route loop strictly between
-    // `this.prefixIndex = new WildcardPrefixIndex()` /
-    // `this.identityRegistry = new IdentityRegistry()` and the
-    // `this.prefixIndex = null` reset at the tail of `seal()`. A second
-    // `seal()` call short-circuits at the `if (this.snapshot !== null)`
-    // guard before either ever runs again, so by construction these
-    // fields are non-null at this call site.
     const idx = this.prefixIndex!;
     const registry = this.identityRegistry!;
     const handlerId = handlerSlotId >= 0 ? handlerSlotId : registry.idFor(route.value);
@@ -520,14 +407,6 @@ function createBuildState<T>(): BuildState<T> {
   };
 }
 
-/**
- * Tenant-prefix factor detection. When a method's root has a high-fanout
- * sibling group whose subtrees only differ in the terminal handler index,
- * collapse them onto a single canonical subtree + Map<prefix, handler>.
- * Empirical (100k tenant `/tenant-${i}/users/:id/posts/:postId`):
- * 706k objects → 206k objects, RSS 220 MB → ~50 MB once libpas scavenges
- * the orphaned subtrees (~300 ms after Bun.gc).
- */
 function applyTenantFactors(segmentTrees: ReadonlyArray<SegmentNode | null>): void {
   let factorApplied = false;
   for (const root of segmentTrees) {
@@ -539,8 +418,6 @@ function applyTenantFactors(segmentTrees: ReadonlyArray<SegmentNode | null>): vo
       continue;
     }
     setTenantFactor(root, factor);
-    // Drop the original high-fanout staticChildren now that the factor
-    // map owns the dispatch — they're no longer reachable from the walker.
     root.staticChildren = null;
     root.singleChildKey = null;
     root.singleChildNext = null;
@@ -560,16 +437,11 @@ function rollback(undo: SegmentTreeUndoLog, mark: number): void {
 }
 
 interface RouteShape {
-  /** Names of every capturing segment in registration order. */
   originalNames: ReadonlyArray<string>;
-  /** Param/wildcard discriminator for each `originalNames` entry. */
   originalTypes: ReadonlyArray<PathPartType.Param | PathPartType.Wildcard>;
-  /** Count of `:name?` optional segments — drives expansion fanout. */
   optionalCount: number;
 }
 
-/** Walk parts once, collecting both the capture metadata and the
- *  optional count needed for cap validation. */
 function collectRouteShape(parts: ReadonlyArray<PathPart>): RouteShape {
   const originalNames: string[] = [];
   const originalTypes: Array<PathPartType.Param | PathPartType.Wildcard> = [];
@@ -589,9 +461,6 @@ function collectRouteShape(parts: ReadonlyArray<PathPart>): RouteShape {
   return { originalNames, originalTypes, optionalCount };
 }
 
-/** Reject routes that exceed the optional-fanout cap or the 31-bit
- *  presentBitmask ceiling. Returns the error data on rejection,
- *  `undefined` otherwise. */
 function checkDynamicRouteCaps(route: { path: string }, shape: RouteShape): RouterErrorData | undefined {
   if (shape.optionalCount > MAX_OPTIONAL_SEGMENTS_PER_ROUTE) {
     return {
@@ -601,10 +470,6 @@ function checkDynamicRouteCaps(route: { path: string }, shape: RouteShape): Rout
       suggestion: `Reduce optional segments to ${MAX_OPTIONAL_SEGMENTS_PER_ROUTE} or fewer, or register explicit routes for the rare combinations.`,
     };
   }
-  // presentBitmask is a 32-bit Int32. `1 << 31` already lands on the sign
-  // bit, and `1 << 32` wraps to 1 in V8/JSC. With more than 31 capturing
-  // segments the super-factory's per-name gate would alias and silently
-  // miscompile, so reject at registration time.
   if (shape.originalNames.length > 31) {
     return {
       kind: RouterErrorKind.RouteParse,
@@ -616,8 +481,6 @@ function checkDynamicRouteCaps(route: { path: string }, shape: RouteShape): Rout
   return undefined;
 }
 
-/** Resolve `state.segmentTrees[methodCode]` or create a fresh root and
- *  push the rollback marker. Returns the root node either way. */
 function ensureSegmentTreeRoot<T>(state: BuildState<T>, methodCode: number, undo: SegmentTreeUndoLog): SegmentNode {
   const existing = state.segmentTrees[methodCode];
   if (existing !== undefined && existing !== null) {
@@ -629,7 +492,6 @@ function ensureSegmentTreeRoot<T>(state: BuildState<T>, methodCode: number, undo
   return fresh;
 }
 
-/** Append `value` to `state.handlers` and record the rollback marker. */
 function pushHandler<T>(state: BuildState<T>, value: T, undo: SegmentTreeUndoLog): number {
   const hIdx = state.handlers.length;
   state.handlers.push(value);
@@ -637,9 +499,6 @@ function pushHandler<T>(state: BuildState<T>, value: T, undo: SegmentTreeUndoLog
   return hIdx;
 }
 
-/** Append per-expansion terminal slab data (handler, isWildcard,
- *  presentBitmask, factory) and record the rollback marker. Returns the
- *  newly assigned terminal index `tIdx`. */
 function recordExpansionTerminal<T>(
   state: BuildState<T>,
   expParts: ReadonlyArray<PathPart>,

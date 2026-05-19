@@ -1,9 +1,3 @@
-/**
- * Unit specs for `segment-tree.ts`. Each per-PathPart insert helper
- * mutates the supplied node and pushes one or more entries onto an
- * undo log; these specs pin each helper's contract in isolation so
- * regressions surface as a single named failure.
- */
 import { describe, expect, it } from 'bun:test';
 
 import type { PatternTesterFn } from './pattern-tester';
@@ -61,7 +55,7 @@ describe('resolveOrCompileTester', () => {
     const first = resolveOrCompileTester({ name: 'id', pattern: '\\d+' }, cache, undo);
     const second = resolveOrCompileTester({ name: 'id', pattern: '\\d+' }, cache, undo);
     expect(second).toBe(first);
-    expect(undo).toHaveLength(1); // no second TesterAdd push
+    expect(undo).toHaveLength(1);
   });
 
   it('returns route-parse error data for an invalid regex pattern', () => {
@@ -143,7 +137,7 @@ describe('insertParamPart', () => {
     if ('node' in a && 'node' in b) {
       expect(a.node).toBe(b.node);
     }
-    expect(undo).toHaveLength(1); // no second ParamChildSet push
+    expect(undo).toHaveLength(1);
   });
 
   it('returns route-conflict when registering a wildcard-positioned node first', () => {

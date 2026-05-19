@@ -17,19 +17,6 @@ interface PrefixTrieNode {
   subtreeWildcardCount: number;
 }
 
-/**
- * Sparse-storage extras for the rare nodes that participate in regex or
- * wildcard validation. Most routers (and most nodes within a regex-bearing
- * router) never touch these fields, so keeping them off the base shape
- * shaves a JSC inline slot per node and keeps the hidden class smaller.
- *   - `regexParamChildren` / `regexAst` are used only when a route segment
- *     declares a regex constraint, e.g. `:id(\d+)`.
- *   - `wildcardName` is used only on the terminal-attachment node of a
- *     wildcard route (`/foo/*tail`).
- *
- * Build-only — the entire `WildcardPrefixIndex` instance is nulled out
- * at the end of `seal()` so the map has no runtime cost.
- */
 const regexParamChildrenStore = new WeakMap<PrefixTrieNode, PrefixTrieNode[]>();
 const regexAstStore = new WeakMap<PrefixTrieNode, string>();
 const wildcardNameStore = new WeakMap<PrefixTrieNode, string>();
@@ -69,20 +56,10 @@ interface RouteMeta {
   isOptionalExpansion: boolean;
 }
 
-/**
- * Plan-result alias signal used during planning. The implementation never
- * exposes plan/visited/edges arrays — rollback walks the live trie via the
- * `CommitPlan` carrier instead, eliminating per-route allocation churn under
- * 100k mixed/wildcard-heavy.
- */
 interface CommitPlan {
-  /** Trie nodes from root through the terminal/prefix-attachment node. */
   visited: PrefixTrieNode[];
-  /** Static-key + parent for each fresh literal edge (rollback removes from parent.literalChildren). */
   freshLiteralEdges: Array<{ parent: PrefixTrieNode; key: string; literalChildrenWasNull: boolean }> | null;
-  /** Parents that received a fresh paramChild (rollback nulls paramChild + paramName). */
   freshParamParents: PrefixTrieNode[] | null;
-  /** Parents that received a fresh regex sibling at the end of regexParamChildren (rollback pops + nulls). */
   freshRegexParents: Array<{ parent: PrefixTrieNode; createdArray: boolean }> | null;
   hasWildcardTail: boolean;
   wildcardTailName: string | null;
@@ -91,17 +68,6 @@ interface CommitPlan {
 class WildcardPrefixIndex {
   private readonly roots = new Map<number, PrefixTrieNode>();
 
-  /**
-   * Validate and (on success) commit a route into the per-method prefix
-   * trie. Walks `parts` directly without an intermediate RoutePart[] copy,
-   * mutates the trie inline, and returns either:
-   *  - a `CommitPlan` describing exactly what was newly attached so a
-   *    later rollback can detach it without a closure,
-   *  - the literal `'alias'` for an optional-expansion duplicate against an
-   *    identical-identity terminal, or
-   *  - an `err()` for any conflict / unreachable / sibling-cap failure
-   *    (the trie is reverted before returning).
-   */
   planAndCommit(
     methodCode: number,
     parts: ReadonlyArray<PathPart>,
@@ -124,12 +90,6 @@ class WildcardPrefixIndex {
     let node = root;
     let wildcardTailName: string | null = null;
 
-    // Mid-walk reject. Sync the in-flight `freshX` carriers onto the plan
-    // (so applyRevert sees every node we attached) and roll back. The
-    // five-line dance is open-coded at every error path otherwise; this
-    // collapses seven copies into one call. Bound method, not a closure
-    // — `planAndCommit` runs once per registered route and we don't want
-    // to mint a captured closure for every entry of a 100k-route build.
     const abort = (data: RouterErrorData): Result<never, RouterErrorData> => {
       partial.freshLiteralEdges = freshLiteralEdges;
       partial.freshParamParents = freshParamParents;
@@ -190,12 +150,6 @@ class WildcardPrefixIndex {
             }
           }
           if (matched === null && siblings !== null && siblings.length > 0) {
-            // Disjointness analysis between two distinct regex sources is
-            // a hard problem (the prior `safeRegexDisjoint` stub returned
-            // false unconditionally, so every distinct sibling fell through
-            // to this branch anyway). Until a real analyzer lands here,
-            // any distinct regex sibling is rejected as a conflict so
-            // ambiguous matching never reaches the runtime walker.
             return abort(routeConflict('regex param sibling overlap not provably disjoint', routeMeta));
           }
           if (matched !== null) {
@@ -269,13 +223,6 @@ class WildcardPrefixIndex {
   }
 }
 
-/**
- * Roll back the mutations made during a planning walk. `decrementCounters`
- * is true only when a successful commit had already bumped
- * `subtreeTerminalCount` / `subtreeWildcardCount` on every visited node.
- * During in-walk failures the counters were not yet bumped, so they must
- * NOT be decremented.
- */
 function applyRevert(plan: CommitPlan, decrementCounters: boolean): void {
   const visited = plan.visited;
   if (decrementCounters) {
@@ -332,13 +279,6 @@ function applyRevert(plan: CommitPlan, decrementCounters: boolean): void {
   }
 }
 
-/**
- * Apply the inverse of a previously-committed plan: detaches every newly-
- * planned edge from its parent and decrements the subtree counters that the
- * commit incremented. Used by registration's rollback path; pushing the
- * plan itself as a tagged undo record (instead of a closure that captures
- * `plan`) avoids one closure allocation per route during high-volume builds.
- */
 function rollbackPlan(plan: CommitPlan): void {
   applyRevert(plan, true);
 }
@@ -375,13 +315,6 @@ function routeDuplicate(meta: RouteMeta): RouterErrorData {
 }
 
 function routeConflict(why: string, meta: RouteMeta): RouterErrorData {
-  // The prefix-index walk knows *that* a sibling at the current
-  // position blocks this route, but resolving *which* sibling without
-  // a backref pointer would mean a second walk. The actionable
-  // information is in `message` (what kind of conflict). `segment`
-  // and `conflictsWith` carry the registering route's own path so
-  // the caller can echo it without losing context — they are not
-  // a pointer to the colliding sibling.
   return {
     kind: RouterErrorKind.RouteConflict,
     message: `${meta.method} ${meta.path}: ${why}`,
@@ -393,11 +326,6 @@ function routeConflict(why: string, meta: RouteMeta): RouterErrorData {
   };
 }
 
-/**
- * Commit a wildcard-tail terminal at `node`. Caller has already filled
- * `partial.freshX` carriers so revert can run cleanly on rejection.
- * Returns an `Err` Result on conflict, `undefined` on success.
- */
 function attachWildcardTail(
   node: PrefixTrieNode,
   name: string,
@@ -416,11 +344,6 @@ function attachWildcardTail(
   return undefined;
 }
 
-/**
- * Commit a non-wildcard terminal at `node`. Returns `'alias'` for a
- * permitted optional-expansion duplicate, an `Err` Result on conflict,
- * `undefined` on a normal commit.
- */
 function attachTerminal(
   node: PrefixTrieNode,
   visited: PrefixTrieNode[],

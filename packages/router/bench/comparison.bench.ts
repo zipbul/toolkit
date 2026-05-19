@@ -1,23 +1,3 @@
-/**
- * Apples-to-apples cross-router microbench against seven adapters
- * (zipbul, find-my-way, memoirist, rou3, hono-regexp, hono-trie,
- * koa-tree-router). Each (adapter × scenario) pair runs in a fresh
- * child process — JIT code cache, structure cache, IC state, and RSS
- * baseline are isolated per pair. mitata's cross-router summary
- * (normalized rankings, p-values) is sacrificed in exchange for true
- * process-level isolation; compare adapters via stdout raw values.
- *
- * Each adapter is held to the same per-scenario sanity contract before
- * any timing runs:
- *   - every hit path the bench will measure must return non-null
- *   - every declared miss path must return null
- *   - the declared wrong-method dispatch must return null
- *   - the wildcard syntax rewrite produces a path the adapter actually
- *     accepts at registration time
- * If an adapter fails the contract for a scenario, that pair is skipped
- * (with a printed reason) instead of silently emitting a `0 ns/op` line.
- */
-
 import FindMyWay from 'find-my-way';
 import { RegExpRouter } from 'hono/router/reg-exp-router';
 import { TrieRouter } from 'hono/router/trie-router';
@@ -37,10 +17,6 @@ type AdapterName = (typeof ADAPTER_NAMES)[number];
 type Method = string;
 type Route = readonly [Method, string, number];
 
-// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-//  ROUTE SETS
-// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
 const STATIC_ROUTES: Route[] = [];
 for (let i = 0; i < 100; i++) {
   STATIC_ROUTES.push(['GET', `/api/v1/resource${i}`, i]);
@@ -53,8 +29,6 @@ const PARAM_ROUTES: Route[] = [
   ['GET', '/orgs/:org/teams/:team/members/:member', 4],
 ];
 
-// Wildcard scenario uses two distinct prefixes; both adapters' hit paths
-// hit a different prefix so neither side is biased by IC monomorphism.
 const WILDCARD_ROUTES: Route[] = [
   ['GET', '/static/*path', 1],
   ['GET', '/files/*filepath', 2],
@@ -128,17 +102,10 @@ const GITHUB_ROUTES: Route[] = [
   ['GET', '/emojis', 65],
 ];
 
-// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-//  ADAPTER INTERFACE
-// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
 interface Adapter {
   readonly name: AdapterName;
-  /** Per-scenario route-shape rewrite; identity for adapters that accept
-   *  the canonical `*name` named-wildcard form. */
   rewrite(path: string): string;
   setup(routes: ReadonlyArray<Route>): unknown;
-  /** Match returning a non-null sentinel on hit, null on miss. */
   match(router: unknown, method: Method, path: string): unknown;
 }
 
@@ -158,8 +125,6 @@ const adapters: Record<AdapterName, Adapter> = {
   },
   'find-my-way': {
     name: 'find-my-way',
-    // find-my-way accepts a bare trailing `*` as catchall; named `*name`
-    // is rejected at register time.
     rewrite: p => p.replace(/\/\*[^/]+$/, '/*'),
     setup: rs => {
       const r = FindMyWay();
@@ -172,7 +137,6 @@ const adapters: Record<AdapterName, Adapter> = {
   },
   memoirist: {
     name: 'memoirist',
-    // memoirist accepts canonical `*name`.
     rewrite: p => p,
     setup: rs => {
       const r = new Memoirist<number>();
@@ -185,7 +149,6 @@ const adapters: Record<AdapterName, Adapter> = {
   },
   rou3: {
     name: 'rou3',
-    // rou3 reserves `**:name` as the named catch-all form.
     rewrite: p => p.replace(/\/\*([^/]+)$/, '/**:$1'),
     setup: rs => {
       const r = createRou3<number>();
@@ -198,7 +161,6 @@ const adapters: Record<AdapterName, Adapter> = {
   },
   'hono-regexp': {
     name: 'hono-regexp',
-    // hono accepts a bare trailing `*` placeholder.
     rewrite: p => p.replace(/\/\*[^/]+$/, '/*'),
     setup: rs => {
       const r = new RegExpRouter<number>();
@@ -229,7 +191,6 @@ const adapters: Record<AdapterName, Adapter> = {
   },
   'koa-tree-router': {
     name: 'koa-tree-router',
-    // koa-tree-router uses `*name` as named catchall.
     rewrite: p => p,
     setup: rs => {
       const r = new KoaTreeRouter() as unknown as {
@@ -248,21 +209,11 @@ const adapters: Record<AdapterName, Adapter> = {
   },
 };
 
-// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-//  SCENARIO DEFINITIONS
-// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
 interface Scenario {
-  /** Display label (also used to name bench summary blocks and worker argv). */
   label: string;
-  /** Canonical route list (each adapter rewrites with `rewrite()` first). */
   routes: ReadonlyArray<Route>;
-  /** Hit assertions: each `[method, path]` must return non-null on every adapter. */
   hits: ReadonlyArray<readonly [Method, string]>;
-  /** Miss assertions: each path must return null on every adapter. */
   misses: ReadonlyArray<readonly [Method, string]>;
-  /** Wrong-method axis: `path` is registered under a different method,
-   *  the bench dispatches `method` and expects null. */
   wrongMethod: readonly [Method, string];
 }
 
@@ -325,10 +276,6 @@ const scenarios: Scenario[] = [
   },
 ];
 
-// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-//  ORCHESTRATOR / WORKER SPLIT
-// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
 const workerAdapter = process.argv[2];
 const workerScenario = process.argv[3];
 const isWorker = workerAdapter !== undefined && workerScenario !== undefined;
@@ -368,10 +315,6 @@ if (scenario === undefined) {
   process.exit(1);
 }
 
-// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-//  SANITY GATE (worker-local; one adapter × one scenario)
-// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
 const rewritten = scenario.routes.map(([m, p, v]) => [m, adapter.rewrite(p), v] as Route);
 let router: unknown;
 try {
@@ -408,10 +351,6 @@ for (const [m, p] of scenario.misses) {
   }
 }
 console.log(`sanity=ok adapter=${adapter.name} scenario=${scenario.label}`);
-
-// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-//  BENCH (single adapter × single scenario)
-// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 summary(() => {
   scenario.hits.forEach(([m, path], idx) => {

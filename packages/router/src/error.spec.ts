@@ -25,9 +25,6 @@ describe('RouterError', () => {
   });
 
   it('should preserve data object with all fields', () => {
-    // `param-duplicate` carries every public field shape (kind/message/
-    // segment/suggestion + context path/method). Narrow with `kind` first
-    // so we can access kind-specific fields without `as any`.
     const data = {
       kind: RouterErrorKind.ParamDuplicate as const,
       message: 'duplicate param id',
@@ -67,12 +64,6 @@ describe('RouterError', () => {
   });
 
   it('should support all error kinds — required fields stubbed per discriminated union', () => {
-    // After A3, kind-specific required fields are enforced by the type
-    // system. Each constructor call below provides the minimum legal shape
-    // for its kind. Aspirational kinds present in pre-A3 history
-    // (regex-timeout / method-not-found / not-built / path-too-long /
-    // segment-limit) were never produced anywhere in src or have been
-    // dropped along with the option that emitted them.
     const variants = [
       { kind: RouterErrorKind.RouterSealed as const, message: 'sealed', suggestion: 'recreate' },
       { kind: RouterErrorKind.RouteDuplicate as const, message: 'dup', suggestion: 'use another' },

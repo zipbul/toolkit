@@ -1,18 +1,3 @@
-/**
- * Invariants every RouterError instance must satisfy.
- *
- * The discriminated union in `src/types.ts` already declares `message`
- * and `suggestion` as required strings for every kind (except
- * `route-validation`, whose actionable detail lives in `errors[]`). This
- * suite goes one step further: it triggers each kind through the public
- * API and asserts the actual emitted payload carries non-empty strings.
- *
- * The type system catches a missing field at compile time; this suite
- * catches a future site that satisfies the type but emits an empty
- * string by mistake. Together they enforce a uniform user-facing error
- * shape: every RouterError tells the caller *what* went wrong and
- * *how* to fix it.
- */
 import { describe, expect, it } from 'bun:test';
 
 import type { RouterErrorData } from '../../src/types';
@@ -178,7 +163,6 @@ describe('every RouterError carries actionable kind + message + suggestion', () 
     if (err.data.kind === RouterErrorKind.RouteValidation) {
       expect(err.data.message.length).toBeGreaterThan(0);
       expect(err.data.errors.length).toBeGreaterThan(0);
-      // Inner issues must also be actionable.
       for (const issue of err.data.errors) {
         expect(typeof issue.error.message).toBe('string');
         expect(issue.error.message.length).toBeGreaterThan(0);

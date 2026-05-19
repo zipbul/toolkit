@@ -13,13 +13,10 @@ import { PathPartType, WildcardOrigin } from './path-part';
 import { buildPatternTester } from './pattern-tester';
 import { UndoKind, applyUndo } from './undo';
 
-/** True when the node holds at least one static child (inline or Record). */
 function hasAnyStaticChild(node: SegmentNode): boolean {
   return node.singleChildKey !== null || node.staticChildren !== null;
 }
 
-/** Iterate every static child of `node` regardless of whether the entry
- *  is in the inline cache or the promoted `staticChildren` Record. */
 function forEachStaticChild(node: SegmentNode, fn: (key: string, child: SegmentNode) => void): void {
   if (node.singleChildKey !== null && node.singleChildNext !== null) {
     fn(node.singleChildKey, node.singleChildNext);
@@ -52,17 +49,6 @@ function rollbackUndo(undo: SegmentTreeUndoLog, start: number): void {
   undo.length = start;
 }
 
-/**
- * Insert one expanded route (no optional markers) into the segment tree.
- *
- * Hot-path notes:
- *  - Error paths call the free `rollbackUndo()` helper rather than closing
- *    over a per-call `fail` arrow; allocating one closure per route was
- *    observable GC pressure on large builds.
- *  - The literal-segment branch is structured so the common case (existing
- *    literal child on a non-wildcard node) takes a single hash lookup and
- *    no allocation.
- */
 function insertIntoSegmentTree(
   root: SegmentNode,
   parts: PathPart[],
@@ -92,7 +78,6 @@ function insertIntoSegmentTree(
       }
       node = result.node;
     } else {
-      // wildcard — terminal
       const fail = attachWildcardTerminal(node, part, handlerIndex, undoLog);
       if (fail !== undefined) {
         rollbackUndo(undoLog, undoStart);
@@ -109,11 +94,6 @@ function insertIntoSegmentTree(
   }
 }
 
-/**
- * Walk a sequence of literal segments from `node`, creating fresh nodes
- * for missing children. Returns the descended node on success, or a
- * `RouterErrorData` carrier (no Result wrapper — caller runs rollback).
- */
 function insertStaticSegments(
   node: SegmentNode,
   segs: ReadonlyArray<string>,
@@ -121,12 +101,10 @@ function insertStaticSegments(
 ): SegmentNode | RouterErrorData {
   for (let s = 0; s < segs.length; s++) {
     const seg = segs[s]!;
-    // Fast path 1: inline single-static-child cache hit (string compare).
     if (node.singleChildKey === seg && node.singleChildNext !== null && node.wildcardStore === null) {
       node = node.singleChildNext;
       continue;
     }
-    // Fast path 2: promoted staticChildren Record hit.
     const sc = node.staticChildren;
     if (sc !== null && node.wildcardStore === null) {
       const child = sc[seg];
@@ -146,8 +124,6 @@ function insertStaticSegments(
       };
     }
 
-    // Inline-cache slot is empty AND no Record yet: store the child inline so
-    // a node with exactly one static child never allocates a Record.
     if (node.singleChildKey === null && node.staticChildren === null) {
       const fresh = createSegmentNode();
       node.singleChildKey = seg;
@@ -157,10 +133,6 @@ function insertStaticSegments(
       continue;
     }
 
-    // Either a different inline-cache key already occupies the slot, or the
-    // Record was previously promoted. Promote the inline entry (if any) into
-    // the Record before adding this new sibling so the walker only has to
-    // consult one of inline/Record per node.
     let children = node.staticChildren;
     if (children === null) {
       children = Object.create(null) as Record<string, SegmentNode>;
@@ -185,11 +157,6 @@ function insertStaticSegments(
   return node;
 }
 
-/**
- * Resolve or create the param sibling that matches `part` under `node`.
- * Returns `{ node }` on success or a `RouterErrorData` on conflict
- * (caller runs rollback).
- */
 function insertParamPart(
   node: SegmentNode,
   part: { type: PathPartType.Param; name: string; pattern: string | null; optional: boolean },
@@ -279,14 +246,6 @@ function insertParamPart(
   return { node: fresh.next };
 }
 
-/**
- * Look up or compile the regex tester for a param's `pattern`. Returns
- * `null` for an unconstrained param, the cached/compiled tester on
- * success, or a `RouterErrorData` for a regex compile failure.
- */
-/** Type guard so callers can narrow `resolveOrCompileTester` results
- *  without an `as` cast. RouterErrorData always carries a `kind` string;
- *  PatternTesterFn (function value) does not. */
 function isResolvedTesterError(result: PatternTesterFn | null | RouterErrorData): result is RouterErrorData {
   return result !== null && typeof result === 'object' && 'kind' in result;
 }
@@ -319,10 +278,6 @@ function resolveOrCompileTester(
   }
 }
 
-/**
- * Attach a wildcard terminal at `node`. Returns `undefined` on success
- * or a `RouterErrorData` on conflict.
- */
 function attachWildcardTerminal(
   node: SegmentNode,
   part: { type: PathPartType.Wildcard; name: string; origin: WildcardOrigin },
@@ -363,10 +318,6 @@ function attachWildcardTerminal(
   return undefined;
 }
 
-/**
- * Attach a non-wildcard terminal store at `node`. Returns `undefined`
- * on success or a `RouterErrorData` on duplicate.
- */
 function attachStoreTerminal(node: SegmentNode, handlerIndex: number, undoLog: SegmentTreeUndoLog): RouterErrorData | undefined {
   if (node.store !== null) {
     return {

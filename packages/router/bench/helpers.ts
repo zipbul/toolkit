@@ -1,14 +1,5 @@
-/**
- * Shared bench measurement helpers.
- *
- * Bench scripts import from here so RSS/heap/env measurement stays
- * consistent. The settleScavenger contract is load-bearing: without it
- * RSS deltas read 2-4× high (libpas decommit is async after Bun.gc).
- */
 import { readFileSync } from 'node:fs';
 
-/** Five passes — JSC needs more than one cycle to clean post-build
- *  segment-tree shares; verified to drive heap 270→12 MiB on `100k param`. */
 export function gc(): void {
   if (typeof Bun !== 'undefined') {
     for (let i = 0; i < 5; i++) {
@@ -17,10 +8,6 @@ export function gc(): void {
   }
 }
 
-/** Synchronously wait for the libpas scavenger to decommit freed pages
- *  back to the OS. Bun.gc(true) drops the JSC heap; the scavenger only
- *  returns RSS asynchronously (~300 ms tick). 1.5 s settles every shape
- *  we measure. Sync via Bun.sleepSync so callers stay synchronous. */
 export function settleScavenger(ms = 1500): void {
   if (typeof Bun !== 'undefined') {
     Bun.sleepSync(ms);
@@ -40,10 +27,6 @@ export function fmtMem(before: NodeJS.MemoryUsage, after: NodeJS.MemoryUsage): s
   return `rss=${rss.toFixed(2)}MB heap=${heap.toFixed(2)}MB arrayBuffers=${arrayBuffers.toFixed(2)}MB`;
 }
 
-/** Single-line environment snapshot every bench script calls before the
- *  first measurement. Captures runtime + kernel + CPU + governor +
- *  cgroup + loadavg so stdout-only output reproduces across machines.
- *  Linux-only fields are skipped silently on other platforms. */
 export function printEnv(): void {
   const parts: string[] = [
     `bun=${typeof Bun !== 'undefined' ? Bun.version : 'n/a'}`,
@@ -88,10 +71,6 @@ export function printEnv(): void {
   console.log(parts.join(' '));
 }
 
-/** Nearest-rank percentile. Returns NaN on empty input.
- *  Caveat: with very small samples (n ≤ 4) p75 and p99 collapse to the max
- *  sample; callers reporting both as distinct columns should either raise
- *  the run count or drop the higher percentile from the output. */
 export function percentile(values: readonly number[], p: number): number {
   if (values.length === 0) {
     return Number.NaN;

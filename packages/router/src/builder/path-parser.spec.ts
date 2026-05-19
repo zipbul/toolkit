@@ -164,9 +164,6 @@ describe('PathParser', () => {
     });
 
     it('should reject whitespace-only regex `(   )` as parse error', () => {
-      // Whitespace-only patterns are silently-typo cases — the user almost
-      // certainly meant to omit the parentheses entirely. Reject so the
-      // intent is explicit.
       const result = parse('/users/:id(   )');
       expect(isErr(result)).toBe(true);
       if (isErr(result)) {
@@ -287,11 +284,6 @@ describe('PathParser', () => {
   });
 
   describe('regex pattern body — router accepts any syntactically valid regex', () => {
-    // ReDoS prevention is the framework / user's responsibility (use a
-    // normalizer plug-in such as `re2` ahead of the router). The router
-    // only rejects regex shapes that fail to compile via `new RegExp()`
-    // at build time, surfaced as `route-parse`.
-
     it('accepts a vulnerable nested-quantifier pattern (user responsibility)', () => {
       const result = parse('/test/:val((?:a+)+)');
       expect(isErr(result)).toBe(false);

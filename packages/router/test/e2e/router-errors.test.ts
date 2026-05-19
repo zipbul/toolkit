@@ -248,10 +248,6 @@ describe('Router<T> errors', () => {
   });
 
   it('accepts a backreference pattern (regex safety is user responsibility, not router)', () => {
-    // Per policy, the router does not gate user regex bodies. Backreferences,
-    // nested quantifiers, and other ReDoS-vulnerable shapes are accepted at
-    // registration time; the framework / a user-supplied normalizer (re2,
-    // recheck, etc.) is responsible for catching them.
     const router = new Router<string>();
     router.add('GET', '/users/:id((?:[a-z])\\1)', 'handler');
     expect(() => router.build()).not.toThrow();

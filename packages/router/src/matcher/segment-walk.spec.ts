@@ -1,9 +1,3 @@
-/**
- * Unit spec for `segment-walk.ts`. Drives `createSegmentWalker` directly
- * with hand-built `SegmentNode` fixtures so each tier (factored,
- * prefix-factor, static-prefix wildcard codegen, full segment-tree
- * codegen, iterative, recursive) is exercised in isolation — no Router.
- */
 import { describe, expect, it } from 'bun:test';
 
 import type { SegmentNode } from '../tree';
@@ -74,8 +68,6 @@ describe('createSegmentWalker — static-prefix wildcard codegen tier', () => {
 
 describe('createSegmentWalker — iterative tier (non-ambiguous, exceeds codegen budget)', () => {
   it('falls back to the iterative walker for wide non-ambiguous fanout', () => {
-    // 400 zone prefixes, each with a unique terminal store. Single static
-    // child per zone — no ambiguity, but blows past the codegen size budget.
     const root = manyStaticChildren(400, i => leafWithStore(i + 1000));
 
     const walker = createSegmentWalker(root, identityDecoder, createMatchState(2));
@@ -93,8 +85,6 @@ describe('createSegmentWalker — iterative tier (non-ambiguous, exceeds codegen
 
 describe('createSegmentWalker — recursive tier (ambiguous tree)', () => {
   it('falls back to the recursive walker for trees that need backtracking', () => {
-    // Ambiguous: root carries both a static child and a paramChild at the
-    // same position, with multiple levels of static/param alternation.
     const root = createSegmentNode();
     root.staticChildren = Object.create(null) as Record<string, SegmentNode>;
     const apiStatic = createSegmentNode();

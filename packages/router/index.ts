@@ -1,5 +1,3 @@
-// ── Public API ──
-
 export { Router } from './src/router';
 export { RouterError } from './src/error';
 

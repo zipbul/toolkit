@@ -1,9 +1,3 @@
-/**
- * Unit spec for `wildcard-method-expand.ts`. Pure mutation over an array
- * of pending routes — short-circuits when no `*` method exists, otherwise
- * fans the wildcard registration out across every method observed at seal
- * time. Spec pins each branch.
- */
 import { describe, expect, it } from 'bun:test';
 
 import { MethodRegistry } from '../method-registry';

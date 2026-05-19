@@ -3,8 +3,6 @@ import { describe, it, expect } from 'bun:test';
 import { RouterCache } from './cache';
 
 describe('RouterCache', () => {
-  // ── HP ──
-
   it('should return stored value when key exists', () => {
     const cache = new RouterCache<string>(10);
     cache.set('/users', 'handler');
@@ -52,16 +50,11 @@ describe('RouterCache', () => {
     const cache = new RouterCache<string>(2);
     cache.set('/a', 'a');
     cache.set('/b', 'b');
-    cache.set('/c', 'c'); // triggers eviction of the oldest used entry
-
-    // /c (just inserted) and exactly one of {/a, /b} must survive.
-    // The other must have been evicted to make room.
+    cache.set('/c', 'c');
     expect(cache.get('/c')).toBe('c');
     const survivors = [cache.get('/a'), cache.get('/b')].filter(v => v !== undefined);
     expect(survivors).toHaveLength(1);
   });
-
-  // ── NE ──
 
   it('should return undefined when key was never set', () => {
     const cache = new RouterCache<string>(10);
@@ -78,12 +71,9 @@ describe('RouterCache', () => {
   it('should return undefined after evicted key is accessed', () => {
     const cache = new RouterCache<string>(1);
     cache.set('/a', 'a');
-    cache.set('/b', 'b'); // evicts /a
-
+    cache.set('/b', 'b');
     expect(cache.get('/a')).toBeUndefined();
   });
-
-  // ── ED ──
 
   it('should evict existing entry when maxSize is 1 and second entry is inserted', () => {
     const cache = new RouterCache<string>(1);
@@ -98,8 +88,7 @@ describe('RouterCache', () => {
     const cache = new RouterCache<string>(2);
     cache.set('/a', 'a');
     cache.set('/b', 'b');
-    cache.set('/c', 'c'); // evicts /a
-
+    cache.set('/c', 'c');
     expect(cache.get('/a')).toBeUndefined();
     expect(cache.get('/b')).toBe('b');
     expect(cache.get('/c')).toBe('c');
@@ -113,29 +102,23 @@ describe('RouterCache', () => {
   });
 
   it('should wrap hand correctly when eviction reaches the last slot', () => {
-    // maxSize=2: evict /a (slot 0) → hand=1; next evict /b (slot 1) → hand wraps to 0
     const cache = new RouterCache<string>(2);
-    cache.set('/a', 'a'); // slot 0
-    cache.set('/b', 'b'); // slot 1
-    cache.set('/c', 'c'); // evicts /a, hand moves to 1
-    cache.set('/d', 'd'); // evicts /b, hand wraps to 0
-
+    cache.set('/a', 'a');
+    cache.set('/b', 'b');
+    cache.set('/c', 'c');
+    cache.set('/d', 'd');
     expect(cache.get('/a')).toBeUndefined();
     expect(cache.get('/b')).toBeUndefined();
     expect(cache.get('/c')).toBe('c');
     expect(cache.get('/d')).toBe('d');
   });
 
-  // ── CO ──
-
   it('should complete full clock sweep and evict first entry when all entries have used=true', () => {
-    // Both entries inserted with used=true.
-    // evict(): hand=0 /a→false; hand=1 /b→false; wrap=0 /a→false→evict.
     const cache = new RouterCache<string>(2);
     cache.set('/a', 'a');
     cache.set('/b', 'b');
-    cache.get('/a'); // used=true (already true)
-    cache.get('/b'); // used=true (already true)
+    cache.get('/a');
+    cache.get('/b');
     cache.set('/c', 'c');
 
     expect(cache.get('/a')).toBeUndefined();
@@ -149,66 +132,45 @@ describe('RouterCache', () => {
     expect(cache.get('')).toBeNull();
   });
 
-  // ── ST ──
-
   it('should transition from empty to full to eviction overflow without error', () => {
     const cache = new RouterCache<string>(2);
 
-    expect(cache.get('/x')).toBeUndefined(); // empty state
-
+    expect(cache.get('/x')).toBeUndefined();
     cache.set('/a', 'a');
-    cache.set('/b', 'b'); // full
-    cache.set('/c', 'c'); // overflow → eviction
-
+    cache.set('/b', 'b');
+    cache.set('/c', 'c');
     expect(cache.get('/c')).toBe('c');
   });
 
   it('should evict entry on second clock sweep when entry was given second chance', () => {
-    // clock-sweep: first encounter → used=true→false (second chance); second encounter → used=false→evict
-    // maxSize=2: insert /a(s0), /b(s1). evict for /c:
-    //   h=0, /a.u=T→F; h=1, /b.u=T→F; wrap h=0, /a.u=F→evict. hand=1
     const cache = new RouterCache<string>(2);
     cache.set('/a', 'a');
     cache.set('/b', 'b');
-    cache.set('/c', 'c'); // /a evicted
-
+    cache.set('/c', 'c');
     expect(cache.get('/a')).toBeUndefined();
-    expect(cache.get('/b')).toBe('b'); // /b survived
+    expect(cache.get('/b')).toBe('b');
   });
 
   it('should remove evicted key from index so same key can be re-inserted', () => {
     const cache = new RouterCache<string>(1);
     cache.set('/a', 'a');
-    cache.set('/b', 'b'); // evicts /a
-
-    cache.set('/a', 're-a'); // /a re-inserted after eviction
-
+    cache.set('/b', 'b');
+    cache.set('/a', 're-a');
     expect(cache.get('/a')).toBe('re-a');
   });
 
   it('should evict unreferenced entry while preserving recently-used entry (second chance)', () => {
-    // maxSize=4 (power of 2) to demonstrate real second-chance benefit:
-    // Fill 4 slots: /a(0), /b(1), /c(2), /d(3)
-    // Insert /e → evicts /a (hand=0, u=F→evict), hand=1
-    // All others get used=false after eviction sweep
-    // Refresh /b: /b.used=true
-    // Insert /f → hand=1, /b.u=T→false, skip; hand=2, /c.u=F→evict /c
     const cache = new RouterCache<string>(4);
-    cache.set('/a', 'a'); // slot 0
-    cache.set('/b', 'b'); // slot 1
-    cache.set('/c', 'c'); // slot 2
-    cache.set('/d', 'd'); // slot 3
-    cache.set('/e', 'e'); // triggers first eviction → evicts /a, hand=1
-
-    cache.get('/b'); // refresh /b: used=true
-
-    cache.set('/f', 'f'); // second eviction: /b gets second chance; /c.u=F → evicted
-
-    expect(cache.get('/c')).toBeUndefined(); // /c evicted (no second chance)
-    expect(cache.get('/b')).toBe('b'); // /b survived (had second chance)
+    cache.set('/a', 'a');
+    cache.set('/b', 'b');
+    cache.set('/c', 'c');
+    cache.set('/d', 'd');
+    cache.set('/e', 'e');
+    cache.get('/b');
+    cache.set('/f', 'f');
+    expect(cache.get('/c')).toBeUndefined();
+    expect(cache.get('/b')).toBe('b');
   });
-
-  // ── ID ──
 
   it('should return same value on repeated get calls without modification', () => {
     const cache = new RouterCache<string>(5);
@@ -219,32 +181,24 @@ describe('RouterCache', () => {
     expect(cache.get('/stable')).toBe('value');
   });
 
-  // ── OR ──
-
   it('should evict entries in insertion order when none have been recently accessed', () => {
-    // Both /a and /b start with used=true from insert.
-    // evict inserts in order: /a(slot0) first → /a evicted first.
     const cache = new RouterCache<string>(2);
-    cache.set('/first', 'first'); // slot 0
-    cache.set('/second', 'second'); // slot 1
-    cache.set('/third', 'third'); // /first evicted (hand starts at 0)
-
+    cache.set('/first', 'first');
+    cache.set('/second', 'second');
+    cache.set('/third', 'third');
     expect(cache.get('/first')).toBeUndefined();
     expect(cache.get('/second')).toBe('second');
     expect(cache.get('/third')).toBe('third');
   });
 
   it('should evict the entry at the current hand position before entries inserted later', () => {
-    // After first eviction, hand=1. Next eviction starts at slot 1 (/second).
     const cache = new RouterCache<string>(2);
-    cache.set('/a', 'a'); // slot 0
-    cache.set('/b', 'b'); // slot 1
-    cache.set('/c', 'c'); // evicts /a, hand ends at 1
-
-    // Now hand=1, /b.used=false; next evict starts at slot1 (/b.u=F→evict immediately)
+    cache.set('/a', 'a');
+    cache.set('/b', 'b');
+    cache.set('/c', 'c');
     cache.set('/d', 'd');
 
-    expect(cache.get('/b')).toBeUndefined(); // /b evicted next
+    expect(cache.get('/b')).toBeUndefined();
     expect(cache.get('/c')).toBe('c');
     expect(cache.get('/d')).toBe('d');
   });

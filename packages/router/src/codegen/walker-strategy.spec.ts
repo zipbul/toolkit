@@ -1,9 +1,3 @@
-/**
- * Unit specs for `walker-strategy.ts` — `detectWildCodegenSpec` decides
- * whether a root SegmentNode matches the static-prefix wildcard codegen
- * shape (file-server topology). Spec pins each disqualifier so a future
- * tree-shape change surfaces here.
- */
 import { describe, expect, it } from 'bun:test';
 
 import { WildcardOrigin, createSegmentNode } from '../tree';

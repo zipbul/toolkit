@@ -1,8 +1,3 @@
-/**
- * Unit spec for `factor-detect.ts`. Targets the WeakMap-backed factor
- * store + the `detectTenantFactor` pure function. Operates on raw
- * SegmentNode fixtures so each branch is exercised in isolation.
- */
 import { describe, expect, it } from 'bun:test';
 
 import type { SegmentNode } from './segment-tree';
@@ -85,7 +80,6 @@ describe('detectTenantFactor — disqualifiers', () => {
 
   it('returns null when one sibling has no unique terminal store', () => {
     const root = rootWithSiblings(1000, leafWithStore);
-    // Mutate one sibling to remove the leaf store
     root.staticChildren!['tenant-5']!.store = null;
     expect(detectTenantFactor(root)).toBeNull();
   });

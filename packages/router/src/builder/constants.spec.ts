@@ -1,8 +1,3 @@
-/**
- * Unit specs for `constants.ts` — pin the regex patterns and char-code
- * values so a typo in a hot-path comparison surfaces as a single test
- * failure here instead of silent miss-matches downstream.
- */
 import { describe, expect, it } from 'bun:test';
 
 import { CC_COLON, CC_PLUS, CC_SLASH, CC_STAR, END_ANCHOR_PATTERN, START_ANCHOR_PATTERN } from './constants';

@@ -3,12 +3,6 @@ import type { DecoderFn, MatchFn } from '../types';
 
 import { TESTER_PASS, WildcardOrigin, forEachStaticChild, hasAmbiguousNode, hasAnyStaticChild } from '../tree';
 
-/**
- * Codegen budget thresholds. Trees exceeding either of these fall back to
- * the iterative walker. The node count gate avoids walking past the JSC-
- * compile sweet spot; the source-bytes gate is the hard `new Function()`
- * safety net checked after emission.
- */
 const MAX_SOURCE_BYTES_HARD = 128 * 1024;
 const MAX_NODES_DEFAULT = 256;
 
@@ -40,12 +34,6 @@ function estimateSegmentTreeCodegen(root: SegmentNode, nodeCap: number): Codegen
   return { nodes, oversized: false };
 }
 
-/**
- * Walk the segment tree once and return one synthesized warmup path per
- * direct child of the root. Used by warmup so JSC IC reaches tier-up
- * across every major code path instead of a single one. The per-path
- * depth bound (`16`) is a malformed-tree safety net only.
- */
 function collectWarmupPaths(root: SegmentNode): string[] {
   const out: string[] = [];
 
@@ -108,12 +96,7 @@ interface CompiledPackage {
   testers: PatternTesterFn[];
 }
 
-/**
- * Compile a segment tree into a flat match function via `new Function()`.
- */
 function compileSegmentTree(root: SegmentNode): CompiledPackage | null {
-  // Bail on ambiguous trees: codegen only handles unique-winner trees.
-  // Ambiguous trees (static+param collision) fallback to recursive walker.
   if (hasAmbiguousNode(root)) {
     return null;
   }
@@ -159,21 +142,9 @@ ${body}
 interface EmitContext {
   bail: boolean;
   testers: PatternTesterFn[];
-  /** Stack of [startExpr, endExpr] pairs for param descents that have
-   *  not yet been written to `state.paramOffsets`. Each `emitParamBranch`
-   *  push the descent's `[posVar, slashVar]` before recursing into the
-   *  child subtree and pop after; every terminal emitter (strict, multi-
-   *  wildcard, wildcard-store, terminal-at-node) flushes the entire
-   *  stack into `state.paramOffsets` before its own writes — so a
-   *  walker that fails inside the child subtree returns false without
-   *  paying for the offset writes. Mirrors memoirist's "materialize
-   *  params after the child route succeeds" pattern. */
   pendingParams: Array<readonly [string, string]>;
 }
 
-/** Emit the `state.paramOffsets[...] = ...; state.paramCount = ...;`
- *  block that flushes pending param descents plus any terminal-local
- *  params (e.g. the strict-terminal's own `[posVar, len]` pair). */
 function emitFlushPendingWrites(
   pending: ReadonlyArray<readonly [string, string]>,
   extra: ReadonlyArray<readonly [string, string]> = [],
@@ -207,10 +178,6 @@ function emitRootSlashTerminal(root: SegmentNode): string {
 }
 
 function emitNode(ctx: EmitContext, node: SegmentNode, posVar: string): string {
-  // posVar is always 'pos0' at the entry point or `pos${N}` / `pos${N}_s…`
-  // from the recursive emitNode calls below, so slice(3).split('_')[0] is
-  // always a non-empty digit string. The `?? '0'` fallback the earlier
-  // version carried was unreachable.
   const posDigits = posVar.slice(3).split('_')[0]!;
   const slashVar = `s${posDigits}`;
   const innerPos = `pos${parseInt(posDigits) + 1}`;
@@ -234,20 +201,8 @@ function emitNode(ctx: EmitContext, node: SegmentNode, posVar: string): string {
   return code;
 }
 
-/** Threshold at which `emitStaticChildren` switches from a linear
- *  `if (startsWith) { … }` chain to a `switch (charCodeAt) { case … }`
- *  dispatch. Below this count the chain wins (no switch overhead, JSC
- *  cmovs the comparisons); at and above, the single charCodeAt + jump
- *  table beats N sequential startsWith probes on miss-heavy paths.
- *  The 4 boundary is empirical — verified on github-static/miss and
- *  github-param/miss benches. */
 const STATIC_CHILD_DISPATCH_THRESHOLD = 4;
 
-/** Emit one `if (url.startsWith(seg, pos)) { … }` block per static child
- *  of `node`. Sibling-dense nodes (≥ THRESHOLD) get a first-char switch
- *  prelude so a miss returns after a single charCodeAt instead of N
- *  failed startsWith probes. Each block recursively emits the child's
- *  subtree. */
 function emitStaticChildren(ctx: EmitContext, node: SegmentNode, posVar: string, innerPos: string): string {
   const siblings: Array<{ seg: string; child: SegmentNode }> = [];
   forEachStaticChild(node, (seg, child) => {
@@ -274,10 +229,6 @@ function emitStaticChildren(ctx: EmitContext, node: SegmentNode, posVar: string,
   return code;
 }
 
-/** Emit `switch (url.charCodeAt(pos)) { case <c>: …; break; … }`. Siblings
- *  sharing a first char are grouped into a single case so the inner blocks
- *  still chain `startsWith` for disambiguation (rare — e.g. `commits` vs
- *  `contents` under the same `:repo`). */
 function emitStaticChildrenSwitch(
   ctx: EmitContext,
   siblings: ReadonlyArray<{ seg: string; child: SegmentNode }>,
@@ -315,8 +266,6 @@ function emitStaticChildrenSwitch(
     }`;
 }
 
-/** Emit the per-sibling `if (startsWith) { … }` block shared by both
- *  the chain and the switch paths. */
 function emitStaticChildBlock(ctx: EmitContext, seg: string, child: SegmentNode, posVar: string, innerPos: string): string {
   const segLen = seg.length;
   const nextPos = `${innerPos}_s${seg.replace(/[^a-z0-9]/gi, '_')}`;
@@ -336,11 +285,6 @@ ${emitTerminalAt(ctx, child)}
     }`;
 }
 
-/** Emit param-segment dispatch: scan to next `/`, then either the
- *  strict-terminal fast path, the wildcard-terminal fast path, or the
- *  general descent into `param.next`. Bails if param has siblings
- *  (codegen only handles single-param positions; ambiguous fall through
- *  to the recursive walker). */
 function emitParamBranch(
   ctx: EmitContext,
   param: NonNullable<SegmentNode['paramChild']>,
@@ -359,12 +303,6 @@ function emitParamBranch(
   const wildcardTerminal = nextHasNoStatic && next.paramChild === null && next.wildcardStore !== null;
   const testerIdx = param.tester !== null ? ctx.testers.push(param.tester) - 1 : -1;
 
-  // charCodeAt scan beats `indexOf('/', pos)` on short HTTP paths (the
-  // common case); see bench/method-research/P-indexof-vs-charcode.bench.ts.
-  // The walker uses the same shape — keep emitter aligned. The "no slash
-  // found" sentinel is `len` here (matches what the walker emits) instead
-  // of `-1`, but we keep `-1` to preserve the wildcardTerminal branch's
-  // existing arithmetic guards.
   let code = `
     var ${slashVar} = ${posVar};
     while (${slashVar} < len && url.charCodeAt(${slashVar}) !== 47) ${slashVar}++;
@@ -381,10 +319,6 @@ function emitParamBranch(
     return code;
   }
 
-  // Push this descent's [start, end] onto the pending-params stack;
-  // every terminal inside the inner subtree flushes the stack into
-  // state.paramOffsets before returning true. If the inner subtree
-  // fails (returns false), the pending writes are never paid.
   ctx.pendingParams.push([posVar, slashVar] as const);
   const inner = emitNode(ctx, next, innerPos);
   ctx.pendingParams.pop();

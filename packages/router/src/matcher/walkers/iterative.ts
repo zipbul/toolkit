@@ -3,12 +3,6 @@ import type { DecoderFn, MatchFn, MatchState } from '../../types';
 
 import { TESTER_PASS, WildcardOrigin } from '../../tree';
 
-/**
- * Single-pass, allocation-free walker for trees without ambiguous nodes
- * (no static + param/wildcard at the same position). Single-static-child
- * fast path avoids a substring alloc on the hottest shape; param/wildcard
- * dispatch fall through after the static probe.
- */
 export function createIterativeWalker(root: SegmentNode, decoder: DecoderFn): MatchFn {
   return function walk(url: string, state: MatchState): boolean {
     state.paramCount = 0;
@@ -29,18 +23,12 @@ export function createIterativeWalker(root: SegmentNode, decoder: DecoderFn): Ma
         }
       }
 
-      // charCodeAt scan for the next '/' beats `indexOf('/', pos)` on
-      // short HTTP paths (< 64 chars), which dominate production
-      // workloads. indexOf wins past ~65 chars but those are rare for
-      // HTTP request paths.
       let end = pos;
       while (end < len && url.charCodeAt(end) !== 47) {
         end++;
       }
       const segLen = end - pos;
 
-      // Single-static-child offset fast path: avoid substring alloc on
-      // the most common shape (single static child per node).
       const sck = node.singleChildKey;
       if (sck !== null && node.singleChildNext !== null && sck.length === segLen && url.startsWith(sck, pos)) {
         node = node.singleChildNext;
@@ -92,8 +80,6 @@ export function createIterativeWalker(root: SegmentNode, decoder: DecoderFn): Ma
   };
 }
 
-/** Walk a compacted single-static chain. Returns the new `pos` after
- *  the prefix matches, or `-1` to signal mismatch. */
 export function consumeStaticPrefix(sp: ReadonlyArray<string>, url: string, pos: number, len: number): number {
   for (let i = 0; i < sp.length; i++) {
     const seg = sp[i]!;
@@ -113,8 +99,6 @@ export function consumeStaticPrefix(sp: ReadonlyArray<string>, url: string, pos:
   return pos;
 }
 
-/** Resolve a terminal at the end-of-input position: store first, then
- *  star-wildcard fallback. */
 export function matchTerminalAtNode(node: SegmentNode, len: number, state: MatchState): boolean {
   if (node.store !== null) {
     state.handlerIndex = node.store;

@@ -3,16 +3,6 @@ import type { DecoderFn, MatchFn, MatchState } from '../../types';
 
 import { TESTER_PASS, WildcardOrigin } from '../../tree';
 
-/**
- * Recursive backtracking walker. Used when `hasAmbiguousNode(root)` is
- * true — a node that holds both static children and a param/wildcard
- * sibling. The iterative walker can't backtrack across that ambiguity,
- * so we drop to a depth-first match() with rollback on `state.paramCount`.
- *
- * tryMatchParam captures the cursor in `mark` before descending and
- * restores it on miss so that a sibling param attempt sees a clean
- * paramOffsets state.
- */
 function createRecursiveWalker(root: SegmentNode, decoder: DecoderFn): MatchFn {
   function tryMatchParam(
     param: ParamSegment,

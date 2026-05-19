@@ -1,8 +1,3 @@
-/**
- * Public surface of the codegen layer (`new Function()`-emitted match
- * machinery). Cross-directory consumers import from this barrel only.
- */
-
 export type { MatchCacheEntry, MatchConfig } from './emitter';
 export { compileMatchFn } from './emitter';
 

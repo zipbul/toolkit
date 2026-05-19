@@ -1,10 +1,3 @@
-/* eslint-disable no-console */
-/* Baseline correctness gate vs external routers — checks exact value,
- * params, wrong-method behavior, and wildcard capture.
- * Exception: koa-tree-router's API can't return the stored value without
- * invoking the handler, so its value check is skipped (params still
- * verified). See L107/L184. */
-
 import FindMyWay from 'find-my-way';
 import { TrieRouter } from 'hono/router/trie-router';
 import KoaTreeRouter from 'koa-tree-router';
@@ -66,8 +59,6 @@ const adapters: Adapter[] = [
     name: 'rou3',
     build: rs => {
       const r = createRou3<number>();
-      // rou3 wildcard syntax is `**:name`, param is `:name`. Translate from
-      // current zipbul syntax `*name` → `**:name`.
       for (const [m, p, v] of rs) {
         const path = p.replace(/\*([a-zA-Z_][a-zA-Z0-9_]*)/g, '**:$1');
         addRoute(r, m, path, v);
@@ -119,7 +110,7 @@ const adapters: Adapter[] = [
           params[key] = value;
         }
       }
-      return { value: undefined, params }; // koa returns handle/params, value retrieval requires invoke
+      return { value: undefined, params };
     },
   },
   {
@@ -214,7 +205,6 @@ function runScenario(scenarioName: string, routes: Array<[string, string, number
           fails.push(`${probe.method} ${probe.path} → expected match, got null`);
           continue;
         }
-        // koa-tree-router can't return value; only check params
         const valueMatches = a.name === 'koa-tree-router' ? true : res.value === probe.expect.value;
         const paramsMatch = deepEqualParams(res.params as any, probe.expect.params);
         if (valueMatches && paramsMatch) {
@@ -237,7 +227,6 @@ function runScenario(scenarioName: string, routes: Array<[string, string, number
   }
 }
 
-// ─── 1. Static scenario ───
 const staticRoutes: Array<[string, string, number]> = [];
 for (let i = 0; i < 1000; i++) {
   staticRoutes.push(['GET', `/api/v1/resource-${i}`, i]);
@@ -251,7 +240,6 @@ runScenario('static-1k', staticRoutes, [
   { method: 'POST', path: '/api/v1/resource-0', expect: { kind: 'no-match' } },
 ]);
 
-// ─── 2. Param scenario ───
 const paramRoutes: Array<[string, string, number]> = [];
 for (let i = 0; i < 1000; i++) {
   paramRoutes.push(['GET', `/tenant-${i}/users/:user/posts/:post`, i]);
@@ -268,7 +256,6 @@ runScenario('param-1k', paramRoutes, [
   { method: 'GET', path: '/tenant-x/users/42/posts/7', expect: { kind: 'no-match' } },
 ]);
 
-// ─── 3. Wildcard scenario ───
 const wildcardRoutes: Array<[string, string, number]> = [];
 for (let i = 0; i < 100; i++) {
   wildcardRoutes.push(['GET', `/files/group-${i}/*path`, i]);
@@ -284,7 +271,6 @@ runScenario('wildcard-100', wildcardRoutes, [
   },
 ]);
 
-// ─── 4. Wrong method ───
 runScenario(
   'wrong-method',
   [
@@ -300,7 +286,6 @@ runScenario(
   ],
 );
 
-// ─── 5. Falsy values ───
 runScenario(
   'falsy-values',
   [

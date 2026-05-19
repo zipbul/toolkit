@@ -33,9 +33,6 @@ function runHighCardinality(router: Router<string>, unique: number): void {
 printEnv();
 settleScavenger();
 
-// Phase 1: eviction-correctness probe (not a timing bench). Drives
-// 100k unique keys through a 128-entry cache and asserts the oldest
-// key has been evicted while the newest stays resident.
 const probe = buildRouter();
 const before = heap();
 runHighCardinality(probe, UNIQUE);
@@ -58,19 +55,14 @@ if (newest?.meta.source !== MatchSource.Cache) {
   throw new Error(`cache cardinality regression: newest hit should remain cached, got ${newest?.meta.source}`);
 }
 
-// Phase 2: timing benches that separate hit / evict / miss cost.
-// Earlier bench mixed all three into one call — the cost components
-// could not be told apart. Each call site below is monomorphic.
 settleScavenger();
 
 const hitRouter = buildRouter();
-// Warm cache to exactly CACHE_SIZE keys, all dynamic hits.
 for (let i = 0; i < CACHE_SIZE; i++) {
   hitRouter.match('GET', `/users/${i}`);
 }
 
 const evictRouter = buildRouter();
-// Warm cache full so every subsequent new key triggers eviction.
 for (let i = 0; i < CACHE_SIZE; i++) {
   evictRouter.match('GET', `/users/${i}`);
 }

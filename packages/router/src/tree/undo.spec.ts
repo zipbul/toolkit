@@ -1,8 +1,3 @@
-/**
- * Unit spec for `undo.ts`. The undo log replays tagged records back to
- * their reverse mutations; spec pins each UndoKind branch so a future
- * record-shape change surfaces here.
- */
 import { describe, expect, it } from 'bun:test';
 
 import type { PatternTesterFn } from './pattern-tester';

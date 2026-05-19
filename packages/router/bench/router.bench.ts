@@ -9,8 +9,6 @@ import { printEnv } from './helpers';
 
 printEnv();
 
-// ── Helpers ──
-
 function buildRouter<T>(routes: Array<[string, string, T]>, options: RouterOptions = {}): Router<T> {
   const router = new Router<T>(options);
 
@@ -52,17 +50,11 @@ function generateMixedRoutes(count: number): Array<[string, string, number]> {
   return routes;
 }
 
-// ── Route sets ──
-
 const STATIC_ROUTES_100: Array<[string, string, number]> = generateStaticRoutes(100);
 const STATIC_ROUTES_500: Array<[string, string, number]> = generateStaticRoutes(500);
 const STATIC_ROUTES_1000: Array<[string, string, number]> = generateStaticRoutes(1000);
 const MIXED_ROUTES_100: Array<[string, string, number]> = generateMixedRoutes(100);
 
-// ── Pre-built routers ──
-
-// Static lookups hit a hash bucket regardless of table size (compileStaticOnlySingleMethod);
-// one router suffices — extra sizes would just confirm the same O(1).
 const staticRouter = buildRouter(STATIC_ROUTES_100);
 
 const paramRouter = buildRouter([
@@ -80,8 +72,6 @@ const wildcardRouter = buildRouter([
 
 const mixedRouter100 = buildRouter(MIXED_ROUTES_100);
 
-// ignoreTrailingSlash: true + pathCaseSensitive:false exercise the full option pipeline.
-// No collapsed-slash option exists in RouterOptions, so that axis is not benched.
 const fullOptionsRouter = buildRouter(
   [
     ['GET', '/users/:id', 1],
@@ -96,17 +86,9 @@ const fullOptionsRouter = buildRouter(
   },
 );
 
-// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-//  BENCHMARKS
-// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-// ── 1. Static route match (single bucket lookup) ──
-
 bench('static match (hash bucket, 100 routes)', () => {
   do_not_optimize(staticRouter.match('GET', '/api/v1/resource50'));
 });
-
-// ── 2. Parametric route match ──
 
 summary(() => {
   bench('param match: /users/:id', () => {
@@ -126,8 +108,6 @@ summary(() => {
   });
 });
 
-// ── 3. Wildcard route match ──
-
 summary(() => {
   bench('wildcard match: short suffix', () => {
     do_not_optimize(wildcardRouter.match('GET', '/static/app.js'));
@@ -142,13 +122,9 @@ summary(() => {
   });
 });
 
-// ── 4. Match miss (404, single bucket lookup) ──
-
 bench('404 miss (hash bucket, 100 routes)', () => {
   do_not_optimize(staticRouter.match('GET', '/nonexistent/path'));
 });
-
-// ── 5. Mixed route types ──
 
 summary(() => {
   bench('mixed static hit (100 routes)', () => {
@@ -163,8 +139,6 @@ summary(() => {
     do_not_optimize(mixedRouter100.match('GET', '/files/0/docs/readme.md'));
   });
 });
-
-// ── 6. Full options pipeline (case-insensitive + trailing slash) ──
 
 summary(() => {
   bench('full-options static match', () => {
@@ -184,8 +158,6 @@ summary(() => {
   });
 });
 
-// ── 7. Route registration (add + build) ──
-
 boxplot(() => {
   bench('add+build 100 static routes', () => {
     do_not_optimize(buildRouter(STATIC_ROUTES_100));
@@ -203,8 +175,6 @@ boxplot(() => {
     do_not_optimize(buildRouter(MIXED_ROUTES_100));
   }).gc('inner');
 });
-
-// ── 8. Regex param match ──
 
 const regexParamRouter = buildRouter([
   ['GET', '/:id(\\d+)', 1],
@@ -226,8 +196,6 @@ summary(() => {
   });
 });
 
-// ── 9. Optional param match ──
-
 const optionalParamRouter = buildRouter([
   ['GET', '/:lang?/docs', 1],
   ['GET', '/:lang?/docs/:section', 2],
@@ -247,8 +215,6 @@ summary(() => {
     do_not_optimize(optionalParamRouter.match('GET', '/en/docs/intro'));
   });
 });
-
-// ── 10. Multi-method match ──
 
 const multiMethodRouter = buildRouter([
   ['GET', '/api/resources/:id', 1],
@@ -281,8 +247,6 @@ summary(() => {
     do_not_optimize(multiMethodRouter.match('HEAD', '/api/resources/42'));
   });
 });
-
-// ── 11. addAll bulk registration ──
 
 function generateParamRoutes(count: number): Array<[string, string, number]> {
   const methods: Array<'GET' | 'POST' | 'PUT' | 'DELETE'> = ['GET', 'POST', 'PUT', 'DELETE'];

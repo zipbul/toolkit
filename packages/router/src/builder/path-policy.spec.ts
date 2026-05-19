@@ -51,7 +51,6 @@ describe('IRI registration (RFC 3987) — raw Unicode is normalized to URI form'
     const r = new Router<string>();
     r.add('GET', '/users/한국', 'h');
     r.build();
-    // After build, both IRI input and URI wire form route to the same handler.
     expect(r.match('GET', '/users/%ED%95%9C%EA%B5%AD')?.value).toBe('h');
   });
 
@@ -64,9 +63,6 @@ describe('IRI registration (RFC 3987) — raw Unicode is normalized to URI form'
   });
 
   test('NFC normalization collapses decomposed and composed forms to one route', () => {
-    // NFD (decomposed): `A` + combining ring above (U+0041 U+030A) → Å
-    // NFC (composed):   precomposed Å (U+00C5)
-    // Both must canonicalize to the same registered route.
     const decomposed = '/users/A\u030A';
     const composed = '/users/\u00C5';
     const r = new Router<string>();
@@ -135,17 +131,12 @@ describe('percent-decode UTF-8 validation (validateDecodedBytes)', () => {
   });
 
   test('skips validation inside a regex paren group — `(?:%FF)` is allowed as raw regex source', () => {
-    // The percent-decode validator only scrutinizes bytes outside `()`.
-    // Anything inside a regex constraint is the regex's concern, not the
-    // path-policy's. This pins that delegation contract.
     const r = new Router<string>();
     r.add('GET', '/users/:id(a%20b)', 'h');
     expect(() => r.build()).not.toThrow();
   });
 
   test('rejects a dot segment inside a path that follows a regex paren group', () => {
-    // The `inside paren` skip must not mask the dot-segment check after
-    // the paren closes.
     const r = new Router<string>();
     r.add('GET', '/users/:id(\\d+)/..', 'h');
     const issue = firstBuildIssue(r);
@@ -153,11 +144,6 @@ describe('percent-decode UTF-8 validation (validateDecodedBytes)', () => {
   });
 
   test('rejects a dot segment inside a balanced regex group that crosses a slash (line 80-85 branch)', () => {
-    // `validatePathChars` keeps a `segStart` cursor even while skipping
-    // bytes inside `parenDepth > 0`. When a `/` appears mid-group, the
-    // walker still classifies the segment up to that slash as a dot
-    // segment if it is one. This pins the paren-active dot-segment
-    // sub-branch (path-policy.ts:80-85).
     const r = new Router<string>();
     r.add('GET', '/foo(/../bar)', 'h');
     const issue = firstBuildIssue(r);
@@ -168,7 +154,6 @@ describe('percent-decode UTF-8 validation (validateDecodedBytes)', () => {
 describe('lowercase hex digit parsing (hexValue a-f branch)', () => {
   test('decodes lowercase hex digits in percent-escapes', () => {
     const r = new Router<string>();
-    // %e4%b8%80 = 一 (lowercase hex). Same codepoint as %E4%B8%80.
     r.add('GET', '/a/%e4%b8%80', 'h');
     expect(() => r.build()).not.toThrow();
   });

@@ -1,13 +1,3 @@
-/* eslint-disable no-console */
-/**
- * Measure post-build first-match latency for a freshly-built router
- * in the SAME process. JSC is already warm after the first few samples
- * (5 discarded) — this is not a true cold start. It probes whether
- * build()'s internal warmup is sufficient for the first user-visible
- * match() to be fast on a hot JSC, not whether tier-0 cold-start is
- * acceptable. True cold-start measurement would require a per-sample
- * child process spawn, which we currently don't do.
- */
 import { performance } from 'node:perf_hooks';
 
 import { Router } from '../src/router';
@@ -59,8 +49,6 @@ function probe(shape: Shape, samples: number): { ns: number[]; checksum: number 
     const out = r.match('GET', path);
     const dt = (performance.now() - t0) * 1e6;
     ns.push(dt);
-    // Consume the result so JSC can't dead-code eliminate the match
-    // call — the timed window would otherwise collapse to ~0.
     if (out !== null && out !== undefined) {
       checksum++;
     }
@@ -88,7 +76,6 @@ console.log(
 );
 let totalChecksum = 0;
 for (const shape of ['static-small', 'static-large', 'param-medium'] as const) {
-  // Discard first 5 (warmup)
   totalChecksum += probe(shape, 5).checksum;
   const { ns, checksum } = probe(shape, SAMPLES);
   totalChecksum += checksum;
@@ -97,7 +84,6 @@ for (const shape of ['static-small', 'static-large', 'param-medium'] as const) {
     `${shape.padEnd(16)} ${s.p50.toFixed(0).padStart(10)} ${s.p99.toFixed(0).padStart(10)} ${s.mean.toFixed(0).padStart(10)} ${s.min.toFixed(0).padStart(10)} ${s.max.toFixed(0).padStart(10)}`,
   );
 }
-// Pin checksum past the loop so DCE can't strip the consumer above.
 if (totalChecksum < 0) {
   console.log(totalChecksum);
 }

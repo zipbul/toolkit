@@ -5,22 +5,17 @@ import type { MatchOutput } from '../../index';
 
 import { Router, RouterError } from '../../index';
 
-// ── Arbitraries ──
-
 const URL_SAFE_CHARS = 'abcdefghijklmnopqrstuvwxyz0123456789-'.split('');
 const ALPHA_CHARS = 'abcdefghijklmnopqrstuvwxyz'.split('');
 const ALPHANUM_CHARS = 'abcdefghijklmnopqrstuvwxyz0123456789'.split('');
 
-/** Generates a URL-safe segment: 1-20 alphanumeric + hyphen chars, starting with a letter. */
 const segmentArb = fc
   .array(fc.constantFrom(...URL_SAFE_CHARS), { minLength: 1, maxLength: 20 })
   .map(chars => chars.join(''))
   .filter(s => /^[a-z]/.test(s));
 
-/** Generates a valid static path like /seg1/seg2/seg3 with 1-5 segments. */
 const staticPathArb = fc.array(segmentArb, { minLength: 1, maxLength: 5 }).map(segments => '/' + segments.join('/'));
 
-/** Generates an HTTP method. */
 const methodArb = fc.constantFrom(
   'GET' as const,
   'POST' as const,
@@ -31,13 +26,9 @@ const methodArb = fc.constantFrom(
   'OPTIONS' as const,
 );
 
-/** Generates a param name: 2-10 lowercase letters. */
 const paramNameArb = fc.array(fc.constantFrom(...ALPHA_CHARS), { minLength: 2, maxLength: 10 }).map(chars => chars.join(''));
 
-/** Generates a param value: 1-20 URL-safe alphanumeric chars. */
 const paramValueArb = fc.array(fc.constantFrom(...ALPHANUM_CHARS), { minLength: 1, maxLength: 20 }).map(chars => chars.join(''));
-
-// ── Tests ──
 
 describe('Router — property-based tests', () => {
   describe('round-trip invariant', () => {
@@ -195,7 +186,6 @@ describe('Router — property-based tests', () => {
 
       fc.assert(
         fc.property(fc.string({ unit: 'grapheme', minLength: 0, maxLength: 500 }), arbitraryPath => {
-          // Must not crash — either returns a result or throws RouterError
           try {
             const result = router.match('GET', arbitraryPath);
 
@@ -205,7 +195,6 @@ describe('Router — property-based tests', () => {
               expect(result.meta).toBeDefined();
             }
           } catch (e) {
-            // RouterError is expected for invalid paths
             expect(e).toBeInstanceOf(RouterError);
             const err = e as RouterError;
             expect(typeof err.data.kind).toBe('string');
@@ -238,11 +227,9 @@ describe('Router — property-based tests', () => {
             fc.string({ minLength: 1, maxLength: 200 }),
           ),
           fuzzPath => {
-            // Must not crash with unhandled exception
             try {
               router.match('GET', fuzzPath);
             } catch (e) {
-              // Only RouterError is acceptable
               expect(e).toBeInstanceOf(RouterError);
             }
           },

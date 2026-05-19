@@ -1,26 +1,8 @@
-/**
- * Walker tier dispatch + fallback coverage.
- *
- * The router's matchImpl is built by a layered codegen pipeline:
- *   1. Shape-specialized matchImpl (e.g. static-prefix wildcard inline)
- *   2. tryCodegenStaticPrefixWildcard (per-method walker)
- *   3. compileSegmentTree (general per-method walker)
- *   4. createIterativeWalker (non-ambiguous trees, no codegen)
- *   5. recursive `match` walker (ambiguous trees, no codegen)
- *   6. radix-walk fallback (when segment tree can't be built at all)
- *
- * Bench routes mostly hit (1)-(3). The lower tiers fire only when route shapes
- * don't fit the codegen subset; this file intentionally constructs trees that
- * bail on codegen and forces traffic through each tier, plus the per-shape
- * `walkSharedSubtree` branches inside the factored / prefix-factor walkers.
- */
 import { describe, it, expect } from 'bun:test';
 
 import { getRouterInternals } from '../../internal';
 import { Router } from '../../src/router';
 import { MatchSource } from '../../src/types';
-
-// ── Helpers ─────────────────────────────────────────────────────────────────
 
 function pickedWalkerName(router: Router<string>): string | null {
   const trees = (
@@ -31,8 +13,6 @@ function pickedWalkerName(router: Router<string>): string | null {
   const tree = trees.find(t => t != null);
   return tree ? tree.name : null;
 }
-
-// ── Iterative walker (wide fanout, non-ambiguous) ──────────────────────────
 
 describe('iterative walker (wide fanout exceeding codegen size budget)', () => {
   function makeWideFanoutRouter() {
@@ -104,9 +84,6 @@ describe('iterative walker (wide fanout exceeding codegen size budget)', () => {
   });
 
   it('rejects via tester when a regex param at iterative-walker depth refuses the slice', () => {
-    // Forces iterative tier by route count, then plants a regex-constrained
-    // param at the leaf so the walker hits `tester(decoded) !== TESTER_PASS`
-    // (iterative.ts:60-61) on a non-numeric input.
     const r = new Router<string>();
     for (let i = 0; i < 200; i++) {
       r.add('GET', `/zone${i}/users/:id(\\d+)`, `r-${i}`);
@@ -116,8 +93,6 @@ describe('iterative walker (wide fanout exceeding codegen size budget)', () => {
     expect(r.match('GET', '/zone3/users/abc')).toBeNull();
   });
 });
-
-// ── Recursive walker (ambiguous tree) ──────────────────────────────────────
 
 describe('recursive walker (ambiguous tree)', () => {
   function makeAmbiguousRouter() {
@@ -187,8 +162,6 @@ describe('recursive walker (ambiguous tree)', () => {
   });
 });
 
-// ── Wildcard semantics under fallback walkers ──────────────────────────────
-
 describe('wildcard semantics under fallback walkers', () => {
   it('multi-wildcard at root rejects empty suffix', () => {
     const r = new Router<string>();
@@ -212,8 +185,6 @@ describe('wildcard semantics under fallback walkers', () => {
     expect(r.match('GET', '/files')!.params).toEqual({ p: '' });
   });
 });
-
-// ── Decoding + regex testers under fallback walkers ────────────────────────
 
 describe('decoding under fallback walkers', () => {
   it('decodes percent-encoded params', () => {
@@ -246,8 +217,6 @@ describe('regex testers under fallback walkers', () => {
   });
 });
 
-// ── Multi-method router behavior ───────────────────────────────────────────
-
 describe('multi-method routers (no shape specialization)', () => {
   it('routes by method correctly', () => {
     const r = new Router<string>();
@@ -272,8 +241,6 @@ describe('multi-method routers (no shape specialization)', () => {
     expect(r.match('POST', '/health')).toBeNull();
   });
 });
-
-// ── Shape-specialized matchImpl (file-server topology) ─────────────────────
 
 describe('shape-specialized wildcard matchImpl', () => {
   it('matches /static prefix correctly', () => {
@@ -364,9 +331,6 @@ describe('shape specialization gating', () => {
     r.add('POST', '/upload/*filepath', 2);
     r.build();
     const impl = getRouterInternals(r).matchImpl as { toString: () => string };
-    // Multi-method dispatch reduces to `mcByMethod[method]` table
-    // lookup; the table maps method names to numeric method codes
-    // that matchActive consumes directly.
     expect(impl.toString()).toContain('mcByMethod[method]');
     expect(r.match('GET', '/static/foo')!.value).toBe(1);
     expect(r.match('POST', '/upload/bar')!.value).toBe(2);
@@ -389,8 +353,6 @@ describe('shape specialization gating', () => {
     expect(impl.toString()).toContain('activeBucket');
   });
 });
-
-// ── Walker wildcard tail across tiers ──────────────────────────────────────
 
 describe('walker wildcard tail across tiers', () => {
   it('iterative walker — star wildcard at leaf accepts non-empty + empty', () => {
@@ -437,10 +399,6 @@ describe('walker wildcard tail across tiers', () => {
   });
 
   it('multi-prefix factor — one child has internal prefix chain, the other factors directly', () => {
-    // Mixed shape that exercises both Pending branches of
-    // tryDetectMultiPrefixFactor: `users/v1` introduces a single-static-chain
-    // prefix before its 1500 tenants (prefixed-factor branch), while `api`
-    // exposes its 1500 tenants directly under root (direct-factor branch).
     const r = new Router<string>();
     for (let i = 0; i < 1500; i++) {
       r.add('GET', `/users/v1/${i}/posts/:id`, `u-v1-${i}`);
@@ -457,9 +415,6 @@ describe('walker wildcard tail across tiers', () => {
 
 describe('codegen — :param followed by multi-wildcard tail (`/x/:id/*rest+`)', () => {
   it('emits the param + multi-wildcard terminal branch and matches with both params populated', () => {
-    // Pins segment-compile.ts:269-271 (paramAtSlashEmit's
-    // wildcardTerminal + multi origin path). Without a covering test the
-    // emitter could regress to strict-terminal-only without any failure.
     const r = new Router<string>();
     r.add('GET', '/users/:id/*rest+', 'h');
     r.build();
@@ -470,7 +425,6 @@ describe('codegen — :param followed by multi-wildcard tail (`/x/:id/*rest+`)',
     expect(m.params.id).toBe('42');
     expect(m.params.rest).toBe('files/a.txt');
 
-    // multi origin requires a non-empty tail.
     expect(r.match('GET', '/users/42')).toBeNull();
     expect(r.match('GET', '/users/42/')).toBeNull();
   });
@@ -562,8 +516,6 @@ describe('match.params edge values', () => {
     expect(r.match('GET', '/users/%E4%B8%80')?.params['name']).toBe('一');
   });
 });
-
-// ── Factored walker shared-subtree shapes (1500-tenant tier) ───────────────
 
 describe('factored walker shared-subtree shapes', () => {
   it('walks a paramChild + tester (regex-constrained) inside shared subtree', () => {

@@ -1,9 +1,4 @@
 import { isErr } from '@zipbul/result';
-/**
- * Unit spec for `wildcard-prefix-index.ts`. The prefix-trie validates
- * every commit before mutating; spec pins each conflict path and the
- * rollback contract by driving `planAndCommit` + `rollbackPlan` directly.
- */
 import { describe, expect, it } from 'bun:test';
 
 import type { PathPart } from '../tree';

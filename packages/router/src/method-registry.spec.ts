@@ -5,8 +5,6 @@ import { MethodRegistry } from './method-registry';
 import { RouterErrorKind } from './types';
 
 describe('MethodRegistry', () => {
-  // ── HP: Happy Path ──
-
   describe('happy path', () => {
     it('should return correct offsets for all 7 default methods', () => {
       const reg = new MethodRegistry();
@@ -63,8 +61,6 @@ describe('MethodRegistry', () => {
     });
   });
 
-  // ── ED: Edge ──
-
   describe('edge cases', () => {
     it('should reject empty string method name', () => {
       const reg = new MethodRegistry();
@@ -84,7 +80,7 @@ describe('MethodRegistry', () => {
 
     it('should accept arbitrarily long valid-tchar method names (no length cap; RFC 9110 §2.3)', () => {
       const reg = new MethodRegistry();
-      const longName = 'X'.repeat(1000); // valid tchar (ALPHA), unbounded length
+      const longName = 'X'.repeat(1000);
       const result = reg.getOrCreate(longName);
 
       expect(isErr(result)).toBe(false);
@@ -97,7 +93,6 @@ describe('MethodRegistry', () => {
     it('should allow exactly 32 methods and all be accessible via get()', () => {
       const reg = new MethodRegistry();
 
-      // 7 defaults + 25 customs = 32
       for (let i = 0; i < 25; i++) {
         const result = reg.getOrCreate(`CUSTOM_${i}`);
         expect(isErr(result)).toBe(false);
@@ -105,7 +100,6 @@ describe('MethodRegistry', () => {
 
       expect(reg.size).toBe(32);
 
-      // All accessible
       expect(reg.get('GET')).toBe(0);
       expect(reg.get('CUSTOM_0')).toBe(7);
       expect(reg.get('CUSTOM_24')).toBe(31);
@@ -118,7 +112,6 @@ describe('MethodRegistry', () => {
         reg.getOrCreate(`CUSTOM_${i}`);
       }
 
-      // 32nd method (7 defaults + 24 = 31, so next = 25th custom = index 31)
       const result = reg.getOrCreate('CUSTOM_24');
       expect(result).toBe(31);
     });
@@ -130,11 +123,9 @@ describe('MethodRegistry', () => {
       expect(reg.get('get')).toBeUndefined();
 
       const result = reg.getOrCreate('get');
-      expect(result).toBe(7); // New method, not the default 'GET'
+      expect(result).toBe(7);
     });
   });
-
-  // ── NE: Negative / Error ──
 
   describe('negative / error', () => {
     function fillToMax(reg: MethodRegistry): void {
@@ -183,8 +174,7 @@ describe('MethodRegistry', () => {
     it('should allow get() for existing methods after limit error', () => {
       const reg = new MethodRegistry();
       fillToMax(reg);
-      reg.getOrCreate('OVERFLOW'); // trigger error
-
+      reg.getOrCreate('OVERFLOW');
       expect(reg.get('GET')).toBe(0);
       expect(reg.get('CUSTOM_0')).toBe(7);
       expect(reg.get('CUSTOM_24')).toBe(31);
@@ -193,8 +183,7 @@ describe('MethodRegistry', () => {
     it('should allow getOrCreate() for existing methods after limit error', () => {
       const reg = new MethodRegistry();
       fillToMax(reg);
-      reg.getOrCreate('OVERFLOW'); // trigger error
-
+      reg.getOrCreate('OVERFLOW');
       const result = reg.getOrCreate('GET');
       expect(isErr(result)).toBe(false);
       expect(result).toBe(0);
@@ -223,8 +212,6 @@ describe('MethodRegistry', () => {
     });
   });
 
-  // ── CO: Corner ──
-
   describe('corner cases', () => {
     it('should return existing offset via getOrCreate when at max capacity', () => {
       const reg = new MethodRegistry();
@@ -233,7 +220,6 @@ describe('MethodRegistry', () => {
         reg.getOrCreate(`CUSTOM_${i}`);
       }
 
-      // At max, but requesting existing
       const result = reg.getOrCreate('GET');
       expect(isErr(result)).toBe(false);
       expect(result).toBe(0);
@@ -271,27 +257,21 @@ describe('MethodRegistry', () => {
         reg.getOrCreate(`CUSTOM_${i}`);
       }
 
-      // Hit limit
       const limitResult = reg.getOrCreate('NEW');
       expect(isErr(limitResult)).toBe(true);
 
-      // Existing custom still works
       const existingResult = reg.getOrCreate('CUSTOM_12');
       expect(isErr(existingResult)).toBe(false);
       expect(existingResult).toBe(7 + 12);
     });
   });
 
-  // ── ST: State Transition ──
-
   describe('state transition', () => {
     it('should complete full lifecycle: construct → fill to 32 → hit limit → reads ok', () => {
       const reg = new MethodRegistry();
 
-      // initial state
       expect(reg.size).toBe(7);
 
-      // fill to capacity
       for (let i = 0; i < 25; i++) {
         const result = reg.getOrCreate(`M_${i}`);
         expect(isErr(result)).toBe(false);
@@ -300,11 +280,9 @@ describe('MethodRegistry', () => {
 
       expect(reg.size).toBe(32);
 
-      // hit limit
       const errResult = reg.getOrCreate('OVER');
       expect(isErr(errResult)).toBe(true);
 
-      // reads still work
       expect(reg.get('GET')).toBe(0);
       expect(reg.get('HEAD')).toBe(6);
       expect(reg.get('M_0')).toBe(7);
@@ -329,11 +307,9 @@ describe('MethodRegistry', () => {
         reg.getOrCreate(`C_${i}`);
       }
 
-      // Error
       reg.getOrCreate('FAIL_1');
       reg.getOrCreate('FAIL_2');
 
-      // Still consistent
       expect(reg.size).toBe(32);
       expect(reg.get('GET')).toBe(0);
       expect(reg.get('C_0')).toBe(7);
@@ -350,8 +326,6 @@ describe('MethodRegistry', () => {
       expect(reg.get('TRACE')).toBe(7);
     });
   });
-
-  // ── ID: Idempotency ──
 
   describe('idempotency', () => {
     it('should return same offset when getOrCreate called twice for default', () => {
@@ -396,8 +370,6 @@ describe('MethodRegistry', () => {
     });
   });
 
-  // ── OR: Ordering ──
-
   describe('ordering', () => {
     it('should assign offsets to custom methods in registration order', () => {
       const reg = new MethodRegistry();
@@ -410,13 +382,13 @@ describe('MethodRegistry', () => {
     it('should assign sequential custom offsets despite interleaved default access', () => {
       const reg = new MethodRegistry();
 
-      reg.getOrCreate('GET'); // default, no new offset
+      reg.getOrCreate('GET');
       expect(reg.getOrCreate('ALPHA')).toBe(7);
 
-      reg.getOrCreate('POST'); // default, no new offset
+      reg.getOrCreate('POST');
       expect(reg.getOrCreate('BETA')).toBe(8);
 
-      reg.getOrCreate('PUT'); // default
+      reg.getOrCreate('PUT');
       expect(reg.getOrCreate('GAMMA')).toBe(9);
     });
 
@@ -424,14 +396,12 @@ describe('MethodRegistry', () => {
       const reg = new MethodRegistry();
 
       expect(reg.getOrCreate('A')).toBe(7);
-      reg.getOrCreate('A'); // re-register, no gap
+      reg.getOrCreate('A');
       expect(reg.getOrCreate('B')).toBe(8);
-      reg.getOrCreate('B'); // re-register, no gap
+      reg.getOrCreate('B');
       expect(reg.getOrCreate('C')).toBe(9);
     });
   });
-
-  // ── CM: getCodeMap (F11 / A6) ──
 
   describe('getCodeMap', () => {
     it('should expose every default method with the same offset as getOrCreate', () => {
@@ -456,9 +426,6 @@ describe('MethodRegistry', () => {
     });
 
     it('should be a prototype-less object so unrelated property reads return undefined', () => {
-      // Object.prototype contains entries like `toString`. A plain `{}` would
-      // resolve `map.toString` to a function, masking "method not registered"
-      // as a truthy hit. The registry must hand out a null-prototype Record.
       const reg = new MethodRegistry();
       const map = reg.getCodeMap() as unknown as Record<string, unknown>;
 

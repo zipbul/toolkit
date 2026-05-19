@@ -1,6 +1,3 @@
-/**
- * Path normalization + percent-decode behavior matrix.
- */
 import { describe, expect, it } from 'bun:test';
 
 import { Router } from '../../src/router';
@@ -33,15 +30,9 @@ describe('percent-decoded param values', () => {
   });
 
   it('rejects encoded slash inside captured value (path-encoded-slash policy)', () => {
-    // Policy is enforced at register-time on literal paths; runtime
-    // match path is not re-validated. A param can technically capture
-    // %2F bytes from the URL — verify behavior.
     const r = new Router<string>();
     r.add('GET', '/users/:name', 'h');
     r.build();
-    // Walker tokenizes by raw byte 47 (`/`); %2F (3 bytes) is not 47
-    // and is therefore treated as part of the segment value, decoded
-    // to '/'.
     expect(r.match('GET', '/users/a%2Fb')?.params['name']).toBe('a/b');
   });
 
@@ -49,8 +40,6 @@ describe('percent-decoded param values', () => {
     const r = new Router<string>();
     r.add('GET', '/files/*path', 'h');
     r.build();
-    // Wildcard tail is intentionally raw — no decoder pass per
-    // path-parser policy (wildcard captures are byte-exact).
     expect(r.match('GET', '/files/a%2Fb')?.params['path']).toBe('a%2Fb');
     expect(r.match('GET', '/files/deep/nested/file.txt')?.params['path']).toBe('deep/nested/file.txt');
   });
@@ -65,7 +54,6 @@ describe('percent-decoded param values', () => {
     const second = r.match('GET', '/users/foo%20bar');
     expect(second?.meta.source).toBe(MatchSource.Cache);
     expect(second?.params['name']).toBe('foo bar');
-    // Cache must not corrupt params on repeated hit
     const third = r.match('GET', '/users/foo%20bar');
     expect(third?.params['name']).toBe('foo bar');
   });
@@ -161,11 +149,11 @@ describe('integration — register/build/match end-to-end', () => {
   it('wildcard method (*) expands to every registered method at seal', () => {
     const r = new Router<string>();
     r.add('*', '/x', 'all');
-    r.add('PATCH', '/y', 'patch-y'); // patch is not a default method
+    r.add('PATCH', '/y', 'patch-y');
     r.build();
     expect(r.match('GET', '/x')?.value).toBe('all');
     expect(r.match('POST', '/x')?.value).toBe('all');
-    expect(r.match('PATCH', '/x')?.value).toBe('all'); // includes seal-time methods
+    expect(r.match('PATCH', '/x')?.value).toBe('all');
   });
 
   it('cache hit on repeated dynamic match', () => {

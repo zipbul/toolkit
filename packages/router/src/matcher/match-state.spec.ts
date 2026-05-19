@@ -17,7 +17,6 @@ describe('MatchState', () => {
     it('should pre-allocate paramOffsets Int32Array sized from the given param cap', () => {
       const state = createMatchState(64);
       expect(state.paramOffsets).toBeInstanceOf(Int32Array);
-      // params × 2 slots + 2 headroom slots (see createMatchState).
       expect(state.paramOffsets.length).toBe(64 * 2 + 2);
     });
 

@@ -1,5 +1,3 @@
-/* eslint-disable no-console */
-
 import { performance } from 'node:perf_hooks';
 
 import { Router } from '../src/router';
@@ -15,9 +13,6 @@ type Scenario = {
 
 const COUNT = 100_000;
 const ITER = 500_000;
-// argv is an internal worker-mode IPC: when 100k-gate-runner.ts spawns
-// this file with a scenario name, only that scenario runs. End users
-// just `bun bench/100k-verification.ts` and get the full suite.
 const scenarioFilter = process.argv[2] ?? 'all';
 
 function nowNs(): bigint {
@@ -201,9 +196,6 @@ function wildcardHeavyScenario(): Scenario {
 }
 
 function regexHeavyScenario(): Scenario {
-  // 100k routes where each segment uses a constrained regex param.
-  // Stresses regex compilation, sibling disjointness, and tester cache.
-  // Uses 4 distinct regex shapes per group to exercise sibling logic.
   const routes: Route[] = [];
   const shapes = ['(\\d+)', '([a-z]+)', '([A-Z]+)', '(\\d{2,8})'];
   for (let i = 0; i < COUNT; i++) {
@@ -224,10 +216,6 @@ function regexHeavyScenario(): Scenario {
     ],
   };
 }
-
-// Real cache-churn measurement lives in cacheTraversalFeasibility() below
-// (unique-ish path per call defeats the cache). A fixed-hit/fixed-miss
-// scenario at this scale would just duplicate paramScenario().
 
 function wildcardConflictFeasibility(): void {
   console.log('\n## wildcard conflict feasibility');
@@ -318,8 +306,6 @@ function runScenario(scenario: Scenario): void {
   console.log(`\n## ${scenario.name}`);
   console.log(`routes=${scenario.routes.length}`);
 
-  // Settle libpas pages from the previous scenario so this scenario's
-  // RSS baseline isn't inflated by the prior shape's transient frees.
   settleScavenger();
 
   const built = buildZipbul(scenario.routes);

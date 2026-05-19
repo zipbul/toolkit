@@ -1,16 +1,5 @@
 import { Memoirist } from 'memoirist';
 import { run, bench, do_not_optimize } from 'mitata';
-/**
- * Complex / extreme shape benchmarks vs memoirist + rou3.
- *
- * Each (router × shape) pair runs in a fresh child process — JIT code
- * cache, IC state, and RSS baseline are isolated per pair. Pairs the
- * adapter doesn't support (rou3 has no regex/manywild/deep20; memoirist
- * has no regex) are skipped explicitly with a printed reason.
- *
- * End users invoke with no argv; the orchestrator spawns one worker per
- * supported pair.
- */
 import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { createRouter as createRou3, addRoute, findRoute } from 'rou3';
@@ -35,8 +24,6 @@ const SHAPES = [
   'heavy1k-regex',
 ] as const;
 type Shape = (typeof SHAPES)[number];
-
-// ── Shape constants (route + match URL) ──
 
 const DEEP_ROUTE = '/a/:p1/b/:p2/c/:p3/d/:p4/e/:p5/f/:p6/g/:p7/h/:p8/i/:p9/j/:p10';
 const DEEP_URL = '/a/v1/b/v2/c/v3/d/v4/e/v5/f/v6/g/v7/h/v8/i/v9/j/v10';
@@ -71,8 +58,6 @@ interface Built {
   match: (url: string) => unknown;
   benchUrl: string;
 }
-
-// ── Zipbul per-shape builders ──
 
 function buildZipbul(shape: Shape): Built | null {
   switch (shape) {
@@ -168,8 +153,6 @@ function buildZipbul(shape: Shape): Built | null {
   }
 }
 
-// ── Memoirist per-shape builders ──
-
 function buildMemoirist(shape: Shape): Built | null {
   switch (shape) {
     case 'deep10': {
@@ -183,7 +166,6 @@ function buildMemoirist(shape: Shape): Built | null {
       return { match: u => r.find('GET', u), benchUrl: COMBO_URL };
     }
     case 'regex':
-      // memoirist has no regex constraint support — skip explicitly.
       return null;
     case 'heavy-param':
     case 'heavy-static': {
@@ -255,8 +237,6 @@ function buildMemoirist(shape: Shape): Built | null {
   }
 }
 
-// ── rou3 per-shape builders ──
-
 function buildRou3(shape: Shape): Built | null {
   switch (shape) {
     case 'deep10': {
@@ -272,8 +252,6 @@ function buildRou3(shape: Shape): Built | null {
     case 'regex':
     case 'manywild':
     case 'deep20':
-      // rou3 doesn't support regex constraints, named middle-wildcards, or
-      // deep20 param chains within its expressive limits.
       return null;
     case 'heavy-param':
     case 'heavy-static': {
@@ -339,10 +317,6 @@ const BUILDERS: Record<RouterKind, (shape: Shape) => Built | null> = {
   rou3: buildRou3,
 };
 
-// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-//  ORCHESTRATOR / WORKER SPLIT
-// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
 const workerKind = process.argv[2] as RouterKind | undefined;
 const workerShape = process.argv[3] as Shape | undefined;
 const isWorker = workerKind !== undefined && workerShape !== undefined;
@@ -385,7 +359,6 @@ if (built === null) {
   process.exit(0);
 }
 
-// Sanity gate.
 const probe = built.match(built.benchUrl);
 if (probe === null || probe === undefined) {
   console.log(`sanity=match-null router=${workerKind} shape=${workerShape} url=${JSON.stringify(built.benchUrl)}`);

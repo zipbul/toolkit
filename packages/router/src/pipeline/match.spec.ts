@@ -1,9 +1,3 @@
-/**
- * Unit spec for `match.ts`. Drives `MatchLayer.allowedMethods` directly
- * with hand-built MatchLayerDeps fixtures so each code path (static-mask
- * branch, dynamic walker branch, preprocess wiring) is exercised in
- * isolation — no Router.
- */
 import { describe, expect, it } from 'bun:test';
 
 import type { PathNormalizer } from '../codegen';

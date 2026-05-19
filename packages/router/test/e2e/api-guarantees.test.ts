@@ -1,22 +1,9 @@
-/**
- * Strict-behavior guarantees that production code might rely on without
- * realizing — and that surface as bugs only when invariants drift. Things
- * like "params is null-prototype", "static MatchOutput is frozen and
- * shared", "no state leaks across calls", "cache returns a fresh-enough
- * object that callers can mutate".
- *
- * Also covers the lower fallback paths the rest of the suite skips through
- * codegen: forcing the radix-walk path by causing segment-tree insertion
- * to fail.
- */
 import { describe, expect, it } from 'bun:test';
 
 import { getRouterInternals } from '../../internal';
 import { RouterError } from '../../src/error';
 import { Router } from '../../src/router';
 import { MatchSource } from '../../src/types';
-
-// ── API contract guarantees ─────────────────────────────────────────────────
 
 describe('API guarantees', () => {
   it('returns null when match() is called before build()', () => {
@@ -50,9 +37,6 @@ describe('API guarantees', () => {
   });
 
   it('static-route MatchOutput is shared and frozen across identical hits', () => {
-    // Static lookups return the per-method bucket's frozen MatchOutput
-    // directly, so repeated hits give back the same object reference and
-    // never allocate a new wrapper.
     const r = new Router<string>();
     r.add('GET', '/health', 'ok');
     r.build();
@@ -76,7 +60,6 @@ describe('API guarantees', () => {
 
     expect(Object.keys(m.params)).toHaveLength(0);
     expect(Object.isFrozen(m.params)).toBe(true);
-    // Strict mode would throw on write; we just assert frozen here.
   });
 
   it('params object is prototype-less (no inherited keys)', () => {
@@ -86,7 +69,6 @@ describe('API guarantees', () => {
 
     const m = r.match('GET', '/users/42')!;
 
-    // No inherited keys (prototype is the frozen null-proto object)
     expect((m.params as Record<string, unknown>).toString).toBeUndefined();
     expect((m.params as Record<string, unknown>).hasOwnProperty).toBeUndefined();
     expect('toString' in m.params).toBe(false);
@@ -99,13 +81,11 @@ describe('API guarantees', () => {
     r.build();
 
     const a = r.match('GET', '/users/42')!;
-    // Second match must not have `id` from the first one in its params
 
     const b = r.match('GET', '/posts/hello')!;
 
     expect(b.params).toEqual({ slug: 'hello' });
     expect((b.params as Record<string, unknown>).id).toBeUndefined();
-    // First result also untouched (no aliasing into shared state)
     expect(a.params).toEqual({ id: '42' });
   });
 
@@ -125,7 +105,7 @@ describe('API guarantees', () => {
     r.add('GET', '/users/:id', 'd');
     r.build();
 
-    r.match('GET', '/users/1'); // populate cache
+    r.match('GET', '/users/1');
     const m = r.match('GET', '/users/1')!;
 
     expect(m.meta.source).toBe(MatchSource.Cache);
@@ -143,13 +123,10 @@ describe('API guarantees', () => {
       (a.params as Record<string, string>).id = 'mutated';
     }).toThrow(TypeError);
 
-    const b = r.match('GET', '/users/1')!; // cache hit
-
+    const b = r.match('GET', '/users/1')!;
     expect(b.params.id).toBe('1');
   });
 });
-
-// ── Optional param behaviors ──────────────────────────────────────────────
 
 describe('optional params', () => {
   it('omit: missing optional disappears from params object', () => {
@@ -177,8 +154,6 @@ describe('optional params', () => {
     expect(m.params.id).toBeUndefined();
   });
 });
-
-// ── Method specifications ─────────────────────────────────────────────────
 
 describe('method specs', () => {
   it('method "*" registers across all standard methods', () => {
@@ -227,8 +202,6 @@ describe('method specs', () => {
   });
 });
 
-// ── Sealed router state ──────────────────────────────────────────────────
-
 describe('sealed state', () => {
   it('throws router-sealed when add() is called after build()', () => {
     const r = new Router<string>();
@@ -260,13 +233,6 @@ describe('sealed state', () => {
     r.add('GET', '/x', 'x');
     r.build();
 
-    // Internal-state-inspection pattern. Frozen build-only tables live on
-    // `registration.snapshot`; `matchLayer` carries hot-path tables that
-    // intentionally stay mutable. Earlier revisions of this test referred
-    // to long-removed fields (`staticMap`, `staticRegistered`,
-    // `matchLayer.staticOutputsByMethod`); the cast covered for the
-    // missing fields and `Object.isFrozen(undefined)` is true, so the
-    // asserts passed by accident. Rewritten against the real shape.
     const internal = getRouterInternals(r);
     const snapshot = (
       internal.registration as unknown as {
@@ -278,33 +244,17 @@ describe('sealed state', () => {
       trees: unknown[];
     };
 
-    // Build-only tables must be frozen.
     expect(Object.isFrozen(snapshot.segmentTrees)).toBe(true);
     expect(Object.isFrozen(matchLayer.activeMethodCodes)).toBe(true);
 
-    // Hot-path tables stay mutable. `handlers` is read by the emitted
-    // matchImpl as `handlers[state.handlerIndex]` on every dynamic
-    // match — freezing it cost 5-10 ns/match in earlier bench runs.
     expect(Object.isFrozen(snapshot.handlers)).toBe(false);
     expect(Object.isFrozen(matchLayer.trees)).toBe(false);
 
-    // Frozen array mutation throws TypeError in strict mode (ESM = strict).
     expect(() => (snapshot.segmentTrees as unknown[]).push(null)).toThrow(TypeError);
   });
 });
 
-// ── Radix-walk fallback paths ────────────────────────────────────────────
-//
-// Now that unreachable sibling-param registrations are rejected at add-time,
-// the only routes that exercise the radix-walk path are optional-param
-// expansions (which generate same-handler siblings) and tester-bearing
-// siblings (which legitimately distinguish at runtime). Both cases must
-// continue to work end-to-end.
-
 describe('optional-param expansion with stable paramName', () => {
-  // /users/:id? expands to two concrete routes that share the same paramName
-  // at the optional segment, so the prefix index merges them onto a single
-  // param edge with one terminal alias.
   function makeOptionalRouter() {
     const r = new Router<string>();
     r.add('GET', '/users/:id?', 'opt');
@@ -381,13 +331,8 @@ describe('optional expansion combined with deep param routes', () => {
   });
 });
 
-// ── Edge URLs ─────────────────────────────────────────────────────────────
-
 describe('edge case URLs', () => {
   it('passes raw unicode in param values through to the matcher', () => {
-    // The router does not perform runtime URL validation; raw bytes from
-    // the framework / HTTP server pass straight to the segment-tree
-    // walker which captures the param value byte-for-byte.
     const r = new Router<string>();
     r.add('GET', '/users/:name', 'u');
     r.build();
@@ -403,7 +348,6 @@ describe('edge case URLs', () => {
     r.add('GET', '/users/:name', 'u');
     r.build();
 
-    // %ED%95%9C%EA%B8%80 is "한글" in UTF-8 → percent-encoded
     const m = r.match('GET', '/users/%ED%95%9C%EA%B8%80');
 
     expect(m).not.toBeNull();
@@ -427,9 +371,6 @@ describe('edge case URLs', () => {
   });
 
   it('does not match path containing query string (framework strips ?)', () => {
-    // Router treats input as pathname-only. Caller (framework) is responsible
-    // for stripping the query string. A path containing literal '?' will not
-    // match a registered route — it is just a different path.
     const r = new Router<string>();
     r.add('GET', '/users/:id', 'u');
     r.build();
@@ -461,23 +402,17 @@ describe('edge case URLs', () => {
   });
 });
 
-// ── Cache behavior under stress ──────────────────────────────────────────
-
 describe('cache stress', () => {
   it('miss cache evicts oldest when full (FIFO)', () => {
     const r = new Router<string>({ cacheSize: 3 });
     r.add('GET', '/users/:id', 'u');
     r.build();
 
-    // 4 distinct misses — first should be evicted
     r.match('GET', '/miss1');
     r.match('GET', '/miss2');
     r.match('GET', '/miss3');
     r.match('GET', '/miss4');
 
-    // miss1 evicted; miss4 still in. The router is asked again — should
-    // re-walk for miss1, hit cache for miss4. Both return null but path
-    // through code differs. Test just verifies no crash and consistent null.
     expect(r.match('GET', '/miss1')).toBeNull();
     expect(r.match('GET', '/miss4')).toBeNull();
   });
@@ -495,11 +430,7 @@ describe('cache stress', () => {
   });
 });
 
-// ── Method registry boundary ─────────────────────────────────────────────
-
 describe('method registry', () => {
-  // MAX_METHODS = 32, with the 7 default verbs (GET, POST, PUT, PATCH, DELETE,
-  // OPTIONS, HEAD) pre-registered. Custom methods can fill the remaining 25 slots.
   const CUSTOM_LIMIT = 25;
 
   it('accepts up to 25 distinct custom methods (32 total including defaults)', () => {

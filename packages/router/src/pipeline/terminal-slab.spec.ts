@@ -1,8 +1,3 @@
-/**
- * Unit spec for `terminal-slab.ts`. The packed layout is shared with
- * codegen/emitter.ts (which hard-codes `*3+1` / `*3+2`); pin the
- * constants and packer behavior here so any drift is caught.
- */
 import { describe, expect, it } from 'bun:test';
 
 import {

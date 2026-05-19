@@ -1,8 +1,3 @@
-/**
- * Unit spec for the `/internal` subpath. Verifies the symbol-keyed
- * accessor behaves both for genuine Router instances and for
- * imposters — the latter must throw rather than return undefined.
- */
 import { describe, expect, it } from 'bun:test';
 
 import { getRouterInternals } from './internal';

@@ -7,8 +7,6 @@ import { RouterError } from './error';
 import { Router, validateCacheSize } from './router';
 import { MatchSource, RouterErrorKind } from './types';
 
-// ── Fixtures ──
-
 function makeRouter<T = number>(opts: RouterOptions = {}): Router<T> {
   return new Router<T>(opts);
 }
@@ -23,8 +21,6 @@ function buildWith(routes: Array<[string, string, number]>, opts: RouterOptions 
 }
 
 describe('Router', () => {
-  // ---- HP (Happy Path) ----
-
   describe('happy path', () => {
     it('should construct with default options', () => {
       const r = makeRouter();
@@ -34,7 +30,6 @@ describe('Router', () => {
 
     it('should add a single static route via add(method, path, value)', () => {
       const r = makeRouter<number>();
-      // add() returns void (throws on error)
       r.add('GET', '/users', 1);
     });
 
@@ -126,9 +121,8 @@ describe('Router', () => {
     it('should return meta.source="cache" on cache hit', () => {
       const r = buildWith([['GET', '/users/:id', 10]], {});
 
-      r.match('GET', '/users/1'); // first → dynamic
-      const cached = r.match('GET', '/users/1'); // second → cache
-
+      r.match('GET', '/users/1');
+      const cached = r.match('GET', '/users/1');
       expect(cached).not.toBeNull();
       expect(cached!.meta.source).toBe(MatchSource.Cache);
     });
@@ -143,8 +137,6 @@ describe('Router', () => {
       expect(second).toBeNull();
     });
   });
-
-  // ---- NE (Negative/Error) ----
 
   describe('negative', () => {
     it('should throw RouterError(router-sealed) when add() after build', () => {
@@ -206,8 +198,6 @@ describe('Router', () => {
     });
   });
 
-  // ---- ED (Edge) ----
-
   describe('edge', () => {
     it('should add and match root path "/"', () => {
       const r = buildWith([['GET', '/', 99]]);
@@ -219,7 +209,7 @@ describe('Router', () => {
 
     it('should accept addAll with empty array', () => {
       const r = makeRouter<number>();
-      r.addAll([]); // should not throw
+      r.addAll([]);
     });
 
     it('should not error on second build() call (sealed no-op)', () => {
@@ -234,18 +224,14 @@ describe('Router', () => {
     });
   });
 
-  // ---- CO (Corner) ----
-
   describe('corner', () => {
     it('should throw on add but allow match when sealed', () => {
       const r = buildWith([['GET', '/a', 1]]);
 
-      // add should throw
       const e = catchRouterError(() => r.add('POST', '/b', 2));
 
       expect(e.data.kind).toBe(RouterErrorKind.RouterSealed);
 
-      // match should work
       const matchResult = r.match('GET', '/a');
 
       expect(matchResult).not.toBeNull();
@@ -255,7 +241,6 @@ describe('Router', () => {
     it('should apply combined preNormalize (caseSensitive:false + ignoreTrailingSlash)', () => {
       const r = buildWith([['GET', '/users', 1]], { pathCaseSensitive: false, ignoreTrailingSlash: true });
 
-      // Trailing slash + uppercase → both normalized
       const result = r.match('GET', '/Users/');
 
       expect(result).not.toBeNull();
@@ -265,17 +250,13 @@ describe('Router', () => {
     it('should return null from cache for previously missed path', () => {
       const r = buildWith([['GET', '/users/:id', 1]], {});
 
-      // First miss → null stored in cache
       const miss1 = r.match('GET', '/nope/1');
-      // Second hit → from cache
       const miss2 = r.match('GET', '/nope/1');
 
       expect(miss1).toBeNull();
       expect(miss2).toBeNull();
     });
   });
-
-  // ---- ST (State Transition) ----
 
   describe('state transitions', () => {
     it('should follow full lifecycle: add → addAll → build → match', () => {
@@ -298,23 +279,19 @@ describe('Router', () => {
       r.add('GET', '/users/:id', 10);
       r.build();
 
-      // Match still works
       const result = r.match('GET', '/users/1');
 
       expect(result).not.toBeNull();
       expect(result!.value).toBe(10);
 
-      // Add blocked → sealed
       expect(() => r.add('GET', '/y', 2)).toThrow(RouterError);
     });
 
     it('should write cache entry on dynamic match hit', () => {
       const r = buildWith([['GET', '/items/:id', 5]], {});
 
-      r.match('GET', '/items/42'); // dynamic → writes cache
-
-      const cached = r.match('GET', '/items/42'); // reads from cache
-
+      r.match('GET', '/items/42');
+      const cached = r.match('GET', '/items/42');
       expect(cached).not.toBeNull();
       expect(cached!.meta.source).toBe(MatchSource.Cache);
     });
@@ -345,16 +322,13 @@ describe('Router', () => {
     });
   });
 
-  // ---- ID (Idempotency) ----
-
   describe('idempotency', () => {
     it('should return same sealed state on build() called twice', () => {
       const r = makeRouter<number>();
       r.add('GET', '/x', 1);
 
       r.build();
-      r.build(); // second call no-op
-
+      r.build();
       const result = r.match('GET', '/x');
 
       expect(result).not.toBeNull();
@@ -387,8 +361,6 @@ describe('Router', () => {
     });
   });
 
-  // ---- OR (Ordering) ----
-
   describe('ordering', () => {
     it('should match static route before dynamic when both exist', () => {
       const r = makeRouter<string>();
@@ -412,19 +384,16 @@ describe('Router', () => {
         {},
       );
 
-      // Static route → source: MatchSource.Static
       const staticResult = r.match('GET', '/static');
 
       expect(staticResult).not.toBeNull();
       expect(staticResult!.meta.source).toBe(MatchSource.Static);
 
-      // Dynamic first hit → source: MatchSource.Dynamic
       const dynamicResult = r.match('GET', '/dynamic/1');
 
       expect(dynamicResult).not.toBeNull();
       expect(dynamicResult!.meta.source).toBe(MatchSource.Dynamic);
 
-      // Dynamic second hit → source: MatchSource.Cache
       const cachedResult = r.match('GET', '/dynamic/1');
 
       expect(cachedResult).not.toBeNull();

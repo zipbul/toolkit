@@ -1,8 +1,3 @@
-/**
- * Unit spec for `optional-param-defaults.ts`. The tracker is small —
- * record / snapshot / restore — but it backs the rollback path so the
- * cross-state invariants need explicit pinning.
- */
 import { describe, expect, it } from 'bun:test';
 
 import { OptionalParamDefaults } from './optional-param-defaults';

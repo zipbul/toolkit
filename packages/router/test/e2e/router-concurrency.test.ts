@@ -1,24 +1,3 @@
-/**
- * Router concurrency contract.
- *
- * Once `build()` returns, the router is sealed and its public surface
- * (`match`, `allowedMethods`) is safe to call from any number of
- * concurrent async tasks within the same isolate.
- *
- * Contract notes:
- *
- *   - `match()` writes into a per-Router `MatchState` buffer; results
- *     are derived from that buffer **before the function returns**, so
- *     consecutive interleaved match() calls cannot corrupt each other
- *     under cooperative scheduling (single-threaded JS event loop).
- *     The contract is **single-isolate, cooperative**. Worker threads
- *     would each need their own Router (per-isolate state).
- *   - The MatchOutput returned by `match()` is a fresh object on every
- *     dynamic call; the `params` map is owned by the caller and frozen
- *     so a downstream mutation cannot corrupt the next match.
- *   - `allowedMethods()` is read-only against the same MatchState
- *     buffer; it does not race with `match()` within one tick.
- */
 import { describe, expect, it } from 'bun:test';
 
 import { Router } from '../../src/router';
@@ -35,7 +14,6 @@ describe('router is safe under concurrent async match() calls (cooperative)', ()
     for (let i = 0; i < 1000; i++) {
       tasks.push(
         (async () => {
-          // Yield to the event loop so calls actually interleave.
           if (i % 7 === 0) {
             await Promise.resolve();
           }
@@ -138,15 +116,9 @@ describe('built router exposes a read-only contract', () => {
 
 describe('non-contract: cross-isolate safety', () => {
   it('documents that a single Router is single-isolate by design (no shared-state guarantee across workers)', () => {
-    // This test exists to lock the contract in code: callers crossing
-    // isolate boundaries (Worker threads, SharedArrayBuffer scenarios)
-    // must instantiate a Router per-isolate. The router's MatchState
-    // buffer is mutable per-call and not protected against parallel
-    // (truly concurrent, not cooperative) writers.
     const r = new Router<string>();
     r.add('GET', '/x', 'x');
     r.build();
-    // No assertion — the test name is the contract.
     expect(r.match('GET', '/x')?.value).toBe('x');
   });
 });

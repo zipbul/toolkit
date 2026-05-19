@@ -6,8 +6,6 @@ import { MatchSource, RouterErrorKind } from '../../src/types';
 import { catchRouterError } from '../test-utils';
 
 describe('Router<T>', () => {
-  // ── HP: Happy Path (21 tests) ──
-
   describe('happy path', () => {
     it('should match static route returning value and empty params', () => {
       const router = new Router<string>();
@@ -62,7 +60,6 @@ describe('Router<T>', () => {
 
     it('should return void for addAll with empty array', () => {
       const router = new Router<string>();
-      // addAll returns void — no throw means success
       router.addAll([]);
     });
 
@@ -209,12 +206,10 @@ describe('Router<T>', () => {
       router.add('GET', '/users/:id(\\d+)', 'user');
       router.build();
 
-      // Should match numeric
       const numeric = router.match('GET', '/users/123');
       expect(numeric).not.toBeNull();
       expect(numeric!.params.id).toBe('123');
 
-      // Should not match non-numeric
       const alpha = router.match('GET', '/users/abc');
       expect(alpha).toBeNull();
     });
@@ -229,8 +224,6 @@ describe('Router<T>', () => {
       expect(result!.value).toBe('purge');
     });
   });
-
-  // ── ED: Edge Cases (10 tests) ──
 
   describe('edge cases', () => {
     it("should match root path '/'", () => {
@@ -333,8 +326,6 @@ describe('Router<T>', () => {
     });
 
     it('does not strip query string from match path (framework concern)', () => {
-      // Router treats input as pathname-only — query stripping is the
-      // caller / framework's responsibility.
       const router = new Router<string>();
       router.add('GET', '/hello', 'world');
       router.build();
@@ -344,27 +335,20 @@ describe('Router<T>', () => {
     });
   });
 
-  // ── ST: State Transition (11 tests) ──
-
   describe('state transition', () => {
     it('should complete standard lifecycle: construct → add → build → match', () => {
       const router = new Router<string>();
 
-      // not built yet → match returns null
       expect(router.match('GET', '/x')).toBeNull();
 
-      // add
       router.add('GET', '/x', 'x');
 
-      // build
       const built = router.build();
       expect(built).toBe(router);
 
-      // match succeeds
       const matchAfter = router.match('GET', '/x');
       expect(matchAfter).not.toBeNull();
 
-      // add after seal throws
       expect(() => router.add('POST', '/y', 'y')).toThrow(RouterError);
     });
 
@@ -422,12 +406,10 @@ describe('Router<T>', () => {
       const router = new Router<string>();
       router.add('GET', '/x', 'x');
 
-      // Before build: can add
       router.add('GET', '/y', 'y');
 
       router.build();
 
-      // After build: cannot add
       const err = catchRouterError(() => router.add('GET', '/z', 'z'));
       expect(err.data.kind).toBe(RouterErrorKind.RouterSealed);
     });
@@ -494,8 +476,6 @@ describe('Router<T>', () => {
       expect(err.data.kind).toBe(RouterErrorKind.RouterSealed);
     });
   });
-
-  // ── ID: Idempotency (10 tests) ──
 
   describe('idempotency', () => {
     it('should return same this when build called multiple times', () => {
@@ -582,12 +562,10 @@ describe('Router<T>', () => {
     });
 
     it("should match identically via '*' and individual method add", () => {
-      // Router 1: via '*'
       const r1 = new Router<string>();
       r1.add('*', '/path', 'val');
       r1.build();
 
-      // Router 2: via individual methods
       const r2 = new Router<string>();
       for (const m of ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS', 'HEAD'] as const) {
         r2.add(m, '/path', 'val');
@@ -629,8 +607,6 @@ describe('Router<T>', () => {
     });
   });
 
-  // ── OR: Ordering (8 tests) ──
-
   describe('ordering', () => {
     it('should check static → cache → dynamic in match priority', () => {
       const router = new Router<string>({});
@@ -638,15 +614,12 @@ describe('Router<T>', () => {
       router.add('GET', '/users/:id', 'dynamic-val');
       router.build();
 
-      // Static → source='static'
       const staticResult = router.match('GET', '/static');
       expect(staticResult!.meta.source).toBe(MatchSource.Static);
 
-      // Dynamic first → source='dynamic'
       const dynamicResult = router.match('GET', '/users/1');
       expect(dynamicResult!.meta.source).toBe(MatchSource.Dynamic);
 
-      // Dynamic second → source='cache'
       const cachedResult = router.match('GET', '/users/1');
       expect(cachedResult!.meta.source).toBe(MatchSource.Cache);
     });
@@ -661,7 +634,6 @@ describe('Router<T>', () => {
 
       expect(get).not.toBeNull();
       expect(post).not.toBeNull();
-      // PUT has no routes registered → null (standard methods always have codes)
       expect(router.match('PUT', '/both')).toBeNull();
     });
 
@@ -755,15 +727,12 @@ describe('Router<T>', () => {
       expect(get!.value).toBe('get-user');
       expect(post!.value).toBe('post-user');
 
-      // Second calls → cached
       const get2 = router.match('GET', '/users/42');
       const post2 = router.match('POST', '/users/42');
       expect(get2!.value).toBe('get-user');
       expect(post2!.value).toBe('post-user');
     });
   });
-
-  // ── NEW: ED / ST / ID / OR additions (10 tests) ──
 
   describe('additional edge & state', () => {
     it('should return null when matching on router with zero routes', () => {
@@ -799,14 +768,12 @@ describe('Router<T>', () => {
       router.add('GET', '/items/:a?', 'handler');
       router.build();
 
-      // Absent → a is defaulted to undefined
       const r1 = router.match('GET', '/items');
       expect(r1).not.toBeNull();
       expect(r1!.value).toBe('handler');
       expect('a' in r1!.params).toBe(true);
       expect(r1!.params.a).toBeUndefined();
 
-      // Present
       const r2 = router.match('GET', '/items/42');
       expect(r2).not.toBeNull();
       expect(r2!.params.a).toBe('42');
@@ -826,14 +793,9 @@ describe('Router<T>', () => {
       router.add('GET', '/exists/:id', 'val');
       router.build();
 
-      // Repeated probe on a missing path returns null both times — the
-      // walker doesn't cache misses (the hit cache only stores positive
-      // resolutions), so both calls take the same path through the tree.
       expect(router.match('GET', '/nope/1')).toBeNull();
       expect(router.match('GET', '/nope/1')).toBeNull();
 
-      // The repeated miss on /nope/1 must not corrupt the cache slot
-      // for an unrelated path that DOES match.
       const hit = router.match('GET', '/exists/42');
       expect(hit).not.toBeNull();
       expect(hit!.value).toBe('val');

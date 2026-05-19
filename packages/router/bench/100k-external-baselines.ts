@@ -1,5 +1,3 @@
-/* eslint-disable no-console */
-
 import FindMyWay from 'find-my-way';
 import { RegExpRouter } from 'hono/router/reg-exp-router';
 import { TrieRouter } from 'hono/router/trie-router';
@@ -19,10 +17,6 @@ type Route = [method: string, path: string, value: number];
 const COUNT = 100_000;
 const ITER = 200_000;
 
-// argv is an internal worker-mode IPC for the self-spawn loop below.
-// End users never pass argv — they just `bun bench/100k-external-baselines.ts`
-// and the orchestrator branch spawns one fresh process per
-// router × scenario so JIT/RSS isolation is preserved.
 const isWorker = process.argv.length > 2;
 const target = process.argv[2] ?? '';
 const scenarioName = process.argv[3] ?? '';
@@ -49,8 +43,6 @@ function paramRoutes(): Route[] {
 
 function wildcardRoutes(): Route[] {
   const out: Route[] = [];
-  // Same shape as the in-process `100k wildcard-heavy` scenario so the
-  // baseline numbers compare apples-to-apples against the in-tree run.
   for (let g = 0; g < 1000; g++) {
     for (let b = 0; b < 100; b++) {
       out.push(['GET', `/files/group-${g}/bucket-${b * 1000 + g}/*p`, g * 100 + b]);
@@ -80,11 +72,8 @@ type MethodPath = readonly [method: string, path: string];
 
 interface Scenario {
   routes: Route[];
-  /** Method-aware hits so mixed scenarios (POST/DELETE/PATCH routes)
-   *  are exercised under the correct method, matching 100k-verification. */
   hits: readonly MethodPath[];
   misses: readonly MethodPath[];
-  /** Same path as a hit but registered under a different method. */
   wrongMethod: MethodPath;
 }
 
@@ -164,33 +153,12 @@ function bench(name: string, fn: () => unknown): void {
 }
 
 interface AdapterMeta {
-  /** npm package name resolved against package.json. */
   pkg: string;
-  /** Capability matrix: which scenarios this adapter can run under. */
   scenarios: ReadonlySet<'static' | 'param' | 'wildcard' | 'mixed'>;
-  /**
-   * Failure class summary when a scenario is unsupported. The harness
-   * prints this so reproducers can see why a baseline was skipped without
-   * digging through adapter source.
-   */
   notes: string;
-  /**
-   * Path rewrite that converts the canonical route shape (`*p` named
-   * wildcards, `:name` params) into the adapter's accepted syntax. The
-   * default (no rewrite) is correct for adapters that already accept the
-   * canonical form. Rewriting only touches REGISTRATION paths — the
-   * runtime hit/miss paths are kept identical so the bench comparison is
-   * apples-to-apples on what each adapter resolves.
-   */
   rewritePath?: (path: string) => string;
 }
 
-/**
- * Rewrites the trailing `/*name` wildcard segment to the form the target
- * adapter expects. The path tail is the only place wildcards appear in our
- * scenarios; mid-path wildcards remain canonical and would need a richer
- * per-adapter normalizer.
- */
 function rewriteWildcardTrailing(path: string, replacement: string): string {
   return path.replace(/\/\*[^/]*$/, replacement);
 }
@@ -245,8 +213,6 @@ function resolveAdapterVersion(pkg: string): string {
   if (pkg.startsWith('@zipbul/')) {
     return 'workspace';
   }
-  // Hono ships subpath routers off the same `hono` package — resolve the
-  // top-level package.json, not the subpath.
   const top = pkg.split('/')[0]!;
   try {
     const meta = require(`${top}/package.json`);
@@ -310,7 +276,6 @@ async function measure(
   }
   const rewrite = meta.rewritePath;
   const rs = rewrite === undefined ? sc.routes : sc.routes.map(([m, p, v]) => [m, rewrite(p), v] as Route);
-  // Settle before `before` so RSS baseline matches regression-snapshot.ts:193.
   settleScavenger();
   const before = mem();
   const start = performance.now();
@@ -326,10 +291,6 @@ async function measure(
     console.log(`build=${buildMs.toFixed(2)}ms timeoutClass=build phase exceeded ${BUILD_TIMEOUT_MS}ms`);
     return;
   }
-  // Unified 1500ms settle (helpers.settleScavenger) so RSS measurement
-  // matches 100k-verification.ts head-to-head. Without it, the two
-  // harnesses would compare zipbul to memoirist under different
-  // scavenger windows and the resulting RSS column would be unfair.
   settleScavenger();
   const after = mem();
   if (after.rss / 1024 / 1024 > BENCH_MEMORY_CAP_MB) {
@@ -337,10 +298,6 @@ async function measure(
     return;
   }
   console.log(`build=${buildMs.toFixed(2)}ms mem=${fmtMem(before, after)}`);
-  // Sanity-check the adapter on the canonical hit / miss / wrong-method
-  // paths before measuring. Catches silent mismatches that would
-  // otherwise show up as a `checksum=0` line buried among the timing
-  // numbers.
   const correctness = correctnessCheck(router, match, sc);
   if (!correctness.ok) {
     console.log(`correctnessClass=mismatch reason=${correctness.reason} detail=${JSON.stringify(correctness.detail)}`);
@@ -376,7 +333,6 @@ const builders: Record<string, () => Promise<void>> = {
     measure(
       'find-my-way',
       rs => {
-        // ignoreTrailingSlash:true to match 100k-external-correctness.ts:51.
         const router = FindMyWay({ ignoreTrailingSlash: true });
         for (const [method, path, value] of rs) {
           router.on(method as 'GET', path, () => value);
@@ -486,9 +442,6 @@ if (isWorker) {
   console.log(
     `adapters=${adapters.length} scenarios=${scenarios.length} runs=${RUNS} (each pair runs in a fresh process; ${RUNS} runs per pair for percentile)`,
   );
-  // Scenario coverage subset of 100k-verification.ts (static/param/wildcard/mixed
-  // only). high-fanout/versioned-api/regex-heavy aren't compared against externals
-  // because hono-trie/hono-regexp/koa-tree-router/radix3 don't fully support them.
 
   interface PairRun {
     buildMs: number;
@@ -547,8 +500,6 @@ if (isWorker) {
       const hits = runs.flatMap(r => r.hitNs);
       const misses = runs.flatMap(r => r.missNs);
       const wrong = runs.flatMap(r => r.wrongMethodNs);
-      // builds/rss/heap are 1 sample per run (RUNS=3) → use max instead of p99
-      // which would collapse to the same value.
       console.log(
         `summary adapter=${adapter} scenario=${scenario} runs=${runs.length} ` +
           `buildMedian=${fmt(median(builds))}ms buildMax=${fmt(Math.max(...builds))}ms ` +

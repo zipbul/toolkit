@@ -7,17 +7,10 @@ import { EMPTY_PARAMS, STATIC_META, createNullProtoBucket } from '../internal';
 import { createMatchState, createSegmentWalker, decoder } from '../matcher';
 import { MethodRegistry } from '../method-registry';
 
-/**
- * Configuration for compiled match implementation.
- */
 export interface BuildResult<T> {
   trees: Array<MatchFn | null>;
   staticOutputsByMethod: Array<Record<string, MatchOutput<T>> | undefined>;
-  /** Path-first static lookup table. Maps `path → { mask, outputs[mc] }`.
-   *  Emitter uses this for the static probe — ULTIMATE measured
-   *  path-first lookup 1.70 ns/op vs method-first 2.63 ns/op. */
   staticByPath: Record<string, { mask: number; outputs: Array<MatchOutput<T> | undefined> }>;
-  /** Per-static-path 32-bit method-availability mask (bit `methodCode`). */
   staticPathMethodMask: Record<string, number>;
   activeMethodCodes: ReadonlyArray<readonly [string, number]>;
   methodCodes: Readonly<Record<string, number>>;
@@ -29,9 +22,6 @@ export interface BuildResult<T> {
   caseSensitive: boolean;
 }
 
-/**
- * Compile a `RegistrationSnapshot` into runtime tables.
- */
 export function buildFromRegistration<T>(
   snapshot: RegistrationSnapshot<T>,
   options: RouterOptions,
@@ -40,12 +30,6 @@ export function buildFromRegistration<T>(
   const allCodes = methodRegistry.getAllCodes();
   const methodCodes = methodRegistry.getCodeMap();
 
-  // Materialize the static-output buckets up front so the per-method
-  // walker/active-codes loop below can decide activeness in one pass.
-  // Build BOTH representations: method-first (legacy compileMixed shape)
-  // and path-first (compact path-keyed entry with method bitmask +
-  // outputs array). The emitter selects path-first for the static
-  // probe — ULTIMATE measured 1.70 ns/op vs 2.63 ns/op for method-first.
   const staticOutputsByMethod: Array<Record<string, MatchOutput<T>> | undefined> = [];
   const staticByPath: Record<string, { mask: number; outputs: Array<MatchOutput<T> | undefined> }> = createNullProtoBucket();
   for (let mc = 0; mc < snapshot.staticByMethod.length; mc++) {
@@ -75,19 +59,8 @@ export function buildFromRegistration<T>(
     }
   }
 
-  // Pre-allocate the runtime match state so its paramOffsets buffer can be
-  // shared with codegen warmup — the warmup pass needs a real MatchState
-  // to invoke the freshly-compiled walker against, and reusing the runtime
-  // instance avoids ever sizing a throwaway buffer with an arbitrary cap.
   const matchState = createMatchState(snapshot.maxParamsObserved);
 
-  // Fused loop — for each method:
-  //   1. attach a segment walker to `trees[code]` if a tree exists
-  //   2. push `[name, code]` into activeMethodCodes if the method has
-  //      either a walker or a static bucket
-  // Earlier pipeline ran two passes; bench `bench/method-research/
-  // E-build-loops-fusion.bench.ts` measures this single pass at
-  // 1.16-1.21× the dual-pass cost across 7/15/32 methods.
   const trees: Array<MatchFn | null> = [];
   const activeMethodCodes: Array<readonly [string, number]> = [];
   for (const [name, code] of allCodes) {

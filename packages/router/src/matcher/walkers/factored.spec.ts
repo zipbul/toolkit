@@ -1,8 +1,3 @@
-/**
- * Unit specs for the factored walker helpers. The factored walker shares
- * a subtree across multiple compiled paths and descends through it
- * after the per-path prefix matches; these specs pin its descent contract.
- */
 import { describe, expect, it } from 'bun:test';
 
 import { createMatchState } from '../match-state';

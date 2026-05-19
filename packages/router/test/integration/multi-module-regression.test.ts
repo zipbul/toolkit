@@ -1,9 +1,3 @@
-/**
- * Regression fixtures. Each suite locks down a behavior that a prior
- * audit pass found broken; the test name (or in-test comment) documents
- * the specific shape under test. Commit hashes belong in `git log`,
- * not here.
- */
 import { describe, it, expect } from 'bun:test';
 
 import { RouterError } from '../../src/error';
@@ -14,11 +8,9 @@ import { firstBuildIssue } from '../test-utils';
 describe('subtreeShapesEqual: terminal-store presence (C-03/04/05/06)', () => {
   it('rejects factor when one tenant adds a mid-route terminal that other tenants do not have', () => {
     const r = new Router<string>();
-    // 1500 tenants registered with /tenant-X/data/:type/:item only
     for (let i = 0; i < 1500; i++) {
       r.add('GET', `/tenant-${i}/data/:type/:item`, `leaf-${i}`);
     }
-    // tenant-5 alone adds /tenant-5/data/:type (mid-position terminal)
     r.add('GET', '/tenant-5/data/:type', 'mid-5');
     r.build();
 
@@ -46,13 +38,9 @@ describe('subtreeShapesEqual: terminal-store presence (C-03/04/05/06)', () => {
 describe('multi-prefix factor: partial-mutation rollback (W1, C-07/08/09)', () => {
   it('leaves the tree intact when only some root children qualify for a factor', () => {
     const r = new Router<string>();
-    // child A: 1500 tenants with shared shape — qualifies for factor
     for (let i = 0; i < 1500; i++) {
       r.add('GET', `/a/${i}/users/:id`, `a-${i}`);
     }
-    // child B: single static route — does NOT qualify for factor.
-    // The previous (pre-fix) implementation mutated `a` then aborted on `b`,
-    // leaving an inconsistent tree that a later walker tier walked wrong.
     r.add('GET', '/b/static/route', 'b-static');
     r.build();
 
@@ -66,7 +54,6 @@ describe('multi-prefix factor: partial-mutation rollback (W1, C-07/08/09)', () =
 
   it('still applies factor when every root child qualifies', () => {
     const r = new Router<string>();
-    // Two prefixes, each with 1500 sibling tenants of identical shape.
     for (let i = 0; i < 1500; i++) {
       r.add('GET', `/users/${i}/posts/:id`, `users-${i}`);
       r.add('GET', `/api/${i}/items/:id`, `api-${i}`);
@@ -108,8 +95,6 @@ describe('super-factory presentBitmask boundary (C-01/02)', () => {
 });
 
 describe('walker tier consistency — every applicable tier returns the same result', () => {
-  // Workloads designed to exercise different walker tiers.
-  // Same probe set, different scale, expectations identical.
   const cases = [
     {
       name: 'iterative tier (small static-only)',
@@ -188,11 +173,6 @@ describe('walker tier consistency — every applicable tier returns the same res
 describe('leafStoreOf rejects multi-terminal subtree (AUDIT2-001/002)', () => {
   it('does not collapse intermediate + leaf terminals into one factor entry', () => {
     const r = new Router<string>();
-    // Every tenant has BOTH an intermediate terminal (/data/:id) AND a
-    // leaf terminal (/data/:id/item). The factored walker keeps a single
-    // storeOverride per tenant key — without the leafStoreOf guard, the
-    // override would be pinned to the intermediate handler and every
-    // leaf match would silently return the wrong route.
     for (let i = 0; i < 1500; i++) {
       r.add('GET', `/tenant-${i}/data/:id`, `mid-${i}`);
       r.add('GET', `/tenant-${i}/data/:id/item`, `leaf-${i}`);
@@ -237,14 +217,11 @@ describe('cacheSize validation (AUDIT2-009)', () => {
 
 describe('rollback after route validation failure (R1)', () => {
   it('truncates every per-terminal column including presentBitmaskByTerminal', () => {
-    // Mix valid + invalid routes. Fail invalid → all columns must
-    // truncate consistently. Re-validating a fresh router with the
-    // same set should produce the same issue list.
     const buildOnce = () => {
       const r = new Router<string>();
-      r.add('GET', '/users/:id?', 'ok-1'); // valid (1 optional)
-      r.add('GET', '/' + Array.from({ length: 32 }, (_, i) => `:p${i}`).join('/'), 'too-many'); // 32 captures → reject
-      r.add('GET', '/posts/:slug', 'ok-2'); // valid
+      r.add('GET', '/users/:id?', 'ok-1');
+      r.add('GET', '/' + Array.from({ length: 32 }, (_, i) => `:p${i}`).join('/'), 'too-many');
+      r.add('GET', '/posts/:slug', 'ok-2');
       try {
         r.build();
       } catch (e) {
@@ -265,24 +242,13 @@ describe('rollback after route validation failure (R1)', () => {
 describe('coverage: ParamSiblingAdd undo + LEAF_STORE_MAX_DEPTH removal', () => {
   it('rolls back a fresh param-sibling on bulk seal failure (UndoKind.ParamSiblingAdd)', () => {
     const r = new Router<string>();
-    // Same regex pattern, different param names — wildcard-prefix-index
-    // matches the regex AST (allowing the shared trie node), but
-    // segment-tree's insertParamPart sees a name mismatch and appends a
-    // fresh ParamSegment via `tail.nextSibling = fresh`. That's the
-    // single insert path that pushes UndoKind.ParamSiblingAdd.
     r.add('GET', '/users/:a(\\d+)/x', 'first');
     r.add('GET', '/users/:b(\\d+)/y', 'second');
-    // Malformed path triggers a parse failure → seal() runs a bulk
-    // `rollback(undo, 0)` over every entry, including the
-    // ParamSiblingAdd record from the route above.
     r.add('GET', '?bad-path', 'broken');
     expect(() => r.build()).toThrow(RouterError);
   });
 
   it('factors a >64-segment chain (no LEAF_STORE_MAX_DEPTH ceiling)', () => {
-    // 70-segment chain per tenant — would have been silently rejected
-    // by the prior 64-depth cap inside leafStoreOf. Now factor detection
-    // descends the full chain.
     const r = new Router<string>();
     const chain = Array.from({ length: 70 }, (_, i) => `s${i}`).join('/');
     for (let i = 0; i < 1500; i++) {

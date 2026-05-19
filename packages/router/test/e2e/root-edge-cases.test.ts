@@ -1,17 +1,3 @@
-/**
- * Root-level optional/wildcard edge cases that the original test suite missed
- * because the default ignoreTrailingSlash trim and the codegen specialization
- * around root-slash terminals papered over the underlying logic gaps.
- *
- * - `/:id?` should match `/` (the omit-expansion of an optional collapses to
- *   the root path; before the fix it was silently dropped).
- * - `/*p` star wildcard at root should match `/` with empty capture (codegen
- *   `emitRootSlashTerminal` only handled bare `root.store`, not the wildcard
- *   variant; iterative and recursive walkers had the same gap).
- * - `:a:b` style collapsed param names — surprising user-visible behavior.
- *   We now reject router-metacharacters (':', '*', '?', '+', '/', '(', ')')
- *   inside param names so `/:a:b` errors at registration time.
- */
 import { describe, expect, it } from 'bun:test';
 
 import { RouterError } from '../../src/error';
@@ -98,7 +84,6 @@ describe('star wildcard at root matches /', () => {
   });
 
   it('multi-wildcard at root /*p+ does NOT match /', () => {
-    // Multi requires ≥1 char of suffix — `/` alone is not enough.
     const r = new Router<string>();
     r.add('GET', '/*p+', 'multi');
     r.build();
@@ -124,10 +109,6 @@ describe('param-name validation', () => {
   });
 
   it('treats `/` after a param as a segment boundary, not part of the name', () => {
-    // `/:a/b/c` parses as `[param :a, static b, static c]`. The grammar
-    // makes it impossible to get a `/` inside a param name because the
-    // tokenizer splits on `/` before parseParam runs — this test pins
-    // that property end-to-end through build() + match().
     const r = new Router<string>();
     r.add('GET', '/:a/b/c', 'val');
     r.build();
@@ -160,9 +141,6 @@ describe('param-name validation', () => {
   });
 
   it('rejects metacharacters in wildcard name', () => {
-    // /*p{\w+} silently used to register a wildcard whose name was the
-    // literal string `p{\w+}` (parser doesn't support wildcard regex). Now
-    // surfaced as a parse error.
     const r = new Router<string>();
 
     r.add('GET', '/files/*p{\\w+}', 'wreg');
@@ -186,8 +164,6 @@ describe('param-name validation', () => {
 
 describe('handler value with falsy/undefined values', () => {
   it('static route with handler value === undefined returns MatchOutput, not null', () => {
-    // Distinguishing "registered with undefined" from "not registered" requires
-    // a parallel boolean array — slot value alone is ambiguous.
     const r = new Router<undefined>();
     r.add('GET', '/x', undefined);
     r.build();
@@ -211,9 +187,6 @@ describe('handler value with falsy/undefined values', () => {
   });
 
   it('re-registering a static path with undefined still throws route-duplicate', () => {
-    // Without the staticRegistered tracking, the duplicate check
-    // (`arr[mc] !== undefined`) would fail to fire when the first value was
-    // undefined — silently allowing re-registration.
     const r = new Router<string | undefined>();
     r.add('GET', '/x', undefined);
     r.add('GET', '/x', 'something');

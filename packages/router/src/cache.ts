@@ -4,10 +4,6 @@ interface CacheEntry<T> {
   used: boolean;
 }
 
-/**
- * Round up to the next power of 2.
- * Enables bitwise AND masking instead of modulo.
- */
 function nextPow2(n: number): number {
   if (n <= 1) {
     return 1;
@@ -79,8 +75,6 @@ export class RouterCache<T> {
       slot = this.evict();
     }
 
-    // Reuse the evicted slot's entry object when possible — avoids one
-    // allocation per eviction in the steady-state cache-pressure regime.
     const existingSlot = this.entries[slot];
     if (existingSlot !== undefined) {
       existingSlot.key = key;

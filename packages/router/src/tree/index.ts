@@ -1,10 +1,3 @@
-/**
- * Public surface of the segment-tree data model. All cross-directory
- * consumers (builder, codegen, matcher, pipeline) MUST import through
- * this barrel — deep imports into individual files are forbidden so
- * the module's internal structure can evolve without rippling churn.
- */
-
 export type { PathPart } from './path-part';
 export { PathPartType, WildcardOrigin } from './path-part';
 

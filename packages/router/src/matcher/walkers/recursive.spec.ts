@@ -1,7 +1,3 @@
-/**
- * Unit specs for the recursive walker helpers. Each helper is pure
- * (no closure state) and exercised with raw arrays / SegmentNode literals.
- */
 import { describe, expect, it } from 'bun:test';
 
 import { createMatchState } from '../match-state';

@@ -75,10 +75,6 @@ describe('Router<T> options', () => {
   });
 
   it('accepts a vulnerable regex pattern (regex safety is user responsibility)', () => {
-    // Per policy ("URL safety = framework responsibility"), the router does
-    // not gate user regex bodies for ReDoS. A nested-quantifier pattern is
-    // registered without rejection; it remains the framework's job (e.g. via
-    // a `re2` or `recheck` plug-in) to catch this before reaching the router.
     const router = new Router<string>();
     router.add('GET', '/test/:val((?:a+)+)', 'test');
     expect(() => router.build()).not.toThrow();
@@ -105,10 +101,6 @@ describe('Router<T> options', () => {
   });
 
   it('decodes percent-escapes in captured param values', () => {
-    // Per RFC 3986 §2.4, percent-encoded octets in the path component
-    // are decoded when extracted as a parameter. `%2F` becomes `/` in
-    // the captured string — it's just a value, not a path component, so
-    // there is no traversal risk.
     const router = new Router<string>();
     router.add('GET', '/files/:name', 'files');
     router.build();

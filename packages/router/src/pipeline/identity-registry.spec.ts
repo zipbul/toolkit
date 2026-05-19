@@ -1,9 +1,3 @@
-/**
- * Unit spec for `identity-registry.ts`. The registry interns object refs
- * via WeakMap and primitives via tagged keys; spec pins each branch and
- * the cross-type-tag isolation that prevents accidental collisions
- * (e.g. number 1 vs boolean true).
- */
 import { describe, expect, it } from 'bun:test';
 
 import { IdentityRegistry } from './identity-registry';

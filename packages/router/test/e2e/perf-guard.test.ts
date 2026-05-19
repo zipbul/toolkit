@@ -6,9 +6,6 @@ import { getRegistrationSnapshot } from '../test-utils';
 
 describe('performance guard invariants', () => {
   it('optional expansions share one handler index across all expansion variants', () => {
-    // /items/:id? expands to two concrete routes (`/items` and `/items/:id`).
-    // Both must point to the single registered handler — terminal metadata
-    // may be duplicated, but the underlying handlers array stays at length 1.
     const r = new Router<string>();
     r.add('GET', '/items/:id?', 'handler');
     r.build();

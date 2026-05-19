@@ -1,9 +1,3 @@
-/**
- * Unit specs for `path-normalize.ts`. The two emit helpers and the
- * `buildPathNormalizer` are pure: each emit returns a JS fragment;
- * `buildPathNormalizer` wraps them in a function whose runtime behavior
- * must match the policy bits exactly.
- */
 import { describe, expect, it } from 'bun:test';
 
 import { buildPathNormalizer, emitLowerCase, emitTrailingSlashTrim } from './path-normalize';

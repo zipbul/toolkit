@@ -1,21 +1,7 @@
-/**
- * Option × route-type matrix.
- *
- * Each router option is exercised against the canonical route shapes
- * (static, single param, param chain, star wildcard, multi wildcard,
- * optional param, regex param). Combinations that interact (cache + decode,
- * caseSensitive + cache, etc.) get explicit coverage.
- *
- * The goal is to catch option × shape interactions that single-option tests
- * miss — e.g. "decoding works" alone doesn't prove "decoding works in a
- * cached hit" or "decoding works after a trailing-slash trim".
- */
 import { describe, expect, it } from 'bun:test';
 
 import { Router } from '../../src/router';
 import { MatchSource } from '../../src/types';
-
-// ── ignoreTrailingSlash × every route type ─────────────────────────────────
 
 describe('ignoreTrailingSlash: true × route type', () => {
   it('static: trailing slash variant matches the no-slash route', () => {
@@ -126,8 +112,6 @@ describe('ignoreTrailingSlash: false × route type', () => {
   });
 });
 
-// ── caseSensitive × route type ─────────────────────────────────────────────
-
 describe('pathCaseSensitive: true (default) × route type', () => {
   it('static: case mismatch returns null', () => {
     const r = new Router<string>();
@@ -180,8 +164,6 @@ describe('pathCaseSensitive: false × route type', () => {
   });
 });
 
-// ── percent-decoding × cache ──────────────────────────────────────────────
-
 describe('decoding × cache', () => {
   it('cached hit returns decoded value', () => {
     const r = new Router<string>();
@@ -206,8 +188,6 @@ describe('decoding × cache', () => {
     expect(m.params.path).toBe('a%20b/c');
   });
 });
-
-// ── cache × route type ───────────────────────────────────────────────────
 
 describe('cache × route type', () => {
   it('static: every static lookup returns the pre-built MatchOutput directly', () => {
@@ -237,8 +217,6 @@ describe('cache × route type', () => {
     expect(r.match('GET', '/nonexistent/path')).toBeNull();
   });
 });
-
-// ── omitMissingOptional × cache ────────────────────────────────────────
 
 describe('omitMissingOptional × cache', () => {
   it('omit + cache: missing optional remains absent on cached hit', () => {
@@ -303,8 +281,6 @@ describe('omitMissingOptional × cache', () => {
   });
 });
 
-// ── unbounded path/segment lengths ────────────────────────────────────────
-
 describe('unbounded length', () => {
   it('accepts arbitrarily long static path registrations', () => {
     const r = new Router<string>();
@@ -330,8 +306,6 @@ describe('unbounded length', () => {
     expect(m!.params.id?.length).toBe(100_000);
   });
 });
-
-// ── triple combinations ──────────────────────────────────────────────────
 
 describe('triple combinations', () => {
   it('trim slash + case fold + cache: all three apply consistently', () => {
@@ -389,8 +363,6 @@ describe('triple combinations', () => {
   });
 });
 
-// ── cache-key normalization across distinct inputs ───────────────────────
-
 describe('cache-key normalization collapses normalized-equal inputs to one entry', () => {
   it('caseSensitive=false: two different-case inputs collapse to the same cache key', () => {
     const r = new Router<string>({ pathCaseSensitive: false });
@@ -434,8 +406,6 @@ describe('cache-key normalization collapses normalized-equal inputs to one entry
     expect(second.params.id).toBe('42');
   });
 });
-
-// ── pathname-only contract: query/fragment chars stay in param value ─────
 
 describe('pathname-only contract', () => {
   it('captures query characters as part of dynamic param value (caller strips ? before calling)', () => {

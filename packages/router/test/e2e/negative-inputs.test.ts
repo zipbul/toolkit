@@ -1,24 +1,7 @@
-/**
- * Negative paths + exception/error code paths.
- *
- * "Happy" coverage exercises the router with valid input. This file
- * complements that with three contract surfaces:
- *
- *   1. match() tolerates structurally odd but well-formed pathnames
- *      (NUL bytes, BOM, doubled slashes, etc.) without throwing —
- *      result may be null or a match, but never an exception.
- *   2. match() *propagates* `URIError` from `decodeURIComponent` when
- *      the caller hands it malformed percent-encoded input — the router
- *      treats well-formed-pathname as a caller invariant, not a value
- *      it re-validates per request.
- *   3. add() / build() throw `RouterError` on register-time misuse.
- */
 import { describe, it, expect } from 'bun:test';
 
 import { Router, RouterError } from '../../index';
 import { RouterErrorKind } from '../../src/types';
-
-// ── match() tolerates structurally odd but well-formed input ──────────────
 
 describe('match() tolerates structurally odd well-formed paths', () => {
   function setupGenericRouter() {
@@ -106,8 +89,6 @@ describe('match() propagates URIError on malformed percent-encoded paths', () =>
   });
 });
 
-// ── build() rejects malformed registration input ──────────────────────────
-
 describe('build() rejects malformed registration input', () => {
   it('throws RouterError on duplicate route', () => {
     const r = new Router<string>();
@@ -166,8 +147,6 @@ describe('build() rejects malformed registration input', () => {
   });
 });
 
-// ── Regex pattern body — router accepts any syntactically valid regex ────
-
 describe('regex pattern body (regex safety is user responsibility)', () => {
   it('accepts backreference patterns (ReDoS gating is framework responsibility)', () => {
     const r = new Router<string>();
@@ -187,8 +166,6 @@ describe('regex pattern body (regex safety is user responsibility)', () => {
     expect(() => r.build()).toThrow(RouterError);
   });
 });
-
-// ── State transition errors ──────────────────────────────────────────────
 
 describe('state transition errors', () => {
   it('add() after build() throws RouterError', () => {
@@ -215,8 +192,6 @@ describe('state transition errors', () => {
     expect(r.match('GET', '/x')).toBeNull();
   });
 });
-
-// ── Misuse of optional params and wildcards ───────────────────────────────
 
 describe('misuse rejection', () => {
   it('rejects sibling param routes from different handlers as unreachable', () => {
@@ -249,8 +224,6 @@ describe('misuse rejection', () => {
     expect(() => r.build()).toThrow(RouterError);
   });
 });
-
-// ── Optional expansion (positive contract — single optional yields both variants) ──
 
 describe('optional expansion — single optional', () => {
   it('a single optional segment registers and matches both present and dropped variants', () => {

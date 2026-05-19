@@ -1,9 +1,3 @@
-/**
- * Unit specs for `null-proto-obj.ts` — the hot-path bucket constructor
- * and the frozen sentinels reused by every match. Spec pins each of these
- * because their identity and prototype lookup behavior are load-bearing
- * for downstream IC stability.
- */
 import { describe, expect, it } from 'bun:test';
 
 import { MatchSource } from '../types';
