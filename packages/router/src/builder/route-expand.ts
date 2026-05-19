@@ -16,18 +16,6 @@ interface OptionalCollection {
   names: string[];
 }
 
-function countOptionalSegments(parts: PathPart[]): number {
-  let count = 0;
-
-  for (const part of parts) {
-    if (part.type === PathPartType.Param && part.optional) {
-      count++;
-    }
-  }
-
-  return count;
-}
-
 function expandOptional(parts: PathPart[], handlerIndex: number, optionalDefaults: OptionalParamDefaults): ExpandedRoute[] {
   let firstOptional = -1;
   for (let i = 0; i < parts.length; i++) {
@@ -146,11 +134,4 @@ function mergeStaticParts(parts: PathPart[]): PathPart[] {
   return result;
 }
 
-export {
-  countOptionalSegments,
-  expandOptional,
-  filterDroppedSegments,
-  isDroppedAt,
-  MAX_OPTIONAL_SEGMENTS_PER_ROUTE,
-  trimTrailingSlashOnDrop,
-};
+export { expandOptional, MAX_OPTIONAL_SEGMENTS_PER_ROUTE };

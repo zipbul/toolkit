@@ -5,19 +5,7 @@ interface CacheEntry<T> {
 }
 
 function nextPow2(n: number): number {
-  if (n <= 1) {
-    return 1;
-  }
-
-  let v = n - 1;
-
-  v |= v >>> 1;
-  v |= v >>> 2;
-  v |= v >>> 4;
-  v |= v >>> 8;
-  v |= v >>> 16;
-
-  return v + 1;
+  return n <= 1 ? 1 : 2 ** Math.ceil(Math.log2(n));
 }
 
 export class RouterCache<T> {

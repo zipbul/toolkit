@@ -6,7 +6,7 @@ import type { PathParserConfig } from './path-parser';
 
 import { PathPartType, WildcardOrigin } from '../tree';
 import { RouterErrorKind } from '../types';
-import { extractNameAndPattern, PathParser, rejectColonWildcardSugar, stripOptionalDecorator } from './path-parser';
+import { PathParser } from './path-parser';
 
 function defaultConfig(overrides: Partial<PathParserConfig> = {}): PathParserConfig {
   return {
@@ -298,93 +298,5 @@ describe('PathParser', () => {
       const result = parse('/test/:val(\\d+)');
       expect(isErr(result)).toBe(false);
     });
-  });
-});
-
-describe('stripOptionalDecorator', () => {
-  it('returns isOptional=false when there is no trailing `?`', () => {
-    expect(stripOptionalDecorator(':id', ':id', '/users/:id')).toEqual({ core: ':id', isOptional: false });
-  });
-
-  it('peels the trailing `?` and reports isOptional=true', () => {
-    expect(stripOptionalDecorator(':id?', ':id?', '/users/:id?')).toEqual({ core: ':id', isOptional: true });
-  });
-
-  it('rejects `:name+?` combinations', () => {
-    const result = stripOptionalDecorator(':id+?', ':id+?', '/users/:id+?');
-    expect('kind' in result).toBe(true);
-    if ('kind' in result) {
-      expect(result.kind).toBe(RouterErrorKind.RouteParse);
-    }
-  });
-
-  it('rejects `:name*?` combinations', () => {
-    const result = stripOptionalDecorator(':id*?', ':id*?', '/users/:id*?');
-    expect('kind' in result).toBe(true);
-  });
-});
-
-describe('rejectColonWildcardSugar', () => {
-  it('returns undefined when core has no trailing `+` or `*`', () => {
-    expect(rejectColonWildcardSugar(':id', ':id', '/users/:id')).toBeUndefined();
-  });
-
-  it('returns undefined when the segment contains a regex group (the regex shape is valid)', () => {
-    expect(rejectColonWildcardSugar(':id(a+)', ':id(a+)', '/users/:id(a+)')).toBeUndefined();
-  });
-
-  it('rejects `:name+` and suggests the canonical `*name+` form', () => {
-    const result = rejectColonWildcardSugar(':rest+', ':rest+', '/files/:rest+');
-    expect(result).toBeDefined();
-    if (result) {
-      expect(result.kind).toBe(RouterErrorKind.RouteParse);
-      expect(result.message).toContain('*rest+');
-    }
-  });
-
-  it('rejects `:name*` and suggests the canonical `*name` form', () => {
-    const result = rejectColonWildcardSugar(':rest*', ':rest*', '/files/:rest*');
-    expect(result).toBeDefined();
-    if (result) {
-      expect(result.kind).toBe(RouterErrorKind.RouteParse);
-      expect(result.message).toContain('*rest');
-    }
-  });
-});
-
-describe('extractNameAndPattern', () => {
-  it('returns the bare name when there is no regex group', () => {
-    expect(extractNameAndPattern(':id', '/users/:id')).toEqual({ name: 'id', pattern: null });
-  });
-
-  it('extracts both name and pattern from `:name(pattern)`', () => {
-    expect(extractNameAndPattern(':id(\\d+)', '/users/:id(\\d+)')).toEqual({ name: 'id', pattern: '\\d+' });
-  });
-
-  it('returns route-parse error for an unclosed regex group', () => {
-    const result = extractNameAndPattern(':id(\\d+', '/users/:id(\\d+');
-    expect('kind' in result).toBe(true);
-    if ('kind' in result) {
-      expect(result.kind).toBe(RouterErrorKind.RouteParse);
-      expect(result.message).toContain('Unclosed');
-    }
-  });
-
-  it('returns route-parse error for a whitespace-only pattern', () => {
-    const result = extractNameAndPattern(':id(   )', '/users/:id(   )');
-    expect('kind' in result).toBe(true);
-    if ('kind' in result) {
-      expect(result.kind).toBe(RouterErrorKind.RouteParse);
-      expect(result.message).toContain('Empty regex');
-    }
-  });
-
-  it('returns route-parse error for an anchored pattern', () => {
-    const result = extractNameAndPattern(':id(^\\d+$)', '/users/:id(^\\d+$)');
-    expect('kind' in result).toBe(true);
-    if ('kind' in result) {
-      expect(result.kind).toBe(RouterErrorKind.RouteParse);
-      expect(result.message).toContain('Anchored');
-    }
   });
 });

@@ -314,6 +314,7 @@ class Registration<T> {
       key: normalized,
       prevMask,
     });
+    return undefined;
   }
 
   private compileDynamicRoute(

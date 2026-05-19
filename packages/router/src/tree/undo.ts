@@ -123,7 +123,6 @@ export function applyUndo(entry: UndoRecord): void {
       return;
     default: {
       const _exhaustive: never = entry;
-      void _exhaustive;
     }
   }
 }
